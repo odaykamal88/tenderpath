@@ -1,0 +1,146 @@
+import { neon } from "@neondatabase/serverless";
+import { config } from "dotenv";
+import { resolve } from "path";
+
+config({ path: resolve(process.cwd(), ".env.local") });
+
+const sql = neon(process.env.DATABASE_URL);
+
+const tables = `
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  name TEXT,
+  tier TEXT,
+  subscription_status TEXT,
+  subscription_expires_at TIMESTAMPTZ,
+  is_super_admin BOOLEAN DEFAULT FALSE,
+  magic_token TEXT,
+  magic_token_expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  tier TEXT NOT NULL,
+  stripe_customer_id TEXT,
+  stripe_subscription_id TEXT,
+  status TEXT DEFAULT 'active',
+  current_period_end TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS assessments (
+  id SERIAL PRIMARY KEY,
+  company_name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  website TEXT,
+  description TEXT NOT NULL,
+  sector TEXT,
+  countries JSONB DEFAULT '[]',
+  crawled_data JSONB,
+  ai_analysis JSONB,
+  readiness_score INTEGER DEFAULT 0,
+  matched_tenders JSONB DEFAULT '[]',
+  gaps JSONB DEFAULT '[]',
+  recommended_tier TEXT,
+  org_type TEXT,
+  dev_themes JSONB DEFAULT '[]',
+  matched_grants JSONB DEFAULT '[]',
+  grant_readiness_score INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS tenders (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  agency TEXT NOT NULL,
+  deadline TIMESTAMPTZ,
+  country TEXT,
+  sector TEXT,
+  reference_id TEXT,
+  requirements JSONB,
+  experience_level TEXT,
+  opportunity_type TEXT,
+  source_url TEXT,
+  status TEXT DEFAULT 'open',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS grants (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  agency TEXT NOT NULL,
+  deadline TIMESTAMPTZ,
+  sector TEXT,
+  themes JSONB,
+  eligible_org_types JSONB,
+  source_url TEXT,
+  status TEXT DEFAULT 'open',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE grants ADD COLUMN IF NOT EXISTS reference_id TEXT;
+ALTER TABLE grants ADD COLUMN IF NOT EXISTS source_name TEXT;
+ALTER TABLE grants ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE grants ADD COLUMN IF NOT EXISTS countries JSONB;
+ALTER TABLE grants ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+CREATE UNIQUE INDEX IF NOT EXISTS grants_reference_id_unique ON grants (reference_id);
+
+CREATE TABLE IF NOT EXISTS email_queue (
+  id SERIAL PRIMARY KEY,
+  assessment_id INTEGER REFERENCES assessments(id),
+  email TEXT NOT NULL,
+  status TEXT DEFAULT 'pending',
+  sent_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS crawl_logs (
+  id SERIAL PRIMARY KEY,
+  platform TEXT NOT NULL,
+  tenders_added INTEGER DEFAULT 0,
+  tenders_updated INTEGER DEFAULT 0,
+  tenders_expired INTEGER DEFAULT 0,
+  errors JSONB DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS purchase_logs (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  tier TEXT NOT NULL,
+  stripe_session_id TEXT,
+  amount INTEGER,
+  currency TEXT DEFAULT 'usd',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+`;
+
+async function migrate() {
+  console.log("Running migration...");
+  // neon() doesn't support multi-statement, split by CREATE TABLE
+  const statements = tables
+    .split(/;/)
+    .map((s) => s.trim())
+    .filter((s) => /^(CREATE|ALTER)\b/.test(s));
+
+  for (const stmt of statements) {
+    const label =
+      stmt.match(/CREATE TABLE IF NOT EXISTS (\w+)/)?.[1] ??
+      stmt.match(/CREATE UNIQUE INDEX IF NOT EXISTS (\w+)/)?.[1] ??
+      stmt.match(/ALTER TABLE (\w+) ADD COLUMN IF NOT EXISTS (\w+)/)?.slice(1).join(".") ??
+      stmt.slice(0, 40);
+    await sql.query(stmt);
+    console.log(`  ✓ ${label}`);
+  }
+  console.log("Migration complete!");
+}
+
+migrate().catch((err) => {
+  console.error("Migration failed:", err);
+  process.exit(1);
+});

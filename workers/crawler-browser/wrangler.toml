@@ -1,0 +1,21 @@
+name = "crawler-browser"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+# Browser Rendering binding — requires Workers Paid plan OR free tier access
+# (Cloudflare has been rolling out a free Browser Rendering tier with 10 min/day).
+browser = { binding = "BROWSER" }
+
+# Custom domain attached via dashboard (Workers & Pages → Settings → Domains & Routes).
+# Not declaring it here so dashboard is source of truth.
+
+# CRAWLER_KEY is set via `wrangler secret put CRAWLER_KEY` — never commit it.
+
+[observability]
+enabled = true
+
+# Observability: keep logs for debugging. 1 day is plenty.
+[observability.logs]
+enabled = true

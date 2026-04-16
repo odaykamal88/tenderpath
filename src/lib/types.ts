@@ -1,0 +1,120 @@
+export interface Assessment {
+  id: number;
+  company_name: string;
+  email: string;
+  website: string | null;
+  description: string;
+  sector: string | null;
+  countries: string[];
+  crawled_data: CrawledData | null;
+  ai_analysis: AIAnalysis | null;
+  readiness_score: number;
+  matched_tenders: MatchedTender[];
+  gaps: Gap[];
+  recommended_tier: TierSlug;
+  org_type: string | null;
+  dev_themes: string[];
+  matched_grants: MatchedGrant[];
+  grant_readiness_score: number;
+  created_at: string;
+}
+
+export interface CrawledData {
+  title: string | null;
+  metaDescription: string | null;
+  ogDescription: string | null;
+  content: string;
+  isThinContent: boolean;
+}
+
+export interface AIAnalysis {
+  detected_industry: string;
+  sectors: string[];
+  services: string[];
+  capabilities: string[];
+  certifications_detected: string[];
+  company_size_signal: string;
+  strengths: string[];
+  gaps: Gap[];
+  readiness_dimensions: ReadinessDimensions;
+  overall_score: number;
+  summary: string;
+}
+
+export interface ReadinessDimensions {
+  technical_capability: number;
+  compliance_readiness: number;
+  financial_stability: number;
+  geographic_reach: number;
+  experience_relevance: number;
+}
+
+export interface Gap {
+  gap: string;
+  severity: "high" | "medium" | "low";
+  fix: string;
+  action_steps: string[];
+  upsell_tier: TierSlug;
+}
+
+export interface MatchedTender {
+  id: number;
+  title: string;
+  agency: string;
+  deadline: string;
+  country: string;
+  sector: string;
+  score: number;
+  reference_id?: string;
+  source_url?: string | null;
+}
+
+export interface MatchedGrant {
+  id: number;
+  title: string;
+  agency: string;
+  deadline: string;
+  sector: string;
+  score: number;
+  source_url?: string | null;
+}
+
+export type TierSlug =
+  | "tender-intelligence"
+  | "submission-package"
+  | "strategic-partnership";
+
+export interface User {
+  id: number;
+  email: string;
+  name: string | null;
+  tier: TierSlug | null;
+  subscription_status: SubscriptionStatus | null;
+  subscription_expires_at: string | null;
+  is_super_admin: boolean;
+  created_at: string;
+}
+
+export type SubscriptionStatus = "active" | "canceled" | "past_due" | "trialing";
+
+export interface Subscription {
+  id: number;
+  user_id: number;
+  tier: TierSlug;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  status: SubscriptionStatus;
+  current_period_end: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssessmentInput {
+  companyName: string;
+  email: string;
+  website?: string;
+  description: string;
+  countries: string[];
+  orgType?: string;
+  devThemes?: string[];
+}
