@@ -2,12 +2,6 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
-/**
- * Subscription gating middleware.
- * Protects tier-gated API routes by verifying JWT presence.
- * Detailed tier checks happen in route-level guards (subscription-guard.ts).
- */
-
 const PUBLIC_PATHS = new Set([
   "/api/auth/signup",
   "/api/auth/login",
@@ -21,8 +15,7 @@ const PUBLIC_PATHS = new Set([
 
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true;
-  // Allow all non-API routes (pages, static assets)
-  if (!pathname.startsWith("/api/")) return true;
+  if (!pathname.startsWith("/api/") && !pathname.startsWith("/dashboard")) return true;
   return false;
 }
 
@@ -33,7 +26,43 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for Authorization header
+  const isDashboardPage = pathname.startsWith("/dashboard");
+  const secret = process.env.JWT_SECRET;
+
+  if (!secret) {
+    if (isDashboardPage) {
+      return NextResponse.redirect(new URL("/login?next=" + encodeURIComponent(pathname), request.url));
+    }
+    return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+  }
+
+  // Dashboard page routes: authenticate via httpOnly cookie
+  if (isDashboardPage) {
+    const cookieToken = request.cookies.get("tp_session")?.value;
+    if (!cookieToken) {
+      return NextResponse.redirect(new URL("/login?next=" + encodeURIComponent(pathname), request.url));
+    }
+    try {
+      const { payload } = await jwtVerify(cookieToken, new TextEncoder().encode(secret));
+      const trialExpiresAt = payload.trialExpiresAt as string | null | undefined;
+      const subscriptionStatus = payload.subscriptionStatus as string | null | undefined;
+      const isAdmin = payload.isAdmin as boolean | undefined;
+
+      // Admins and active subscribers bypass trial check
+      if (!isAdmin && subscriptionStatus !== "active") {
+        if (trialExpiresAt && new Date(trialExpiresAt) < new Date()) {
+          return NextResponse.redirect(
+            new URL("/pricing?trial_expired=1", request.url)
+          );
+        }
+      }
+      return NextResponse.next();
+    } catch {
+      return NextResponse.redirect(new URL("/login?next=" + encodeURIComponent(pathname), request.url));
+    }
+  }
+
+  // API routes: authenticate via Authorization header
   const authHeader = request.headers.get("authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return NextResponse.json(
@@ -43,14 +72,6 @@ export async function proxy(request: NextRequest) {
   }
 
   const token = authHeader.slice(7);
-  const secret = process.env.JWT_SECRET;
-
-  if (!secret) {
-    return NextResponse.json(
-      { error: "Server configuration error" },
-      { status: 500 }
-    );
-  }
 
   try {
     await jwtVerify(token, new TextEncoder().encode(secret));
@@ -64,5 +85,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*"],
+  matcher: ["/api/:path*", "/dashboard/:path*", "/dashboard"],
 };

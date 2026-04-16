@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   }
 
   const users = await sql`
-    SELECT id, email, name, tier, subscription_status, is_super_admin
+    SELECT id, email, name, tier, subscription_status, is_super_admin, trial_start_date
     FROM users
     WHERE magic_token = ${token}
       AND magic_token_expires_at > NOW()
@@ -34,9 +34,13 @@ export async function POST(request: Request) {
     WHERE id = ${user.id}
   `;
 
-  const jwt = await createToken(user.id as number, user.email as string);
+  const jwt = await createToken(user.id as number, user.email as string, {
+    isAdmin: user.is_super_admin as boolean,
+    subscriptionStatus: user.subscription_status as string | null,
+    trialStartDate: user.trial_start_date as string | null,
+  });
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     ok: true,
     token: jwt,
     user: {
@@ -48,4 +52,14 @@ export async function POST(request: Request) {
       is_super_admin: user.is_super_admin,
     },
   });
+
+  response.cookies.set("tp_session", jwt, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 7 * 24 * 60 * 60,
+    path: "/",
+  });
+
+  return response;
 }

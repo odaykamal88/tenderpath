@@ -10,8 +10,28 @@ const JWT_SECRET_KEY = () => {
 
 const JWT_EXPIRY = "7d";
 
-export async function createToken(userId: number, email: string): Promise<string> {
-  return new SignJWT({ userId, email })
+interface TokenClaims {
+  isAdmin?: boolean;
+  subscriptionStatus?: string | null;
+  trialStartDate?: string | null;
+}
+
+export async function createToken(
+  userId: number,
+  email: string,
+  claims: TokenClaims = {}
+): Promise<string> {
+  const trialExpiresAt = claims.trialStartDate
+    ? new Date(new Date(claims.trialStartDate).getTime() + 14 * 24 * 60 * 60 * 1000).toISOString()
+    : null;
+
+  return new SignJWT({
+    userId,
+    email,
+    isAdmin: claims.isAdmin ?? false,
+    subscriptionStatus: claims.subscriptionStatus ?? null,
+    trialExpiresAt,
+  })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(JWT_EXPIRY)
@@ -20,12 +40,15 @@ export async function createToken(userId: number, email: string): Promise<string
 
 export async function verifyToken(
   token: string
-): Promise<{ userId: number; email: string } | null> {
+): Promise<{ userId: number; email: string; isAdmin?: boolean; subscriptionStatus?: string | null; trialExpiresAt?: string | null } | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET_KEY());
     return {
       userId: payload.userId as number,
       email: payload.email as string,
+      isAdmin: payload.isAdmin as boolean | undefined,
+      subscriptionStatus: payload.subscriptionStatus as string | null | undefined,
+      trialExpiresAt: payload.trialExpiresAt as string | null | undefined,
     };
   } catch {
     return null;

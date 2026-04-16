@@ -103,7 +103,7 @@ export default function VaultPage() {
       </p>
 
       {expiring.length > 0 && (
-        <div className="mb-6 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+        <div className="mb-6 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-900">
           <strong>{expiring.length}</strong> document
           {expiring.length === 1 ? "" : "s"} expire within {EXPIRY_WARN_DAYS} days:{" "}
           {expiring.map((d) => d.name).join(", ")}

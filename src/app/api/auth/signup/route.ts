@@ -14,14 +14,18 @@ export async function POST(request: Request) {
   const magicToken = generateMagicToken();
   const expires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
 
-  // Upsert user with magic token
+  // Ensure column exists for existing DBs (safe no-op if already present)
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_start_date TIMESTAMPTZ`;
+
+  // Upsert user with magic token; set trial_start_date only on first insert
   await sql`
-    INSERT INTO users (email, name, magic_token, magic_token_expires_at)
-    VALUES (${normalizedEmail}, ${name ?? null}, ${magicToken}, ${expires.toISOString()})
+    INSERT INTO users (email, name, magic_token, magic_token_expires_at, trial_start_date)
+    VALUES (${normalizedEmail}, ${name ?? null}, ${magicToken}, ${expires.toISOString()}, NOW())
     ON CONFLICT (email) DO UPDATE SET
       magic_token = ${magicToken},
       magic_token_expires_at = ${expires.toISOString()},
-      name = COALESCE(${name ?? null}, users.name)
+      name = COALESCE(${name ?? null}, users.name),
+      trial_start_date = COALESCE(users.trial_start_date, NOW())
   `;
 
   // In production, send magic link via email (Resend)

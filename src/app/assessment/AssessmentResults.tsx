@@ -533,6 +533,32 @@ export default function AssessmentResults({ data, onReset }: Props) {
         </div>
       </div>
 
+      {/* Dashboard CTA — free→trial conversion */}
+      <div className="rounded-xl border border-gold/40 bg-gold/10 p-6 text-center">
+        <div className="text-xs font-semibold uppercase tracking-widest text-gold mb-2">Your pipeline is ready</div>
+        <h3 className="text-xl font-bold text-white mb-2">See your matched tenders and track your progress</h3>
+        <p className="text-sm text-gray-400 mb-5">
+          We&apos;ve found {data.matched_tenders.length} tenders and {data.matched_grants.length} grants for you.
+          Start your 14-day free trial and track them all in your personal pipeline.
+        </p>
+        <button
+          onClick={() => {
+            const bridge = {
+              assessment_id: data.id,
+              readiness_score: data.readiness_score,
+              company_name: data.company_name,
+              matched_tenders: data.matched_tenders.slice(0, 5),
+              gaps: data.gaps.filter((g) => g.severity === "high").slice(0, 5),
+            };
+            localStorage.setItem("tp_bridge", JSON.stringify(bridge));
+            window.location.href = "/login?next=/dashboard";
+          }}
+          className="inline-flex items-center gap-2 rounded-lg bg-gold px-6 py-3 text-sm font-semibold text-white hover:bg-gold-dark transition-colors"
+        >
+          Go to my dashboard →
+        </button>
+      </div>
+
       {/* Bottom links */}
       <div className="text-center space-y-3">
         <a href="/#services" className="text-sm text-gray-400 hover:text-white transition-colors">See all services →</a>

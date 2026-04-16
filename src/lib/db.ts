@@ -39,6 +39,7 @@ export async function initializeDatabase() {
       stripe_subscription_id VARCHAR(255),
       magic_token VARCHAR(255),
       magic_token_expires_at TIMESTAMPTZ,
+      trial_start_date TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     )
