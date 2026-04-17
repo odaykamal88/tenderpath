@@ -23,9 +23,6 @@ try {
 }
 
 const nextConfig: NextConfig = {
-  turbopack: {
-    root: "/Users/odaykamal/Desktop/TENDERPATH",
-  },
   serverExternalPackages: ["@anthropic-ai/sdk"],
 };
 
