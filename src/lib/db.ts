@@ -205,4 +205,24 @@ export async function initializeDatabase() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS bid_analyses (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      pipeline_item_id INTEGER REFERENCES pipeline_items(id) ON DELETE SET NULL,
+      tender_id INTEGER REFERENCES tenders(id) ON DELETE SET NULL,
+      tender_url TEXT,
+      stripe_session_id VARCHAR(200),
+      win_probability INTEGER NOT NULL,
+      recommendation VARCHAR(20) NOT NULL,
+      strength_areas JSONB DEFAULT '[]',
+      gap_areas JSONB DEFAULT '[]',
+      required_documents JSONB DEFAULT '[]',
+      effort_estimate VARCHAR(20) NOT NULL,
+      key_risks JSONB DEFAULT '[]',
+      next_steps JSONB DEFAULT '[]',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 }

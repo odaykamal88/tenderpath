@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   DragDropContext,
   Droppable,
@@ -39,9 +40,11 @@ function authHeaders(): HeadersInit {
 }
 
 export default function PipelinePage() {
+  const router = useRouter();
   const [items, setItems] = useState<PipelineItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [analysingId, setAnalysingId] = useState<number | null>(null);
   const [form, setForm] = useState({
     tender_title: "",
     tender_agency: "",
@@ -125,6 +128,41 @@ export default function PipelinePage() {
   async function remove(id: number) {
     await fetch(`/api/dashboard/pipeline/${id}`, { method: "DELETE", headers: authHeaders() });
     setItems((prev) => prev.filter((it) => it.id !== id));
+  }
+
+  async function handleAnalyse(item: PipelineItem) {
+    setAnalysingId(item.id);
+    try {
+      // Check if analysis already exists
+      const checkRes = await fetch(
+        `/api/analysis/bid-no-bid?pipeline_item_id=${item.id}`,
+        { headers: authHeaders() }
+      );
+      if (checkRes.ok) {
+        router.push(`/dashboard/analysis/${item.id}`);
+        return;
+      }
+
+      // No existing analysis — start Stripe checkout
+      const checkoutRes = await fetch("/api/analysis/bid-no-bid/checkout", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          pipeline_item_id: item.id,
+          tender_title: item.tender_title,
+        }),
+      });
+
+      if (!checkoutRes.ok) {
+        alert("Could not start checkout. Please try again.");
+        return;
+      }
+
+      const { url } = await checkoutRes.json();
+      if (url) window.location.href = url;
+    } finally {
+      setAnalysingId(null);
+    }
   }
 
   return (
@@ -252,12 +290,21 @@ export default function PipelinePage() {
                                   </span>
                                 )}
                               </div>
-                              <button
-                                onClick={() => remove(item.id)}
-                                className="mt-2 text-xs text-red-600 hover:underline"
-                              >
-                                Remove
-                              </button>
+                              <div className="mt-2 flex items-center gap-3">
+                                <button
+                                  onClick={() => handleAnalyse(item)}
+                                  disabled={analysingId === item.id}
+                                  className="text-xs font-medium text-indigo-600 hover:text-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {analysingId === item.id ? "Checking…" : "Analyse →"}
+                                </button>
+                                <button
+                                  onClick={() => remove(item.id)}
+                                  className="text-xs text-red-600 hover:underline"
+                                >
+                                  Remove
+                                </button>
+                              </div>
                             </div>
                           )}
                         </Draggable>
