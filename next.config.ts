@@ -9,6 +9,9 @@ const projectRoot = fs.realpathSync(path.resolve(process.cwd()));
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: projectRoot,
+  turbopack: {
+    root: projectRoot,
+  },
   serverExternalPackages: ["@anthropic-ai/sdk"],
 };
 
