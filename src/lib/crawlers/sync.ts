@@ -91,7 +91,7 @@ async function filterLiveLinks(tenders: RawTender[], concurrency = 10): Promise<
   return { live, dropped };
 }
 
-async function upsertTenders(tenders: RawTender[]): Promise<{ added: number; updated: number }> {
+export async function upsertTenders(tenders: RawTender[]): Promise<{ added: number; updated: number }> {
   let added = 0;
   let updated = 0;
 
@@ -133,7 +133,7 @@ async function upsertTenders(tenders: RawTender[]): Promise<{ added: number; upd
   return { added, updated };
 }
 
-async function expireAllOverdue(): Promise<number> {
+export async function expireAllOverdue(): Promise<number> {
   const result = await sql`
     UPDATE tenders
     SET status = 'expired', updated_at = NOW()

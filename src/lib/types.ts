@@ -67,6 +67,11 @@ export interface MatchedTender {
   score: number;
   reference_id?: string;
   source_url?: string | null;
+  estimated_value?: string | number | null;
+  jv_allowed?: boolean;
+  match_reason?: string | null;
+  discovered_date?: string | null;
+  confidence?: string | null;
 }
 
 export interface MatchedGrant {
@@ -77,6 +82,11 @@ export interface MatchedGrant {
   sector: string;
   score: number;
   source_url?: string | null;
+  country?: string | null;
+  region?: string | null;
+  value_range?: string | null;
+  description?: string | null;
+  org_type_mismatch?: boolean;
 }
 
 export type TierSlug =

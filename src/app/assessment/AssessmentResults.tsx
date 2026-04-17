@@ -43,11 +43,17 @@ function scoreColor(score: number): string {
   return "bg-red";
 }
 
-function fitLabel(score: number): { text: string; cls: string } {
-  if (score >= 80) return { text: "Excellent Fit", cls: "bg-green/20 text-green" };
-  if (score >= 60) return { text: "High Fit", cls: "bg-green/20 text-green" };
-  if (score >= 40) return { text: "Moderate Fit", cls: "bg-yellow-500/20 text-yellow-400" };
-  return { text: "Low Fit", cls: "bg-orange-500/20 text-orange-400" };
+function isDeadlineSoon(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return false;
+  return (d.getTime() - Date.now()) / (1000 * 60 * 60 * 24) <= 30;
+}
+
+function matchBadge(score: number): { label: string; cls: string } {
+  if (score >= 80) return { label: "High Fit", cls: "bg-green/20 text-green border border-green/30" };
+  if (score >= 60) return { label: "Medium Fit", cls: "bg-amber-500/20 text-amber-400 border border-amber-500/30" };
+  return { label: "Low Fit", cls: "bg-gray-500/20 text-gray-400 border border-gray-500/30" };
 }
 
 function severityColor(s: string): string {
@@ -74,30 +80,22 @@ const GRANT_DIMENSION_LABELS = [
   "Impact Methodology", "M&E Frameworks", "Grant Management", "Org Capacity", "Financial Controls",
 ];
 
-/* ── group tenders by geography ── */
-function groupTenders(tenders: MatchedTender[]): { label: string; icon: string; tenders: MatchedTender[] }[] {
-  const countryMap = new Map<string, MatchedTender[]>();
-  const regional: MatchedTender[] = [];
-  const international: MatchedTender[] = [];
-
-  for (const t of tenders) {
-    const c = t.country?.toLowerCase() ?? "";
-    if (c === "global" || c === "international" || c === "") {
-      international.push(t);
-    } else if (c.includes("region") || c.includes("multiple")) {
-      regional.push(t);
+function groupGrants(grants: MatchedGrant[]): { label: string; grants: MatchedGrant[] }[] {
+  const sorted = [...grants].sort((a, b) => b.score - a.score);
+  const regional: MatchedGrant[] = [];
+  const global: MatchedGrant[] = [];
+  for (const g of sorted) {
+    const c = (g.country ?? g.region ?? "").toLowerCase();
+    if (!c || c === "global" || c === "international" || c.includes("global")) {
+      global.push(g);
     } else {
-      if (!countryMap.has(t.country)) countryMap.set(t.country, []);
-      countryMap.get(t.country)!.push(t);
+      regional.push(g);
     }
   }
-
-  const groups: { label: string; icon: string; tenders: MatchedTender[] }[] = [];
-  for (const [country, list] of countryMap) {
-    groups.push({ label: `Tenders in ${country}`, icon: "📍", tenders: list });
-  }
-  if (regional.length) groups.push({ label: "Regional Opportunities", icon: "🌍", tenders: regional });
-  if (international.length) groups.push({ label: "International Tenders", icon: "🌐", tenders: international });
+  const groups: { label: string; grants: MatchedGrant[] }[] = [];
+  if (regional.length) groups.push({ label: "Regional Grants", grants: regional });
+  if (global.length) groups.push({ label: "Global Grant Opportunities", grants: global });
+  if (!groups.length) groups.push({ label: "Matched Grants", grants: sorted });
   return groups;
 }
 
@@ -123,7 +121,8 @@ export default function AssessmentResults({ data, onReset }: Props) {
   const recommended = TIER_INFO[data.recommended_tier];
   const secondary = data.recommended_tier === "strategic-partnership" ? TIER_INFO["submission-package"] : TIER_INFO["tender-intelligence"];
   const secondarySlug = data.recommended_tier === "strategic-partnership" ? "submission-package" : "tender-intelligence";
-  const tenderGroups = groupTenders(data.matched_tenders);
+  const sortedTenders = [...data.matched_tenders].sort((a, b) => b.score - a.score);
+  const grantGroups = groupGrants(data.matched_grants);
 
   // Derive grant readiness dimension scores from grant_readiness_score
   // The API doesn't return individual grant dims, so we approximate from the total
@@ -260,106 +259,167 @@ export default function AssessmentResults({ data, onReset }: Props) {
 
       {/* Tenders Tab */}
       {activeTab === "tenders" && (
+        <div className="space-y-4 mb-10">
+          {sortedTenders.length === 0 && <p className="text-gray-500 text-sm">No matching tenders found.</p>}
+          {sortedTenders.map((t) => {
+            const badge = matchBadge(t.score);
+            const soon = isDeadlineSoon(t.deadline);
+            const agencyQ = encodeURIComponent(t.agency);
+            const refQ = encodeURIComponent(t.reference_id ?? t.title);
+            return (
+              <div key={t.id} className="rounded-xl bg-navy-light border border-white/10 p-5">
+                {/* Top row: ref chip + country tag + Copy ID */}
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  {t.reference_id && (
+                    <span className="rounded bg-gray-800 px-2 py-0.5 text-[10px] font-mono text-gray-400">{t.reference_id}</span>
+                  )}
+                  <span className="rounded bg-gold/20 px-2 py-0.5 text-[10px] font-medium text-gold uppercase">{t.country}</span>
+                  {t.reference_id && (
+                    <button
+                      onClick={() => navigator.clipboard.writeText(t.reference_id!)}
+                      className="text-[10px] text-gray-500 hover:text-gray-300 flex items-center gap-1"
+                    >
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                      Copy ID
+                    </button>
+                  )}
+                </div>
+
+                {/* Title */}
+                <h4 className="text-base font-bold mb-3">{t.title}</h4>
+
+                {/* Match % badge + fit label */}
+                <div className="flex items-center gap-2 mb-3">
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badge.cls}`}>{t.score}% match</span>
+                  <span className="text-xs text-gray-400">{badge.label}</span>
+                </div>
+
+                {/* Meta row: agency · country · value · deadline */}
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400 mb-3">
+                  <span>{t.agency}</span>
+                  <span>{t.country}</span>
+                  {t.estimated_value != null && (
+                    <span>{typeof t.estimated_value === "number" ? `$${t.estimated_value.toLocaleString()}` : t.estimated_value}</span>
+                  )}
+                  {t.deadline && (
+                    <span className={`flex items-center gap-1 ${soon ? "text-red font-medium" : ""}`}>
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Deadline: {formatDate(t.deadline)}
+                    </span>
+                  )}
+                </div>
+
+                {/* JV allowed badge */}
+                {t.jv_allowed && (
+                  <span className="inline-flex items-center rounded bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 text-[10px] text-blue-300 mb-3 mr-2">
+                    JV Allowed
+                  </span>
+                )}
+
+                {/* One-line match reason */}
+                {t.match_reason && (
+                  <p className="text-xs text-gray-300 italic mb-3">{t.match_reason}</p>
+                )}
+
+                {/* Metadata: Source · Discovered · Confidence */}
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-500 mb-4">
+                  <span>Source: {t.agency} Procurement</span>
+                  {t.discovered_date && <span>Discovered: {formatDate(t.discovered_date)}</span>}
+                  <span>Confidence: {t.confidence ?? (t.score >= 70 ? "Verified" : "Inferred")}</span>
+                </div>
+
+                {/* Two search buttons */}
+                <div className="flex flex-wrap gap-2 mb-2">
+                  <a
+                    href={`https://www.google.com/search?q=${agencyQ}+procurement+${refQ}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded bg-gold/15 border border-gold/30 px-3 py-1.5 text-xs text-gold hover:bg-gold/25 transition-colors"
+                  >
+                    Search {t.agency} Procurement →
+                  </a>
+                  <a
+                    href={`https://www.google.com/search?q=UNGM+${refQ}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded bg-gray-800 border border-white/10 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 transition-colors"
+                  >
+                    Search UNGM →
+                  </a>
+                </div>
+
+                {t.reference_id && (
+                  <p className="text-[10px] text-gray-600 mt-1">Use reference ID {t.reference_id} to find this tender on the portal</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Grants Tab */}
+      {activeTab === "grants" && (
         <div className="space-y-8 mb-10">
-          {tenderGroups.length === 0 && <p className="text-gray-500 text-sm">No matching tenders found.</p>}
-          {tenderGroups.map((group) => (
+          {data.matched_grants.length === 0 && <p className="text-gray-500 text-sm">No matching grants found.</p>}
+          {grantGroups.map((group) => (
             <div key={group.label}>
-              <h3 className="flex items-center gap-2 text-sm font-semibold text-gold mb-4">
-                <span>{group.icon}</span>
-                {group.label}
-                <span className="rounded-full bg-gold/20 px-2 py-0.5 text-xs">{group.tenders.length}</span>
-              </h3>
+              <h3 className="text-sm font-semibold text-teal-400 mb-4">{group.label}</h3>
               <div className="space-y-4">
-                {group.tenders.map((t) => {
-                  const fit = fitLabel(t.score);
+                {group.grants.map((g) => {
+                  const badge = matchBadge(g.score);
+                  const soon = isDeadlineSoon(g.deadline);
                   return (
-                    <div key={t.id} className="rounded-xl bg-navy-light border border-white/10 p-5">
-                      {/* Header row */}
-                      <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {t.reference_id && (
-                            <span className="rounded bg-gray-800 px-2 py-0.5 text-[10px] font-mono text-gray-400">{t.reference_id}</span>
-                          )}
-                          <span className="rounded bg-gold/20 px-2 py-0.5 text-[10px] font-medium text-gold uppercase">{t.country}</span>
-                          {t.reference_id && (
-                            <button
-                              onClick={() => { navigator.clipboard.writeText(t.reference_id!); }}
-                              className="text-[10px] text-gray-500 hover:text-gray-300 flex items-center gap-1"
-                            >
-                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                              </svg>
-                              Copy ID
-                            </button>
-                          )}
-                        </div>
-                        <div className="flex flex-col items-end gap-1">
-                          <span className="text-green text-sm font-semibold">{t.score}% match</span>
-                          <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium ${fit.cls}`}>{fit.text}</span>
-                        </div>
-                      </div>
-
-                      {/* Title */}
-                      <h4 className="text-base font-semibold mb-3">{t.title}</h4>
-
-                      {/* Meta row */}
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400 mb-3">
-                        <span className="flex items-center gap-1">
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                          {t.agency}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                          {t.country}
-                        </span>
-                        {t.deadline && (
-                          <span className="flex items-center gap-1 text-red">
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                            Deadline: {formatDate(t.deadline)}
+                    <div key={g.id} className="rounded-xl bg-navy-light border border-white/10 p-5">
+                      {/* Agency · region/country · value range · deadline */}
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400 mb-2">
+                        <span>{g.agency}</span>
+                        {(g.country ?? g.region) && <span>{g.country ?? g.region}</span>}
+                        {g.value_range && <span>{g.value_range}</span>}
+                        {g.deadline && (
+                          <span className={soon ? "text-red font-medium" : ""}>
+                            Deadline: {formatDate(g.deadline)}
                           </span>
                         )}
                       </div>
 
-                      {/* Source info grid */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-lg bg-gray-900/50 p-3 text-[11px] mb-4">
-                        <div><span className="text-gray-500 block">Source</span><span className="text-blue-400">{t.agency} Procurement</span></div>
-                        <div><span className="text-gray-500 block">Issuer</span><span>{t.agency}</span></div>
-                        <div><span className="text-gray-500 block">Trust</span><span className="text-green flex items-center gap-1">
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                          Verified Source
-                        </span></div>
-                        <div><span className="text-gray-500 block">Confidence</span><span>{t.score >= 70 ? "High" : t.score >= 50 ? "Medium" : "Low"}</span></div>
-                      </div>
-
-                      {/* Links */}
-                      <div className="flex flex-wrap gap-2">
-                        {t.source_url ? (
-                          <a
-                            href={t.source_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 rounded bg-gold px-3 py-1.5 text-xs font-semibold text-white hover:bg-gold-light transition-colors"
-                          >
-                            View Official Notice
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                          </a>
-                        ) : (
-                          <a
-                            href={`https://www.ungm.org/Public/Notice/Search?q=${encodeURIComponent(t.reference_id ?? t.title)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 rounded bg-gold/15 border border-gold/30 px-3 py-1.5 text-xs text-gold hover:bg-gold/25 transition-colors"
-                          >
-                            Search UNGM
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                          </a>
+                      {/* Title + GRANT badge + eligibility warning */}
+                      <div className="flex flex-wrap items-start gap-2 mb-3">
+                        <h4 className="text-base font-semibold flex-1">{g.title}</h4>
+                        <span className="rounded bg-teal-500/20 border border-teal-500/40 px-2 py-0.5 text-[10px] font-semibold text-teal-300 uppercase flex-shrink-0">Grant</span>
+                        {g.org_type_mismatch && (
+                          <span className="rounded bg-orange-500/15 border border-orange-500/40 px-2 py-0.5 text-[10px] font-medium text-orange-400 flex-shrink-0">
+                            ⚠ Check eligibility
+                          </span>
                         )}
                       </div>
 
-                      {t.reference_id && (
-                        <p className="text-[10px] text-gray-600 mt-2">
-                          Use reference ID {t.reference_id} to find this tender on the portal
-                        </p>
+                      {/* Match badge */}
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badge.cls}`}>{g.score}% match</span>
+                        <span className="text-xs text-gray-400">{badge.label}</span>
+                      </div>
+
+                      {/* 2-line description */}
+                      {g.description && (
+                        <p className="text-xs text-gray-300 mb-3 line-clamp-2">{g.description}</p>
+                      )}
+
+                      {/* Apply / Learn More */}
+                      {g.source_url ? (
+                        <a
+                          href={g.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded bg-teal-500/20 border border-teal-500/40 px-3 py-1.5 text-xs font-semibold text-teal-300 hover:bg-teal-500/30 transition-colors"
+                        >
+                          Apply / Learn More →
+                        </a>
+                      ) : (
+                        <span className="text-xs text-gray-500 italic">Contact {g.agency} directly for application details</span>
                       )}
                     </div>
                   );
@@ -367,50 +427,6 @@ export default function AssessmentResults({ data, onReset }: Props) {
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Grants Tab */}
-      {activeTab === "grants" && (
-        <div className="space-y-4 mb-10">
-          {data.matched_grants.length === 0 && <p className="text-gray-500 text-sm">No matching grants found.</p>}
-          {data.matched_grants.map((g) => {
-            const fit = fitLabel(g.score);
-            return (
-              <div key={g.id} className="rounded-xl bg-navy-light border border-white/10 p-5">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <h4 className="text-base font-semibold">{g.title}</h4>
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <span className="text-teal-400 text-sm font-semibold">{g.score}% match</span>
-                    <span className="rounded-full bg-teal-500/20 text-teal-400 px-2 py-0.5 text-[10px] font-medium">{g.sector}</span>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400 mb-3">
-                  <span>{g.agency}</span>
-                  {g.deadline && (
-                    <span className="flex items-center gap-1">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                      Deadline: {formatDate(g.deadline)}
-                    </span>
-                  )}
-                  <span className="rounded bg-teal-500/15 px-2 py-0.5 text-[10px] text-teal-400 uppercase font-medium">Grant</span>
-                </div>
-                {g.source_url ? (
-                  <a
-                    href={g.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded bg-teal-500/20 border border-teal-500/40 px-3 py-1.5 text-xs font-semibold text-teal-300 hover:bg-teal-500/30 transition-colors"
-                  >
-                    View Grant Details
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                  </a>
-                ) : (
-                  <span className="text-xs text-gray-500 italic">Contact {g.agency} directly for application details</span>
-                )}
-              </div>
-            );
-          })}
         </div>
       )}
 

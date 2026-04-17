@@ -40,6 +40,7 @@ export default function AssessmentPage() {
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
   const [includeGlobal, setIncludeGlobal] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
+  const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
   const [progressStage, setProgressStage] = useState(0);
   const [results, setResults] = useState<AssessmentResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +49,8 @@ export default function AssessmentPage() {
     setSelectedCountries((prev) =>
       prev.includes(country) ? prev.filter((c) => c !== country) : [...prev, country]
     );
+    setCountrySearch("");
+    setCountryDropdownOpen(false);
   }, []);
 
   const filteredGroups = useMemo(() => {
@@ -254,44 +257,53 @@ export default function AssessmentPage() {
                 </div>
               )}
 
-              <input
-                type="text"
-                value={countrySearch}
-                onChange={(e) => setCountrySearch(e.target.value)}
-                className="w-full rounded-lg bg-navy-light border border-white/10 px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none"
-                placeholder="Type a country to search…"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={countrySearch}
+                  onChange={(e) => { setCountrySearch(e.target.value); setCountryDropdownOpen(true); }}
+                  onFocus={() => setCountryDropdownOpen(true)}
+                  onBlur={() => setTimeout(() => setCountryDropdownOpen(false), 150)}
+                  className="w-full rounded-lg bg-navy-light border border-white/10 px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none"
+                  placeholder="Type a country to search…"
+                />
 
-              <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-white/10 bg-navy-light">
-                {filteredGroups.length === 0 ? (
-                  <div className="px-3 py-4 text-xs text-gray-500">No countries match &ldquo;{countrySearch}&rdquo;.</div>
-                ) : (
-                  filteredGroups.map((g) => (
-                    <div key={g.label}>
-                      <div className="sticky top-0 bg-navy-light/95 backdrop-blur px-3 py-1.5 text-[10px] font-semibold tracking-wider text-gold uppercase border-b border-white/5">
-                        {g.label}
-                      </div>
-                      <div className="py-1">
-                        {g.countries.map((c) => {
-                          const active = selectedCountries.includes(c);
-                          return (
-                            <label
-                              key={c}
-                              className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 hover:bg-white/5 cursor-pointer"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={active}
-                                onChange={() => toggleCountry(c)}
-                                className="w-3.5 h-3.5 rounded border-white/20 bg-navy text-gold focus:ring-gold focus:ring-offset-0"
-                              />
-                              <span className={active ? "text-white" : ""}>{c}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))
+                {countryDropdownOpen && (
+                  <div className="absolute z-10 mt-1 w-full max-h-64 overflow-y-auto rounded-lg border border-white/10 bg-navy-light shadow-xl">
+                    {filteredGroups.length === 0 ? (
+                      <div className="px-3 py-4 text-xs text-gray-500">No countries match &ldquo;{countrySearch}&rdquo;.</div>
+                    ) : (
+                      filteredGroups.map((g) => (
+                        <div key={g.label}>
+                          <div className="sticky top-0 bg-navy-light/95 backdrop-blur px-3 py-1.5 text-[10px] font-semibold tracking-wider text-gold uppercase border-b border-white/5">
+                            {g.label}
+                          </div>
+                          <div className="py-1">
+                            {g.countries.map((c) => {
+                              const active = selectedCountries.includes(c);
+                              return (
+                                <button
+                                  key={c}
+                                  type="button"
+                                  onMouseDown={(e) => { e.preventDefault(); toggleCountry(c); }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 hover:bg-white/5 cursor-pointer text-left"
+                                >
+                                  <span className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center ${active ? "bg-gold border-gold" : "border-white/20 bg-navy"}`}>
+                                    {active && (
+                                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    )}
+                                  </span>
+                                  <span className={active ? "text-white" : ""}>{c}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 )}
               </div>
 
