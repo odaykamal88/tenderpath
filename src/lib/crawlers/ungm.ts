@@ -3,86 +3,90 @@
  * (UNICEF, WFP, WHO, UNHCR, IOM, UNDP, UNFPA, UNESCO, UNOPS, FAO, etc.) that
  * post here by mandate. Sits behind Cloudflare bot protection.
  *
- * Strategy: route all requests through our Cloudflare Browser Rendering
- * worker (workers/crawler-browser). The worker launches real Chromium,
- * warms up on /Public/Notice so Cloudflare sets cookies, then issues the
- * actual fetch from inside the page context — real TLS/JA3 fingerprint,
- * carries the CF cookies automatically. One worker call = warmup + action
- * atomically (cookies do not persist between calls), so every page request
- * is self-contained.
+ * Strategy: batch all pagination through a single call to the worker's
+ * /fetch-many endpoint. The worker launches Chromium once, warms up on
+ * /Public/Notice (Cloudflare issues cf_clearance + session cookies), then
+ * loops every page fetch inside the same page context — real TLS/JA3
+ * fingerprint, cookies + session reused across all N requests. This is
+ * the fix for the 300s Vercel timeout: per-page calls cost ~15s each in
+ * Chromium cold-start, which blew the cron budget for N=15. One batched
+ * call totals ~30-40s for all 20 pages.
  *
- * Per-notice detail enrichment (description + UNSPSCs) is disabled here:
- * with ~15 rows/page × ~15 pages that's 225 extra worker calls per run,
- * each spawning a fresh browser. Listing-only rows still carry title,
- * agency, country, and deadline — enough to filter and rank. Re-enable
- * with a dedicated cheap detail fetcher if UNSPSC signal becomes critical.
+ * Per-notice detail enrichment (description + UNSPSCs) still disabled —
+ * listing rows carry enough signal (title, agency, country, deadline).
  */
 import { type RawTender, type CrawlResult, withRetry } from "./types";
 
 const UNGM_API = "https://www.ungm.org/Public/Notice/Search";
 const UNGM_WARMUP = "https://www.ungm.org/Public/Notice";
 // Server caps at ~15 rows/page regardless of what we send. 100 matches what
-// the UI sends so our payload looks real; loop breaks on empty page.
+// the UI sends so our payload looks real.
 const PAGE_SIZE = 100;
-// 15 pages × ~15 rows ≈ 225 notices per run. Each page is one worker call
-// (~5-10s warmup+fetch), so MAX_PAGES × 10s bounds wall-clock under Vercel's
-// 300s maxDuration with headroom for the grants + other crawlers after us.
-const MAX_PAGES = 15;
-// Short jitter between page calls — worker launches fresh browser each time
-// so there's no session-fingerprint risk, but keep some pacing anyway.
-const PAGE_DELAY_MIN_MS = 500;
-const PAGE_DELAY_MAX_MS = 1500;
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const randomDelay = () =>
-  PAGE_DELAY_MIN_MS + Math.floor(Math.random() * (PAGE_DELAY_MAX_MS - PAGE_DELAY_MIN_MS));
-
-interface WorkerFetchOpts {
-  method: "GET" | "POST";
-  headers?: Record<string, string>;
-  body?: string;
-}
-
-interface WorkerFetchResult {
-  status: number;
-  body: string;
-}
+// 20 pages × ~15 rows ≈ 300 notices per run. All 20 pages ride a single
+// worker call (/fetch-many) so warmup cost is amortized once — total
+// wall-clock dominated by 20 × ~1-2s origin latency, not 20 × Chromium
+// cold-start. Comfortably under Vercel's 300s budget with headroom for
+// the other 8 crawlers.
+const MAX_PAGES = 20;
 
 function workerConfigured(): boolean {
   return !!(process.env.CRAWLER_WORKER_URL && process.env.CRAWLER_WORKER_KEY);
 }
 
+interface WorkerPageResult { status: number; body: string }
+
 /**
- * Route a request through the Cloudflare Browser Rendering worker. The worker
- * does warmup + fetch in a single call — we just pass the target URL and the
- * warmup URL, the worker handles the rest.
+ * Derive /fetch-many endpoint from the configured CRAWLER_WORKER_URL. The env
+ * var was set to .../fetch; we strip the path and append /fetch-many so we
+ * don't need a second env var.
  */
-async function workerFetch(url: string, opts: WorkerFetchOpts): Promise<WorkerFetchResult> {
-  const endpoint = process.env.CRAWLER_WORKER_URL!;
+function fetchManyEndpoint(): string {
+  const raw = process.env.CRAWLER_WORKER_URL!;
+  return new URL("/fetch-many", raw).toString();
+}
+
+/**
+ * Fan out N requests through a single worker invocation. Worker warms up
+ * Chromium + clears Cloudflare exactly once, then loops the requests inside
+ * the same page (cookies + TLS fingerprint reused). This is the difference
+ * between ~30-40s total and ~300s (one cold-start per page).
+ */
+async function workerFetchMany(
+  requests: Array<{ method: "GET" | "POST"; body?: string; headers?: Record<string, string> }>,
+): Promise<WorkerPageResult[]> {
+  const endpoint = fetchManyEndpoint();
   const key = process.env.CRAWLER_WORKER_KEY!;
 
   const resp = await fetch(endpoint, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Crawler-Key": key,
-    },
+    headers: { "Content-Type": "application/json", "X-Crawler-Key": key },
     body: JSON.stringify({
-      url,
-      method: opts.method,
-      body: opts.body,
-      headers: opts.headers ?? {},
       warmupUrl: UNGM_WARMUP,
-      waitMs: 2000,
+      waitMs: 2500,
+      delayMs: 700,
+      requests: requests.map((r) => ({
+        url: UNGM_API,
+        method: r.method,
+        body: r.body,
+        headers: r.headers ?? {},
+      })),
     }),
-    signal: AbortSignal.timeout(90_000),
+    // Budget: warmup ~8-12s + N × ~1.5s origin latency + delays. 20 pages
+    // comfortably fits in 120s; 180s gives margin for a slow warmup.
+    signal: AbortSignal.timeout(180_000),
   });
 
-  if (!resp.ok && resp.status !== 502) {
-    throw new Error(`crawler worker HTTP ${resp.status}`);
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`crawler worker /fetch-many HTTP ${resp.status}: ${text.slice(0, 200)}`);
   }
-  const payload = (await resp.json()) as { ok: boolean; status: number; body: string };
-  return { status: payload.status, body: payload.body };
+  const payload = (await resp.json()) as {
+    ok: boolean;
+    results?: WorkerPageResult[];
+    error?: string;
+  };
+  if (!payload.ok) throw new Error(`crawler worker error: ${payload.error ?? "unknown"}`);
+  return payload.results ?? [];
 }
 
 interface UNGMNotice {
@@ -149,8 +153,8 @@ function parseNoticeRows(html: string): UNGMNotice[] {
   return out;
 }
 
-async function fetchPage(pageIndex: number): Promise<UNGMNotice[]> {
-  const body = JSON.stringify({
+function buildPagePayload(pageIndex: number): string {
+  return JSON.stringify({
     PageIndex: pageIndex,
     PageSize: PAGE_SIZE,
     Title: "",
@@ -173,19 +177,17 @@ async function fetchPage(pageIndex: number): Promise<UNGMNotice[]> {
     NoticeDisplayType: null,
     NoticeSearchTotalLabelId: "noticeSearchTotal",
   });
+}
 
-  const resp = await workerFetch(UNGM_API, {
-    method: "POST",
-    body,
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "text/html, */*; q=0.01",
-      "X-Requested-With": "XMLHttpRequest",
-      Origin: "https://www.ungm.org",
-      Referer: "https://www.ungm.org/Public/Notice",
-    },
-  });
+const PAGE_HEADERS = {
+  "Content-Type": "application/json",
+  Accept: "text/html, */*; q=0.01",
+  "X-Requested-With": "XMLHttpRequest",
+  Origin: "https://www.ungm.org",
+  Referer: "https://www.ungm.org/Public/Notice",
+};
 
+function parsePageResult(pageIndex: number, resp: WorkerPageResult): UNGMNotice[] {
   if (resp.status !== 200) {
     throw new Error(`UNGM page ${pageIndex} HTTP ${resp.status}: ${resp.body.slice(0, 200)}`);
   }
@@ -234,11 +236,27 @@ export async function crawlUNGM(): Promise<CrawlResult> {
   }
 
   try {
+    // Build all page payloads upfront — we fire them as a single worker call.
+    const requests = Array.from({ length: MAX_PAGES }, (_, i) => ({
+      method: "POST" as const,
+      body: buildPagePayload(i),
+      headers: PAGE_HEADERS,
+    }));
+
+    const results = await withRetry(() => workerFetchMany(requests));
+
     const tenders: RawTender[] = [];
-    for (let page = 0; page < MAX_PAGES; page++) {
-      if (page > 0) await sleep(randomDelay());
-      const notices = await withRetry(() => fetchPage(page));
-      if (!notices.length) break;
+    for (let i = 0; i < results.length; i++) {
+      let notices: UNGMNotice[];
+      try {
+        notices = parsePageResult(i, results[i]);
+      } catch (err) {
+        // One bad page shouldn't drop the whole run. Log and continue — the
+        // worker-level retry already covered transient failures.
+        console.error(`[ungm] page ${i} parse failed:`, err instanceof Error ? err.message : err);
+        continue;
+      }
+      if (!notices.length) break; // empty page = end of active notices
       tenders.push(...notices.map(mapNotice));
     }
     return { platform: "UNGM", status: "success", tenders, durationMs: Date.now() - start };
