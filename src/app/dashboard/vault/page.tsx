@@ -44,8 +44,9 @@ export default function VaultPage() {
     name: "",
     type: "certification" as DocType,
     expiry_date: "",
-    file_url: "",
   });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -70,24 +71,64 @@ export default function VaultPage() {
   async function upload(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const res = await fetch("/api/dashboard/vault", {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({
-        name: form.name,
-        type: form.type,
-        expiry_date: form.expiry_date || null,
-        file_url: form.file_url,
-      }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error || "Upload failed");
+
+    if (!selectedFile) {
+      setError("Please select a file to upload.");
       return;
     }
-    const body = await res.json();
-    setDocs((prev) => [body.document, ...prev]);
-    setForm({ name: "", type: "certification", expiry_date: "", file_url: "" });
+
+    setUploading(true);
+
+    try {
+      // Upload file first
+      const uploadData = new FormData();
+      uploadData.append("file", selectedFile);
+
+      const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+      const uploadRes = await fetch("/api/dashboard/vault/upload", {
+        method: "POST",
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+        body: uploadData,
+      });
+
+      if (!uploadRes.ok) {
+        const body = await uploadRes.json().catch(() => ({}));
+        setError(body.error || "File upload failed");
+        setUploading(false);
+        return;
+      }
+
+      const { url: file_url } = await uploadRes.json();
+
+      // Save document record
+      const res = await fetch("/api/dashboard/vault", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          name: form.name || selectedFile.name,
+          type: form.type,
+          expiry_date: form.expiry_date || null,
+          file_url,
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error || "Save failed");
+        setUploading(false);
+        return;
+      }
+
+      const body = await res.json();
+      setDocs((prev) => [body.document, ...prev]);
+      setForm({ name: "", type: "certification", expiry_date: "" });
+      setSelectedFile(null);
+      // Reset file input
+      const fileInput = document.getElementById("vault-file-input") as HTMLInputElement;
+      if (fileInput) fileInput.value = "";
+    } finally {
+      setUploading(false);
+    }
   }
 
   async function remove(id: number) {
@@ -112,48 +153,67 @@ export default function VaultPage() {
 
       <form
         onSubmit={upload}
-        className="mb-6 rounded-lg border border-gray-200 bg-white p-4 grid grid-cols-1 md:grid-cols-5 gap-3"
+        className="mb-6 rounded-lg border border-gray-200 bg-white p-4 space-y-3"
       >
-        <input
-          className="border rounded px-2 py-1 text-sm md:col-span-2"
-          placeholder="Document name"
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          required
-        />
-        <select
-          className="border rounded px-2 py-1 text-sm"
-          value={form.type}
-          onChange={(e) => setForm({ ...form, type: e.target.value as DocType })}
-        >
-          {TYPES.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
-        </select>
-        <input
-          type="date"
-          className="border rounded px-2 py-1 text-sm"
-          value={form.expiry_date}
-          onChange={(e) => setForm({ ...form, expiry_date: e.target.value })}
-        />
-        <input
-          type="url"
-          className="border rounded px-2 py-1 text-sm"
-          placeholder="https://… file URL"
-          value={form.file_url}
-          onChange={(e) => setForm({ ...form, file_url: e.target.value })}
-          required
-        />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <input
+            className="border rounded px-2 py-1 text-sm"
+            placeholder="Document name (optional — defaults to filename)"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
+          <select
+            className="border rounded px-2 py-1 text-sm"
+            value={form.type}
+            onChange={(e) => setForm({ ...form, type: e.target.value as DocType })}
+          >
+            {TYPES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Expiry date (optional)</label>
+            <input
+              type="date"
+              className="w-full border rounded px-2 py-1 text-sm"
+              value={form.expiry_date}
+              onChange={(e) => setForm({ ...form, expiry_date: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">File *</label>
+            <input
+              id="vault-file-input"
+              type="file"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp"
+              className="w-full text-sm text-gray-600 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-gray-900 file:text-white hover:file:bg-gray-700 cursor-pointer"
+              onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+              required
+            />
+            <p className="mt-1 text-xs text-gray-400">PDF, Word, Excel, or image — max 10MB</p>
+          </div>
+        </div>
         <button
           type="submit"
-          className="md:col-span-5 px-4 py-2 bg-gray-900 text-white text-sm rounded"
+          disabled={uploading || !selectedFile}
+          className="w-full px-4 py-2 bg-gray-900 text-white text-sm rounded disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          Save document
+          {uploading ? (
+            <>
+              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Uploading…
+            </>
+          ) : (
+            "Upload document"
+          )}
         </button>
         {error && (
-          <div className="md:col-span-5 text-xs text-red-600">{error}</div>
+          <div className="text-xs text-red-600">{error}</div>
         )}
       </form>
 

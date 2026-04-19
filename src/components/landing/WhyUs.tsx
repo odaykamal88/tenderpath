@@ -27,7 +27,7 @@ const reasons = [
     ),
     title: "Competitor Intelligence",
     description:
-      "Know who you're bidding against. See how many vendors are pursuing the same tenders and where you have a competitive edge.",
+      "Know who you're bidding against before you commit. See exactly how many vendors are pursuing the same tenders, track repeat winners, and find the gaps where you have an edge.",
   },
   {
     icon: (
@@ -47,7 +47,7 @@ const reasons = [
     ),
     title: "Global Coverage",
     description:
-      "Whether you're in the Middle East, Africa, Asia, or Europe — we match vendors from 190+ countries with relevant UN opportunities.",
+      "Whether you're in the Middle East, Africa, Asia, or Europe — we match vendors from 190+ countries with relevant UN opportunities. Reports delivered in English and Arabic.",
   },
   {
     icon: (

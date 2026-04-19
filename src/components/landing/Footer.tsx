@@ -40,10 +40,15 @@ export default function Footer() {
               Resources
             </h4>
             <ul className="space-y-2.5">
-              {["UN Procurement Guide", "UNGM Registration", "Blog", "FAQ"].map((link) => (
-                <li key={link}>
-                  <a href="#" className="text-sm text-gray-400 hover:text-white transition-colors">
-                    {link}
+              {[
+                { label: "UN Procurement Guide", href: "#" },
+                { label: "UNGM Registration", href: "#" },
+                { label: "Blog", href: "#" },
+                { label: "FAQ", href: "/faq" },
+              ].map((link) => (
+                <li key={link.label}>
+                  <a href={link.href} className="text-sm text-gray-400 hover:text-white transition-colors">
+                    {link.label}
                   </a>
                 </li>
               ))}
@@ -55,10 +60,15 @@ export default function Footer() {
               Company
             </h4>
             <ul className="space-y-2.5">
-              {["About", "Contact", "Privacy Policy", "Terms of Service"].map((link) => (
-                <li key={link}>
-                  <a href="#" className="text-sm text-gray-400 hover:text-white transition-colors">
-                    {link}
+              {[
+                { label: "About", href: "#" },
+                { label: "Contact", href: "/contact" },
+                { label: "Privacy Policy", href: "#" },
+                { label: "Terms of Service", href: "#" },
+              ].map((link) => (
+                <li key={link.label}>
+                  <a href={link.href} className="text-sm text-gray-400 hover:text-white transition-colors">
+                    {link.label}
                   </a>
                 </li>
               ))}

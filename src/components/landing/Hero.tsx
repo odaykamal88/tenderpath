@@ -24,7 +24,7 @@ export default function Hero() {
                 href="/assessment"
                 className="inline-flex items-center gap-2 rounded-lg bg-gold px-6 py-3.5 text-sm font-semibold text-white shadow-md shadow-gold/20 hover:bg-gold-dark transition-colors"
               >
-                See What You&apos;re Missing — Free
+                Get Your Free Readiness Score
                 <svg
                   className="h-4 w-4"
                   fill="none"
@@ -45,6 +45,15 @@ export default function Hero() {
               >
                 See How It Works
               </a>
+            </div>
+            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2">
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Trusted by vendors in</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                {["🇯🇴 Jordan","🇬🇭 Ghana","🇰🇪 Kenya","🇪🇬 Egypt","🇵🇰 Pakistan","🇳🇬 Nigeria"].map((c) => (
+                  <span key={c} className="text-xs text-gray-500">{c}</span>
+                ))}
+                <span className="text-xs text-gray-400">+ 35 more countries</span>
+              </div>
             </div>
           </div>
 

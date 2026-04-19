@@ -80,7 +80,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen flex bg-gray-50">
       <aside className="w-64 bg-white border-r border-gray-200 p-6 flex flex-col">
         <Link href="/" className="text-lg font-semibold text-gray-900 mb-8">
-          TenderPath
+          Tender<span className="text-amber-500">Path</span>
         </Link>
         <nav className="flex flex-col gap-1">
           {navItems.map((item) => {
@@ -103,6 +103,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             );
           })}
         </nav>
+        <div className="mt-6 pt-4 border-t border-gray-100">
+          <a
+            href="mailto:hello@tenderpath.co?subject=Support Request"
+            className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Help &amp; Support
+          </a>
+          <a
+            href="/faq"
+            className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            FAQ
+          </a>
+        </div>
         <div className="mt-auto pt-6 border-t border-gray-200 text-xs text-gray-500">
           <div className="mb-2 truncate">{state.user.email}</div>
           <button
@@ -118,24 +138,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       <main className="flex-1 p-8">
-        {state.isTrialing && state.trialDaysLeft > 0 && (
-          <div className="mb-6 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900 flex items-center justify-between">
+        {(state.isTrialing || state.locked) && (
+          <div className={`mb-6 rounded-md px-4 py-3 text-sm flex items-center justify-between gap-4 ${
+            state.locked
+              ? "bg-red-50 border border-red-200 text-red-900"
+              : state.trialDaysLeft <= 3
+              ? "bg-orange-50 border border-orange-200 text-orange-900"
+              : "bg-amber-50 border border-amber-200 text-amber-900"
+          }`}>
             <span>
-              Free trial: <strong>{state.trialDaysLeft}</strong> day
-              {state.trialDaysLeft === 1 ? "" : "s"} remaining.
+              {state.locked ? (
+                "Your trial has ended. Upgrade to continue accessing your pipeline and vault."
+              ) : (
+                <>
+                  Free trial: <strong>{state.trialDaysLeft}</strong> day{state.trialDaysLeft === 1 ? "" : "s"} remaining.
+                  {state.trialDaysLeft <= 3 && " Upgrade now to keep your data."}
+                </>
+              )}
             </span>
-            <Link href="/pricing" className="font-medium underline">
-              Subscribe — $49/mo
+            <Link
+              href="/pricing"
+              className="flex-shrink-0 font-semibold underline whitespace-nowrap"
+            >
+              {state.locked ? "Subscribe to unlock" : "Subscribe — $49/mo"}
             </Link>
-          </div>
-        )}
-        {state.locked && (
-          <div className="mb-6 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-900">
-            Your trial has ended.{" "}
-            <Link href="/pricing" className="font-medium underline">
-              Subscribe to continue
-            </Link>
-            .
           </div>
         )}
         {children}

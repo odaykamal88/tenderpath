@@ -34,8 +34,8 @@ export async function POST(request: Request) {
   if (!isType(type)) {
     return NextResponse.json({ error: "invalid type" }, { status: 400 });
   }
-  if (!file_url || typeof file_url !== "string" || !/^https?:\/\//.test(file_url)) {
-    return NextResponse.json({ error: "valid file_url (http/https) required" }, { status: 400 });
+  if (!file_url || typeof file_url !== "string" || !/^(https?:\/\/|data:)/.test(file_url)) {
+    return NextResponse.json({ error: "valid file_url required" }, { status: 400 });
   }
 
   const rows = await sql`

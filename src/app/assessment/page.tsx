@@ -169,7 +169,7 @@ export default function AssessmentPage() {
                   ) : s}
                 </div>
                 <span className={`text-[10px] mt-1 ${step >= s ? "text-gray-300" : "text-gray-600"}`}>
-                  {["Company Info", "Analysis", "Results"][i]}
+                  {["Company Info", "AI Analysis", "Results"][i]}
                 </span>
               </div>
               {i < 2 && <div className={`w-20 sm:w-28 h-px mx-2 mb-4 ${step > s ? "bg-green" : "bg-gray-700"}`} />}
@@ -211,6 +211,12 @@ export default function AssessmentPage() {
                 className="w-full rounded-lg bg-navy-light border border-white/10 px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none"
                 placeholder="you@company.com"
               />
+              <p className="mt-1.5 text-xs text-gray-500 flex items-center gap-1.5">
+                <svg className="h-3 w-3 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                No spam — your report is sent to this address only.
+              </p>
             </div>
 
             <div>
@@ -320,6 +326,27 @@ export default function AssessmentPage() {
               </label>
             </div>
 
+            {/* Report preview */}
+            <div className="rounded-lg border border-white/10 bg-navy-light/50 p-4 mt-2">
+              <p className="text-xs font-semibold text-gold uppercase tracking-wider mb-3">What you&apos;ll receive</p>
+              <ul className="space-y-2">
+                {[
+                  "Vendor Readiness Score (0–100) across 5 dimensions",
+                  "Matched tenders & grants from 15+ UN agencies",
+                  "Compliance gap analysis with specific fixes",
+                  "Recommended next steps based on your profile",
+                  "Competitor intelligence — how many vendors are bidding",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-2 text-xs text-gray-300">
+                    <svg className="h-3.5 w-3.5 mt-0.5 text-gold flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
             <button
               onClick={handleSubmit}
               className="w-full rounded-lg bg-gold py-3 text-sm font-semibold text-white hover:bg-gold-dark transition-colors mt-4"
@@ -334,8 +361,8 @@ export default function AssessmentPage() {
       {step === 2 && (
         <div className="mx-auto max-w-lg px-6 py-16 text-center">
           <div className="mx-auto mb-6 w-12 h-12 border-3 border-gold/30 border-t-gold rounded-full animate-spin" />
-          <h2 className="font-serif text-2xl font-bold mb-2">Analyzing Your Business...</h2>
-          <p className="text-gray-400 text-sm mb-8">This takes 10-20 seconds. We&apos;re doing real work here.</p>
+          <h2 className="font-serif text-2xl font-bold mb-2">AI is analyzing your profile…</h2>
+          <p className="text-gray-400 text-sm mb-8">Our AI is analyzing your profile — this takes 15–30 seconds.</p>
           <div className="text-left space-y-3 max-w-sm mx-auto">
             {PROGRESS_STEPS.map((label, i) => (
               <div key={label} className="flex items-center gap-3">
