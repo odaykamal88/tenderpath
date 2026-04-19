@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { TierSlug, Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
+import { TIER_INFO_BY_SLUG } from "@/lib/pricing";
 
 interface AssessmentData {
   id: number;
@@ -62,11 +63,7 @@ function severityColor(s: string): string {
   return "bg-yellow-500/15 border-yellow-500/40 text-yellow-400";
 }
 
-const TIER_INFO: Record<TierSlug, { name: string; price: string; tagline: string; cta: string }> = {
-  "strategic-partnership": { name: "Strategic Partnership", price: "$999", tagline: "End-to-end procurement support including roster registration", cta: "Talk to an Expert" },
-  "submission-package": { name: "Submission Package", price: "$299", tagline: "Get your first proposal right", cta: "Get Proposal Help" },
-  "tender-intelligence": { name: "Tender Intelligence", price: "$49", tagline: "Real-time matching and alerts for your exact profile", cta: "Start Matching" },
-};
+const TIER_INFO = TIER_INFO_BY_SLUG;
 
 const DIMENSION_LABELS: { key: keyof ReadinessDimensions; label: string }[] = [
   { key: "technical_capability", label: "Technical" },
@@ -509,12 +506,15 @@ export default function AssessmentResults({ data, onReset }: Props) {
       {/* Pricing cards */}
       <div className="grid sm:grid-cols-2 gap-4 mb-8">
         {/* Recommended tier */}
-        <div className="rounded-xl border-2 border-gold p-6 bg-navy-light relative">
+        <div
+          className="rounded-xl border-2 border-gold p-6 bg-navy-light relative cursor-pointer hover:bg-navy-light/80 transition-colors"
+          onClick={() => { window.location.href = `/login?plan=${data.recommended_tier}`; }}
+        >
           <span className="absolute -top-3 right-4 rounded-full bg-gold px-3 py-0.5 text-[10px] font-bold text-white uppercase">Best Fit</span>
           <h3 className="text-lg font-bold">{recommended.name}</h3>
           <div className="mt-2 mb-3">
             <span className="text-2xl font-bold text-gold">{recommended.price}</span>
-            <span className="text-xs text-gray-500">/mo</span>
+            <span className="text-xs text-gray-500">{recommended.billingPeriod}</span>
           </div>
           <p className="text-xs text-gray-400 mb-4">{recommended.tagline}</p>
           {data.gaps.length > 0 && (
@@ -523,18 +523,21 @@ export default function AssessmentResults({ data, onReset }: Props) {
               {data.gaps[0].gap}
             </p>
           )}
-          <button className="w-full rounded-lg bg-gold py-2.5 text-sm font-semibold text-white hover:bg-gold-dark transition-colors">
+          <div className="w-full rounded-lg bg-gold py-2.5 text-sm font-semibold text-white hover:bg-gold-dark transition-colors text-center">
             {recommended.cta} →
-          </button>
+          </div>
         </div>
 
         {/* Secondary tier */}
-        <div className="rounded-xl border border-white/10 p-6 bg-navy-light relative">
+        <div
+          className="rounded-xl border border-white/10 p-6 bg-navy-light relative cursor-pointer hover:bg-navy-light/80 transition-colors"
+          onClick={() => { window.location.href = `/login?plan=${secondarySlug}`; }}
+        >
           <span className="absolute -top-3 right-4 rounded-full bg-gray-700 px-3 py-0.5 text-[10px] font-bold text-gray-300 uppercase">Also Consider</span>
           <h3 className="text-lg font-bold">{secondary.name}</h3>
           <div className="mt-2 mb-3">
             <span className="text-2xl font-bold">{secondary.price}</span>
-            <span className="text-xs text-gray-500">/mo</span>
+            <span className="text-xs text-gray-500">{secondary.billingPeriod}</span>
           </div>
           <p className="text-xs text-gray-400 mb-4">{secondary.tagline}</p>
           {data.gaps.length > 1 && (
@@ -543,9 +546,9 @@ export default function AssessmentResults({ data, onReset }: Props) {
               {data.gaps[1].gap}
             </p>
           )}
-          <button className="w-full rounded-lg border border-white/20 py-2.5 text-sm font-semibold text-white hover:bg-white/5 transition-colors">
+          <div className="w-full rounded-lg border border-white/20 py-2.5 text-sm font-semibold text-white hover:bg-white/5 transition-colors text-center">
             {secondary.cta} →
-          </button>
+          </div>
         </div>
       </div>
 

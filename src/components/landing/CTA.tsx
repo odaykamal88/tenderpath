@@ -6,7 +6,7 @@ export default function CTA() {
           Stop missing contracts you were made to win
         </h2>
         <p className="text-gray-300 text-base leading-relaxed mb-10 max-w-xl mx-auto">
-          Take the free Vendor Readiness Assessment. In under 5 minutes,
+          Take the free Vendor Readiness Assessment. In 2 minutes,
           you&apos;ll know exactly where you stand — and what to do next.
         </p>
         <div className="flex flex-wrap justify-center gap-4">
@@ -29,9 +29,15 @@ export default function CTA() {
               />
             </svg>
           </a>
+          <a
+            href="#services"
+            className="inline-flex items-center gap-2 rounded-lg border border-gold/40 px-8 py-4 text-base font-semibold text-gold hover:border-gold/70 hover:bg-gold/5 transition-colors"
+          >
+            See Pricing
+          </a>
         </div>
         <p className="mt-6 text-xs text-gray-400">
-          Free — No credit card required — Results in under 5 minutes
+          Free — No credit card required — Results in 2 minutes
         </p>
       </div>
     </section>

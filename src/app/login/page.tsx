@@ -55,20 +55,38 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen grid place-items-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm rounded-lg bg-white border border-gray-200 p-6">
-        <h1 className="text-xl font-semibold text-gray-900 mb-1">
-          Sign in to TenderPath
+    <div className="min-h-screen bg-navy flex flex-col items-center justify-center px-4">
+      {/* Back link */}
+      <a
+        href="/"
+        className="self-start max-w-sm w-full mx-auto mb-6 text-xs text-gray-400 hover:text-gold transition-colors flex items-center gap-1"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+        Back to TenderPath
+      </a>
+
+      <div className="w-full max-w-sm rounded-xl bg-navy-light border border-white/10 p-8">
+        {/* Logo */}
+        <div className="mb-6 text-center">
+          <span className="text-2xl font-semibold text-white">
+            Tender<span className="text-gold">Path</span>
+          </span>
+        </div>
+
+        <h1 className="text-xl font-semibold text-white mb-1">
+          Save your assessment results
         </h1>
-        <p className="text-sm text-gray-600 mb-6">
-          14-day free trial. No credit card required.
+        <p className="text-sm text-gray-400 mb-6">
+          Free for 14 days — no credit card required.
         </p>
 
         {step === "request" ? (
           <form onSubmit={request} className="flex flex-col gap-3">
             <input
               type="email"
-              className="border rounded px-3 py-2 text-sm"
+              className="rounded-lg bg-navy border border-white/10 px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-gold focus:outline-none"
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -76,30 +94,30 @@ function LoginForm() {
             />
             <input
               type="text"
-              className="border rounded px-3 py-2 text-sm"
+              className="rounded-lg bg-navy border border-white/10 px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-gold focus:outline-none"
               placeholder="Name (optional)"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
             <button
               disabled={busy}
-              className="px-4 py-2 bg-gray-900 text-white text-sm rounded disabled:opacity-50"
+              className="rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-white hover:bg-gold-dark transition-colors disabled:opacity-50"
             >
               {busy ? "Sending…" : "Send magic link"}
             </button>
           </form>
         ) : (
           <form onSubmit={verify} className="flex flex-col gap-3">
-            <p className="text-sm text-gray-600">
-              Paste the token from the magic link emailed to {email}.
+            <p className="text-sm text-gray-400">
+              Paste the token from the magic link emailed to <span className="text-white">{email}</span>.
             </p>
-            {devToken && (
-              <p className="text-xs text-gray-500 break-all">
-                Dev token: <code>{devToken}</code>
+            {process.env.NODE_ENV === "development" && devToken && (
+              <p className="text-xs text-gray-500 break-all rounded bg-navy border border-white/10 px-3 py-2">
+                Dev token: <code className="text-gold">{devToken}</code>
               </p>
             )}
             <input
-              className="border rounded px-3 py-2 text-sm"
+              className="rounded-lg bg-navy border border-white/10 px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-gold focus:outline-none"
               placeholder="Paste token"
               value={token}
               onChange={(e) => setToken(e.target.value)}
@@ -107,21 +125,21 @@ function LoginForm() {
             />
             <button
               disabled={busy}
-              className="px-4 py-2 bg-gray-900 text-white text-sm rounded disabled:opacity-50"
+              className="rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-white hover:bg-gold-dark transition-colors disabled:opacity-50"
             >
               {busy ? "Verifying…" : "Sign in"}
             </button>
             <button
               type="button"
               onClick={() => setStep("request")}
-              className="text-xs text-gray-500 hover:underline"
+              className="text-xs text-gray-500 hover:text-gold transition-colors hover:underline"
             >
               Use a different email
             </button>
           </form>
         )}
 
-        {error && <div className="mt-3 text-xs text-red-600">{error}</div>}
+        {error && <div className="mt-3 text-xs text-red">{error}</div>}
       </div>
     </div>
   );
@@ -129,7 +147,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen" />}>
+    <Suspense fallback={<div className="min-h-screen bg-navy" />}>
       <LoginForm />
     </Suspense>
   );

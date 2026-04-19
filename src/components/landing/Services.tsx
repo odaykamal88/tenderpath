@@ -1,53 +1,4 @@
-const tiers = [
-  {
-    name: "Tender Intelligence",
-    price: "$49",
-    period: "/mo",
-    description: "For businesses exploring UN procurement opportunities.",
-    features: [
-      "Vendor Readiness Assessment",
-      "Live tender matching (up to 10/month)",
-      "Basic compliance checklist",
-      "UNGM registration guidance",
-      "Email notifications for new matches",
-    ],
-    cta: "Start Free Assessment",
-    featured: false,
-  },
-  {
-    name: "Submission Package",
-    price: "$199",
-    period: "/mo",
-    description: "For businesses ready to bid on UN contracts.",
-    features: [
-      "Everything in Tender Intelligence",
-      "Unlimited tender matching",
-      "Full gap analysis & remediation plan",
-      "Bid/no-bid recommendation engine",
-      "Document preparation templates",
-      "Competitor activity monitoring",
-    ],
-    cta: "Get Started",
-    featured: false,
-  },
-  {
-    name: "Strategic Partnership",
-    price: "$599",
-    period: "/mo",
-    description: "For businesses serious about winning consistently.",
-    features: [
-      "Everything in Submission Package",
-      "Dedicated account strategist",
-      "End-to-end submission support",
-      "Pre-bid compliance review",
-      "Post-award contract support",
-      "Quarterly performance reviews",
-      "Priority tender alerts",
-    ],
-    cta: "Contact Sales",
-    featured: true,
-  },
-];
+import { TIERS } from "@/lib/pricing";
 
 export default function Services() {
   return (
@@ -59,44 +10,47 @@ export default function Services() {
             Services
           </p>
           <h2 className="font-serif text-3xl sm:text-4xl font-bold text-navy mb-4">
-            Choose the level of support you need
+            The right tool for every stage of winning
           </h2>
           <p className="text-gray-500 text-base leading-relaxed">
-            Start with a free assessment. Upgrade when you&apos;re ready to
-            compete.
+            Use one service or all four — each delivers immediate value on its own.
           </p>
         </div>
 
         {/* Pricing cards */}
-        <div className="grid md:grid-cols-3 gap-8">
-          {tiers.map((tier) => (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {TIERS.map((tier) => (
             <div
-              key={tier.name}
-              className={`rounded-xl border p-8 flex flex-col ${
+              key={tier.slug}
+              className={`rounded-xl border p-6 flex flex-col ${
                 tier.featured
                   ? "border-gold bg-gradient-to-b from-cream to-white shadow-xl shadow-gold/10 ring-1 ring-gold/20"
                   : "border-gray-100 hover:border-gold/20 hover:shadow-lg transition-all"
               }`}
             >
               {tier.featured && (
-                <span className="inline-block self-start rounded-full bg-gold/10 text-gold text-[10px] font-bold tracking-wider uppercase px-3 py-1 mb-4">
+                <span className="inline-block self-start rounded-full bg-gold/10 text-gold text-[10px] font-bold tracking-wider uppercase px-3 py-1 mb-3">
                   Most Popular
                 </span>
               )}
-              <h3 className="text-lg font-semibold text-navy">{tier.name}</h3>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">
+                {tier.label}
+              </p>
+              <h3 className="text-base font-semibold text-navy leading-tight">{tier.name}</h3>
               <div className="mt-3 flex items-baseline gap-1">
-                <span className="font-serif text-4xl font-bold text-navy">
+                <span className="font-serif text-3xl font-bold text-navy">
                   {tier.price}
                 </span>
-                <span className="text-sm text-gray-400">{tier.period}</span>
+                <span className="text-xs text-gray-400">{tier.billingPeriod}</span>
               </div>
-              <p className="mt-3 text-sm text-gray-500">{tier.description}</p>
+              <p className="mt-0.5 text-[10px] text-gray-400">{tier.billingNote}</p>
+              <p className="mt-3 text-xs text-gray-500 leading-relaxed flex-1">{tier.tagline}</p>
 
-              <ul className="mt-6 space-y-3 flex-1">
+              <ul className="mt-5 space-y-2.5">
                 {tier.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2.5">
+                  <li key={feature} className="flex items-start gap-2">
                     <svg
-                      className="h-4 w-4 mt-0.5 shrink-0 text-green"
+                      className="h-3.5 w-3.5 mt-0.5 shrink-0 text-green"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -108,14 +62,14 @@ export default function Services() {
                         d="M4.5 12.75l6 6 9-13.5"
                       />
                     </svg>
-                    <span className="text-sm text-gray-600">{feature}</span>
+                    <span className="text-xs text-gray-600">{feature}</span>
                   </li>
                 ))}
               </ul>
 
               <a
-                href="/assessment"
-                className={`mt-8 block rounded-lg py-3 text-center text-sm font-semibold transition-colors ${
+                href={tier.ctaHref}
+                className={`mt-6 block rounded-lg py-2.5 text-center text-xs font-semibold transition-colors ${
                   tier.featured
                     ? "bg-gold text-white hover:bg-gold-dark shadow-md shadow-gold/20"
                     : "border-2 border-navy/15 text-navy hover:border-navy/30"
