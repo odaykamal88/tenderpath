@@ -12,6 +12,10 @@ import { crawlUKFTS } from "./uk-fts";
 import { crawlWorldBank } from "./world-bank";
 import { crawlSAMGov } from "./sam-gov";
 import { crawlGIZ } from "./giz";
+import { crawlDevelopmentAidNPO } from "./developmentaid-npo";
+import { crawlADB } from "./adb";
+import { crawlEBRD } from "./ebrd";
+import { crawlUNRWA } from "./unrwa";
 
 export interface PlatformSyncResult {
   platform: string;
@@ -44,9 +48,13 @@ const SOURCE_PRIORITY: Record<string, number> = {
   "SAM.gov": 85,
   "UK Find a Tender": 80,
   "UNDP Atlas": 75,
+  ADB: 75,
+  EBRD: 75,
+  UNRWA: 72,
   ReliefWeb: 70,
   UNDP: 60,
   GIZ: 60,
+  "DevelopmentAid NPO": 40,
 };
 
 function dedupeTenders(tenders: RawTender[]): { kept: RawTender[]; deduped: number } {
@@ -201,6 +209,10 @@ export async function syncAllTenders(): Promise<SyncSummary> {
     crawlGIZ(),
     crawlUNDP(),
     crawlUNDPAtlas(),
+    crawlADB(),
+    crawlEBRD(),
+    crawlUNRWA(),
+    crawlDevelopmentAidNPO(),
     // crawlWFP(),    — disabled, posts to UNGM
   ]);
 

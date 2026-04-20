@@ -1,0 +1,190 @@
+/**
+ * EBRD — European Bank for Reconstruction and Development.
+ * Procurement notices live on ECEPP (Electronic Contract Opportunities Portal):
+ *   https://ecepp.ebrd.com/delta/viewNoticesPublic.html
+ * Public search results render to HTML; each notice link is:
+ *   /delta/viewNotice.html?displayId=<id>
+ *
+ * Volume: ~1–2k open notices, focus on Central/Eastern Europe, Central Asia,
+ * North Africa, Eastern Mediterranean — the EBRD's 38 countries of operations.
+ *
+ * Override `EBRD_NOTICES_URL` to point at a mirror if ECEPP is blocked.
+ */
+import { type RawTender, type CrawlResult, withRetry, fetchWithTimeout } from "./types";
+
+const BASE = process.env.EBRD_NOTICES_URL ?? "https://ecepp.ebrd.com/delta/viewNoticesPublic.html";
+const MAX_PAGES = 3;
+const PAGE_DELAY_MS = 1500;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function fetchPage(page: number): Promise<string> {
+  // ECEPP pages via POST form or GET with pageIndex. Stick with GET.
+  const url = page === 0 ? BASE : `${BASE}?pageIndex=${page}`;
+  const resp = await fetchWithTimeout(url, {
+    headers: {
+      Accept: "text/html,application/xhtml+xml",
+      "Accept-Language": "en-US,en;q=0.9",
+      "User-Agent": "Mozilla/5.0 (compatible; TenderPath/1.0; +https://tenderpath.io)",
+    },
+  });
+  if (!resp.ok) throw new Error(`EBRD page ${page} ${resp.status}`);
+  return resp.text();
+}
+
+interface ParsedNotice {
+  id: string;
+  title: string;
+  country: string;
+  noticeType: string;
+  deadline: string | null;
+}
+
+const ENTITIES: Record<string, string> = {
+  "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"",
+  "&#039;": "'", "&#39;": "'", "&nbsp;": " ",
+};
+
+function cleanText(s: string): string {
+  return s
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&[a-zA-Z#0-9]+;/g, (m) => ENTITIES[m] ?? " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// ECEPP renders each notice inside a result card or row; every card contains
+// a link matching viewNotice.html?displayId=NNNNN. Anchor on that link.
+function parseNotices(html: string): ParsedNotice[] {
+  const out: ParsedNotice[] = [];
+  const seen = new Set<string>();
+  const rowRe = /<(tr|div|li)\b[^>]*>([\s\S]*?)<\/\1>/gi;
+  const linkRe = /href="[^"]*viewNotice\.html\?displayId=(\d+)"[^>]*>([\s\S]*?)<\/a>/i;
+
+  let m: RegExpExecArray | null;
+  while ((m = rowRe.exec(html)) !== null) {
+    const inner = m[2];
+    const link = linkRe.exec(inner);
+    if (!link) continue;
+    const id = link[1];
+    if (seen.has(id)) continue;
+
+    const title = cleanText(link[2]);
+    if (!title) continue;
+    seen.add(id);
+
+    // Grab nearby text labelled Country / Deadline / Notice Type. ECEPP uses
+    // <span class="label">Country:</span> <span>…</span> patterns fairly
+    // consistently; we tolerate either labelled spans or raw colon phrases.
+    const country = pickField(inner, /Country[^<>]{0,20}<\/[^>]+>\s*<[^>]+>([^<]+)</i)
+      ?? pickField(inner, /Country\s*:\s*([^<|\n]+?)(?:\s*[|<])/i)
+      ?? "";
+    const noticeType = pickField(inner, /Notice\s*Type[^<>]{0,20}<\/[^>]+>\s*<[^>]+>([^<]+)</i)
+      ?? pickField(inner, /Notice\s*Type\s*:\s*([^<|\n]+?)(?:\s*[|<])/i)
+      ?? "";
+    const deadlineRaw = pickField(inner, /(?:Closing\s*Date|Deadline)[^<>]{0,20}<\/[^>]+>\s*<[^>]+>([^<]+)</i)
+      ?? pickField(inner, /(?:Closing\s*Date|Deadline)\s*:\s*([^<|\n]+?)(?:\s*[|<])/i)
+      ?? "";
+
+    out.push({
+      id,
+      title,
+      country: country || "EBRD Region",
+      noticeType,
+      deadline: toISO(deadlineRaw),
+    });
+  }
+  return out;
+}
+
+function pickField(html: string, re: RegExp): string | null {
+  const m = re.exec(html);
+  if (!m) return null;
+  return cleanText(m[1]);
+}
+
+// ECEPP deadlines are "31-Dec-2026" or "31/12/2026 14:00" — cover both.
+function toISO(raw: string): string | null {
+  if (!raw) return null;
+  const MONTHS: Record<string, string> = {
+    jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
+    jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
+  };
+  let m = /(\d{1,2})[-/\s]([A-Za-z]{3})\w*[-/\s](\d{4})/.exec(raw);
+  if (m) {
+    const mm = MONTHS[m[2].toLowerCase()];
+    if (mm) return `${m[3]}-${mm}-${m[1].padStart(2, "0")}`;
+  }
+  m = /(\d{1,2})[./-](\d{1,2})[./-](\d{4})/.exec(raw);
+  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  m = /(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return null;
+}
+
+function mapType(notice: string): string {
+  const s = notice.toLowerCase();
+  if (s.includes("expression of interest") || s.includes("eoi")) return "EOI";
+  if (s.includes("invitation for tender") || s.includes("ift") || s.includes("itb")) return "ITB";
+  if (s.includes("request for quotation") || s.includes("rfq")) return "RFQ";
+  if (s.includes("consultant") || s.includes("consulting")) return "Consultancy";
+  if (s.includes("prequalification") || s.includes("pre-qualif")) return "EOI";
+  return "RFP";
+}
+
+function mapNotice(n: ParsedNotice): RawTender {
+  return {
+    reference_id: `EBRD-${n.id}`,
+    title: n.title.slice(0, 500),
+    description: null,
+    agency: "European Bank for Reconstruction and Development",
+    country: n.country || "EBRD Region",
+    country_code: null,
+    region: null,
+    sector: null,
+    deadline: n.deadline,
+    estimated_value: null,
+    source_url: `https://ecepp.ebrd.com/delta/viewNotice.html?displayId=${n.id}`,
+    opportunity_type: mapType(n.noticeType),
+    eligibility_summary: null,
+    experience_level: null,
+    submission_language: "English",
+    source_tier: 1,
+    source_name: "EBRD",
+  };
+}
+
+export async function crawlEBRD(): Promise<CrawlResult> {
+  const start = Date.now();
+  try {
+    const tenders: RawTender[] = [];
+    const seen = new Set<string>();
+    for (let page = 0; page < MAX_PAGES; page++) {
+      if (page > 0) await sleep(PAGE_DELAY_MS);
+      const html = await withRetry(() => fetchPage(page));
+      const rows = parseNotices(html);
+      if (!rows.length) break;
+      let added = 0;
+      for (const r of rows) {
+        if (seen.has(r.id)) continue;
+        seen.add(r.id);
+        tenders.push(mapNotice(r));
+        added++;
+      }
+      if (added === 0) break;
+    }
+    if (!tenders.length) {
+      return {
+        platform: "EBRD", status: "failure", tenders: [], durationMs: Date.now() - start,
+        error: "EBRD page parsed but yielded 0 rows — ECEPP markup likely changed",
+      };
+    }
+    return { platform: "EBRD", status: "success", tenders, durationMs: Date.now() - start };
+  } catch (err) {
+    return {
+      platform: "EBRD", status: "failure", tenders: [], durationMs: Date.now() - start,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
