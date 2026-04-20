@@ -115,9 +115,6 @@ export default function AssessmentResults({ data, onReset }: Props) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const recommended = TIER_INFO[data.recommended_tier];
-  const secondary = data.recommended_tier === "strategic-partnership" ? TIER_INFO["submission-package"] : TIER_INFO["tender-intelligence"];
-  const secondarySlug = data.recommended_tier === "strategic-partnership" ? "submission-package" : "tender-intelligence";
   const sortedTenders = [...data.matched_tenders].sort((a, b) => b.score - a.score);
   const grantGroups = groupGrants(data.matched_grants);
 
@@ -133,7 +130,7 @@ export default function AssessmentResults({ data, onReset }: Props) {
   ];
 
   return (
-    <div className="mx-auto max-w-4xl px-6 pb-20">
+    <div className="mx-auto max-w-4xl px-6 pb-20" style={{ animation: "fadeIn 0.5s ease-out both" }}>
       {/* Header */}
       <h1 className="font-serif text-3xl font-bold text-center">Assessment Results</h1>
       <p className="text-center text-gray-400 text-sm mt-1 mb-4">{data.company_name}</p>
@@ -329,8 +326,21 @@ export default function AssessmentResults({ data, onReset }: Props) {
                   <span>Confidence: {t.confidence ?? (t.score >= 70 ? "Verified" : "Inferred")}</span>
                 </div>
 
-                {/* Two search buttons */}
+                {/* Direct source link (primary) + Google fallbacks.
+                    Every crawler populates source_url today, but we keep the
+                    Google search buttons as a secondary path for the rare row
+                    where the origin URL is stale or 404s. */}
                 <div className="flex flex-wrap gap-2 mb-2">
+                  {t.source_url && (
+                    <a
+                      href={t.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded bg-gold/90 border border-gold px-3 py-1.5 text-xs text-navy font-medium hover:bg-gold transition-colors"
+                    >
+                      View Notice →
+                    </a>
+                  )}
                   <a
                     href={`https://www.google.com/search?q=${agencyQ}+procurement+${refQ}`}
                     target="_blank"
@@ -503,53 +513,37 @@ export default function AssessmentResults({ data, onReset }: Props) {
         </div>
       </div>
 
-      {/* Pricing cards */}
-      <div className="grid sm:grid-cols-2 gap-4 mb-8">
-        {/* Recommended tier */}
-        <div
-          className="rounded-xl border-2 border-gold p-6 bg-navy-light relative cursor-pointer hover:bg-navy-light/80 transition-colors"
-          onClick={() => { window.location.href = `/login?plan=${data.recommended_tier}`; }}
-        >
-          <span className="absolute -top-3 right-4 rounded-full bg-gold px-3 py-0.5 text-[10px] font-bold text-white uppercase">Best Fit</span>
-          <h3 className="text-lg font-bold">{recommended.name}</h3>
-          <div className="mt-2 mb-3">
-            <span className="text-2xl font-bold text-gold">{recommended.price}</span>
-            <span className="text-xs text-gray-500">{recommended.billingPeriod}</span>
-          </div>
-          <p className="text-xs text-gray-400 mb-4">{recommended.tagline}</p>
-          {data.gaps.length > 0 && (
-            <p className="text-[11px] text-gray-500 mb-4 flex items-center gap-1">
-              <svg className="w-3 h-3 text-red" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-              {data.gaps[0].gap}
-            </p>
-          )}
-          <div className="w-full rounded-lg bg-gold py-2.5 text-sm font-semibold text-white hover:bg-gold-dark transition-colors text-center">
-            {recommended.cta} →
-          </div>
-        </div>
-
-        {/* Secondary tier */}
-        <div
-          className="rounded-xl border border-white/10 p-6 bg-navy-light relative cursor-pointer hover:bg-navy-light/80 transition-colors"
-          onClick={() => { window.location.href = `/login?plan=${secondarySlug}`; }}
-        >
-          <span className="absolute -top-3 right-4 rounded-full bg-gray-700 px-3 py-0.5 text-[10px] font-bold text-gray-300 uppercase">Also Consider</span>
-          <h3 className="text-lg font-bold">{secondary.name}</h3>
-          <div className="mt-2 mb-3">
-            <span className="text-2xl font-bold">{secondary.price}</span>
-            <span className="text-xs text-gray-500">{secondary.billingPeriod}</span>
-          </div>
-          <p className="text-xs text-gray-400 mb-4">{secondary.tagline}</p>
-          {data.gaps.length > 1 && (
-            <p className="text-[11px] text-gray-500 mb-4 flex items-center gap-1">
-              <svg className="w-3 h-3 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-              {data.gaps[1].gap}
-            </p>
-          )}
-          <div className="w-full rounded-lg border border-white/20 py-2.5 text-sm font-semibold text-white hover:bg-white/5 transition-colors text-center">
-            {secondary.cta} →
-          </div>
-        </div>
+      {/* Pricing cards — all 3 tiers, ascending price, recommended highlighted */}
+      <div className="grid sm:grid-cols-3 gap-4 mb-8">
+        {(["tender-intelligence", "submission-package", "strategic-partnership"] as TierSlug[]).map((slug, i) => {
+          const tier = TIER_INFO[slug];
+          const isRec = slug === data.recommended_tier;
+          return (
+            <div
+              key={slug}
+              className={`rounded-xl border-2 p-5 bg-navy-light relative cursor-pointer transition-colors ${
+                isRec ? "border-gold hover:bg-navy-light/80" : "border-white/10 hover:border-white/20 hover:bg-navy-light/60"
+              }`}
+              style={{ animation: "fadeInUp 0.5s ease-out both", animationDelay: `${i * 0.1}s` }}
+              onClick={() => { window.location.href = `/login?plan=${slug}`; }}
+            >
+              {isRec && (
+                <span className="absolute -top-3 right-4 rounded-full bg-gold px-3 py-0.5 text-[10px] font-bold text-white uppercase">Best Fit</span>
+              )}
+              <h3 className="text-base font-bold mb-1">{tier.name}</h3>
+              <div className="mt-2 mb-3">
+                <span className={`text-2xl font-bold ${isRec ? "text-gold" : "text-white"}`}>{tier.price}</span>
+                <span className="text-xs text-gray-500">{tier.billingPeriod}</span>
+              </div>
+              <p className="text-xs text-gray-400 mb-4 leading-relaxed">{tier.tagline}</p>
+              <div className={`w-full rounded-lg py-2.5 text-xs font-semibold text-center transition-colors ${
+                isRec ? "bg-gold text-white hover:bg-gold-dark" : "border border-white/20 text-white hover:bg-white/5"
+              }`}>
+                {tier.cta} →
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Dashboard CTA — free→trial conversion */}
