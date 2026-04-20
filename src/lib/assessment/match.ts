@@ -50,6 +50,107 @@ function tokenize(text: string): string[] {
     .filter((t) => t.length > 3 && !STOPWORDS.has(t));
 }
 
+// Country-name aliasing. User picks "Syria" but WB/UN post "Syrian Arab
+// Republic"; picks "Palestine" but WB posts "West Bank and Gaza". Without
+// this table every MENA/Africa/Asia user gets zero strict matches and
+// autoGeoOpen fires, so they see Global results only. Keys and values are
+// all lowercase for case-insensitive matching against tender.country.
+const COUNTRY_ALIASES: Record<string, string[]> = {
+  "syria": ["syrian arab republic", "syria (syrian arab republic)"],
+  "syrian arab republic": ["syria"],
+  "palestine": ["west bank and gaza", "occupied palestinian territory", "state of palestine", "palestinian territories", "gaza", "west bank", "gaza strip"],
+  "iran": ["iran, islamic republic of", "islamic republic of iran"],
+  "vietnam": ["viet nam"],
+  "viet nam": ["vietnam"],
+  "laos": ["lao people's democratic republic", "lao pdr"],
+  "russia": ["russian federation"],
+  "moldova": ["republic of moldova"],
+  "tanzania": ["united republic of tanzania"],
+  "congo": ["republic of congo", "congo-brazzaville"],
+  "drc": ["democratic republic of the congo", "democratic republic of congo", "congo, dem. rep.", "dr congo"],
+  "democratic republic of the congo": ["drc", "dr congo"],
+  "ivory coast": ["côte d'ivoire", "cote d'ivoire"],
+  "côte d'ivoire": ["ivory coast", "cote d'ivoire"],
+  "cote d'ivoire": ["côte d'ivoire", "ivory coast"],
+  "cabo verde": ["cape verde"],
+  "cape verde": ["cabo verde"],
+  "south korea": ["korea, republic of", "republic of korea"],
+  "north korea": ["democratic people's republic of korea", "korea, dpr"],
+  "czech republic": ["czechia"],
+  "czechia": ["czech republic"],
+  "macedonia": ["north macedonia", "republic of north macedonia", "former yugoslav republic of macedonia"],
+  "north macedonia": ["macedonia"],
+  "myanmar": ["burma"],
+  "east timor": ["timor-leste", "timor leste"],
+  "timor-leste": ["east timor", "timor leste"],
+  "swaziland": ["eswatini"],
+  "eswatini": ["swaziland"],
+  "turkey": ["türkiye", "turkiye"],
+  "türkiye": ["turkey"],
+  "egypt": ["egypt, arab rep.", "arab republic of egypt"],
+  "yemen": ["yemen, rep.", "yemen, republic of"],
+  "venezuela": ["venezuela, rb", "bolivarian republic of venezuela"],
+  "bolivia": ["bolivia (plurinational state of)", "plurinational state of bolivia"],
+  "uk": ["united kingdom", "great britain"],
+  "united kingdom": ["uk", "great britain"],
+  "usa": ["united states", "united states of america", "u.s.", "u.s.a."],
+  "united states": ["usa", "united states of america"],
+  "uae": ["united arab emirates"],
+  "united arab emirates": ["uae"],
+  "saudi arabia": ["kingdom of saudi arabia"],
+  "bosnia": ["bosnia and herzegovina"],
+  "bosnia and herzegovina": ["bosnia"],
+};
+
+function expandCountrySet(countries: string[]): Set<string> {
+  const out = new Set<string>();
+  for (const raw of countries) {
+    const key = raw.trim().toLowerCase();
+    if (!key) continue;
+    out.add(key);
+    const aliases = COUNTRY_ALIASES[key];
+    if (aliases) for (const a of aliases) out.add(a.toLowerCase());
+  }
+  return out;
+}
+
+// Individual-contractor / jobs-feed titles, regardless of opportunity_type.
+// Many crawlers (UNGM, SAM.gov, UNDP Atlas) tag these as "RFP" or "Individual
+// Contractor" rather than "Consultancy", so the type filter alone misses them.
+// Pattern is conservative — substrings that only appear in recruitment.
+const INDIVIDUAL_ROLE_RE = /\b(individual contractor|individual consultant|ssa \d|special service agreement|short[- ]term expert|long[- ]term expert|roster of experts?|roster of consultants?|expert(s)? roster|consultant roster|national consultant|international consultant|junior consultant|senior consultant|home[- ]based consultant|un volunteer|unv [a-z]+|request for cv|call for cv|call for experts?|national professional officer)\b/i;
+
+// Parse estimated_value strings like "$50,000,000", "USD 2.5M", "EUR 500k"
+// into a rough USD number. Conservative — if we can't parse, return null and
+// skip the demote rather than misfire.
+function parseUsdValue(raw: string | number | null | undefined): number | null {
+  if (raw == null) return null;
+  if (typeof raw === "number") return Number.isFinite(raw) && raw > 0 ? raw : null;
+  const s = raw.toString().toLowerCase().replace(/[,\s]/g, "");
+  const m = /([\d.]+)\s*(k|m|b|million|billion|thousand)?/.exec(s);
+  if (!m) return null;
+  const n = parseFloat(m[1]);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const unit = m[2] ?? "";
+  const mult =
+    unit === "k" || unit === "thousand" ? 1_000 :
+    unit === "m" || unit === "million" ? 1_000_000 :
+    unit === "b" || unit === "billion" ? 1_000_000_000 : 1;
+  return n * mult;
+}
+
+// company_size_signal is free-text from the LLM ("small SME", "mid-sized",
+// "large enterprise", "micro"). Normalize to a rough bucket.
+function companyTier(signal: string | null | undefined): "micro" | "small" | "mid" | "large" | "unknown" {
+  if (!signal) return "unknown";
+  const s = signal.toLowerCase();
+  if (/\bmicro\b|solo|freelanc|1[-\s]?2 (people|staff|employees)/.test(s)) return "micro";
+  if (/\bsmall\b|\bsme\b|startup|boutique/.test(s)) return "small";
+  if (/\bmid\b|medium|growing/.test(s)) return "mid";
+  if (/\blarge\b|enterprise|multinational|global firm/.test(s)) return "large";
+  return "unknown";
+}
+
 /**
  * Match open tenders using text-signal scoring.
  *
@@ -64,7 +165,12 @@ export async function matchTenders(
   analysis: AIAnalysis,
   countries: string[],
 ): Promise<MatchedTender[]> {
-  const countrySet = new Set(countries.map((c) => c.toLowerCase()));
+  // Expand user country list through alias table so "Syria" matches tenders
+  // posted as "Syrian Arab Republic", "Palestine" matches "West Bank and Gaza",
+  // etc. Without this expansion strictGeoMatch silently fails for most
+  // MENA/Africa/Asia users and autoGeoOpen kicks in even when local supply
+  // exists — users never see their own country's tenders.
+  const countrySet = expandCountrySet(countries);
   const acceptsGlobal = countrySet.has("global");
 
   // Pre-probe the strict-geo pool size for this user. When country-specific
@@ -73,7 +179,7 @@ export async function matchTenders(
   // Global. This is the key differentiator for niche MENA profiles — better
   // to surface a handful of highly relevant geo-open opportunities than an
   // empty page because the user's country has no open notices today.
-  const countryArr = countries.map((c) => c.toLowerCase());
+  const countryArr = [...countrySet];
   const strictProbe = await sql`
     SELECT COUNT(*)::int AS n FROM tenders
     WHERE status='open' AND deadline >= CURRENT_DATE
@@ -126,6 +232,7 @@ export async function matchTenders(
     requirements: string[] | null; experience_level: string | null;
     opportunity_type: string | null; source_url: string | null;
     submission_language: string | null;
+    estimated_value: string | number | null;
   };
   const byId = new Map<number, Row>();
 
@@ -139,7 +246,7 @@ export async function matchTenders(
       const rows = await sql`
         SELECT id, title, description, agency, deadline, country, sector,
                reference_id, requirements, experience_level, opportunity_type,
-               source_url, submission_language
+               source_url, submission_language, estimated_value
         FROM tenders
         WHERE status = 'open'
           AND deadline >= CURRENT_DATE
@@ -160,7 +267,7 @@ export async function matchTenders(
   const baseline = await sql`
     SELECT id, title, description, agency, deadline, country, sector,
            reference_id, requirements, experience_level, opportunity_type,
-           source_url, submission_language
+           source_url, submission_language, estimated_value
     FROM tenders
     WHERE status = 'open'
       AND deadline >= CURRENT_DATE
@@ -191,6 +298,12 @@ export async function matchTenders(
     // every other industry — a warehousing company doesn't bid on
     // "Proposal Writers Network" or "External Evaluator Roster".
     if (!userIsConsulting && (t.opportunity_type as string | null) === "Consultancy") continue;
+
+    // Second line of defence: many crawlers tag individual-contractor/roster
+    // postings as plain "RFP" or "Individual Contractor" rather than
+    // "Consultancy". Catch those by title pattern — conservative regex of
+    // phrases that only appear in recruitment, not B2B procurement.
+    if (!userIsConsulting && INDIVIDUAL_ROLE_RE.test(rawTitle)) continue;
 
     const tSector = (t.sector as string ?? "");
     const tCountry = (t.country as string ?? "").toLowerCase();
@@ -237,7 +350,19 @@ export async function matchTenders(
     else if (isGeoOpen && (acceptsGlobal || autoGeoOpen)) geoScore = 10;
     // else: geo-open, user didn't opt in and strict supply is healthy — held at 0.
 
-    const total = sectorScore + tokenScore + agencyScore + geoScore;
+    let total = sectorScore + tokenScore + agencyScore + geoScore;
+
+    // Value × company-size sanity check. A 2-person freelance outfit has no
+    // realistic path to bid on a $50M WB civil-works contract. Parse the
+    // estimated_value and demote (or skip) when the contract is clearly out
+    // of reach. Conservative: only fires when both value AND tier parse
+    // cleanly; otherwise we let the match through unchanged.
+    const usd = parseUsdValue(t.estimated_value as string | number | null);
+    const tier = companyTier(analysis.company_size_signal as string | null | undefined);
+    if (usd != null && (tier === "micro" || tier === "small")) {
+      if (tier === "micro" && usd >= 20_000_000) continue;
+      if (usd >= 5_000_000) total = Math.round(total * 0.6);
+    }
 
     // Lower threshold vs before — with canonical sector slugs even a partial
     // match should carry real signal. Token-only matches score ~25-30.
