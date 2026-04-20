@@ -5,12 +5,14 @@ import { useEffect, useState, useCallback } from "react";
 interface CrawlLog {
   id: number;
   started_at: string;
-  finished_at: string | null;
+  platform: string | null;
   status: string;
-  tenders_found?: number;
-  tenders_added?: number;
-  source?: string;
-  error_message?: string | null;
+  duration_ms: number | null;
+  tenders_added: number;
+  tenders_updated: number;
+  tenders_expired: number;
+  broken_links: number;
+  error: string | null;
 }
 
 interface SubscriptionRow {
@@ -45,9 +47,8 @@ function formatDate(v: string | null | undefined): string {
   return d.toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" });
 }
 
-function duration(start: string, end: string | null): string {
-  if (!end) return "running…";
-  const ms = new Date(end).getTime() - new Date(start).getTime();
+function duration(ms: number | null): string {
+  if (ms == null) return "—";
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
@@ -299,10 +300,10 @@ export default function AdminPage() {
                   <thead>
                     <tr className="border-b border-white/5 text-xs text-slate-500 uppercase tracking-wider">
                       <th className="px-6 py-3 text-left font-medium">Started</th>
-                      <th className="px-6 py-3 text-left font-medium">Source</th>
+                      <th className="px-6 py-3 text-left font-medium">Platform</th>
                       <th className="px-6 py-3 text-left font-medium">Status</th>
-                      <th className="px-6 py-3 text-right font-medium">Found</th>
                       <th className="px-6 py-3 text-right font-medium">Added</th>
+                      <th className="px-6 py-3 text-right font-medium">Updated</th>
                       <th className="px-6 py-3 text-right font-medium">Duration</th>
                     </tr>
                   </thead>
@@ -310,23 +311,23 @@ export default function AdminPage() {
                     {stats.recentCrawls.map((log) => (
                       <tr key={log.id} className="hover:bg-white/3 transition-colors">
                         <td className="px-6 py-3 text-slate-300 whitespace-nowrap">{formatDate(log.started_at)}</td>
-                        <td className="px-6 py-3 text-slate-400 whitespace-nowrap">{log.source ?? "—"}</td>
+                        <td className="px-6 py-3 text-slate-400 whitespace-nowrap">{log.platform ?? "—"}</td>
                         <td className="px-6 py-3">
                           <StatusPill status={log.status} />
-                          {log.error_message && (
-                            <p className="text-[11px] text-red-400 mt-1 max-w-xs truncate" title={log.error_message}>
-                              {log.error_message}
+                          {log.error && (
+                            <p className="text-[11px] text-red-400 mt-1 max-w-xs truncate" title={log.error}>
+                              {log.error}
                             </p>
                           )}
                         </td>
-                        <td className="px-6 py-3 text-right text-slate-300">
-                          {log.tenders_found != null ? log.tenders_found : "—"}
-                        </td>
                         <td className="px-6 py-3 text-right text-teal-400 font-medium">
-                          {log.tenders_added != null ? `+${log.tenders_added}` : "—"}
+                          {`+${log.tenders_added ?? 0}`}
+                        </td>
+                        <td className="px-6 py-3 text-right text-slate-300">
+                          {log.tenders_updated ?? 0}
                         </td>
                         <td className="px-6 py-3 text-right text-slate-500 whitespace-nowrap">
-                          {duration(log.started_at, log.finished_at)}
+                          {duration(log.duration_ms)}
                         </td>
                       </tr>
                     ))}
