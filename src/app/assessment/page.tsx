@@ -222,11 +222,15 @@ export default function AssessmentPage() {
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">Website URL <span className="text-gray-500">(optional)</span></label>
               <input
-                type="url"
+                type="text"
+                inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={form.website}
                 onChange={(e) => setForm({ ...form, website: e.target.value })}
                 className="w-full rounded-lg bg-navy-light border border-white/10 px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none"
-                placeholder="https://yourcompany.com"
+                placeholder="yourcompany.com"
               />
             </div>
 
