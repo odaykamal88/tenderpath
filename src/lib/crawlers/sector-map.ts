@@ -51,8 +51,12 @@ const SLUG_KEYWORDS: Record<SectorSlug, string[]> = {
   ],
   logistics: [
     "logistic", "supply chain", "warehous", "freight", "transport",
-    "shipping", "distribution", "last mile", "fleet", "customs",
-    "procurement service",
+    "shipping", "distribution", "last mile", "last-mile", "fleet", "customs",
+    "procurement service", "procurement and delivery", "supply and delivery",
+    "delivery of goods", "delivery and installation", "installation and delivery",
+    "forwarding", "haulage", "trucking", "cargo", "stockpile",
+    "prepositioning", "pre-positioning", "clearing agent", "clearance service",
+    "storage service", "fuel delivery",
   ],
   construction: [
     "construction", "building work", "civil work", "infrastructure",
@@ -61,9 +65,12 @@ const SLUG_KEYWORDS: Record<SectorSlug, string[]> = {
   ],
   consulting: [
     "consulting", "consultancy", "advisory", "technical assistance",
-    "policy", "research service", "evaluation", "assessment service",
-    "feasibility stud", "governance", "public financial management",
-    "institutional support", "programme management", "project management",
+    "policy", "research service", "evaluation service", "mid-term evaluation",
+    "final evaluation", "external evaluation", "impact evaluation",
+    "monitoring and evaluation", "m&e ",
+    "assessment service", "feasibility stud", "governance",
+    "public financial management", "institutional support",
+    "programme management", "project management",
   ],
   food: [
     "food", "nutrition supply", "catering", "meal", "commodit",
@@ -113,6 +120,7 @@ const LABEL_TO_SLUG: Record<string, SectorSlug> = {
   "education": "education",
   "training": "education",
   "capacity building": "education",
+  "education & training": "education",
   "healthcare": "healthcare",
   "health": "healthcare",
   "medical": "healthcare",
@@ -124,18 +132,39 @@ const LABEL_TO_SLUG: Record<string, SectorSlug> = {
   "infrastructure": "construction",
   "consulting": "consulting",
   "consulting services": "consulting",
+  "professional services": "consulting",
   "advisory": "consulting",
+  "advisory services": "consulting",
   "technical assistance": "consulting",
+  "monitoring and evaluation": "consulting",
+  "monitoring & evaluation": "consulting",
+  "program/project management": "consulting",
+  "program management": "consulting",
+  "project management": "consulting",
+  "programme management": "consulting",
+  "staffing & human resources": "consulting",
+  "human resources": "consulting",
+  "staffing": "consulting",
   "food": "food",
+  "food services": "food",
+  "catering": "food",
   "nutrition": "food",
   "security": "security",
   "security services": "security",
   "language services": "language_services",
   "translation": "language_services",
+  "publishing & communications": "language_services",
+  "publishing & media services": "language_services",
+  "publishing": "language_services",
+  "communications": "language_services",
+  "editorial services": "language_services",
   "engineering": "engineering",
   "environment": "environment",
   "climate": "environment",
   "environmental services": "environment",
+  "waste management": "environment",
+  "waste management & environmental services": "environment",
+  "facility management": "environment",
   "agriculture": "agriculture",
   "rural development": "agriculture",
   "water and sanitation": "water_sanitation",
@@ -259,6 +288,26 @@ export function normalizeSector(
   const direct = slugFromLabel(rawSector);
   const hits = new Set<SectorSlug>();
   if (direct) hits.add(direct);
+
+  // UNSPSC / NAICS-style numeric-coded feeds (UNGM, SAM.gov, WB) lose all
+  // sector signal through keyword matching. Try segment mapping first so
+  // "336413" → engineering instead of null.
+  if (rawSector) {
+    const trimmed = rawSector.trim();
+    // Pure numeric codes (allow separators like "43-21-15-00")
+    if (/^\d[\d\s\-.]*$/.test(trimmed)) {
+      const fromCode = unspscSegmentToSlug(trimmed);
+      if (fromCode) hits.add(fromCode);
+    }
+    // Multiple codes in a list ("43211500, 81112200")
+    const codeMatches = trimmed.match(/\b\d{4,8}\b/g);
+    if (codeMatches) {
+      for (const code of codeMatches) {
+        const s = unspscSegmentToSlug(code);
+        if (s) hits.add(s);
+      }
+    }
+  }
 
   for (const slug of SECTOR_SLUGS) {
     if (hits.has(slug)) continue;

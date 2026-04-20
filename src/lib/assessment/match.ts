@@ -36,7 +36,11 @@ const STOPWORDS = new Set([
   "per", "its", "their", "them", "these", "those", "other", "more", "such",
   "including", "provide", "providing", "services", "service", "solutions",
   "solution", "support", "company", "companies", "work", "works", "based",
-  "offer", "offering", "including",
+  "offer", "offering",
+  // Generic tender/role vocabulary — these fire on nearly every UN notice
+  // regardless of industry and drown out real capability signal.
+  "management", "specialist", "coordinator", "project", "program", "programme",
+  "manager", "assistant", "consultant",
 ]);
 
 function tokenize(text: string): string[] {
@@ -63,7 +67,90 @@ export async function matchTenders(
   const countrySet = new Set(countries.map((c) => c.toLowerCase()));
   const acceptsGlobal = countrySet.has("global");
 
-  const candidates = await sql`
+  // Pre-probe the strict-geo pool size for this user. When country-specific
+  // supply is thin (common for logistics in Syria/Lebanon/Palestine etc.),
+  // we auto-relax geo so geo-open tenders score as if the user opted in to
+  // Global. This is the key differentiator for niche MENA profiles — better
+  // to surface a handful of highly relevant geo-open opportunities than an
+  // empty page because the user's country has no open notices today.
+  const countryArr = countries.map((c) => c.toLowerCase());
+  const strictProbe = await sql`
+    SELECT COUNT(*)::int AS n FROM tenders
+    WHERE status='open' AND deadline >= CURRENT_DATE
+      AND LOWER(country) = ANY(${countryArr}::text[])`;
+  const strictPoolSize = Number(strictProbe?.[0]?.n ?? 0);
+  const autoGeoOpen = !acceptsGlobal && strictPoolSize < 25;
+
+  const userSlugs = userSectorSlugs(analysis.detected_industry, analysis.sectors);
+
+  // Pool per slug instead of a single deadline-sorted LIMIT 600 — otherwise a
+  // heavy sector (M&E / consulting) dominates the candidate window and starves
+  // narrower industries (logistics, language services) of any candidates to
+  // score. We union per-slug pools, then de-dupe by id.
+  const slugKeywordMap: Record<string, string[]> = {
+    it: ["software", "information technology", "it ", "digital", "platform", "system", "data", "technology"],
+    education: ["education", "training", "curriculum", "learning", "teacher", "school"],
+    healthcare: ["health", "medical", "hospital", "clinic", "pharmaceutical", "vaccine"],
+    logistics: [
+      "logistics", "transport", "freight", "shipping", "warehouse", "warehousing",
+      "supply chain", "distribution", "fleet", "customs", "cargo", "storage",
+      "forwarding", "forwarder", "haulage", "trucking", "delivery of",
+      "supply and delivery", "supply of", "procurement and delivery",
+      "procurement services", "last mile", "last-mile", "stockpile",
+      "prepositioning", "pre-positioning", "clearing", "clearance",
+      "loading", "unloading", "import", "export", "dispatch",
+      "installation and delivery",
+    ],
+    construction: ["construction", "civil works", "infrastructure", "building", "rehabilitation", "refurbishment"],
+    consulting: ["consulting", "consultancy", "advisory", "technical assistance", "feasibility", "evaluation service", "mid-term evaluation", "final evaluation", "external evaluation", "impact evaluation"],
+    food: ["food", "nutrition", "catering", "meal", "agricultural produce", "ration", "foodstuff", "kitchen", "cafeteria"],
+    security: ["security", "guarding", "surveillance", "protection", "guard service", "safety service", "access control", "fire safety"],
+    language_services: ["translation", "interpretation", "interpreter", "translator", "linguistic", "language service", "transcription", "proofreading", "editorial"],
+    engineering: ["engineering", "mechanical", "electrical engineering", "civil engineering"],
+    environment: ["environment", "climate", "biodiversity", "pollution", "waste management", "cleaning service", "janitorial", "sanitation service", "recycling"],
+    agriculture: ["agriculture", "agricultural", "farming", "livestock", "crop", "irrigation"],
+    water_sanitation: ["water", "sanitation", "wash", "hygiene", "sewage", "latrine"],
+    energy: ["energy", "solar", "electricity", "power", "renewable", "grid"],
+  };
+
+  type Row = {
+    id: number; title: string; description: string | null; agency: string;
+    deadline: string; country: string; sector: string; reference_id: string;
+    requirements: string[] | null; experience_level: string | null;
+    opportunity_type: string | null; source_url: string | null;
+    submission_language: string | null;
+  };
+  const byId = new Map<number, Row>();
+
+  if (userSlugs.size) {
+    // Per-slug pool — LIKE on title + sector pulls genuinely relevant rows
+    // rather than whatever happens to have the earliest deadline. Each slug
+    // gets up to 150; union deduped by id.
+    for (const slug of userSlugs) {
+      const kws = slugKeywordMap[slug] ?? [slug.replace(/_/g, " ")];
+      const patterns = kws.map((k) => `%${k}%`);
+      const rows = await sql`
+        SELECT id, title, description, agency, deadline, country, sector,
+               reference_id, requirements, experience_level, opportunity_type,
+               source_url, submission_language
+        FROM tenders
+        WHERE status = 'open'
+          AND deadline >= CURRENT_DATE
+          AND (
+            title ILIKE ANY(${patterns}::text[])
+            OR sector ILIKE ANY(${patterns}::text[])
+            OR COALESCE(description, '') ILIKE ANY(${patterns}::text[])
+          )
+        ORDER BY deadline ASC
+        LIMIT 150
+      `;
+      for (const r of rows) byId.set(r.id as number, r as Row);
+    }
+  }
+
+  // Always mix in a deadline-sorted baseline so we don't miss tenders whose
+  // relevance only shows through tokens/agency even when no slug keyword hits.
+  const baseline = await sql`
     SELECT id, title, description, agency, deadline, country, sector,
            reference_id, requirements, experience_level, opportunity_type,
            source_url, submission_language
@@ -71,12 +158,12 @@ export async function matchTenders(
     WHERE status = 'open'
       AND deadline >= CURRENT_DATE
     ORDER BY deadline ASC
-    LIMIT 600
+    LIMIT 300
   `;
+  for (const r of baseline) if (!byId.has(r.id as number)) byId.set(r.id as number, r as Row);
 
+  const candidates = Array.from(byId.values());
   if (!candidates.length) return [];
-
-  const userSlugs = userSectorSlugs(analysis.detected_industry, analysis.sectors);
 
   // Build user capability token bag from services + capabilities + detected_industry.
   const userTokens = new Set<string>([
@@ -85,7 +172,7 @@ export async function matchTenders(
     ...tokenize(analysis.detected_industry ?? ""),
   ]);
 
-  type Scored = MatchedTender & { _strict: boolean; _geoOpen: boolean };
+  type Scored = MatchedTender & { _strict: boolean; _geoOpen: boolean; _sectorScore: number };
   const scored: Scored[] = [];
 
   for (const t of candidates) {
@@ -134,8 +221,8 @@ export async function matchTenders(
 
     let geoScore = 0;
     if (strictGeoMatch) geoScore = 30;
-    else if (isGeoOpen && acceptsGlobal) geoScore = 10;
-    // else: geo-open, user didn't opt in — held at 0; may surface in soft pass.
+    else if (isGeoOpen && (acceptsGlobal || autoGeoOpen)) geoScore = 10;
+    // else: geo-open, user didn't opt in and strict supply is healthy — held at 0.
 
     const total = sectorScore + tokenScore + agencyScore + geoScore;
 
@@ -156,30 +243,45 @@ export async function matchTenders(
       source_url: (t.source_url as string | null) ?? null,
       _strict: strictGeoMatch,
       _geoOpen: isGeoOpen,
+      _sectorScore: sectorScore,
     });
   }
 
   const strict = scored.filter((s) => s._strict).sort((a, b) => b.score - a.score);
-  const softPool = scored.filter((s) => !s._strict && s._geoOpen).sort((a, b) => b.score - a.score);
+  // Soft pool: drop anything that didn't hit a sector slug. Pure token-only
+  // hits on boilerplate ("project management", "programme coordinator") would
+  // otherwise spray identical M&E / consulting tenders across every industry.
+  // Drop the sectorScore floor to 40 only when strict supply is healthy. For
+  // thin-supply profiles (autoGeoOpen), any sector-slug hit (score ≥20) is
+  // signal — a single keyword match on a logistics notice in a Global feed
+  // is exactly the "hidden opportunity" we want to surface.
+  const softSectorFloor = autoGeoOpen ? 20 : 40;
+  const softPool = scored
+    .filter((s) => !s._strict && s._geoOpen && s._sectorScore >= softSectorFloor)
+    .sort((a, b) => b.score - a.score);
 
   const out: MatchedTender[] = strict.slice(0, 10).map(stripMeta);
 
-  // Soft geo fallback: if strict yields <3, surface geo-open tenders at a
-  // reduced score so users see *something* relevant.
-  if (out.length < 3 && softPool.length) {
+  // Soft geo fallback: raised threshold from 3 → 5 when supply is thin, so
+  // niche MENA profiles get a real list. Also keep score discount milder
+  // (0.75 vs 0.6) when autoGeoOpen — these are legitimate matches, not
+  // second-class.
+  const fallbackTarget = autoGeoOpen ? 8 : 3;
+  if (out.length < fallbackTarget && softPool.length) {
+    const discount = autoGeoOpen ? 0.75 : 0.6;
     const need = Math.min(10 - out.length, softPool.length);
     for (let i = 0; i < need; i++) {
       const s = softPool[i];
-      out.push({ ...stripMeta(s), score: Math.max(15, Math.round(s.score * 0.6)) });
+      out.push({ ...stripMeta(s), score: Math.max(20, Math.round(s.score * discount)) });
     }
   }
 
   return out;
 }
 
-function stripMeta(s: MatchedTender & { _strict: boolean; _geoOpen: boolean }): MatchedTender {
-  const { _strict, _geoOpen, ...rest } = s;
-  void _strict; void _geoOpen;
+function stripMeta(s: MatchedTender & { _strict: boolean; _geoOpen: boolean; _sectorScore: number }): MatchedTender {
+  const { _strict, _geoOpen, _sectorScore, ...rest } = s;
+  void _strict; void _geoOpen; void _sectorScore;
   return rest;
 }
 

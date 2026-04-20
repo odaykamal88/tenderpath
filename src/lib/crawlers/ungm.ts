@@ -53,6 +53,7 @@ function fetchManyEndpoint(): string {
  */
 async function workerFetchMany(
   requests: Array<{ method: "GET" | "POST"; body?: string; headers?: Record<string, string> }>,
+  opts: { waitMs?: number } = {},
 ): Promise<WorkerPageResult[]> {
   const endpoint = fetchManyEndpoint();
   const key = process.env.CRAWLER_WORKER_KEY!;
@@ -62,7 +63,7 @@ async function workerFetchMany(
     headers: { "Content-Type": "application/json", "X-Crawler-Key": key },
     body: JSON.stringify({
       warmupUrl: UNGM_WARMUP,
-      waitMs: 2500,
+      waitMs: opts.waitMs ?? 2500,
       delayMs: 700,
       requests: requests.map((r) => ({
         url: UNGM_API,
@@ -76,15 +77,25 @@ async function workerFetchMany(
     signal: AbortSignal.timeout(180_000),
   });
 
+  // Read the body as text first — Cloudflare occasionally returns an
+  // edge-level HTML error page with 2xx status when the isolate hiccups,
+  // and resp.json() buries the diagnostic as "Unexpected token '<'".
+  const text = await resp.text().catch(() => "");
   if (!resp.ok) {
-    const text = await resp.text().catch(() => "");
     throw new Error(`crawler worker /fetch-many HTTP ${resp.status}: ${text.slice(0, 200)}`);
   }
-  const payload = (await resp.json()) as {
-    ok: boolean;
-    results?: WorkerPageResult[];
-    error?: string;
-  };
+
+  let payload: { ok: boolean; results?: WorkerPageResult[]; error?: string };
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    // Body wasn't JSON — surface the first 300 chars verbatim so we can
+    // tell whether it was a CF challenge, a Workers runtime error, or a
+    // timeout-reaper page. Previously this blew up as "Unexpected token"
+    // with zero signal about the real failure.
+    const snippet = text.slice(0, 300).replace(/\s+/g, " ").trim();
+    throw new Error(`crawler worker returned non-JSON (status ${resp.status}): ${snippet || "(empty body)"}`);
+  }
   if (!payload.ok) throw new Error(`crawler worker error: ${payload.error ?? "unknown"}`);
   return payload.results ?? [];
 }
@@ -243,7 +254,24 @@ export async function crawlUNGM(): Promise<CrawlResult> {
       headers: PAGE_HEADERS,
     }));
 
-    const results = await withRetry(() => workerFetchMany(requests));
+    // Fast-fail detection: the common failure mode is the worker returning
+    // HTML (CF edge error / challenge / Workers cold-start hiccup) in 3-4s
+    // instead of the usual 30-40s. withRetry gives us one retry, but at the
+    // same waitMs — so if warmup was the actual problem we fail the same way
+    // twice. Detect fast-fail-with-HTML and retry once with a longer warmup
+    // (6s) before giving up.
+    const t0 = Date.now();
+    let results: WorkerPageResult[];
+    try {
+      results = await withRetry(() => workerFetchMany(requests));
+    } catch (err) {
+      const elapsed = Date.now() - t0;
+      const msg = err instanceof Error ? err.message : String(err);
+      const fastFailHtml = elapsed < 10_000 && /non-JSON|Cloudflare|HTTP 5\d\d/.test(msg);
+      if (!fastFailHtml) throw err;
+      console.warn(`[ungm] fast-fail in ${elapsed}ms (${msg.slice(0, 120)}) — retrying once with waitMs=6000`);
+      results = await workerFetchMany(requests, { waitMs: 6000 });
+    }
 
     const tenders: RawTender[] = [];
     for (let i = 0; i < results.length; i++) {
