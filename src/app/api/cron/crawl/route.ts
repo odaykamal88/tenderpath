@@ -41,10 +41,11 @@ async function logSource(s: SourceSummary): Promise<void> {
   await sql`
     INSERT INTO crawl_logs (
       platform, status, duration_ms,
-      tenders_added, tenders_updated, tenders_expired
+      tenders_added, tenders_updated, tenders_expired, errors
     ) VALUES (
       ${s.source}, ${s.status}, ${s.duration_ms},
-      ${s.notices_added}, ${s.notices_updated}, ${s.notices_expired}
+      ${s.notices_added}, ${s.notices_updated}, ${s.notices_expired},
+      ${s.error ? JSON.stringify([s.error]) : null}::jsonb
     )
   `;
 }
