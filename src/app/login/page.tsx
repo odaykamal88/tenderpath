@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 function LoginForm() {
@@ -15,6 +15,33 @@ function LoginForm() {
   const [devToken, setDevToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Auto-verify when magic link token is in the URL (?token=...)
+  useEffect(() => {
+    const urlToken = search.get("token");
+    if (!urlToken) return;
+    setBusy(true);
+    fetch("/api/auth/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: urlToken }),
+    })
+      .then((r) => r.json())
+      .then((body) => {
+        if (body.token) {
+          localStorage.setItem("tp_token", body.token);
+          router.replace(next);
+        } else {
+          setError(body.error || "This link is invalid or has expired. Please request a new one.");
+          setBusy(false);
+        }
+      })
+      .catch(() => {
+        setError("Something went wrong. Please request a new magic link.");
+        setBusy(false);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function request(e: React.FormEvent) {
     e.preventDefault();
@@ -52,6 +79,20 @@ function LoginForm() {
     }
     localStorage.setItem("tp_token", body.token);
     router.replace(next);
+  }
+
+  // Show spinner while auto-verifying from URL token
+  if (busy && !email && search.get("token")) {
+    return (
+      <div className="min-h-screen bg-navy flex flex-col items-center justify-center gap-4">
+        <svg className="w-8 h-8 animate-spin text-gold" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        <p className="text-sm text-slate-400">Signing you in…</p>
+        {error && <p className="text-sm text-red-400 max-w-sm text-center">{error}</p>}
+      </div>
+    );
   }
 
   return (
