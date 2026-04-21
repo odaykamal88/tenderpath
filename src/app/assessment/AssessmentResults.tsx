@@ -546,11 +546,10 @@ export default function AssessmentResults({ data, onReset }: Props) {
           return (
             <div
               key={slug}
-              className={`rounded-xl border-2 p-5 bg-navy-light relative cursor-pointer transition-colors ${
-                isRec ? "border-gold hover:bg-navy-light/80" : "border-white/10 hover:border-white/20 hover:bg-navy-light/60"
+              className={`rounded-xl border-2 p-5 bg-navy-light relative flex flex-col transition-colors ${
+                isRec ? "border-gold" : "border-white/10 hover:border-white/20"
               }`}
               style={{ animation: "fadeInUp 0.5s ease-out both", animationDelay: `${i * 0.1}s` }}
-              onClick={() => { window.location.href = `/login?plan=${slug}`; }}
             >
               {isRec && (
                 <span className="absolute -top-3 right-4 rounded-full bg-gold px-3 py-0.5 text-[10px] font-bold text-white uppercase">Best Fit</span>
@@ -560,12 +559,21 @@ export default function AssessmentResults({ data, onReset }: Props) {
                 <span className={`text-2xl font-bold ${isRec ? "text-gold" : "text-white"}`}>{tier.price}</span>
                 <span className="text-xs text-gray-500">{tier.billingPeriod}</span>
               </div>
-              <p className="text-xs text-gray-400 mb-4 leading-relaxed">{tier.tagline}</p>
-              <div className={`w-full rounded-lg py-2.5 text-xs font-semibold text-center transition-colors ${
-                isRec ? "bg-gold text-white hover:bg-gold-dark" : "border border-white/20 text-white hover:bg-white/5"
-              }`}>
+              <p className="text-xs text-gray-400 mb-4 leading-relaxed flex-1">{tier.tagline}</p>
+              <button
+                onClick={() => { window.location.href = `/login?plan=${slug}`; }}
+                className={`w-full rounded-lg py-2.5 text-xs font-semibold text-center transition-colors mb-2 ${
+                  isRec ? "bg-gold text-white hover:bg-gold-dark" : "border border-white/20 text-white hover:bg-white/5"
+                }`}
+              >
                 {tier.cta} →
-              </div>
+              </button>
+              <a
+                href={`/pay?plan=${slug}`}
+                className="w-full rounded-lg py-1.5 text-[11px] font-medium text-center text-gray-500 hover:text-gray-300 border border-white/10 hover:border-white/20 transition-colors"
+              >
+                Pay with USDT / Wire / Whish
+              </a>
             </div>
           );
         })}

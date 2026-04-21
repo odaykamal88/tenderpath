@@ -77,6 +77,12 @@ export default function Services() {
               >
                 {tier.cta}
               </a>
+              <a
+                href={`/pay?plan=${tier.slug}`}
+                className="mt-2 block rounded-lg py-2 text-center text-[11px] font-medium text-gray-400 hover:text-gray-600 border border-gray-100 hover:border-gray-200 transition-colors"
+              >
+                Pay with USDT · Wire · Whish
+              </a>
             </div>
           ))}
         </div>
