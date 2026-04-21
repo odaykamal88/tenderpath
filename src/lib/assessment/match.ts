@@ -190,11 +190,13 @@ export async function matchTenders(
   const userSlugs = userSectorSlugs(analysis.detected_industry, analysis.sectors);
 
   // Consultancy tenders (ReliefWeb jobs feed, UN individual-consultant roster)
-  // are individual-recruitment postings, not B2B procurement. A logistics or
-  // warehousing company should never see "M&E Specialist Consultant" or
-  // "Investigator Roster" — those are jobs for people, not contracts for firms.
-  // Only surface them when the user actually sells consulting services.
-  const userIsConsulting = userSlugs.has("consulting");
+  // are individual-recruitment postings, not B2B procurement. Only gate on the
+  // PRIMARY detected industry, not the full union of sectors[]. Service firms
+  // routinely get "Consulting Services"/"Technical Assistance"/"Project
+  // Management" added to sectors[] by the LLM (all three normalize → consulting
+  // slug), which would otherwise disable the filter for translation firms,
+  // logistics companies, etc. If consulting isn't the primary trade, skip them.
+  const userIsConsulting = (analysis.detected_industry ?? "").toLowerCase() === "consulting";
 
   // Pool per slug instead of a single deadline-sorted LIMIT 600 — otherwise a
   // heavy sector (M&E / consulting) dominates the candidate window and starves

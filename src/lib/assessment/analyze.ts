@@ -73,14 +73,20 @@ export async function classifyIndustry(
     messages: [
       {
         role: "user",
-        content: `Analyze the following company information and classify their industry for UN/international development procurement matching.
+        content: `Classify this company's PRIMARY industry for UN/international development procurement matching.
 
 ${context}
 
 Return a JSON object with exactly these fields:
-- "detected_industry": primary industry — one of: it, education, healthcare, logistics, construction, consulting, food, security, language_services, engineering, environment, agriculture, water_sanitation, energy
-- "sectors": array of relevant UN procurement sectors (e.g. "Information Technology", "Healthcare", "Construction", "Consulting Services", "Logistics & Supply Chain")
+- "detected_industry": PRIMARY industry — one of: it, education, healthcare, logistics, construction, consulting, food, security, language_services, engineering, environment, agriculture, water_sanitation, energy
+- "sectors": array of relevant UN procurement sectors (e.g. "Information Technology", "Healthcare", "Construction", "Logistics & Supply Chain"). Include ONLY sectors the company directly operates in — do NOT add "Consulting Services", "Technical Assistance", "Advisory", or "Project Management" as a generic add-on. Those belong only to companies whose core trade is providing consulting/advisory itself.
 - "services": array of specific services the company offers
+
+CRITICAL classification rules:
+- A warehousing / freight / supply-chain / transport / storage company is "logistics", NOT "consulting". Even if their website mentions "solutions" or "services" or "expertise".
+- A translation / interpretation / editorial / subtitling / localization company is "language_services", NOT "consulting".
+- A software / SaaS / platform / digital-product company is "it", NOT "consulting".
+- Only use "consulting" when the company's primary offering is advisory work itself (management consulting, M&E consulting, policy research, strategy firms, feasibility studies for hire). If unsure, pick the concrete trade (logistics, it, education, etc.) over "consulting". DO NOT default to "consulting" when website content is thin or ambiguous — pick the closest concrete industry from any available signal (company description, countries, services listed).
 
 Return ONLY valid JSON, no explanation.`,
       },
@@ -89,8 +95,12 @@ Return ONLY valid JSON, no explanation.`,
 
   const text =
     msg.content[0]?.type === "text" ? msg.content[0].text : "{}";
+  // NB: parse-failure fallback is intentionally NOT "consulting" — that was
+  // poisoning the Consultancy filter for every company whose classification
+  // JSON happened to fail parsing. Use empty string so userIsConsulting stays
+  // false and the Consultancy/individual-role guards keep firing.
   return safeParseJSON(text, {
-    detected_industry: "consulting",
+    detected_industry: "",
     sectors: [],
     services: [],
   });
