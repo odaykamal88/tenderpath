@@ -50,8 +50,13 @@ function mapProcess(p?: string): string {
 
 function parseHTML(html: string): RawTender[] {
   const tenders: RawTender[] = [];
-  // Each notice = an <a class="vacanciesTableLink vacanciesTable__row ...">...</a>
-  const rowRe = /<a\s+href="(view_notice\.cfm\?notice_id=(\d+))"[^>]*class="[^"]*vacanciesTableLink[^"]*"[^>]*>([\s\S]*?)<\/a>/g;
+  // UNDP listing uses two link patterns — older notices go through
+  //   view_notice.cfm?notice_id=N
+  // while newer country-office RFPs (the majority, ~97%) go through
+  //   view_negotiation.cfm?nego_id=N
+  // We accept either; the numeric id stays unique across both spaces so we
+  // keep using it as the reference-id fallback.
+  const rowRe = /<a\s+href="((?:view_notice\.cfm\?notice_id|view_negotiation\.cfm\?nego_id)=(\d+))"[^>]*class="[^"]*vacanciesTableLink[^"]*"[^>]*>([\s\S]*?)<\/a>/g;
   let m: RegExpExecArray | null;
   while ((m = rowRe.exec(html)) !== null) {
     const href = m[1];

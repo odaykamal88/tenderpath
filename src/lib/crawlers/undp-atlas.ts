@@ -124,8 +124,12 @@ function extractCells(block: string): Record<string, string> {
 
 function parseListing(html: string): ListingRow[] {
   const rows: ListingRow[] = [];
+  // Accept both URL schemes — older notices go through view_notice.cfm,
+  // newer country-office RFPs (~97% of rows, including the Lebanon solar
+  // curricula RFP) go through view_negotiation.cfm. See undp.ts for the
+  // diagnostic write-up.
   const rowRe =
-    /<a\s+href="(view_notice\.cfm\?notice_id=(\d+))"[^>]*class="[^"]*vacanciesTableLink[^"]*"[^>]*>([\s\S]*?)<\/a>/g;
+    /<a\s+href="((?:view_notice\.cfm\?notice_id|view_negotiation\.cfm\?nego_id)=(\d+))"[^>]*class="[^"]*vacanciesTableLink[^"]*"[^>]*>([\s\S]*?)<\/a>/g;
   let m: RegExpExecArray | null;
   while ((m = rowRe.exec(html)) !== null) {
     const href = m[1];
@@ -197,8 +201,10 @@ function parseDetail(html: string): NoticeDetail {
   return { description, overviewHtml, metadata };
 }
 
-async function fetchDetail(noticeId: string): Promise<NoticeDetail | null> {
-  const url = `${BASE}view_notice.cfm?notice_id=${noticeId}`;
+async function fetchDetail(href: string): Promise<NoticeDetail | null> {
+  // Use the captured href verbatim — notices on view_negotiation.cfm return
+  // 404 if we force view_notice.cfm?notice_id=N.
+  const url = `${BASE}${href}`;
   try {
     const resp = await fetchWithTimeout(
       url,
@@ -284,7 +290,7 @@ export async function crawlUNDPAtlas(): Promise<CrawlResult> {
         const i = idx++;
         const row = mena[i];
         if (i > 0) await sleep(randomDelay());
-        const detail = await fetchDetail(row.noticeId);
+        const detail = await fetchDetail(row.href);
         enriched.push(rowToTender(row, detail));
       }
     }

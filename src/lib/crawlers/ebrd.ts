@@ -10,7 +10,8 @@
  *
  * Override `EBRD_NOTICES_URL` to point at a mirror if ECEPP is blocked.
  */
-import { type RawTender, type CrawlResult, withRetry, fetchWithTimeout } from "./types";
+import { type RawTender, type CrawlResult, withRetry } from "./types";
+import { fetchViaBrowser, browserAvailable } from "./_browser";
 
 const BASE = process.env.EBRD_NOTICES_URL ?? "https://ecepp.ebrd.com/delta/viewNoticesPublic.html";
 const MAX_PAGES = 3;
@@ -18,18 +19,31 @@ const PAGE_DELAY_MS = 1500;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// ECEPP returns an empty body (0 bytes) to plain fetch — the notice list is
+// rendered client-side by a Delta/JSF framework after JS execution. Only a
+// real browser fills the listing. Route through the worker like UNGM/GIZ and
+// give it a generous waitMs so the Ajax list call has time to complete.
 async function fetchPage(page: number): Promise<string> {
-  // ECEPP pages via POST form or GET with pageIndex. Stick with GET.
   const url = page === 0 ? BASE : `${BASE}?pageIndex=${page}`;
-  const resp = await fetchWithTimeout(url, {
+  const resp = await fetchViaBrowser(url, {
+    method: "GET",
     headers: {
       Accept: "text/html,application/xhtml+xml",
       "Accept-Language": "en-US,en;q=0.9",
-      "User-Agent": "Mozilla/5.0 (compatible; TenderPath/1.0; +https://tenderpath.io)",
+      Referer: BASE,
     },
+    warmupUrl: BASE,
+    // ECEPP is a Delta/JSF SPA — plain DOM fetch returns an empty shell.
+    // Use navigate mode so Chromium actually loads the page, runs the JSF
+    // init, and waits for the notice table to populate before we snapshot.
+    mode: "navigate",
+    waitForSelector: "a[href*='viewNotice.html?displayId=']",
+    waitAfterNav: 1500,
+    waitMs: 2000,
+    timeoutMs: 120000,
   });
-  if (!resp.ok) throw new Error(`EBRD page ${page} ${resp.status}`);
-  return resp.text();
+  if (!resp.ok) throw new Error(`EBRD page ${page} ${resp.status}: ${resp.body.slice(0, 200)}`);
+  return resp.body;
 }
 
 interface ParsedNotice {
@@ -157,6 +171,12 @@ function mapNotice(n: ParsedNotice): RawTender {
 
 export async function crawlEBRD(): Promise<CrawlResult> {
   const start = Date.now();
+  if (!browserAvailable()) {
+    return {
+      platform: "EBRD", status: "failure", tenders: [], durationMs: 0,
+      error: "CRAWLER_WORKER_URL / CRAWLER_WORKER_KEY not set — ECEPP list renders client-side",
+    };
+  }
   try {
     const tenders: RawTender[] = [];
     const seen = new Set<string>();

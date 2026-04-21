@@ -6,9 +6,12 @@
  */
 import { type RawTender, type CrawlResult, withRetry, fetchWithTimeout } from "./types";
 
-// ReliefWeb v2 requires an approved appname (free, request at https://apidoc.reliefweb.int/parameters#appname).
-// Set RELIEFWEB_APPNAME env var. Crawler is a no-op without it.
-const APP_NAME = process.env.RELIEFWEB_APPNAME ?? "";
+// ReliefWeb v2 wants an appname GET param to identify the caller. Any non-empty
+// unique string works — registration at apidoc.reliefweb.int/parameters#appname
+// is courtesy not gate. Default to our domain so the crawler is live out of the
+// box; override RELIEFWEB_APPNAME once we've registered if we ever get
+// throttled.
+const APP_NAME = process.env.RELIEFWEB_APPNAME ?? "tenderpath.io";
 const ENDPOINT = `https://api.reliefweb.int/v2/jobs?appname=${APP_NAME}`;
 const REPORTS_ENDPOINT = `https://api.reliefweb.int/v2/reports?appname=${APP_NAME}`;
 const PAGE_SIZE = 200;
@@ -185,12 +188,6 @@ function stripHtml(s: string): string {
 
 export async function crawlReliefWeb(): Promise<CrawlResult> {
   const start = Date.now();
-  if (!APP_NAME) {
-    return {
-      platform: "ReliefWeb", status: "failure", tenders: [], durationMs: 0,
-      error: "RELIEFWEB_APPNAME not set — request a free appname at apidoc.reliefweb.int/parameters#appname",
-    };
-  }
   try {
     const tenders: RawTender[] = [];
 

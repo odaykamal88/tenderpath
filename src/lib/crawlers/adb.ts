@@ -10,7 +10,8 @@
  *
  * Override `ADB_TENDERS_URL` to point at a mirror if the main host is blocked.
  */
-import { type RawTender, type CrawlResult, withRetry, fetchWithTimeout } from "./types";
+import { type RawTender, type CrawlResult, withRetry } from "./types";
+import { fetchViaBrowser, browserAvailable } from "./_browser";
 
 const BASE = process.env.ADB_TENDERS_URL ?? "https://www.adb.org/projects/tenders";
 const MAX_PAGES = 3;
@@ -18,17 +19,31 @@ const PAGE_DELAY_MS = 1500;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// ADB sits behind Cloudflare bot protection and returns 403 to plain fetch
+// (even with a realistic UA). Route through the browser worker like UNGM/GIZ.
 async function fetchPage(page: number): Promise<string> {
   const url = page === 0 ? BASE : `${BASE}?page=${page}`;
-  const resp = await fetchWithTimeout(url, {
+  const resp = await fetchViaBrowser(url, {
+    method: "GET",
     headers: {
       Accept: "text/html,application/xhtml+xml",
       "Accept-Language": "en-US,en;q=0.9",
-      "User-Agent": "Mozilla/5.0 (compatible; TenderPath/1.0; +https://tenderpath.io)",
+      Referer: BASE,
     },
+    warmupUrl: BASE,
+    // ADB sits behind CF. DOM-fetch mode returned the 403 challenge page even
+    // after warmup because the target-URL request itself needs the full JS
+    // challenge to run in-context. Navigate mode goes through page.goto(),
+    // so CF's JS challenge executes on the target URL and cf_clearance is
+    // issued before we capture HTML. Anchor on the tenders table selector.
+    mode: "navigate",
+    waitForSelector: "a[href*='/projects/tenders/']",
+    waitAfterNav: 500,
+    waitMs: 2000,
+    timeoutMs: 120000,
   });
-  if (!resp.ok) throw new Error(`ADB page ${page} ${resp.status}`);
-  return resp.text();
+  if (!resp.ok) throw new Error(`ADB page ${page} ${resp.status}: ${resp.body.slice(0, 200)}`);
+  return resp.body;
 }
 
 interface ParsedRow {
@@ -143,6 +158,12 @@ function mapRow(r: ParsedRow): RawTender {
 
 export async function crawlADB(): Promise<CrawlResult> {
   const start = Date.now();
+  if (!browserAvailable()) {
+    return {
+      platform: "ADB", status: "failure", tenders: [], durationMs: 0,
+      error: "CRAWLER_WORKER_URL / CRAWLER_WORKER_KEY not set — ADB sits behind Cloudflare",
+    };
+  }
   try {
     const tenders: RawTender[] = [];
     const seen = new Set<string>();

@@ -9,20 +9,26 @@
  * Override `UNRWA_PROCUREMENT_URL` to swap the base if the
  * layout gets moved under /business-with-us/procurement or similar.
  */
-import { type RawTender, type CrawlResult, withRetry, fetchWithTimeout } from "./types";
+import { type RawTender, type CrawlResult, withRetry } from "./types";
+import { fetchViaBrowser, browserAvailable } from "./_browser";
 
 const BASE = process.env.UNRWA_PROCUREMENT_URL ?? "https://www.unrwa.org/procurement";
 
+// UNRWA fronts /procurement with Cloudflare and 403s plain fetch even with a
+// realistic UA. Route through the browser worker like UNGM/GIZ.
 async function fetchList(): Promise<string> {
-  const resp = await fetchWithTimeout(BASE, {
+  const resp = await fetchViaBrowser(BASE, {
+    method: "GET",
     headers: {
       Accept: "text/html,application/xhtml+xml",
       "Accept-Language": "en-US,en;q=0.9",
-      "User-Agent": "Mozilla/5.0 (compatible; TenderPath/1.0; +https://tenderpath.io)",
+      Referer: "https://www.unrwa.org/",
     },
+    warmupUrl: "https://www.unrwa.org/",
+    waitMs: 3000,
   });
-  if (!resp.ok) throw new Error(`UNRWA ${resp.status}`);
-  return resp.text();
+  if (!resp.ok) throw new Error(`UNRWA ${resp.status}: ${resp.body.slice(0, 200)}`);
+  return resp.body;
 }
 
 interface ParsedNotice {
@@ -165,6 +171,12 @@ function mapNotice(n: ParsedNotice): RawTender {
 
 export async function crawlUNRWA(): Promise<CrawlResult> {
   const start = Date.now();
+  if (!browserAvailable()) {
+    return {
+      platform: "UNRWA", status: "failure", tenders: [], durationMs: 0,
+      error: "CRAWLER_WORKER_URL / CRAWLER_WORKER_KEY not set — UNRWA sits behind Cloudflare",
+    };
+  }
   try {
     const html = await withRetry(() => fetchList());
     const rows = parseNotices(html);

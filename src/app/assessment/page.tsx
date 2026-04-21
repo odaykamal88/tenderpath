@@ -146,7 +146,6 @@ export default function AssessmentPage() {
           <div className="hidden sm:flex items-center gap-6 text-sm text-gray-400">
             <a href="/#how-it-works" className="hover:text-white transition-colors">How It Works</a>
             <a href="/#services" className="hover:text-white transition-colors">Services</a>
-            <span className="rounded-md bg-gold px-4 py-1.5 text-white text-xs font-medium">Get Assessment</span>
           </div>
         </div>
       </nav>
@@ -363,27 +362,41 @@ export default function AssessmentPage() {
 
       {/* Step 2: Analysis Progress */}
       {step === 2 && (
-        <div className="mx-auto max-w-lg px-6 py-16 text-center">
-          <div className="mx-auto mb-6 w-12 h-12 border-3 border-gold/30 border-t-gold rounded-full animate-spin" />
-          <h2 className="font-serif text-2xl font-bold mb-2">AI is analyzing your profile…</h2>
-          <p className="text-gray-400 text-sm mb-8">Our AI is analyzing your profile — this takes 15–30 seconds.</p>
-          <div className="text-left space-y-3 max-w-sm mx-auto">
+        <div
+          className="mx-auto max-w-lg px-6 py-16 text-center"
+          style={{ animation: "fadeIn 0.4s ease-out both" }}
+        >
+          {/* Spinner with pulsing glow ring */}
+          <div className="relative mx-auto mb-8 w-16 h-16">
+            <div className="absolute inset-0 rounded-full bg-gold/10 animate-ping" />
+            <div className="relative w-16 h-16 border-4 border-gold/20 border-t-gold rounded-full animate-spin" />
+          </div>
+          <h2 className="font-serif text-2xl font-bold mb-2">Analyzing your profile…</h2>
+          <p className="text-gray-400 text-sm mb-8">Our AI is reading your website, matching tenders, and scoring your readiness — 15–30 seconds.</p>
+          <div className="text-left space-y-4 max-w-sm mx-auto">
             {PROGRESS_STEPS.map((label, i) => (
-              <div key={label} className="flex items-center gap-3">
-                {progressStage > i ? (
-                  <svg className="w-4 h-4 text-green flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : progressStage === i ? (
-                  <div className="w-4 h-4 flex-shrink-0 flex items-center justify-center">
+              <div
+                key={label}
+                className="flex items-center gap-3"
+                style={{ animation: "fadeInUp 0.4s ease-out both", animationDelay: `${i * 0.15}s` }}
+              >
+                <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300"
+                  style={{
+                    background: progressStage > i ? "var(--color-green)" : progressStage === i ? "rgba(200,151,62,0.15)" : "rgba(255,255,255,0.05)",
+                    border: progressStage > i ? "none" : progressStage === i ? "1px solid var(--color-gold)" : "1px solid rgba(255,255,255,0.1)",
+                  }}
+                >
+                  {progressStage > i ? (
+                    <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : progressStage === i ? (
                     <div className="w-2 h-2 rounded-full bg-gold animate-pulse" />
-                  </div>
-                ) : (
-                  <div className="w-4 h-4 flex-shrink-0 flex items-center justify-center">
+                  ) : (
                     <div className="w-1.5 h-1.5 rounded-full bg-gray-600" />
-                  </div>
-                )}
-                <span className={`text-sm ${progressStage > i ? "text-green" : progressStage === i ? "text-gold" : "text-gray-500"}`}>
+                  )}
+                </div>
+                <span className={`text-sm transition-colors duration-300 ${progressStage > i ? "text-green" : progressStage === i ? "text-gold font-medium" : "text-gray-600"}`}>
                   {label}
                 </span>
               </div>

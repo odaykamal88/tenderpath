@@ -19,6 +19,13 @@ import { crawlTED } from "../src/lib/crawlers/ted-eu";
 import { crawlUKFTS } from "../src/lib/crawlers/uk-fts";
 import { crawlWorldBank } from "../src/lib/crawlers/world-bank";
 import { crawlSAMGov } from "../src/lib/crawlers/sam-gov";
+import { crawlGIZ } from "../src/lib/crawlers/giz";
+import { crawlUNDP } from "../src/lib/crawlers/undp";
+import { crawlUNDPAtlas } from "../src/lib/crawlers/undp-atlas";
+import { crawlADB } from "../src/lib/crawlers/adb";
+import { crawlEBRD } from "../src/lib/crawlers/ebrd";
+import { crawlUNRWA } from "../src/lib/crawlers/unrwa";
+import { crawlDevelopmentAidNPO } from "../src/lib/crawlers/developmentaid-npo";
 
 const fns = [
   ["UNGM", crawlUNGM],
@@ -27,6 +34,13 @@ const fns = [
   ["UK FTS", crawlUKFTS],
   ["World Bank", crawlWorldBank],
   ["SAM.gov", crawlSAMGov],
+  ["GIZ", crawlGIZ],
+  ["UNDP", crawlUNDP],
+  ["UNDP Atlas", crawlUNDPAtlas],
+  ["ADB", crawlADB],
+  ["EBRD", crawlEBRD],
+  ["UNRWA", crawlUNRWA],
+  ["DevAid NPO", crawlDevelopmentAidNPO],
 ] as const;
 
 async function main() {

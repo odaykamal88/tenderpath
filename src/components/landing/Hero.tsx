@@ -47,12 +47,29 @@ export default function Hero() {
               </a>
             </div>
             <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2">
-              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Trusted by vendors in</p>
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide"
+                style={{ animation: "fadeInUp 0.5s ease-out both" }}>
+                Trusted by vendors in
+              </p>
               <div className="flex flex-wrap gap-x-4 gap-y-1">
-                {["🇯🇴 Jordan","🇬🇭 Ghana","🇰🇪 Kenya","🇪🇬 Egypt","🇵🇰 Pakistan","🇳🇬 Nigeria"].map((c) => (
-                  <span key={c} className="text-xs text-gray-500">{c}</span>
+                {["🇯🇴 Jordan","🇬🇭 Ghana","🇰🇪 Kenya","🇪🇬 Egypt","🇵🇰 Pakistan","🇳🇬 Nigeria"].map((c, i) => (
+                  <span
+                    key={c}
+                    className="text-xs text-gray-500"
+                    style={{
+                      animation: "fadeInUp 0.5s ease-out both",
+                      animationDelay: `${0.1 + i * 0.08}s`,
+                    }}
+                  >
+                    {c}
+                  </span>
                 ))}
-                <span className="text-xs text-gray-400">+ 35 more countries</span>
+                <span
+                  className="text-xs text-gray-400"
+                  style={{ animation: "fadeInUp 0.5s ease-out both", animationDelay: "0.6s" }}
+                >
+                  + 35 more countries
+                </span>
               </div>
             </div>
           </div>

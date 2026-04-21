@@ -11,6 +11,13 @@
  *                        Cloudflare, which blows through Vercel's 300s cron
  *                        budget. Amortize warmup across all pages in one call.
  *
+ * Two fetch modes per request:
+ *   - "fetch"    (default) DOM fetch from warmup-page context. Fast, rides
+ *                cf_clearance cookies. Good for JSON/static-HTML endpoints.
+ *   - "navigate" Real page.goto() to the target URL, optional selector wait,
+ *                returns page.content(). Required for SPA sites (EBRD/ECEPP)
+ *                where the listing is populated by post-load Ajax.
+ *
  * Auth: X-Crawler-Key header must match CRAWLER_KEY secret.
  */
 import puppeteer from "@cloudflare/puppeteer";
@@ -20,11 +27,19 @@ export interface Env {
   CRAWLER_KEY: string;        // wrangler secret
 }
 
+type FetchMode = "fetch" | "navigate";
+
 interface FetchRequest {
   url: string;
   method?: "GET" | "POST";
   body?: string;
   headers?: Record<string, string>;
+  /** "fetch" (default) = DOM fetch from warmup ctx. "navigate" = page.goto(url). */
+  mode?: FetchMode;
+  /** navigate-mode only: wait for this CSS selector before capturing content. */
+  waitForSelector?: string;
+  /** navigate-mode only: extra ms after nav/selector before capturing. Default 0. */
+  waitAfterNav?: number;
 }
 
 interface FetchBody extends FetchRequest {
@@ -40,6 +55,8 @@ interface FetchManyBody {
 }
 
 interface PageResult { status: number; body: string; finalUrl?: string }
+
+type PuppeteerPage = Awaited<ReturnType<Awaited<ReturnType<typeof puppeteer.launch>>["newPage"]>>;
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -64,14 +81,16 @@ async function handleFetch(req: Request, env: Env): Promise<Response> {
     const page = await browser.newPage();
     await setupPage(page);
     const warmup = input.warmupUrl ?? new URL(input.url).origin;
-    await page.goto(warmup, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await new Promise((r) => setTimeout(r, input.waitMs ?? 1500));
+    await warmupAndClearCF(page, warmup, input.waitMs ?? 1500);
 
-    const result = await runFetchInPage(page, {
+    const result = await runRequest(page, {
       url: input.url,
       method: input.method,
       body: input.body,
       headers: input.headers,
+      mode: input.mode,
+      waitForSelector: input.waitForSelector,
+      waitAfterNav: input.waitAfterNav,
     });
 
     return json({
@@ -101,8 +120,7 @@ async function handleFetchMany(req: Request, env: Env): Promise<Response> {
 
     // Warmup ONCE — Cloudflare challenge solved, cf_clearance cookie set.
     // All subsequent page.evaluate fetches ride the same cookies.
-    await page.goto(input.warmupUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await new Promise((r) => setTimeout(r, input.waitMs ?? 2000));
+    await warmupAndClearCF(page, input.warmupUrl, input.waitMs ?? 2000);
 
     const results: PageResult[] = [];
     const baseDelay = input.delayMs ?? 800;
@@ -112,7 +130,7 @@ async function handleFetchMany(req: Request, env: Env): Promise<Response> {
         await new Promise((r) => setTimeout(r, jitter));
       }
       try {
-        const r = await runFetchInPage(page, input.requests[i]);
+        const r = await runRequest(page, input.requests[i]);
         results.push(r);
       } catch (err) {
         results.push({ status: 0, body: err instanceof Error ? err.message : String(err) });
@@ -127,22 +145,79 @@ async function handleFetchMany(req: Request, env: Env): Promise<Response> {
   }
 }
 
-async function setupPage(page: Awaited<ReturnType<Awaited<ReturnType<typeof puppeteer.launch>>["newPage"]>>): Promise<void> {
+async function setupPage(page: PuppeteerPage): Promise<void> {
   await page.setUserAgent(
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
       "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   );
 }
 
-async function runFetchInPage(
-  page: Awaited<ReturnType<Awaited<ReturnType<typeof puppeteer.launch>>["newPage"]>>,
-  r: FetchRequest,
-): Promise<PageResult> {
+/**
+ * Visit warmupUrl and wait until Cloudflare has (likely) issued cf_clearance.
+ * Strategy:
+ *   1. goto with networkidle2 — DCL fires too early for CF's JS challenge.
+ *      networkidle2 waits until there are <=2 network connections for 500ms,
+ *      which is the earliest reliable signal that the challenge has settled.
+ *   2. Then poll cookies for cf_clearance up to `maxWaitMs`. Site has no CF?
+ *      We exit early on the goto resolution and the extra wait is skipped.
+ *   3. Floor the wait at the caller's waitMs — some SPAs still want the
+ *      explicit pause even after network goes idle.
+ */
+async function warmupAndClearCF(page: PuppeteerPage, warmupUrl: string, waitMs: number): Promise<void> {
+  try {
+    await page.goto(warmupUrl, { waitUntil: "networkidle2", timeout: 30000 });
+  } catch {
+    // networkidle2 can time out on sites that hold long-poll connections open.
+    // Fall back to domcontentloaded so we still have a page to work with.
+    await page.goto(warmupUrl, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
+  }
+
+  // Poll for cf_clearance. If the site isn't behind CF, the cookie never
+  // appears — cap the poll at 8s so we don't waste the budget.
+  const cookieDeadline = Date.now() + 8000;
+  while (Date.now() < cookieDeadline) {
+    const cookies = await page.cookies().catch(() => []);
+    if (cookies.some((c) => c.name === "cf_clearance")) break;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+
+  // Caller-requested floor (SPA Ajax init, etc.)
+  if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs));
+}
+
+async function runRequest(page: PuppeteerPage, r: FetchRequest): Promise<PageResult> {
+  if (r.mode === "navigate") return await navigateAndCapture(page, r);
+  return await runFetchInPage(page, r);
+}
+
+/**
+ * SPA mode: actually navigate the browser to the target URL so its JS runs,
+ * then optionally wait for a selector that indicates the content has loaded,
+ * and return the fully-rendered HTML.
+ */
+async function navigateAndCapture(page: PuppeteerPage, r: FetchRequest): Promise<PageResult> {
+  const resp = await page.goto(r.url, { waitUntil: "networkidle2", timeout: 45000 }).catch((e) => {
+    throw new Error(`navigate failed: ${e instanceof Error ? e.message : String(e)}`);
+  });
+  const status = resp?.status() ?? 0;
+
+  if (r.waitForSelector) {
+    await page.waitForSelector(r.waitForSelector, { timeout: 20000 }).catch(() => {
+      // Don't throw — we still want to return whatever rendered. The caller
+      // will see the status and empty parse and can decide.
+    });
+  }
+  if (r.waitAfterNav && r.waitAfterNav > 0) {
+    await new Promise((res) => setTimeout(res, r.waitAfterNav));
+  }
+
+  const body = await page.content();
+  return { status, body, finalUrl: page.url() };
+}
+
+async function runFetchInPage(page: PuppeteerPage, r: FetchRequest): Promise<PageResult> {
   return await page.evaluate(
     async (url, method, body, headers) => {
-      // Runs in browser context — `fetch` here is the DOM fetch, which
-      // accepts `credentials`. TS sees the Workers fetch signature because
-      // of our tsconfig env, hence the cast.
       const init = {
         method: method ?? "GET",
         headers: headers ?? {},

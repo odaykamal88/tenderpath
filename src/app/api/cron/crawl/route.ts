@@ -11,6 +11,7 @@ import { crawlUKFTS } from "@/lib/crawlers/uk-fts";
 import { crawlWorldBank } from "@/lib/crawlers/world-bank";
 import { crawlSAMGov } from "@/lib/crawlers/sam-gov";
 import { crawlGIZ } from "@/lib/crawlers/giz";
+import { crawlDevelopmentAidNPO } from "@/lib/crawlers/developmentaid-npo";
 import type { CrawlResult } from "@/lib/crawlers/types";
 
 export const maxDuration = 300;
@@ -35,6 +36,7 @@ const TENDER_CRAWLERS: Array<() => Promise<CrawlResult>> = [
   crawlGIZ,
   crawlUNDP,
   crawlUNDPAtlas,
+  crawlDevelopmentAidNPO,
 ];
 
 async function logSource(s: SourceSummary): Promise<void> {

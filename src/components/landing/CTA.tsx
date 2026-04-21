@@ -29,12 +29,6 @@ export default function CTA() {
               />
             </svg>
           </a>
-          <a
-            href="mailto:hello@tenderpath.co?subject=Book a call"
-            className="inline-flex items-center gap-2 rounded-lg border border-gold/40 px-8 py-4 text-base font-semibold text-gold hover:border-gold/70 hover:bg-gold/5 transition-colors"
-          >
-            Book a Free Expert Call
-          </a>
         </div>
         <p className="mt-6 text-xs text-gray-400">
           Free — No credit card required — Results in 2 minutes

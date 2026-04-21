@@ -17,6 +17,18 @@ export interface BrowserFetchOpts {
   waitMs?: number;
   /** Overall timeout (ms). Browser cold-start adds ~3–5s. Default 60000. */
   timeoutMs?: number;
+  /**
+   * "fetch" (default) — DOM fetch from the warmup page context. Fast; rides
+   * cf_clearance cookies. Good for JSON/static-HTML endpoints.
+   * "navigate" — actually navigate Chromium to the target URL, run its JS,
+   * then return page.content(). Required for SPA sites where the listing is
+   * populated by post-load Ajax (EBRD/ECEPP, anything Angular/React/JSF).
+   */
+  mode?: "fetch" | "navigate";
+  /** navigate-mode only: CSS selector to wait for before capturing HTML. */
+  waitForSelector?: string;
+  /** navigate-mode only: extra ms after nav/selector before capturing. */
+  waitAfterNav?: number;
 }
 
 export interface BrowserFetchResult {
@@ -49,6 +61,9 @@ export async function fetchViaBrowser(
     headers: opts.headers,
     warmupUrl: opts.warmupUrl,
     waitMs: opts.waitMs,
+    mode: opts.mode,
+    waitForSelector: opts.waitForSelector,
+    waitAfterNav: opts.waitAfterNav,
   };
 
   const resp = await fetchWithTimeout(
