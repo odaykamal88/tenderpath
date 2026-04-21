@@ -102,6 +102,48 @@ const COUNTRY_ALIASES: Record<string, string[]> = {
   "bosnia and herzegovina": ["bosnia"],
 };
 
+// Regional adjacency. When the user's country has thin direct supply (typical
+// for Syria/Palestine/Libya/Yemen), tenders posted for a neighbour are often
+// legitimate targets — UN country-offices frequently serve cross-border ops
+// from an adjacent hub (Amman for Syria, Cairo for Libya, etc.). We surface
+// these as a separate "Regional Opportunities" bucket rather than folding
+// them into Global, so the UI can label them correctly.
+const REGIONAL_NEIGHBOURS: Record<string, string[]> = {
+  syria: ["lebanon", "jordan", "iraq", "turkey", "türkiye", "turkiye", "palestine", "state of palestine", "west bank and gaza"],
+  lebanon: ["syria", "syrian arab republic", "jordan", "palestine", "state of palestine", "cyprus"],
+  jordan: ["syria", "syrian arab republic", "lebanon", "iraq", "palestine", "state of palestine", "saudi arabia", "egypt"],
+  iraq: ["syria", "syrian arab republic", "jordan", "iran", "kuwait", "saudi arabia", "turkey", "türkiye"],
+  palestine: ["jordan", "lebanon", "egypt", "syria", "syrian arab republic"],
+  "state of palestine": ["jordan", "lebanon", "egypt", "syria"],
+  yemen: ["saudi arabia", "oman", "djibouti", "somalia", "sudan"],
+  libya: ["tunisia", "egypt", "algeria", "sudan", "chad", "niger"],
+  egypt: ["libya", "sudan", "palestine", "state of palestine", "jordan", "saudi arabia"],
+  tunisia: ["libya", "algeria"],
+  morocco: ["algeria", "mauritania", "western sahara"],
+  algeria: ["morocco", "tunisia", "libya", "mauritania", "mali", "niger"],
+  sudan: ["egypt", "libya", "chad", "south sudan", "ethiopia", "eritrea", "central african republic"],
+  "saudi arabia": ["jordan", "iraq", "kuwait", "qatar", "bahrain", "uae", "united arab emirates", "oman", "yemen"],
+  uae: ["saudi arabia", "oman", "qatar"],
+  "united arab emirates": ["saudi arabia", "oman", "qatar"],
+  oman: ["uae", "united arab emirates", "saudi arabia", "yemen"],
+  qatar: ["saudi arabia", "uae", "united arab emirates", "bahrain"],
+  kuwait: ["saudi arabia", "iraq"],
+  bahrain: ["saudi arabia", "qatar"],
+  iran: ["iraq", "turkey", "türkiye", "turkmenistan", "afghanistan", "pakistan", "armenia", "azerbaijan"],
+  turkey: ["syria", "syrian arab republic", "iraq", "iran", "greece", "bulgaria", "georgia", "armenia"],
+  "türkiye": ["syria", "iraq", "iran", "greece", "bulgaria", "georgia", "armenia"],
+};
+
+function expandRegionalSet(countries: string[]): Set<string> {
+  const out = new Set<string>();
+  for (const raw of countries) {
+    const key = raw.trim().toLowerCase();
+    const neighbours = REGIONAL_NEIGHBOURS[key];
+    if (neighbours) for (const n of neighbours) out.add(n.toLowerCase());
+  }
+  return out;
+}
+
 function expandCountrySet(countries: string[]): Set<string> {
   const out = new Set<string>();
   for (const raw of countries) {
@@ -171,6 +213,9 @@ export async function matchTenders(
   // MENA/Africa/Asia users and autoGeoOpen kicks in even when local supply
   // exists — users never see their own country's tenders.
   const countrySet = expandCountrySet(countries);
+  const regionalSet = expandRegionalSet(countries);
+  // Remove any overlap — strict always wins over regional.
+  for (const c of countrySet) regionalSet.delete(c);
   const acceptsGlobal = countrySet.has("global");
 
   // Pre-probe the strict-geo pool size for this user. When country-specific
@@ -288,7 +333,7 @@ export async function matchTenders(
     ...tokenize(analysis.detected_industry ?? ""),
   ]);
 
-  type Scored = MatchedTender & { _strict: boolean; _geoOpen: boolean; _sectorScore: number };
+  type Scored = MatchedTender & { _strict: boolean; _regional: boolean; _geoOpen: boolean; _sectorScore: number };
   const scored: Scored[] = [];
 
   for (const t of candidates) {
@@ -316,9 +361,11 @@ export async function matchTenders(
 
     const isGeoOpen = !tCountry || tCountry === "global" || tCountry === "remote" || tCountry === "multiple";
     const strictGeoMatch = countrySet.has(tCountry);
-    // Skip tenders that are geographically impossible. We keep geo-open ones
-    // around for the soft fallback pass even when the user didn't opt in.
-    if (!strictGeoMatch && !isGeoOpen) continue;
+    const regionalGeoMatch = !strictGeoMatch && !isGeoOpen && regionalSet.has(tCountry);
+    // Skip tenders that are geographically impossible. Keep geo-open (global)
+    // and regional-neighbour rows around for the respective buckets. A tender
+    // posted in a distant non-neighbour country is dropped.
+    if (!strictGeoMatch && !regionalGeoMatch && !isGeoOpen) continue;
 
     // Sector overlap via canonical slugs — symmetric, so "it" on both sides scores.
     // Description is a huge signal lift for UN feeds where `sector` is often
@@ -349,6 +396,7 @@ export async function matchTenders(
 
     let geoScore = 0;
     if (strictGeoMatch) geoScore = 30;
+    else if (regionalGeoMatch) geoScore = 20;
     else if (isGeoOpen && (acceptsGlobal || autoGeoOpen)) geoScore = 10;
     // else: geo-open, user didn't opt in and strict supply is healthy — held at 0.
 
@@ -381,47 +429,56 @@ export async function matchTenders(
       score: Math.min(100, total),
       reference_id: t.reference_id as string,
       source_url: (t.source_url as string | null) ?? null,
+      bucket: strictGeoMatch ? "country" : regionalGeoMatch ? "regional" : "global",
       _strict: strictGeoMatch,
+      _regional: regionalGeoMatch,
       _geoOpen: isGeoOpen,
       _sectorScore: sectorScore,
     });
   }
 
-  const strict = scored.filter((s) => s._strict).sort((a, b) => b.score - a.score);
-  // Soft pool: drop anything that didn't hit a sector slug. Pure token-only
-  // hits on boilerplate ("project management", "programme coordinator") would
-  // otherwise spray identical M&E / consulting tenders across every industry.
-  // Drop the sectorScore floor to 40 only when strict supply is healthy. For
-  // thin-supply profiles (autoGeoOpen), any sector-slug hit (score ≥20) is
-  // signal — a single keyword match on a logistics notice in a Global feed
-  // is exactly the "hidden opportunity" we want to surface.
+  // Three separate pools. Sector floor relaxes when strict supply is thin —
+  // any sector-slug hit (score ≥20) counts as signal for niche MENA profiles;
+  // otherwise require a stronger match (≥40) so boilerplate keyword hits
+  // don't spray identical M&E / consulting tenders across every industry.
   const softSectorFloor = autoGeoOpen ? 20 : 40;
-  const softPool = scored
-    .filter((s) => !s._strict && s._geoOpen && s._sectorScore >= softSectorFloor)
+
+  const strictPool = scored.filter((s) => s._strict).sort((a, b) => b.score - a.score);
+  const regionalPool = scored
+    .filter((s) => s._regional && s._sectorScore >= softSectorFloor)
+    .sort((a, b) => b.score - a.score);
+  // Global bucket is ONLY truly geo-agnostic rows — not country-specific
+  // tenders from distant countries. That was the old bug where a Yemen tender
+  // would show up under "Global" for a Syria user; now Yemen → Regional (if
+  // adjacent) or dropped.
+  const globalPool = scored
+    .filter((s) => !s._strict && !s._regional && s._geoOpen && s._sectorScore >= softSectorFloor)
     .sort((a, b) => b.score - a.score);
 
-  const out: MatchedTender[] = strict.slice(0, 10).map(stripMeta);
+  const out: MatchedTender[] = [];
+  for (const s of strictPool.slice(0, 15)) out.push(stripMeta(s));
 
-  // Soft geo fallback: raised threshold from 3 → 5 when supply is thin, so
-  // niche MENA profiles get a real list. Also keep score discount milder
-  // (0.75 vs 0.6) when autoGeoOpen — these are legitimate matches, not
-  // second-class.
-  const fallbackTarget = autoGeoOpen ? 8 : 3;
-  if (out.length < fallbackTarget && softPool.length) {
-    const discount = autoGeoOpen ? 0.75 : 0.6;
-    const need = Math.min(10 - out.length, softPool.length);
-    for (let i = 0; i < need; i++) {
-      const s = softPool[i];
-      out.push({ ...stripMeta(s), score: Math.max(20, Math.round(s.score * discount)) });
+  // Regional: lightly discount so country-specific still ranks higher.
+  const regionalDiscount = autoGeoOpen ? 0.85 : 0.75;
+  for (const s of regionalPool.slice(0, 10)) {
+    out.push({ ...stripMeta(s), score: Math.max(20, Math.round(s.score * regionalDiscount)) });
+  }
+
+  // Global: only show when user opted in OR strict+regional supply is thin.
+  const wantGlobal = acceptsGlobal || autoGeoOpen || out.length < 8;
+  if (wantGlobal) {
+    const globalDiscount = acceptsGlobal ? 0.9 : (autoGeoOpen ? 0.75 : 0.6);
+    for (const s of globalPool.slice(0, 8)) {
+      out.push({ ...stripMeta(s), score: Math.max(20, Math.round(s.score * globalDiscount)) });
     }
   }
 
   return out;
 }
 
-function stripMeta(s: MatchedTender & { _strict: boolean; _geoOpen: boolean; _sectorScore: number }): MatchedTender {
-  const { _strict, _geoOpen, _sectorScore, ...rest } = s;
-  void _strict; void _geoOpen; void _sectorScore;
+function stripMeta(s: MatchedTender & { _strict: boolean; _regional: boolean; _geoOpen: boolean; _sectorScore: number }): MatchedTender {
+  const { _strict, _regional, _geoOpen, _sectorScore, ...rest } = s;
+  void _strict; void _regional; void _geoOpen; void _sectorScore;
   return rest;
 }
 

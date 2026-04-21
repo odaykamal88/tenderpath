@@ -77,6 +77,24 @@ const GRANT_DIMENSION_LABELS = [
   "Impact Methodology", "M&E Frameworks", "Grant Management", "Org Capacity", "Financial Controls",
 ];
 
+function groupTenders(tenders: MatchedTender[]): { label: string; tenders: MatchedTender[] }[] {
+  const sorted = [...tenders].sort((a, b) => b.score - a.score);
+  const country: MatchedTender[] = [];
+  const regional: MatchedTender[] = [];
+  const global: MatchedTender[] = [];
+  for (const t of sorted) {
+    if (t.bucket === "regional") regional.push(t);
+    else if (t.bucket === "global") global.push(t);
+    else country.push(t); // default / "country"
+  }
+  const groups: { label: string; tenders: MatchedTender[] }[] = [];
+  if (country.length) groups.push({ label: "Country-Specific Opportunities", tenders: country });
+  if (regional.length) groups.push({ label: "Regional Opportunities", tenders: regional });
+  if (global.length) groups.push({ label: "Global Opportunities", tenders: global });
+  if (!groups.length) groups.push({ label: "Matched Tenders", tenders: sorted });
+  return groups;
+}
+
 function groupGrants(grants: MatchedGrant[]): { label: string; grants: MatchedGrant[] }[] {
   const sorted = [...grants].sort((a, b) => b.score - a.score);
   const regional: MatchedGrant[] = [];
@@ -115,7 +133,7 @@ export default function AssessmentResults({ data, onReset }: Props) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const sortedTenders = [...data.matched_tenders].sort((a, b) => b.score - a.score);
+  const tenderGroups = groupTenders(data.matched_tenders);
   const grantGroups = groupGrants(data.matched_grants);
 
   // Derive grant readiness dimension scores from grant_readiness_score
@@ -253,15 +271,19 @@ export default function AssessmentResults({ data, onReset }: Props) {
 
       {/* Tenders Tab */}
       {activeTab === "tenders" && (
-        <div className="space-y-4 mb-10">
-          {sortedTenders.length === 0 && <p className="text-gray-500 text-sm">No matching tenders found.</p>}
-          {sortedTenders.map((t) => {
-            const badge = matchBadge(t.score);
-            const soon = isDeadlineSoon(t.deadline);
-            const agencyQ = encodeURIComponent(t.agency);
-            const refQ = encodeURIComponent(t.reference_id ?? t.title);
-            return (
-              <div key={t.id} className="rounded-xl bg-navy-light border border-white/10 p-5">
+        <div className="space-y-8 mb-10">
+          {data.matched_tenders.length === 0 && <p className="text-gray-500 text-sm">No matching tenders found.</p>}
+          {tenderGroups.map((group) => (
+            <div key={group.label}>
+              <h3 className="text-sm font-semibold text-gold mb-4">{group.label}</h3>
+              <div className="space-y-4">
+                {group.tenders.map((t) => {
+                  const badge = matchBadge(t.score);
+                  const soon = isDeadlineSoon(t.deadline);
+                  const agencyQ = encodeURIComponent(t.agency);
+                  const refQ = encodeURIComponent(t.reference_id ?? t.title);
+                  return (
+                    <div key={t.id} className="rounded-xl bg-navy-light border border-white/10 p-5">
                 {/* Top row: ref chip + country tag + Copy ID */}
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                   {t.reference_id && (
@@ -359,12 +381,15 @@ export default function AssessmentResults({ data, onReset }: Props) {
                   </a>
                 </div>
 
-                {t.reference_id && (
-                  <p className="text-[10px] text-gray-600 mt-1">Use reference ID {t.reference_id} to find this tender on the portal</p>
-                )}
+                      {t.reference_id && (
+                        <p className="text-[10px] text-gray-600 mt-1">Use reference ID {t.reference_id} to find this tender on the portal</p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
 

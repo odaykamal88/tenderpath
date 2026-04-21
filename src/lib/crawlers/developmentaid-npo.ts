@@ -1,27 +1,31 @@
 /**
- * DevelopmentAid — NPO-funded slice only.
+ * DevelopmentAid — MENA Open tenders ingest (CSV-driven).
  *
- * Why this crawler exists: our primary-source crawlers (UNGM, World Bank,
- * UNDP, TED, etc.) collectively hit 90–100% coverage for the IGO/funder
- * tenders DA lists. The only slice they DON'T cover is NPO-funded notices —
- * individual NGOs (ACTED, DRC, Première Urgence, etc.) posting their own
- * procurement directly. Those surface only on DA and each NGO's private
- * portal. See `scripts/_developmentaid-diff.ts` output.
+ * Originally scoped to NPO-funded rows only (primary crawlers were assumed to
+ * cover all IGO/UN-funder rows). That assumption broke for country-specific
+ * Syria supply: UNGM lists the global/regional-HQ Syria tenders but not the
+ * country-office postings for FAO / ILO / UNHCR / UNRWA / UNDP / UN-Habitat /
+ * WHO etc. that DA surfaces. Cross-check with the user's Thunderbit exports
+ * confirmed the gap. We now accept ALL known-funder rows in the CSV, not
+ * just NPO, and canonicalize the agency name per funder so matchers see
+ * "UNHCR" rather than the raw DA label.
+ *
+ * Dedup safety: sync.ts upserts ON CONFLICT (reference_id); DA rows use
+ * `DA-<id>` refs which can't collide with UNGM/WB/UNDP/TED. Worst case we
+ * double-list the same tender under two source names — still deduped by
+ * title + deadline in the matcher pool via LIMIT.
  *
  * Why CSV ingest instead of scraping: DA gates its listings behind JS + a
- * cookie/session wall. Reverse-engineering is fragile. The user is already
- * exporting via Thunderbit, so this crawler reads the newest CSV from
- * `data/developmentaid/` and filters to NPO Open MENA rows only. Drop a
- * new CSV in that folder and the next cron run picks it up.
+ * cookie/session wall. Reverse-engineering is fragile. The user exports via
+ * Thunderbit; this crawler reads the newest CSV from `data/developmentaid/`.
  *
- * Scoping rules (intentional):
- *   - Funding Agency must contain "NPO" (case-insensitive, split on comma).
+ * Scoping rules:
  *   - Status must be "Open".
  *   - Location must intersect MENA (drops sub-Saharan spill-over from DA's
  *     regional search).
- * Non-NPO rows are ignored here on purpose — our primary crawlers handle
- * those and adding them would re-introduce the aggregator-of-aggregator
- * problem.
+ *   - Funding Agency must match one of the known funders (NPO or any UN
+ *     family agency — see FUNDER_AGENCY below). Rows with unknown/blank
+ *     funders are skipped to keep noise down.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -72,6 +76,56 @@ function parseCsv(text: string): string[][] {
 
 function splitFunders(raw: string): string[] {
   return raw.split(/[,/;]+/).map((s) => s.trim()).filter(Boolean);
+}
+
+// DA labels funders with short codes or full names. Map to canonical agency
+// strings that our matcher / sector map already know. Order matters for the
+// first-match-wins resolver below: put the most specific tokens first.
+const FUNDER_AGENCY: { re: RegExp; agency: string }[] = [
+  { re: /\bUNHCR\b/i, agency: "UN Refugee Agency (UNHCR)" },
+  { re: /\bUNRWA\b/i, agency: "UN Relief and Works Agency (UNRWA)" },
+  { re: /\bUNICEF\b/i, agency: "UN Children's Fund (UNICEF)" },
+  { re: /\bUNOPS\b/i, agency: "UN Office for Project Services (UNOPS)" },
+  { re: /\bUNDP\b/i, agency: "UN Development Programme (UNDP)" },
+  { re: /\bUN[- ]?Habitat\b|\bUNHABITAT\b/i, agency: "UN-Habitat" },
+  { re: /\bUNFPA\b/i, agency: "UN Population Fund (UNFPA)" },
+  { re: /\bUN ?Women\b/i, agency: "UN Women" },
+  { re: /\bUNESCO\b/i, agency: "UNESCO" },
+  { re: /\bUNIDO\b/i, agency: "UN Industrial Development Organization (UNIDO)" },
+  { re: /\bUNEP\b/i, agency: "UN Environment Programme (UNEP)" },
+  { re: /\bUNODC\b/i, agency: "UN Office on Drugs and Crime (UNODC)" },
+  { re: /\bUN ?V\b|\bUNV\b/i, agency: "UN Volunteers" },
+  { re: /\bOCHA\b/i, agency: "UN Office for Coordination of Humanitarian Affairs" },
+  { re: /\bIOM\b/i, agency: "International Organization for Migration (IOM)" },
+  { re: /\bWFP\b/i, agency: "World Food Programme (WFP)" },
+  { re: /\bWHO\b/i, agency: "World Health Organization (WHO)" },
+  { re: /\bFAO\b/i, agency: "Food and Agriculture Organization (FAO)" },
+  { re: /\bILO\b/i, agency: "International Labour Organization (ILO)" },
+  { re: /\bIFAD\b/i, agency: "International Fund for Agricultural Development (IFAD)" },
+  { re: /\bIFRC\b/i, agency: "International Federation of Red Cross (IFRC)" },
+  { re: /\bICRC\b/i, agency: "International Committee of the Red Cross (ICRC)" },
+  { re: /\bWorld Bank\b|\bWB\b|\bIBRD\b|\bIDA\b/i, agency: "World Bank" },
+  { re: /\bEU\b|\bEuropean Union\b|\bEC\b|\bECHO\b/i, agency: "European Union" },
+  { re: /\bUSAID\b/i, agency: "USAID" },
+  { re: /\bGIZ\b/i, agency: "GIZ" },
+  { re: /\bSIDA\b/i, agency: "Sida (Sweden)" },
+  { re: /\bDFID\b|\bFCDO\b/i, agency: "FCDO (UK)" },
+  { re: /\bAFD\b/i, agency: "AFD (France)" },
+  { re: /\bGAVI\b/i, agency: "Gavi" },
+  { re: /\bGlobal Fund\b/i, agency: "The Global Fund" },
+  // NPO = non-profit organization posting its own procurement (e.g. ACTED,
+  // DRC, Première Urgence). DA's private-sector consulting filter; actual
+  // NGO name isn't in the CSV.
+  { re: /^NPO$/i, agency: "NGO (via DevelopmentAid)" },
+];
+
+function resolveAgency(funders: string[]): string | null {
+  for (const f of funders) {
+    for (const { re, agency } of FUNDER_AGENCY) {
+      if (re.test(f)) return agency;
+    }
+  }
+  return null;
 }
 
 function splitLocations(raw: string): string[] {
@@ -160,8 +214,8 @@ export async function crawlDevelopmentAidNPO(): Promise<CrawlResult> {
     if (!refId || seen.has(refId)) continue;
 
     const funders = splitFunders(r[iFund] ?? "");
-    const isNpo = funders.some((f) => /^NPO$/i.test(f));
-    if (!isNpo) continue;
+    const resolvedAgency = resolveAgency(funders);
+    if (!resolvedAgency) continue;
 
     const locations = splitLocations(r[iLoc] ?? "");
     const menaHit = locations.find((l) => MENA.has(l));
@@ -178,10 +232,7 @@ export async function crawlDevelopmentAidNPO(): Promise<CrawlResult> {
       reference_id: refId,
       title,
       description: null,
-      // Funders is literally ["NPO"] — the actual NGO name isn't in the CSV.
-      // Keep the agency as "NGO (via DevelopmentAid)" so matchers don't
-      // mistake it for a UN body.
-      agency: "NGO (via DevelopmentAid)",
+      agency: resolvedAgency,
       country,
       country_code: COUNTRY_CODE[menaHit] ?? null,
       region: "MENA",

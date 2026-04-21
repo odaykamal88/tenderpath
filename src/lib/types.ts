@@ -72,6 +72,7 @@ export interface MatchedTender {
   match_reason?: string | null;
   discovered_date?: string | null;
   confidence?: string | null;
+  bucket?: "country" | "regional" | "global";
 }
 
 export interface MatchedGrant {
