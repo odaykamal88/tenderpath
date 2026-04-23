@@ -1,132 +1,41 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { upsertTenders, expireAllOverdue } from "@/lib/crawlers/sync";
+import { syncAllTenders } from "@/lib/crawlers/sync";
 import { syncAllGrants } from "@/lib/crawlers/grants-sync";
-import { crawlUNGM } from "@/lib/crawlers/ungm";
-import { crawlUNDP } from "@/lib/crawlers/undp";
-import { crawlUNDPAtlas } from "@/lib/crawlers/undp-atlas";
-import { crawlReliefWeb } from "@/lib/crawlers/reliefweb";
-import { crawlTED } from "@/lib/crawlers/ted-eu";
-import { crawlUKFTS } from "@/lib/crawlers/uk-fts";
-import { crawlWorldBank } from "@/lib/crawlers/world-bank";
-import { crawlSAMGov } from "@/lib/crawlers/sam-gov";
-import { crawlGIZ } from "@/lib/crawlers/giz";
-import { crawlDevelopmentAidNPO } from "@/lib/crawlers/developmentaid-npo";
-import type { CrawlResult } from "@/lib/crawlers/types";
 
 export const maxDuration = 300;
 
-type SourceSummary = {
-  source: string;
-  notices_added: number;
-  notices_updated: number;
-  notices_expired: number;
-  duration_ms: number;
-  status: "success" | "failure" | "partial";
-  error?: string;
-};
-
-const TENDER_CRAWLERS: Array<() => Promise<CrawlResult>> = [
-  crawlUNGM,
-  crawlReliefWeb,
-  crawlTED,
-  crawlUKFTS,
-  crawlWorldBank,
-  crawlSAMGov,
-  crawlGIZ,
-  crawlUNDP,
-  crawlUNDPAtlas,
-  crawlDevelopmentAidNPO,
-];
-
-async function logSource(s: SourceSummary): Promise<void> {
-  await sql`
-    INSERT INTO crawl_logs (
-      platform, status, duration_ms,
-      tenders_added, tenders_updated, tenders_expired, errors
-    ) VALUES (
-      ${s.source}, ${s.status}, ${s.duration_ms},
-      ${s.notices_added}, ${s.notices_updated}, ${s.notices_expired},
-      ${s.error ? JSON.stringify([s.error]) : null}::jsonb
-    )
-  `;
-}
-
 async function runCrawl(): Promise<object> {
-  const sources: SourceSummary[] = [];
   const globalStart = Date.now();
 
-  // Sequential — avoid hammering proxies with concurrent requests
-  for (const crawl of TENDER_CRAWLERS) {
-    let result: CrawlResult;
-    try {
-      result = await crawl();
-    } catch (err) {
-      const summary: SourceSummary = {
-        source: "unknown",
-        notices_added: 0, notices_updated: 0, notices_expired: 0,
-        duration_ms: 0, status: "failure",
-        error: err instanceof Error ? err.message : String(err),
-      };
-      await logSource(summary);
-      sources.push(summary);
-      continue;
-    }
+  // Canonical tender sync: parallel crawl, cross-source dedup, link verification,
+  // per-source crawl_logs rows, expiry, and ongoing link health — all handled inside.
+  const tenderSummary = await syncAllTenders();
 
-    if (result.status === "failure") {
-      const summary: SourceSummary = {
-        source: result.platform,
-        notices_added: 0, notices_updated: 0, notices_expired: 0,
-        duration_ms: result.durationMs, status: "failure",
-        error: result.error,
-      };
-      await logSource(summary);
-      sources.push(summary);
-      continue;
-    }
-
-    // Flush immediately — partial results survive timeout
-    const { added, updated } = await upsertTenders(result.tenders);
-    const summary: SourceSummary = {
-      source: result.platform,
-      notices_added: added, notices_updated: updated, notices_expired: 0,
-      duration_ms: result.durationMs, status: "success",
-    };
-    await logSource(summary);
-    sources.push(summary);
-  }
-
-  const expired = await expireAllOverdue();
-
-  // Grants crawlers (sequential internally)
-  const grants = await syncAllGrants();
-  for (const p of grants.platforms) {
-    const summary: SourceSummary = {
-      source: p.platform,
-      notices_added: p.added, notices_updated: p.updated, notices_expired: 0,
-      duration_ms: p.durationMs, status: p.status,
-      error: p.error,
-    };
-    await logSource(summary);
-    sources.push(summary);
-  }
+  // Grants sync: separate table, independent expiry — already logs per-source internally.
+  const grantSummary = await syncAllGrants();
 
   const durationMs = Date.now() - globalStart;
-  const failures = sources.filter((s) => s.status === "failure");
+  const totalAdded = tenderSummary.totalAdded + grantSummary.totalAdded;
+  const totalUpdated = tenderSummary.totalUpdated + grantSummary.totalUpdated;
+  const totalExpired = tenderSummary.totalExpired + grantSummary.totalExpired;
+
+  const tenderFailures = tenderSummary.results.filter((r) => r.status === "failure").length;
+  const grantFailures = grantSummary.platforms.filter((p) => p.status === "failure").length;
+  const totalSources = tenderSummary.results.length + grantSummary.platforms.length;
+  const totalFailures = tenderFailures + grantFailures;
   const overallStatus =
-    failures.length === 0 ? "success" :
-    failures.length === sources.length ? "failure" : "partial";
+    totalFailures === 0 ? "success" :
+    totalFailures === totalSources ? "failure" : "partial";
 
-  const totalAdded = sources.reduce((s, r) => s + r.notices_added, 0);
-  const totalUpdated = sources.reduce((s, r) => s + r.notices_updated, 0);
-
+  // Single SUMMARY row — per-source rows are written inside syncAllTenders/syncAllGrants.
   await sql`
     INSERT INTO crawl_logs (
       platform, status, duration_ms,
       tenders_added, tenders_updated, tenders_expired
     ) VALUES (
       'SUMMARY', ${overallStatus}, ${durationMs},
-      ${totalAdded}, ${totalUpdated}, ${expired}
+      ${totalAdded}, ${totalUpdated}, ${totalExpired}
     )
   `;
 
@@ -137,8 +46,23 @@ async function runCrawl(): Promise<object> {
     duration_ms: durationMs,
     total_added: totalAdded,
     total_updated: totalUpdated,
-    total_expired: expired,
-    sources,
+    total_expired: totalExpired,
+    total_deduped: tenderSummary.totalDeduped,
+    total_broken_links: tenderSummary.totalBrokenLinks + grantSummary.totalBroken,
+    tenders: {
+      sources: tenderSummary.results.map((r) => ({
+        source: r.platform,
+        status: r.status,
+        added: r.added,
+        updated: r.updated,
+        broken_links: r.brokenLinks,
+        duration_ms: r.durationMs,
+        error: r.error,
+      })),
+    },
+    grants: {
+      platforms: grantSummary.platforms,
+    },
   };
 }
 

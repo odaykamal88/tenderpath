@@ -118,6 +118,13 @@ CREATE TABLE IF NOT EXISTS purchase_logs (
   currency TEXT DEFAULT 'usd',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE crawl_logs ADD COLUMN IF NOT EXISTS status TEXT;
+ALTER TABLE crawl_logs ADD COLUMN IF NOT EXISTS duration_ms INTEGER;
+ALTER TABLE crawl_logs ADD COLUMN IF NOT EXISTS broken_links INTEGER DEFAULT 0;
+
+ALTER TABLE tenders ADD COLUMN IF NOT EXISTS last_link_check TIMESTAMPTZ;
+ALTER TABLE tenders ADD COLUMN IF NOT EXISTS has_broken_link BOOLEAN DEFAULT false;
 `;
 
 async function migrate() {

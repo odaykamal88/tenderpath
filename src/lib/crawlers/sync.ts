@@ -188,9 +188,11 @@ async function logCrawl(r: PlatformSyncResult): Promise<void> {
 
   await sql`
     INSERT INTO crawl_logs (
-      platform, tenders_added, tenders_updated, tenders_expired, errors
+      platform, status, duration_ms,
+      tenders_added, tenders_updated, tenders_expired, broken_links, errors
     ) VALUES (
-      ${r.platform}, ${r.added}, ${r.updated}, ${r.expired}, ${errors}
+      ${r.platform}, ${r.status}, ${r.durationMs},
+      ${r.added}, ${r.updated}, ${r.expired}, ${r.brokenLinks}, ${errors}
     )
   `;
 }

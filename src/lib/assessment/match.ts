@@ -419,6 +419,19 @@ export async function matchTenders(
     if (sectorScore === 0 && tokenHits === 0) continue;
     if (total < 15) continue;
 
+    const matchReasons: string[] = [];
+    if (sectorScore > 0) {
+      const matchedSlugs = [...userSlugs].filter((s) => tSlugs.has(s));
+      if (matchedSlugs.length) matchReasons.push(`Sector: ${matchedSlugs.map((s) => s.replace(/_/g, " ")).join(", ")}`);
+    }
+    if (tokenHits > 0) {
+      const matchedTokens = [...userTokens].filter((tok) => tenderTokens.has(tok)).slice(0, 3);
+      if (matchedTokens.length) matchReasons.push(`Keywords: ${matchedTokens.join(", ")}`);
+    }
+    if (strictGeoMatch) matchReasons.push(`Country: ${t.country}`);
+    else if (regionalGeoMatch) matchReasons.push(`Regional: ${t.country}`);
+    else if (isGeoOpen && (acceptsGlobal || autoGeoOpen)) matchReasons.push("Global opportunity");
+
     scored.push({
       id: t.id as number,
       title: t.title as string,
@@ -429,6 +442,7 @@ export async function matchTenders(
       score: Math.min(100, total),
       reference_id: t.reference_id as string,
       source_url: (t.source_url as string | null) ?? null,
+      match_reasons: matchReasons,
       bucket: strictGeoMatch ? "country" : regionalGeoMatch ? "regional" : "global",
       _strict: strictGeoMatch,
       _regional: regionalGeoMatch,

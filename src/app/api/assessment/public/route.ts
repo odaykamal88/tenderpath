@@ -128,6 +128,12 @@ export async function POST(request: Request) {
       topGap: analysis.gaps[0]?.gap ?? null,
       tenderCount: matchedTenders.length,
       grantCount: matchedGrants.length,
+      topTenders: matchedTenders.slice(0, 3).map((t) => ({
+        title: t.title,
+        agency: t.agency,
+        country: t.country,
+        match_reasons: t.match_reasons,
+      })),
     }).catch((e) => console.error("Email send failed:", e));
 
     return NextResponse.json({

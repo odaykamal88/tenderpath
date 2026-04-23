@@ -312,6 +312,17 @@ export default function AssessmentResults({ data, onReset }: Props) {
                   <span className="text-xs text-gray-400">{badge.label}</span>
                 </div>
 
+                {/* Match reasons — only present on new records */}
+                {t.match_reasons && t.match_reasons.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {t.match_reasons.slice(0, 3).map((r, i) => (
+                      <span key={i} className="inline-flex items-center rounded bg-white/5 border border-white/10 px-2 py-0.5 text-[10px] text-gray-400">
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 {/* Meta row: agency · country · value · deadline */}
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400 mb-3">
                   <span>{t.agency}</span>

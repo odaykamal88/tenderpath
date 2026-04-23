@@ -44,8 +44,15 @@ function buildCompanyContext(
       ctx += `OG Description: ${crawledData.ogDescription}\n`;
     if (crawledData.content)
       ctx += `\nWebsite Content:\n${crawledData.content}\n`;
-    if (crawledData.isThinContent)
-      ctx += `\nNote: Website has thin/minimal content — likely SPA or placeholder site.\n`;
+    if (crawledData.isThinContent) {
+      if (crawledData.renderMethod === "failed") {
+        ctx += `\nNote: Website could not be crawled (domain redirect, login wall, or browser render failure) — rely primarily on the company description above.\n`;
+      } else if (crawledData.renderMethod === "browser") {
+        ctx += `\nNote: Website required browser rendering — content may still be incomplete.\n`;
+      } else {
+        ctx += `\nNote: Website has thin/minimal content — likely SPA or placeholder site.\n`;
+      }
+    }
   }
 
   return ctx;

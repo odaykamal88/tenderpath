@@ -33,8 +33,8 @@ export async function POST(request: Request) {
 
   // Send magic link via Resend (skip in dev if no API key)
   const resendKey = process.env.RESEND_API_KEY;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://tenderpath.io";
-  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "TenderPath <no-reply@tenderpath.io>";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://tenderpath.me";
+  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "TenderPath <no-reply@tenderpath.me>";
   const magicLink = `${appUrl}/login?token=${magicToken}`;
 
   if (resendKey) {

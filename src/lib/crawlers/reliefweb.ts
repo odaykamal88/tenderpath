@@ -11,7 +11,7 @@ import { type RawTender, type CrawlResult, withRetry, fetchWithTimeout } from ".
 // is courtesy not gate. Default to our domain so the crawler is live out of the
 // box; override RELIEFWEB_APPNAME once we've registered if we ever get
 // throttled.
-const APP_NAME = process.env.RELIEFWEB_APPNAME ?? "tenderpath.io";
+const APP_NAME = process.env.RELIEFWEB_APPNAME ?? "tenderpath.me";
 const ENDPOINT = `https://api.reliefweb.int/v2/jobs?appname=${APP_NAME}`;
 const REPORTS_ENDPOINT = `https://api.reliefweb.int/v2/reports?appname=${APP_NAME}`;
 const PAGE_SIZE = 200;

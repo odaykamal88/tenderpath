@@ -2,6 +2,13 @@ import { Resend } from "resend";
 import { sql } from "@/lib/db";
 import type { TierSlug } from "@/lib/types";
 
+interface TopTender {
+  title: string;
+  agency: string;
+  country: string;
+  match_reasons?: string[];
+}
+
 interface SendArgs {
   assessmentId: number;
   email: string;
@@ -12,6 +19,7 @@ interface SendArgs {
   topGap: string | null;
   tenderCount: number;
   grantCount: number;
+  topTenders?: TopTender[];
 }
 
 const TIER_COPY: Record<TierSlug, { name: string; price: string; pitch: string }> = {
@@ -34,8 +42,8 @@ const TIER_COPY: Record<TierSlug, { name: string; price: string; pitch: string }
 
 export async function sendAssessmentEmail(args: SendArgs): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "TenderPath <no-reply@tenderpath.io>";
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://tenderpath.io";
+  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "TenderPath <no-reply@tenderpath.me>";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://tenderpath.me";
 
   if (!apiKey) {
     console.warn("RESEND_API_KEY missing — skipping email send");
@@ -88,6 +96,15 @@ function renderText(d: SendArgs & { tier: { name: string; price: string; pitch: 
     ``,
     d.topGap ? `Top gap to close: ${d.topGap}` : ``,
     ``,
+    ...(d.topTenders?.length ? [
+      `── Top Matched Tenders ──`,
+      ``,
+      ...d.topTenders.flatMap((t) => [
+        `• ${t.title} (${t.agency} · ${t.country})`,
+        ...(t.match_reasons?.length ? [`  Why: ${t.match_reasons.slice(0, 3).join(" | ")}`] : []),
+        ``,
+      ]),
+    ] : []),
     `── Your Recommended Services ──`,
     ``,
     ...allTiers.flatMap(({ name, price, pitch, slug }) => [
@@ -143,6 +160,16 @@ function renderHtml(d: SendArgs & { tier: { name: string; price: string; pitch: 
       <strong style="display:block;margin-bottom:4px;color:#fff;">Top gap to close</strong>${escapeHtml(d.topGap)}
     </div>` : ``}
 
+    ${d.topTenders?.length ? `
+    <div style="margin-bottom:24px;">
+      <div style="font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:12px;">Top Matched Tenders</div>
+      ${d.topTenders.map((t) => `
+      <div style="background:#1e293b;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:14px 16px;margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:4px;">${escapeHtml(t.title)}</div>
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:${t.match_reasons?.length ? "8px" : "0"};">${escapeHtml(t.agency)} · ${escapeHtml(t.country)}</div>
+        ${t.match_reasons?.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${t.match_reasons.slice(0, 3).map((r) => `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:2px 8px;font-size:11px;color:#94a3b8;">${escapeHtml(r)}</span>`).join("")}</div>` : ""}
+      </div>`).join("")}
+    </div>` : ""}
     <div style="font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:12px;">Your Recommended Services</div>
     ${tierCards}
 

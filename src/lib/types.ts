@@ -25,6 +25,10 @@ export interface CrawledData {
   ogDescription: string | null;
   content: string;
   isThinContent: boolean;
+  /** Final URL after redirect following (may differ from user-supplied URL). */
+  finalUrl?: string | null;
+  /** How the page was rendered. Absent on assessments saved before this field was added. */
+  renderMethod?: "static" | "browser" | "failed";
 }
 
 export interface AIAnalysis {
@@ -70,6 +74,7 @@ export interface MatchedTender {
   estimated_value?: string | number | null;
   jv_allowed?: boolean;
   match_reason?: string | null;
+  match_reasons?: string[];
   discovered_date?: string | null;
   confidence?: string | null;
   bucket?: "country" | "regional" | "global";
