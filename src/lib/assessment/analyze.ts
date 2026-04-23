@@ -248,7 +248,8 @@ export function determineRecommendedTier(
   overallScore: number
 ): TierSlug {
   const highGaps = gaps.filter((g) => g.severity === "high").length;
-  if (highGaps >= 2) return "strategic-partnership";
-  if (overallScore < 50) return "submission-package";
-  return "tender-intelligence";
+  if (overallScore >= 60) return "tender-intelligence";
+  if (overallScore >= 40) return "submission-package";
+  if (highGaps <= 1) return "submission-package";
+  return "strategic-partnership";
 }

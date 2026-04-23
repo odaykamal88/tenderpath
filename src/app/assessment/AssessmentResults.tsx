@@ -77,20 +77,23 @@ const GRANT_DIMENSION_LABELS = [
   "Impact Methodology", "M&E Frameworks", "Grant Management", "Org Capacity", "Financial Controls",
 ];
 
-function groupTenders(tenders: MatchedTender[]): { label: string; tenders: MatchedTender[] }[] {
+function groupTenders(tenders: MatchedTender[]): { label: string; tenders: MatchedTender[]; isAdjacent?: boolean }[] {
   const sorted = [...tenders].sort((a, b) => b.score - a.score);
   const country: MatchedTender[] = [];
   const regional: MatchedTender[] = [];
   const global: MatchedTender[] = [];
+  const adjacent: MatchedTender[] = [];
   for (const t of sorted) {
+    if (t.is_adjacent) { adjacent.push(t); continue; }
     if (t.bucket === "regional") regional.push(t);
     else if (t.bucket === "global") global.push(t);
-    else country.push(t); // default / "country"
+    else country.push(t);
   }
-  const groups: { label: string; tenders: MatchedTender[] }[] = [];
+  const groups: { label: string; tenders: MatchedTender[]; isAdjacent?: boolean }[] = [];
   if (country.length) groups.push({ label: "Country-Specific Opportunities", tenders: country });
   if (regional.length) groups.push({ label: "Regional Opportunities", tenders: regional });
   if (global.length) groups.push({ label: "Global Opportunities", tenders: global });
+  if (adjacent.length) groups.push({ label: "Adjacent Sector Opportunities", tenders: adjacent, isAdjacent: true });
   if (!groups.length) groups.push({ label: "Matched Tenders", tenders: sorted });
   return groups;
 }
@@ -275,7 +278,11 @@ export default function AssessmentResults({ data, onReset }: Props) {
           {data.matched_tenders.length === 0 && <p className="text-gray-500 text-sm">No matching tenders found.</p>}
           {tenderGroups.map((group) => (
             <div key={group.label}>
-              <h3 className="text-sm font-semibold text-gold mb-4">{group.label}</h3>
+              <h3 className={`text-sm font-semibold mb-1 ${group.isAdjacent ? "text-blue-400" : "text-gold"}`}>{group.label}</h3>
+              {group.isAdjacent && (
+                <p className="text-xs text-gray-500 mb-4">These opportunities are in sectors adjacent to your core industry — lower direct fit, but worth monitoring for partnerships or expansion.</p>
+              )}
+              {!group.isAdjacent && <div className="mb-4" />}
               <div className="space-y-4">
                 {group.tenders.map((t) => {
                   const badge = matchBadge(t.score);
@@ -283,13 +290,16 @@ export default function AssessmentResults({ data, onReset }: Props) {
                   const agencyQ = encodeURIComponent(t.agency);
                   const refQ = encodeURIComponent(t.reference_id ?? t.title);
                   return (
-                    <div key={t.id} className="rounded-xl bg-navy-light border border-white/10 p-5">
+                    <div key={t.id} className={`rounded-xl bg-navy-light border p-5 ${t.is_adjacent ? "border-blue-500/20" : "border-white/10"}`}>
                 {/* Top row: ref chip + country tag + Copy ID */}
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                   {t.reference_id && (
                     <span className="rounded bg-gray-800 px-2 py-0.5 text-[10px] font-mono text-gray-400">{t.reference_id}</span>
                   )}
                   <span className="rounded bg-gold/20 px-2 py-0.5 text-[10px] font-medium text-gold uppercase">{t.country}</span>
+                  {t.is_adjacent && (
+                    <span className="rounded bg-blue-500/20 border border-blue-500/30 px-2 py-0.5 text-[10px] font-medium text-blue-300">Adjacent</span>
+                  )}
                   {t.reference_id && (
                     <button
                       onClick={() => navigator.clipboard.writeText(t.reference_id!)}

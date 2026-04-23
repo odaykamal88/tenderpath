@@ -1,6 +1,7 @@
 import { sql } from "@/lib/db";
 import type { MatchedTender, MatchedGrant, AIAnalysis } from "@/lib/types";
 import { normalizeSector, userSectorSlugs, type SectorSlug } from "@/lib/crawlers/sector-map";
+import { computeAdjacentSlugs } from "./sector-adjacency";
 
 // Non-Latin scripts: Arabic, CJK, Cyrillic, Greek, Hebrew, Thai, Devanagari, etc.
 const NON_LATIN_SCRIPT = /[\u0370-\u03FF\u0400-\u04FF\u0500-\u052F\u0590-\u05FF\u0600-\u06FF\u0900-\u097F\u0E00-\u0E7F\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF]/;
@@ -193,6 +194,22 @@ function companyTier(signal: string | null | undefined): "micro" | "small" | "mi
   return "unknown";
 }
 
+const REGTECH_TERMS = [
+  "compliance", "regulatory", "kyc", "aml", "regtech", "anti-money laundering",
+  "know your customer", "due diligence", "document verification", "identity verification",
+  "financial compliance", "audit trail", "screening", "document management",
+  "records management", "content management",
+];
+
+function detectRegtechSignal(analysis: AIAnalysis): boolean {
+  const texts = [
+    ...(analysis.services ?? []),
+    ...(analysis.capabilities ?? []),
+    analysis.detected_industry ?? "",
+  ].join(" ").toLowerCase();
+  return REGTECH_TERMS.some((term) => texts.includes(term));
+}
+
 /**
  * Match open tenders using text-signal scoring.
  *
@@ -233,6 +250,9 @@ export async function matchTenders(
   const autoGeoOpen = !acceptsGlobal && strictPoolSize < 25;
 
   const userSlugs = userSectorSlugs(analysis.detected_industry, analysis.sectors);
+  const regtechSignal = detectRegtechSignal(analysis);
+  const effectiveUserSlugs = new Set(userSlugs);
+  if (regtechSignal && !effectiveUserSlugs.has("it")) effectiveUserSlugs.add("it" as SectorSlug);
 
   // Consultancy tenders (ReliefWeb jobs feed, UN individual-consultant roster)
   // are individual-recruitment postings, not B2B procurement. Only gate on the
@@ -248,7 +268,12 @@ export async function matchTenders(
   // narrower industries (logistics, language services) of any candidates to
   // score. We union per-slug pools, then de-dupe by id.
   const slugKeywordMap: Record<string, string[]> = {
-    it: ["software", "information technology", "it ", "digital", "platform", "system", "data", "technology"],
+    it: [
+      "software", "information technology", "it ", "digital", "platform", "system", "data", "technology",
+      "document management", "records management", "content management", "ecm", "edms", "dms",
+      "document control", "archiving", "enterprise content", "regulatory technology", "regtech",
+      "compliance software", "contract management", "procurement software", "workflow automation",
+    ],
     education: ["education", "training", "curriculum", "learning", "teacher", "school"],
     healthcare: ["health", "medical", "hospital", "clinic", "pharmaceutical", "vaccine"],
     logistics: [
@@ -265,7 +290,12 @@ export async function matchTenders(
     consulting: ["consulting", "consultancy", "advisory", "technical assistance", "feasibility", "evaluation service", "mid-term evaluation", "final evaluation", "external evaluation", "impact evaluation"],
     food: ["food", "nutrition", "catering", "meal", "agricultural produce", "ration", "foodstuff", "kitchen", "cafeteria"],
     security: ["security", "guarding", "surveillance", "protection", "guard service", "safety service", "access control", "fire safety"],
-    language_services: ["translation", "interpretation", "interpreter", "translator", "linguistic", "language service", "transcription", "proofreading", "editorial"],
+    language_services: [
+      "translation", "interpretation", "interpreter", "translator", "linguistic", "language service",
+      "transcription", "proofreading", "editorial", "document translation", "certified translation",
+      "legal translation", "technical translation", "localization", "subtitling", "voice-over",
+      "dubbing", "multilingual", "language support",
+    ],
     engineering: ["engineering", "mechanical", "electrical engineering", "civil engineering"],
     environment: ["environment", "climate", "biodiversity", "pollution", "waste management", "cleaning service", "janitorial", "sanitation service", "recycling"],
     agriculture: ["agriculture", "agricultural", "farming", "livestock", "crop", "irrigation"],
@@ -283,11 +313,11 @@ export async function matchTenders(
   };
   const byId = new Map<number, Row>();
 
-  if (userSlugs.size) {
+  if (effectiveUserSlugs.size) {
     // Per-slug pool — LIKE on title + sector pulls genuinely relevant rows
     // rather than whatever happens to have the earliest deadline. Each slug
     // gets up to 150; union deduped by id.
-    for (const slug of userSlugs) {
+    for (const slug of effectiveUserSlugs) {
       const kws = slugKeywordMap[slug] ?? [slug.replace(/_/g, " ")];
       const patterns = kws.map((k) => `%${k}%`);
       const rows = await sql`
@@ -309,19 +339,22 @@ export async function matchTenders(
     }
   }
 
-  // Always mix in a deadline-sorted baseline so we don't miss tenders whose
-  // relevance only shows through tokens/agency even when no slug keyword hits.
-  const baseline = await sql`
-    SELECT id, title, description, agency, deadline, country, sector,
-           reference_id, requirements, experience_level, opportunity_type,
-           source_url, submission_language, estimated_value
-    FROM tenders
-    WHERE status = 'open'
-      AND deadline >= CURRENT_DATE
-    ORDER BY deadline ASC
-    LIMIT 300
-  `;
-  for (const r of baseline) if (!byId.has(r.id as number)) byId.set(r.id as number, r as Row);
+  // Baseline pool only when the per-slug pass yielded thin results — avoids
+  // off-sector contamination (the "Zawda noise" problem) when we already have
+  // a solid candidate set from the slug keywords.
+  if (byId.size < 10 || effectiveUserSlugs.size === 0) {
+    const baseline = await sql`
+      SELECT id, title, description, agency, deadline, country, sector,
+             reference_id, requirements, experience_level, opportunity_type,
+             source_url, submission_language, estimated_value
+      FROM tenders
+      WHERE status = 'open'
+        AND deadline >= CURRENT_DATE
+      ORDER BY deadline ASC
+      LIMIT 300
+    `;
+    for (const r of baseline) if (!byId.has(r.id as number)) byId.set(r.id as number, r as Row);
+  }
 
   const candidates = Array.from(byId.values());
   if (!candidates.length) return [];
@@ -374,7 +407,7 @@ export async function matchTenders(
       normalizeSector(tSector, tTitle, `${reqs.join(" ")} ${tDescription}`.trim()),
     );
     let sectorScore = 0;
-    for (const s of userSlugs) if (tSlugs.has(s)) sectorScore += 40;
+    for (const s of effectiveUserSlugs) if (tSlugs.has(s)) sectorScore += 40;
     sectorScore = Math.min(60, sectorScore);
 
     // Capability/service token overlap on title + sector + requirements + description.
@@ -421,7 +454,7 @@ export async function matchTenders(
 
     const matchReasons: string[] = [];
     if (sectorScore > 0) {
-      const matchedSlugs = [...userSlugs].filter((s) => tSlugs.has(s));
+      const matchedSlugs = [...effectiveUserSlugs].filter((s) => tSlugs.has(s));
       if (matchedSlugs.length) matchReasons.push(`Sector: ${matchedSlugs.map((s) => s.replace(/_/g, " ")).join(", ")}`);
     }
     if (tokenHits > 0) {
@@ -487,6 +520,113 @@ export async function matchTenders(
     }
   }
 
+  // Adjacent-sector pass — pull tenders for neighbouring sectors not already
+  // matched, score with 0.6× discount, cap at 50 results.
+  const adjacentSlugs = computeAdjacentSlugs(effectiveUserSlugs);
+  if (adjacentSlugs.size) {
+    const adjacentById = new Map<number, Row>();
+    for (const slug of adjacentSlugs) {
+      const kws = slugKeywordMap[slug] ?? [slug.replace(/_/g, " ")];
+      const patterns = kws.map((k) => `%${k}%`);
+      const rows = await sql`
+        SELECT id, title, description, agency, deadline, country, sector,
+               reference_id, requirements, experience_level, opportunity_type,
+               source_url, submission_language, estimated_value
+        FROM tenders
+        WHERE status = 'open'
+          AND deadline >= CURRENT_DATE
+          AND (
+            title ILIKE ANY(${patterns}::text[])
+            OR sector ILIKE ANY(${patterns}::text[])
+            OR COALESCE(description, '') ILIKE ANY(${patterns}::text[])
+          )
+        ORDER BY deadline ASC
+        LIMIT 100
+      `;
+      for (const r of rows) {
+        const rid = r.id as number;
+        if (!byId.has(rid) && !adjacentById.has(rid)) adjacentById.set(rid, r as Row);
+      }
+    }
+
+    const adjOut: MatchedTender[] = [];
+    for (const t of adjacentById.values()) {
+      const rawTitle = (t.title as string ?? "");
+      if (!isEnglishTitle(rawTitle, t.submission_language as string | null)) continue;
+      if (!userIsConsulting && (t.opportunity_type as string | null) === "Consultancy") continue;
+      if (!userIsConsulting && INDIVIDUAL_ROLE_RE.test(rawTitle)) continue;
+
+      const tSector = (t.sector as string ?? "");
+      const tCountry = (t.country as string ?? "").toLowerCase();
+      const tTitle = rawTitle;
+      const tAgency = (t.agency as string ?? "");
+      const tDescription = (t.description as string | null) ?? "";
+      const reqs = (t.requirements as string[] | null) ?? [];
+
+      const isGeoOpen = !tCountry || tCountry === "global" || tCountry === "remote" || tCountry === "multiple";
+      const strictGeoMatch = countrySet.has(tCountry);
+      const regionalGeoMatch = !strictGeoMatch && !isGeoOpen && regionalSet.has(tCountry);
+      if (!strictGeoMatch && !regionalGeoMatch && !isGeoOpen) continue;
+
+      const tSlugs = new Set<SectorSlug>(
+        normalizeSector(tSector, tTitle, `${reqs.join(" ")} ${tDescription}`.trim()),
+      );
+      let sectorScore = 0;
+      for (const s of adjacentSlugs) if (tSlugs.has(s)) sectorScore += 40;
+      sectorScore = Math.min(60, sectorScore);
+
+      const tenderTokens = new Set<string>([
+        ...tokenize(tTitle), ...tokenize(tSector),
+        ...tokenize(reqs.join(" ")), ...tokenize(tDescription),
+      ]);
+      let tokenHits = 0;
+      for (const tok of userTokens) if (tenderTokens.has(tok)) tokenHits++;
+      const tokenScore = Math.min(25, tokenHits * 5);
+
+      const agencyTokens = new Set<string>(tokenize(tAgency));
+      let agencyHits = 0;
+      for (const tok of userTokens) if (agencyTokens.has(tok)) agencyHits++;
+      const agencyScore = Math.min(5, agencyHits * 2);
+
+      let geoScore = 0;
+      if (strictGeoMatch) geoScore = 30;
+      else if (regionalGeoMatch) geoScore = 20;
+      else if (isGeoOpen && (acceptsGlobal || autoGeoOpen)) geoScore = 10;
+
+      if (sectorScore === 0 && tokenHits === 0) continue;
+      const total = Math.round((sectorScore + tokenScore + agencyScore + geoScore) * 0.6);
+      if (total < 10) continue;
+
+      const matchReasons: string[] = [];
+      const matchedAdjSlugs = [...adjacentSlugs].filter((s) => tSlugs.has(s));
+      if (matchedAdjSlugs.length) matchReasons.push(`Adjacent: ${matchedAdjSlugs.map((s) => s.replace(/_/g, " ")).join(", ")}`);
+      if (tokenHits > 0) {
+        const matchedTokens = [...userTokens].filter((tok) => tenderTokens.has(tok)).slice(0, 3);
+        if (matchedTokens.length) matchReasons.push(`Keywords: ${matchedTokens.join(", ")}`);
+      }
+      if (strictGeoMatch) matchReasons.push(`Country: ${t.country as string}`);
+      else if (regionalGeoMatch) matchReasons.push(`Regional: ${t.country as string}`);
+      else if (isGeoOpen && (acceptsGlobal || autoGeoOpen)) matchReasons.push("Global opportunity");
+
+      adjOut.push({
+        id: t.id as number,
+        title: t.title as string,
+        agency: t.agency as string,
+        deadline: t.deadline as string,
+        country: t.country as string,
+        sector: t.sector as string,
+        score: Math.min(100, total),
+        reference_id: t.reference_id as string,
+        source_url: (t.source_url as string | null) ?? null,
+        match_reasons: matchReasons,
+        bucket: strictGeoMatch ? "country" : regionalGeoMatch ? "regional" : "global",
+        is_adjacent: true,
+      });
+    }
+    adjOut.sort((a, b) => b.score - a.score);
+    for (const s of adjOut.slice(0, 50)) out.push(s);
+  }
+
   return out;
 }
 
@@ -505,7 +645,7 @@ export async function matchGrants(
   devThemes: string[]
 ): Promise<MatchedGrant[]> {
   const candidates = await sql`
-    SELECT id, title, agency, deadline, sector, themes, eligible_org_types, source_url
+    SELECT id, title, agency, deadline, sector, themes, eligible_org_types, source_url, description
     FROM grants
     WHERE status = 'open'
       AND (deadline IS NULL OR deadline >= NOW())
@@ -517,6 +657,10 @@ export async function matchGrants(
 
   const userSlugs = userSectorSlugs(null, sectors);
   const themeSet = new Set(devThemes.map((t) => t.toLowerCase()));
+  const grantUserTokens = new Set<string>([
+    ...tokenize(sectors.join(" ")),
+    ...tokenize(devThemes.join(" ")),
+  ]);
 
   const scored: MatchedGrant[] = [];
 
@@ -524,6 +668,7 @@ export async function matchGrants(
     let score = 0;
     const gSector = (g.sector as string ?? "");
     const gTitle = (g.title as string ?? "");
+    const gDescription = (g.description as string | null) ?? "";
 
     const gSlugs = new Set<SectorSlug>(normalizeSector(gSector, gTitle, null));
     let sectorHits = 0;
@@ -555,7 +700,18 @@ export async function matchGrants(
       score += 5;
     }
 
-    if (score === 0) score = 8;
+    if (grantUserTokens.size) {
+      const grantTokens = new Set<string>([
+        ...tokenize(gTitle), ...tokenize(gDescription), ...tokenize(gSector),
+      ]);
+      let tokenHits = 0;
+      for (const tok of grantUserTokens) if (grantTokens.has(tok)) tokenHits++;
+      score += Math.min(15, tokenHits * 5);
+    }
+
+    // Skip zero-signal grants — the old `score = 8` floor caused identical
+    // grants to appear for every company regardless of relevance.
+    if (score === 0) continue;
 
     scored.push({
       id: g.id as number,
@@ -565,9 +721,22 @@ export async function matchGrants(
       sector: g.sector as string,
       score: Math.min(100, score),
       source_url: (g.source_url as string | null) ?? null,
+      description: gDescription || null,
     });
   }
 
   scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, 8);
+
+  // Cap at 2 results per agency to avoid one donor dominating the list.
+  const agencyCounts = new Map<string, number>();
+  const out: MatchedGrant[] = [];
+  for (const g of scored) {
+    const agency = g.agency ?? "";
+    const count = agencyCounts.get(agency) ?? 0;
+    if (count >= 2) continue;
+    agencyCounts.set(agency, count + 1);
+    out.push(g);
+    if (out.length >= 8) break;
+  }
+  return out;
 }
