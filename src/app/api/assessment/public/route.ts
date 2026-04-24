@@ -84,7 +84,7 @@ export async function POST(request: Request) {
 
     // Match tenders & grants concurrently
     const [matchedTenders, matchedGrants] = await Promise.all([
-      matchTenders(analysis, body.countries),
+      matchTenders(analysis, body.countries, { includeConsultancies: body.includeConsultancies }),
       matchGrants(
         classification.sectors,
         body.orgType ?? null,
@@ -98,7 +98,8 @@ export async function POST(request: Request) {
         company_name, email, website, description, sector,
         countries, crawled_data, ai_analysis, readiness_score,
         matched_tenders, gaps, recommended_tier, org_type,
-        dev_themes, matched_grants, grant_readiness_score
+        dev_themes, matched_grants, grant_readiness_score,
+        include_consultancies
       ) VALUES (
         ${body.companyName}, ${body.email}, ${body.website ?? null},
         ${description}, ${classification.detected_industry},
@@ -107,7 +108,7 @@ export async function POST(request: Request) {
         ${JSON.stringify(matchedTenders)}, ${JSON.stringify(analysis.gaps)},
         ${recommendedTier}, ${body.orgType ?? null},
         ${JSON.stringify(body.devThemes ?? [])}, ${JSON.stringify(matchedGrants)},
-        ${grantScore}
+        ${grantScore}, ${body.includeConsultancies ?? false}
       ) RETURNING id
     `;
 

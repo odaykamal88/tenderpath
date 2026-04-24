@@ -1,3 +1,7 @@
+export interface AssessmentPreferences {
+  include_consultancies: boolean;
+}
+
 export interface Assessment {
   id: number;
   company_name: string;
@@ -16,6 +20,8 @@ export interface Assessment {
   dev_themes: string[];
   matched_grants: MatchedGrant[];
   grant_readiness_score: number;
+  /** User preferences captured at assessment time. Null on pre-Sprint-3 rows. */
+  preferences: AssessmentPreferences | null;
   created_at: string;
 }
 
@@ -77,7 +83,7 @@ export interface MatchedTender {
   match_reasons?: string[];
   discovered_date?: string | null;
   confidence?: string | null;
-  bucket?: "country" | "regional" | "global";
+  bucket?: "country" | "regional" | "global" | "remote";
   is_adjacent?: boolean;
 }
 
@@ -134,4 +140,6 @@ export interface AssessmentInput {
   countries: string[];
   orgType?: string;
   devThemes?: string[];
+  /** Include individual-consultant / consultancy-style tenders. Default OFF for org/company flows. */
+  includeConsultancies?: boolean;
 }

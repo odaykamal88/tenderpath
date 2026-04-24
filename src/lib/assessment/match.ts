@@ -2,6 +2,7 @@ import { sql } from "@/lib/db";
 import type { MatchedTender, MatchedGrant, AIAnalysis } from "@/lib/types";
 import { normalizeSector, userSectorSlugs, type SectorSlug } from "@/lib/crawlers/sector-map";
 import { computeAdjacentSlugs } from "./sector-adjacency";
+import { shouldSuppressSource } from "./source-rules";
 
 // Non-Latin scripts: Arabic, CJK, Cyrillic, Greek, Hebrew, Thai, Devanagari, etc.
 const NON_LATIN_SCRIPT = /[\u0370-\u03FF\u0400-\u04FF\u0500-\u052F\u0590-\u05FF\u0600-\u06FF\u0900-\u097F\u0E00-\u0E7F\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF]/;
@@ -223,6 +224,7 @@ function detectRegtechSignal(analysis: AIAnalysis): boolean {
 export async function matchTenders(
   analysis: AIAnalysis,
   countries: string[],
+  options?: { includeConsultancies?: boolean },
 ): Promise<MatchedTender[]> {
   // Expand user country list through alias table so "Syria" matches tenders
   // posted as "Syrian Arab Republic", "Palestine" matches "West Bank and Gaza",
@@ -262,6 +264,9 @@ export async function matchTenders(
   // slug), which would otherwise disable the filter for translation firms,
   // logistics companies, etc. If consulting isn't the primary trade, skip them.
   const userIsConsulting = (analysis.detected_industry ?? "").toLowerCase() === "consulting";
+  // User may explicitly opt in to consultancy-style tenders (e.g. sole traders,
+  // individuals bidding as consultants). Default is OFF for org/company flows.
+  const allowConsultancies = userIsConsulting || (options?.includeConsultancies ?? false);
 
   // Pool per slug instead of a single deadline-sorted LIMIT 600 — otherwise a
   // heavy sector (M&E / consulting) dominates the candidate window and starves
@@ -285,6 +290,12 @@ export async function matchTenders(
       "prepositioning", "pre-positioning", "clearing", "clearance",
       "loading", "unloading", "import", "export", "dispatch",
       "installation and delivery",
+      // UNGM/UNSPSC 78xxx — warehousing, storage, distribution
+      "bonded warehouse", "fulfillment", "cold chain", "cold storage",
+      "distribution center", "3pl", "third-party logistic", "stevedoring",
+      "port handling", "cargo handling", "cross-dock", "material handling",
+      "packing service", "courier service", "parcel deliver",
+      "transit storage", "in-transit storage",
     ],
     construction: ["construction", "civil works", "infrastructure", "building", "rehabilitation", "refurbishment"],
     consulting: ["consulting", "consultancy", "advisory", "technical assistance", "feasibility", "evaluation service", "mid-term evaluation", "final evaluation", "external evaluation", "impact evaluation"],
@@ -374,16 +385,17 @@ export async function matchTenders(
     if (!isEnglishTitle(rawTitle, t.submission_language as string | null)) continue;
 
     // Drop individual-consultant recruitments (ReliefWeb jobs feed, UN rosters)
-    // unless the user is itself a consulting firm. These pollute results for
-    // every other industry — a warehousing company doesn't bid on
-    // "Proposal Writers Network" or "External Evaluator Roster".
-    if (!userIsConsulting && (t.opportunity_type as string | null) === "Consultancy") continue;
+    // unless the user is itself a consulting firm or has opted in explicitly.
+    if (!allowConsultancies && (t.opportunity_type as string | null) === "Consultancy") continue;
 
     // Second line of defence: many crawlers tag individual-contractor/roster
     // postings as plain "RFP" or "Individual Contractor" rather than
-    // "Consultancy". Catch those by title pattern — conservative regex of
-    // phrases that only appear in recruitment, not B2B procurement.
-    if (!userIsConsulting && INDIVIDUAL_ROLE_RE.test(rawTitle)) continue;
+    // "Consultancy". Catch those by title pattern.
+    if (!allowConsultancies && INDIVIDUAL_ROLE_RE.test(rawTitle)) continue;
+
+    // Gate sources per configurable rules (e.g. SAM.gov for non-US companies).
+    const tSourceUrl = (t.source_url as string | null) ?? "";
+    if (shouldSuppressSource(tSourceUrl, countrySet)) continue;
 
     const tSector = (t.sector as string ?? "");
     const tCountry = (t.country as string ?? "").toLowerCase();
@@ -463,7 +475,16 @@ export async function matchTenders(
     }
     if (strictGeoMatch) matchReasons.push(`Country: ${t.country}`);
     else if (regionalGeoMatch) matchReasons.push(`Regional: ${t.country}`);
-    else if (isGeoOpen && (acceptsGlobal || autoGeoOpen)) matchReasons.push("Global opportunity");
+    else if (isGeoOpen && (acceptsGlobal || autoGeoOpen)) {
+      const label = tCountry === "remote" ? "Remote (location-agnostic)" : "Global (no country required)";
+      matchReasons.push(label);
+    }
+
+    const tendBucket: "country" | "regional" | "global" | "remote" =
+      strictGeoMatch ? "country"
+      : regionalGeoMatch ? "regional"
+      : tCountry === "remote" ? "remote"
+      : "global";
 
     scored.push({
       id: t.id as number,
@@ -476,7 +497,7 @@ export async function matchTenders(
       reference_id: t.reference_id as string,
       source_url: (t.source_url as string | null) ?? null,
       match_reasons: matchReasons,
-      bucket: strictGeoMatch ? "country" : regionalGeoMatch ? "regional" : "global",
+      bucket: tendBucket,
       _strict: strictGeoMatch,
       _regional: regionalGeoMatch,
       _geoOpen: isGeoOpen,
@@ -553,8 +574,11 @@ export async function matchTenders(
     for (const t of adjacentById.values()) {
       const rawTitle = (t.title as string ?? "");
       if (!isEnglishTitle(rawTitle, t.submission_language as string | null)) continue;
-      if (!userIsConsulting && (t.opportunity_type as string | null) === "Consultancy") continue;
-      if (!userIsConsulting && INDIVIDUAL_ROLE_RE.test(rawTitle)) continue;
+      if (!allowConsultancies && (t.opportunity_type as string | null) === "Consultancy") continue;
+      if (!allowConsultancies && INDIVIDUAL_ROLE_RE.test(rawTitle)) continue;
+
+      const adjSourceUrl = (t.source_url as string | null) ?? "";
+      if (shouldSuppressSource(adjSourceUrl, countrySet)) continue;
 
       const tSector = (t.sector as string ?? "");
       const tCountry = (t.country as string ?? "").toLowerCase();
@@ -606,7 +630,17 @@ export async function matchTenders(
       }
       if (strictGeoMatch) matchReasons.push(`Country: ${t.country as string}`);
       else if (regionalGeoMatch) matchReasons.push(`Regional: ${t.country as string}`);
-      else if (isGeoOpen && (acceptsGlobal || autoGeoOpen)) matchReasons.push("Global opportunity");
+      else if (isGeoOpen && (acceptsGlobal || autoGeoOpen)) {
+        const adjTCountry = (t.country as string ?? "").toLowerCase();
+        matchReasons.push(adjTCountry === "remote" ? "Remote (location-agnostic)" : "Global (no country required)");
+      }
+
+      const adjTCountry2 = (t.country as string ?? "").toLowerCase();
+      const adjBucket: "country" | "regional" | "global" | "remote" =
+        strictGeoMatch ? "country"
+        : regionalGeoMatch ? "regional"
+        : adjTCountry2 === "remote" ? "remote"
+        : "global";
 
       adjOut.push({
         id: t.id as number,
@@ -619,7 +653,7 @@ export async function matchTenders(
         reference_id: t.reference_id as string,
         source_url: (t.source_url as string | null) ?? null,
         match_reasons: matchReasons,
-        bucket: strictGeoMatch ? "country" : regionalGeoMatch ? "regional" : "global",
+        bucket: adjBucket,
         is_adjacent: true,
       });
     }

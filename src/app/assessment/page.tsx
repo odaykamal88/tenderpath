@@ -39,6 +39,7 @@ export default function AssessmentPage() {
   });
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
   const [includeGlobal, setIncludeGlobal] = useState(false);
+  const [includeConsultancies, setIncludeConsultancies] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
   const [progressStage, setProgressStage] = useState(0);
@@ -87,6 +88,7 @@ export default function AssessmentPage() {
       website: form.website || undefined,
       description: form.description || "",
       countries,
+      includeConsultancies,
     };
     setError(null);
     setStep(2);
@@ -125,7 +127,7 @@ export default function AssessmentPage() {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setStep(1);
     }
-  }, [form, selectedCountries, includeGlobal]);
+  }, [form, selectedCountries, includeGlobal, includeConsultancies]);
 
   const resetAssessment = useCallback(() => {
     setStep(1);
@@ -133,6 +135,7 @@ export default function AssessmentPage() {
     setForm({ companyName: "", email: "", website: "", description: "", countries: [] });
     setSelectedCountries([]);
     setIncludeGlobal(false);
+    setIncludeConsultancies(false);
     setCountrySearch("");
     setError(null);
   }, []);
@@ -325,6 +328,17 @@ export default function AssessmentPage() {
                 />
                 <span className="text-xs text-gray-400">
                   Also include <span className="text-white">regional / global opportunities</span> (remote-friendly tenders with no specific country)
+                </span>
+              </label>
+              <label className="mt-2 flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeConsultancies}
+                  onChange={(e) => setIncludeConsultancies(e.target.checked)}
+                  className="mt-0.5 w-3.5 h-3.5 rounded border-white/20 bg-navy text-gold focus:ring-gold focus:ring-offset-0"
+                />
+                <span className="text-xs text-gray-400">
+                  Include <span className="text-white">individual consultant / sole-trader opportunities</span> (off by default for companies &amp; organisations)
                 </span>
               </label>
             </div>

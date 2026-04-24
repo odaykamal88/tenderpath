@@ -57,6 +57,12 @@ const SLUG_KEYWORDS: Record<SectorSlug, string[]> = {
     "forwarding", "haulage", "trucking", "cargo", "stockpile",
     "prepositioning", "pre-positioning", "clearing agent", "clearance service",
     "storage service", "fuel delivery",
+    // UNGM/UNSPSC-informed warehousing & distribution terms (UNSPSC 78xxx)
+    "bonded warehouse", "fulfillment", "cold chain", "cold storage",
+    "distribution center", "3pl", "third-party logistic", "stevedoring",
+    "port handling", "cargo handling", "cross-dock", "material handling",
+    "packing service", "port service", "courier service", "parcel deliver",
+    "transit storage", "in-transit storage",
   ],
   construction: [
     "construction", "building work", "civil work", "infrastructure",
