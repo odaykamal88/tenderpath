@@ -38,7 +38,6 @@ export default function AssessmentPage() {
     countries: [],
   });
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
-  const [includeGlobal, setIncludeGlobal] = useState(false);
   const [includeConsultancies, setIncludeConsultancies] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
@@ -74,20 +73,18 @@ export default function AssessmentPage() {
       setError("Please share either your website or a short description of your business.");
       return;
     }
-    if (!selectedCountries.length && !includeGlobal) {
-      setError("Please select at least one country or enable global opportunities.");
+    if (!selectedCountries.length) {
+      setError("Please select at least one country where you deliver work.");
       return;
     }
 
-    const countries = Array.from(
-      new Set([...selectedCountries, ...(includeGlobal ? ["Global"] : [])])
-    );
+    const countries = [...selectedCountries];
     const payload: AssessmentInput = {
       companyName: form.companyName!,
       email: form.email!,
       website: form.website || undefined,
       description: form.description || "",
-      countries,
+      countries: Array.from(new Set(countries)),
       includeConsultancies,
     };
     setError(null);
@@ -127,14 +124,13 @@ export default function AssessmentPage() {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setStep(1);
     }
-  }, [form, selectedCountries, includeGlobal, includeConsultancies]);
+  }, [form, selectedCountries, includeConsultancies]);
 
   const resetAssessment = useCallback(() => {
     setStep(1);
     setResults(null);
     setForm({ companyName: "", email: "", website: "", description: "", countries: [] });
     setSelectedCountries([]);
-    setIncludeGlobal(false);
     setIncludeConsultancies(false);
     setCountrySearch("");
     setError(null);
@@ -322,17 +318,6 @@ export default function AssessmentPage() {
               <label className="mt-3 flex items-start gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={includeGlobal}
-                  onChange={(e) => setIncludeGlobal(e.target.checked)}
-                  className="mt-0.5 w-3.5 h-3.5 rounded border-white/20 bg-navy text-gold focus:ring-gold focus:ring-offset-0"
-                />
-                <span className="text-xs text-gray-400">
-                  Also include <span className="text-white">regional / global opportunities</span> (remote-friendly tenders with no specific country)
-                </span>
-              </label>
-              <label className="mt-2 flex items-start gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
                   checked={includeConsultancies}
                   onChange={(e) => setIncludeConsultancies(e.target.checked)}
                   className="mt-0.5 w-3.5 h-3.5 rounded border-white/20 bg-navy text-gold focus:ring-gold focus:ring-offset-0"
@@ -352,7 +337,6 @@ export default function AssessmentPage() {
                   "Matched tenders & grants from 15+ UN agencies",
                   "Compliance gap analysis with specific fixes",
                   "Recommended next steps based on your profile",
-                  "Competitor intelligence — how many vendors are bidding",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2 text-xs text-gray-300">
                     <svg className="h-3.5 w-3.5 mt-0.5 text-gold flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>

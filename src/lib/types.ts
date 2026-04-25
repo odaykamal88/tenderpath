@@ -67,6 +67,23 @@ export interface Gap {
   upsell_tier: TierSlug;
 }
 
+export type GeographyMode = "direct" | "regional" | "global-open" | "auto-expanded" | "unknown";
+
+export interface MatchReason {
+  summary: string[];
+  matchedSectors?: string[];
+  matchedCapabilities?: string[];
+  matchedKeywords?: string[];
+  geographyAlignment?: {
+    userCountries?: string[];
+    tenderCountry?: string | null;
+    mode: GeographyMode;
+  };
+  tenderTypeAlignment?: string[];
+  confidence?: "high" | "medium" | "low";
+  caveats?: string[];
+}
+
 export interface MatchedTender {
   id: number;
   title: string;
@@ -81,6 +98,7 @@ export interface MatchedTender {
   jv_allowed?: boolean;
   match_reason?: string | null;
   match_reasons?: string[];
+  structured_reasons?: MatchReason | null;
   discovered_date?: string | null;
   confidence?: string | null;
   bucket?: "country" | "regional" | "global" | "remote";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { TierSlug, Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
 import { TIER_INFO_BY_SLUG } from "@/lib/pricing";
 
@@ -79,10 +79,6 @@ const DIMENSION_LABELS: { key: keyof ReadinessDimensions; label: string }[] = [
   { key: "experience_relevance", label: "Experience" },
 ];
 
-const GRANT_DIMENSION_LABELS = [
-  "Impact Methodology", "M&E Frameworks", "Grant Management", "Org Capacity", "Financial Controls",
-];
-
 type GroupVariant = "high" | "medium" | "adjacent" | "geo";
 
 interface TenderGroup {
@@ -122,98 +118,326 @@ function groupTenders(tenders: MatchedTender[]): TenderGroup[] {
 
 function groupGrants(grants: MatchedGrant[]): { label: string; grants: MatchedGrant[] }[] {
   const sorted = [...grants].sort((a, b) => b.score - a.score);
-  const regional: MatchedGrant[] = [];
-  const global: MatchedGrant[] = [];
+  const high: MatchedGrant[] = [];
+  const rest: MatchedGrant[] = [];
   for (const g of sorted) {
-    const c = (g.country ?? g.region ?? "").toLowerCase();
-    if (!c || c === "global" || c === "international" || c.includes("global")) global.push(g);
-    else regional.push(g);
+    if (g.score >= 50) high.push(g);
+    else rest.push(g);
   }
   const groups: { label: string; grants: MatchedGrant[] }[] = [];
-  if (regional.length) groups.push({ label: "Regional Grants", grants: regional });
-  if (global.length) groups.push({ label: "Global Grant Opportunities", grants: global });
+  if (high.length) groups.push({ label: "Strong Grant Matches", grants: high });
+  if (rest.length) groups.push({ label: "Additional Opportunities", grants: rest });
   if (!groups.length) groups.push({ label: "Matched Grants", grants: sorted });
   return groups;
 }
 
-/* ── TenderCard ── */
+function formatAmount(val: string | number | null | undefined): string | null {
+  if (val == null) return null;
+  if (typeof val === "number") return val > 0 ? `$${val.toLocaleString()}` : null;
+  const s = val.toString().trim();
+  return s || null;
+}
 
-function TenderCard({ t }: { t: MatchedTender }) {
+type FeedbackStatus = "saved" | "not_relevant";
+
+/* ── TenderCard (vertical, grid-ready) ── */
+
+interface TenderCardProps {
+  t: MatchedTender;
+  gaps: Gap[];
+  feedbackStatus?: FeedbackStatus;
+  onFeedback: (id: number, status: FeedbackStatus) => void;
+}
+
+function TenderCard({ t, gaps, feedbackStatus, onFeedback }: TenderCardProps) {
+  const [whyOpen, setWhyOpen] = useState(false);
+
   const badge = matchBadge(t.score);
   const soon = isDeadlineSoon(t.deadline);
-  const agencyQ = encodeURIComponent(t.agency);
-  const refQ = encodeURIComponent(t.reference_id ?? t.title);
   const scoreBg = t.score >= 70 ? "bg-green/15" : t.score >= 50 ? "bg-amber-500/15" : "bg-gray-700/40";
   const scoreText = t.score >= 70 ? "text-green" : t.score >= 50 ? "text-amber-400" : "text-gray-400";
+  const amount = formatAmount(t.estimated_value);
+
+  const bucketLabel =
+    t.is_adjacent ? "Adjacent"
+    : t.bucket === "regional" ? "Regional"
+    : t.bucket === "remote" ? "Remote"
+    : t.bucket === "global" ? "Global"
+    : null;
+
+  const bucketCls =
+    t.is_adjacent ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+    : "bg-purple-500/20 text-purple-300 border border-purple-500/30";
+
+  const sr = t.structured_reasons;
+  const summaryLines = sr?.summary?.length
+    ? sr.summary.slice(0, 2)
+    : (t.match_reasons?.slice(0, 2) ?? []);
+
+  const highGaps = gaps.filter((g) => g.severity === "high").slice(0, 2);
+
+  const confidenceCls =
+    sr?.confidence === "high" ? "bg-green/20 text-green border-green/30"
+    : sr?.confidence === "medium" ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
+    : "bg-gray-600/20 text-gray-400 border-gray-600/30";
+
+  const geoModeLabel: Record<string, string> = {
+    direct: "Direct — your target country",
+    regional: "Regional — neighbouring country",
+    "global-open": "Global — open to all countries",
+    "auto-expanded": "Auto-expanded — limited local supply",
+    unknown: "Geography unknown",
+  };
+
+  const handleWhyToggle = () => {
+    const next = !whyOpen;
+    setWhyOpen(next);
+    if (next) console.log("[tp:panel:open]", { tenderId: t.id, score: t.score, confidence: sr?.confidence });
+  };
+
+  const handleFeedback = (status: FeedbackStatus) => {
+    onFeedback(t.id, status);
+    console.log("[tp:feedback]", { tenderId: t.id, status });
+  };
 
   return (
-    <div className={`rounded-xl bg-navy-light border p-4 flex flex-col sm:flex-row gap-4 ${t.is_adjacent ? "border-blue-500/25" : "border-white/10"}`}>
-      {/* Score panel */}
-      <div className="flex sm:flex-col items-center gap-3 sm:gap-2 sm:w-24 flex-shrink-0">
-        <div className={`w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 ${scoreBg}`}>
-          <span className={`text-base font-bold leading-none ${scoreText}`}>{t.score}%</span>
-        </div>
-        <div className="flex flex-wrap sm:flex-col gap-1">
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap ${badge.cls}`}>{badge.label}</span>
-          {t.is_adjacent && (
-            <span className="rounded px-2 py-0.5 text-[10px] font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30 whitespace-nowrap">Adjacent</span>
+    <div className={`rounded-xl bg-navy-light border p-4 flex flex-col gap-3 h-full ${t.is_adjacent ? "border-blue-500/25" : "border-white/10"}`}>
+      {/* Score + badges row */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-wrap gap-1">
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>{badge.label}</span>
+          {bucketLabel && (
+            <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${bucketCls}`}>{bucketLabel}</span>
           )}
+          {feedbackStatus === "saved" && (
+            <span className="rounded bg-teal-500/20 text-teal-300 border border-teal-500/30 px-2 py-0.5 text-[10px] font-medium">✓ Saved</span>
+          )}
+        </div>
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${scoreBg}`}>
+          <span className={`text-xs font-bold leading-none ${scoreText}`}>{t.score}%</span>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        {/* Chips: country + sector + ref */}
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          <span className="rounded bg-gold/20 px-2 py-0.5 text-[10px] font-medium text-gold uppercase">{t.country}</span>
-          {t.sector && (
-            <span className="rounded bg-white/5 border border-white/10 px-2 py-0.5 text-[10px] text-gray-300">{t.sector}</span>
-          )}
-          {t.reference_id && (
-            <span className="rounded bg-gray-800 px-2 py-0.5 text-[10px] font-mono text-gray-500">{t.reference_id}</span>
-          )}
-        </div>
-
-        {/* Title */}
-        <h4 className="text-sm font-bold leading-snug mb-2">{t.title}</h4>
-
-        {/* Meta row */}
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400 mb-2">
-          <span>{t.agency}</span>
-          {t.deadline && (
-            <span className={`flex items-center gap-1 ${soon ? "text-red font-medium" : ""}`}>
-              <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              {formatDate(t.deadline)}{soon && " — closing soon"}
-            </span>
-          )}
-          {t.estimated_value != null && (
-            <span>{typeof t.estimated_value === "number" ? `$${t.estimated_value.toLocaleString()}` : t.estimated_value}</span>
-          )}
-          {t.jv_allowed && <span className="text-blue-400">JV Allowed</span>}
-        </div>
-
-        {/* Why matched */}
-        {(t.match_reason || (t.match_reasons && t.match_reasons.length > 0)) && (
-          <p className="text-[11px] text-gray-400 italic mb-3">
-            {t.match_reason ?? t.match_reasons![0]}
-          </p>
+      {/* Chips: country + sector */}
+      <div className="flex flex-wrap gap-1">
+        <span className="rounded bg-gold/20 px-2 py-0.5 text-[10px] font-medium text-gold uppercase">{t.country}</span>
+        {t.sector && (
+          <span className="rounded bg-white/5 border border-white/10 px-2 py-0.5 text-[10px] text-gray-300">{t.sector}</span>
         )}
+        {t.reference_id && (
+          <span className="rounded bg-gray-800 px-2 py-0.5 text-[10px] font-mono text-gray-500">{t.reference_id}</span>
+        )}
+      </div>
 
-        {/* Actions */}
-        <div className="flex flex-wrap gap-2">
-          {t.source_url && (
-            <a href={t.source_url} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded bg-gold/90 border border-gold px-3 py-1.5 text-xs text-navy font-medium hover:bg-gold transition-colors">
-              View Notice →
-            </a>
+      {/* Title */}
+      <h4 className="text-sm font-bold leading-snug">{t.title}</h4>
+
+      {/* Meta */}
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400">
+        <span className="truncate max-w-full">{t.agency}</span>
+        {t.deadline && (
+          <span className={`flex items-center gap-1 ${soon ? "text-red font-medium" : ""}`}>
+            <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            {formatDate(t.deadline)}{soon && " — soon"}
+          </span>
+        )}
+        {amount && (
+          <span className="text-gray-300 font-medium">{amount}</span>
+        )}
+        {t.jv_allowed && <span className="text-blue-400">JV Allowed</span>}
+      </div>
+
+      {/* Summary snippet */}
+      {summaryLines.length > 0 && (
+        <p className="text-[11px] text-gray-400 italic line-clamp-2">
+          {summaryLines.join(" · ")}
+        </p>
+      )}
+
+      {/* Why matched toggle */}
+      <button
+        onClick={handleWhyToggle}
+        className="flex items-center gap-1 text-[11px] text-gold/80 hover:text-gold transition-colors self-start"
+      >
+        <svg className={`w-3 h-3 transition-transform ${whyOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+        {whyOpen ? "Hide details" : "Why this match?"}
+      </button>
+
+      {/* Expandable why-matched panel */}
+      {whyOpen && (
+        <div className="rounded-lg bg-white/3 border border-white/8 p-3 space-y-3 text-[11px]">
+          {sr?.matchedSectors?.length && (
+            <div>
+              <span className="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Sectors</span>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {sr.matchedSectors.map((s) => (
+                  <span key={s} className="rounded bg-blue-500/15 border border-blue-500/25 px-2 py-0.5 text-blue-300">{s}</span>
+                ))}
+              </div>
+            </div>
           )}
-          <a href={`https://www.google.com/search?q=${agencyQ}+procurement+${refQ}`} target="_blank" rel="noopener noreferrer"
+          {sr?.matchedCapabilities?.length && (
+            <div>
+              <span className="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Matched Capabilities</span>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {sr.matchedCapabilities.map((c) => (
+                  <span key={c} className="rounded bg-green/10 border border-green/20 px-2 py-0.5 text-green/80">{c}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {sr?.matchedKeywords?.length && (
+            <div>
+              <span className="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Keywords</span>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {sr.matchedKeywords.map((k) => (
+                  <span key={k} className="rounded bg-white/5 border border-white/10 px-2 py-0.5 text-gray-300">{k}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {sr?.geographyAlignment && (
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Geography</span>
+              <span className="text-gray-300">{geoModeLabel[sr.geographyAlignment.mode] ?? sr.geographyAlignment.mode}</span>
+            </div>
+          )}
+          {sr?.confidence && (
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Confidence</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold border ${confidenceCls}`}>
+                {sr.confidence.charAt(0).toUpperCase() + sr.confidence.slice(1)}
+              </span>
+            </div>
+          )}
+          {sr?.caveats?.length && (
+            <div className="space-y-1">
+              {sr.caveats.map((c, i) => (
+                <p key={i} className="text-amber-400/80 flex items-start gap-1">
+                  <span className="flex-shrink-0 mt-0.5">⚠</span>{c}
+                </p>
+              ))}
+            </div>
+          )}
+          {/* EPIC C: Readiness blockers */}
+          {highGaps.length > 0 && (
+            <div>
+              <span className="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Readiness Blockers</span>
+              <div className="mt-1 space-y-1">
+                {highGaps.map((g, i) => (
+                  <p key={i} className="text-red/80 flex items-start gap-1">
+                    <span className="flex-shrink-0 mt-0.5">•</span>{g.gap}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Actions — pushed to bottom */}
+      <div className="flex flex-wrap gap-2 mt-auto pt-1">
+        {t.source_url ? (
+          <a href={t.source_url} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded bg-gold/90 border border-gold px-3 py-1.5 text-xs text-navy font-medium hover:bg-gold transition-colors">
+            View Notice →
+          </a>
+        ) : (
+          <a href={`https://www.google.com/search?q=${encodeURIComponent(t.agency + " " + (t.reference_id ?? t.title))}`}
+            target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center gap-1 rounded bg-gold/15 border border-gold/30 px-3 py-1.5 text-xs text-gold hover:bg-gold/25 transition-colors">
             Search Procurement →
           </a>
+        )}
+        <button
+          onClick={() => handleFeedback("saved")}
+          className={`inline-flex items-center gap-1 rounded border px-2.5 py-1.5 text-xs transition-colors ${feedbackStatus === "saved" ? "bg-teal-500/20 border-teal-500/40 text-teal-300" : "border-white/15 text-gray-400 hover:text-white hover:border-white/30"}`}
+        >
+          {feedbackStatus === "saved" ? "✓ Saved" : "Save"}
+        </button>
+        <button
+          onClick={() => handleFeedback("not_relevant")}
+          className="inline-flex items-center gap-1 rounded border border-white/10 px-2.5 py-1.5 text-xs text-gray-500 hover:text-red/80 hover:border-red/30 transition-colors"
+        >
+          ✕ Skip
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── GrantCard (matches TenderCard style, teal accent) ── */
+
+function GrantCard({ g }: { g: MatchedGrant }) {
+  const badge = matchBadge(g.score);
+  const soon = isDeadlineSoon(g.deadline);
+  const amount = g.value_range ? g.value_range : null;
+  const location = g.country ?? g.region ?? null;
+
+  return (
+    <div className="rounded-xl bg-navy-light border border-white/10 p-4 flex flex-col gap-3 h-full">
+      {/* Score + badges row */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-wrap gap-1">
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>{badge.label}</span>
+          <span className="rounded bg-teal-500/20 border border-teal-500/40 px-2 py-0.5 text-[10px] font-semibold text-teal-300 uppercase">Grant</span>
+          {g.org_type_mismatch && (
+            <span className="rounded bg-orange-500/15 border border-orange-500/40 px-2 py-0.5 text-[10px] font-medium text-orange-400">⚠ Check eligibility</span>
+          )}
         </div>
+        <div className="w-10 h-10 rounded-full bg-teal-500/15 flex items-center justify-center flex-shrink-0">
+          <span className="text-xs font-bold leading-none text-teal-400">{g.score}%</span>
+        </div>
+      </div>
+
+      {/* Chips: location + sector */}
+      <div className="flex flex-wrap gap-1">
+        {location && (
+          <span className="rounded bg-teal-500/15 px-2 py-0.5 text-[10px] font-medium text-teal-300 uppercase">{location}</span>
+        )}
+        {g.sector && (
+          <span className="rounded bg-white/5 border border-white/10 px-2 py-0.5 text-[10px] text-gray-300">{g.sector}</span>
+        )}
+      </div>
+
+      {/* Title */}
+      <h4 className="text-sm font-bold leading-snug">{g.title}</h4>
+
+      {/* Meta */}
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400">
+        <span className="truncate max-w-full">{g.agency}</span>
+        {g.deadline && (
+          <span className={`flex items-center gap-1 ${soon ? "text-red font-medium" : ""}`}>
+            <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            {formatDate(g.deadline)}{soon && " — soon"}
+          </span>
+        )}
+        {amount && (
+          <span className="text-teal-300 font-medium">{amount}</span>
+        )}
+      </div>
+
+      {/* Description */}
+      {g.description && (
+        <p className="text-[11px] text-gray-300 line-clamp-2">{g.description}</p>
+      )}
+
+      {/* Action — pushed to bottom */}
+      <div className="mt-auto pt-1">
+        {g.source_url ? (
+          <a href={g.source_url} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded bg-teal-500/20 border border-teal-500/40 px-3 py-1.5 text-xs font-semibold text-teal-300 hover:bg-teal-500/30 transition-colors">
+            Apply / Learn More →
+          </a>
+        ) : (
+          <span className="text-xs text-gray-500 italic">Contact {g.agency} directly for application details</span>
+        )}
       </div>
     </div>
   );
@@ -256,6 +480,77 @@ const GROUP_HEADER: Record<GroupVariant, string> = {
   geo: "text-purple-400",
 };
 
+/* ── Action Plan with High/Medium/Low grouping ── */
+
+interface ActionPlanProps {
+  gaps: Gap[];
+  expandedGaps: Set<number>;
+  toggleGap: (i: number) => void;
+}
+
+const SEVERITY_GROUP_CONFIG = [
+  { key: "high" as const, label: "High Priority", headerCls: "text-red", dotCls: "bg-red" },
+  { key: "medium" as const, label: "Medium Priority", headerCls: "text-orange-400", dotCls: "bg-orange-400" },
+  { key: "low" as const, label: "Low Priority", headerCls: "text-yellow-400", dotCls: "bg-yellow-400" },
+] as const;
+
+function ActionPlan({ gaps, expandedGaps, toggleGap }: ActionPlanProps) {
+  const grouped = SEVERITY_GROUP_CONFIG.map((cfg) => ({
+    ...cfg,
+    items: gaps.map((g, i) => ({ gap: g, idx: i })).filter(({ gap }) => gap.severity === cfg.key),
+  })).filter((g) => g.items.length > 0);
+
+  return (
+    <div className="space-y-5">
+      {grouped.map((group) => (
+        <div key={group.key}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${group.dotCls}`} />
+            <h3 className={`text-xs font-bold uppercase tracking-wider ${group.headerCls}`}>
+              {group.label} — {group.items.length} item{group.items.length > 1 ? "s" : ""}
+            </h3>
+          </div>
+          <div className="space-y-2">
+            {group.items.map(({ gap: g, idx: i }) => (
+              <div key={i} className={`rounded-lg border ${severityColor(g.severity)}`}>
+                <button
+                  onClick={() => toggleGap(i)}
+                  className="w-full px-4 py-3 text-left flex items-center justify-between gap-3"
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium text-gray-200 min-w-0">
+                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded flex-shrink-0 ${severityBadgeCls(g.severity)}`}>
+                      {g.severity}
+                    </span>
+                    <span className="truncate">{g.gap}</span>
+                  </span>
+                  <svg className={`w-4 h-4 flex-shrink-0 text-gray-400 transition-transform ${expandedGaps.has(i) ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {expandedGaps.has(i) && (
+                  <div className="px-4 pb-4 space-y-3 border-t border-white/5 pt-3">
+                    <p className="text-sm text-gray-300"><span className="text-gray-400 font-medium">Fix: </span>{g.fix}</p>
+                    {g.action_steps?.length > 0 && (
+                      <ol className="list-decimal list-inside space-y-1">
+                        {g.action_steps.map((step, si) => (
+                          <li key={si} className="text-xs text-gray-300">{step}</li>
+                        ))}
+                      </ol>
+                    )}
+                    <p className="text-xs text-gray-500">
+                      Recommended service: <span className="text-gold">{TIER_INFO[g.upsell_tier]?.name ?? g.upsell_tier}</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ── Main component ── */
 
 export default function AssessmentResults({ data, onReset }: Props) {
@@ -263,6 +558,36 @@ export default function AssessmentResults({ data, onReset }: Props) {
   const [expandedGaps, setExpandedGaps] = useState<Set<number>>(new Set());
   const [copied, setCopied] = useState(false);
   const [showFullSummary, setShowFullSummary] = useState(false);
+  const [feedback, setFeedback] = useState<Record<number, FeedbackStatus>>({});
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`tp_feedback_${data.id}`);
+      if (stored) setFeedback(JSON.parse(stored));
+    } catch {}
+  }, [data.id]);
+
+  const onFeedback = useCallback((tenderId: number, status: FeedbackStatus) => {
+    setFeedback((prev) => {
+      const next = { ...prev };
+      if (next[tenderId] === status) {
+        delete next[tenderId];
+      } else {
+        next[tenderId] = status;
+      }
+      try { localStorage.setItem(`tp_feedback_${data.id}`, JSON.stringify(next)); } catch {}
+      return next;
+    });
+    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+    if (token) {
+      fetch("/api/dashboard/tender-feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ tender_id: tenderId, assessment_id: data.id, status }),
+      }).catch(() => {});
+    }
+    console.log("[tp:feedback:confidence]", { tenderId, status });
+  }, [data.id]);
 
   const toggleGap = (i: number) => {
     setExpandedGaps((prev) => {
@@ -278,9 +603,10 @@ export default function AssessmentResults({ data, onReset }: Props) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const tenderGroups = groupTenders(data.matched_tenders);
+  const visibleTenders = data.matched_tenders.filter((t) => feedback[t.id] !== "not_relevant");
+  const tenderGroups = groupTenders(visibleTenders);
   const grantGroups = groupGrants(data.matched_grants);
-  const strongMatchCount = data.matched_tenders.filter((t) => t.score >= 50).length;
+  const strongMatchCount = visibleTenders.filter((t) => t.score >= 50).length;
   const criticalGapCount = data.gaps.filter((g) => g.severity === "high").length;
 
   const SUMMARY_LIMIT = 130;
@@ -289,15 +615,11 @@ export default function AssessmentResults({ data, onReset }: Props) {
     ? data.summary
     : data.summary.slice(0, SUMMARY_LIMIT).trimEnd() + "…";
 
-  // Derive grant readiness dimension scores
   const grantTotal = data.grant_readiness_score;
-  const grantDims = [
-    Math.min(100, Math.round(grantTotal * 0.85)),
-    Math.min(100, Math.round(grantTotal * 0.7)),
-    Math.min(100, Math.round(grantTotal * 1.05)),
-    Math.min(100, Math.round(grantTotal * 1.1)),
-    Math.min(100, Math.round(grantTotal * 0.8)),
-  ];
+
+  // Derive a sector display label for the "Next Step" copy
+  const sectorLabel = data.sector || (data.sectors?.[0] ?? "your industry");
+  const topGap = data.gaps.find((g) => g.severity === "high");
 
   return (
     <div className="mx-auto max-w-4xl px-6 pb-20" style={{ animation: "fadeIn 0.5s ease-out both" }}>
@@ -319,7 +641,7 @@ export default function AssessmentResults({ data, onReset }: Props) {
         </button>
       </div>
 
-      {/* Summary — collapsed by default */}
+      {/* Summary */}
       <div className="mb-4">
         <p className="text-sm italic text-gray-300 leading-relaxed inline">
           {summaryDisplay}
@@ -388,30 +710,31 @@ export default function AssessmentResults({ data, onReset }: Props) {
       {data.grant_readiness_score > 0 && (
         <div className="rounded-xl bg-navy-light border border-white/10 p-6 mb-6">
           <h3 className="font-serif text-lg font-bold mb-1">Grant Readiness Score</h3>
-          <p className="text-xs text-gray-500 mb-4">Based on impact methodology, M&E, and grant management capacity</p>
-          <div className="flex flex-col sm:flex-row gap-6">
-            <div className="flex-shrink-0 text-center sm:text-left">
+          <p className="text-xs text-gray-500 mb-4">Overall readiness to apply for institutional and donor grants</p>
+          <div className="flex items-center gap-6">
+            <div className="text-center">
               <div className="text-4xl font-bold">
-                {data.grant_readiness_score}<span className="text-lg text-gray-500">/100</span>
+                {grantTotal}<span className="text-lg text-gray-500">/100</span>
               </div>
               <div className="text-xs text-gray-400 mt-1">Grant Readiness</div>
             </div>
-            <div className="flex-1 space-y-2.5">
-              {GRANT_DIMENSION_LABELS.map((label, i) => (
-                <div key={label} className="flex items-center gap-3">
-                  <span className="text-xs text-gray-400 w-32 text-right">{label}</span>
-                  <div className="flex-1 bg-gray-800 rounded-full h-2.5 overflow-hidden">
-                    <div className="h-full rounded-full bg-teal-500 transition-all" style={{ width: `${grantDims[i]}%` }} />
-                  </div>
-                  <span className="text-xs text-gray-400 w-8">{grantDims[i]}</span>
-                </div>
-              ))}
+            <div className="flex-1">
+              <div className="bg-gray-800 rounded-full h-3 overflow-hidden">
+                <div className="h-full rounded-full bg-teal-500 transition-all" style={{ width: `${grantTotal}%` }} />
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                {grantTotal >= 70
+                  ? "Strong grant readiness — focus on tailoring proposals to each funder's criteria."
+                  : grantTotal >= 40
+                  ? "Moderate grant readiness — address capacity and M&E gaps before applying."
+                  : "Early-stage grant readiness — build core organizational capacity first."}
+              </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Action Plan (Gaps) — moved above tabs ── */}
+      {/* ── Action Plan (grouped by High / Medium / Low) ── */}
       {data.gaps.length > 0 && (
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
@@ -423,41 +746,7 @@ export default function AssessmentResults({ data, onReset }: Props) {
             )}
           </div>
           <p className="text-xs text-gray-500 mb-4">Address these before submitting proposals — panels score these criteria first.</p>
-          <div className="space-y-2">
-            {data.gaps.map((g, i) => (
-              <div key={i} className={`rounded-lg border ${severityColor(g.severity)}`}>
-                <button
-                  onClick={() => toggleGap(i)}
-                  className="w-full px-4 py-3 text-left flex items-center justify-between gap-3"
-                >
-                  <span className="flex items-center gap-2 text-sm font-medium text-gray-200 min-w-0">
-                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded flex-shrink-0 ${severityBadgeCls(g.severity)}`}>
-                      {g.severity}
-                    </span>
-                    <span className="truncate">{g.gap}</span>
-                  </span>
-                  <svg className={`w-4 h-4 flex-shrink-0 text-gray-400 transition-transform ${expandedGaps.has(i) ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {expandedGaps.has(i) && (
-                  <div className="px-4 pb-4 space-y-3 border-t border-white/5 pt-3">
-                    <p className="text-sm text-gray-300"><span className="text-gray-400 font-medium">Fix: </span>{g.fix}</p>
-                    {g.action_steps?.length > 0 && (
-                      <ol className="list-decimal list-inside space-y-1">
-                        {g.action_steps.map((step, si) => (
-                          <li key={si} className="text-xs text-gray-300">{step}</li>
-                        ))}
-                      </ol>
-                    )}
-                    <p className="text-xs text-gray-500">
-                      Recommended service: <span className="text-gold">{TIER_INFO[g.upsell_tier]?.name ?? g.upsell_tier}</span>
-                    </p>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+          <ActionPlan gaps={data.gaps} expandedGaps={expandedGaps} toggleGap={toggleGap} />
         </div>
       )}
 
@@ -468,7 +757,7 @@ export default function AssessmentResults({ data, onReset }: Props) {
           className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === "tenders" ? "border-gold text-white" : "border-transparent text-gray-500 hover:text-gray-300"}`}
         >
           <span>Matched Tenders</span>
-          <span className="rounded-full bg-gold/20 text-gold px-2 py-0.5 text-xs">{data.matched_tenders.length}</span>
+          <span className="rounded-full bg-gold/20 text-gold px-2 py-0.5 text-xs">{visibleTenders.length}</span>
         </button>
         <button
           onClick={() => setActiveTab("grants")}
@@ -482,11 +771,10 @@ export default function AssessmentResults({ data, onReset }: Props) {
       {/* ── Tenders Tab ── */}
       {activeTab === "tenders" && (
         <div className="mb-10">
-          {data.matched_tenders.length === 0 && (
+          {visibleTenders.length === 0 && (
             <p className="text-gray-500 text-sm">No matching tenders found.</p>
           )}
 
-          {/* Bid/No-Bid CTA — only when strong matches exist */}
           {strongMatchCount > 0 && <BidNoBidCTA count={strongMatchCount} />}
 
           <div className="space-y-10">
@@ -495,8 +783,16 @@ export default function AssessmentResults({ data, onReset }: Props) {
                 <h3 className={`text-sm font-semibold mb-1 ${GROUP_HEADER[group.variant]}`}>{group.label}</h3>
                 {group.sub && <p className="text-xs text-gray-500 mb-4">{group.sub}</p>}
                 {!group.sub && <div className="mb-3" />}
-                <div className="space-y-3">
-                  {group.tenders.map((t) => <TenderCard key={t.id} t={t} />)}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {group.tenders.map((t) => (
+                    <TenderCard
+                      key={t.id}
+                      t={t}
+                      gaps={data.gaps}
+                      feedbackStatus={feedback[t.id]}
+                      onFeedback={onFeedback}
+                    />
+                  ))}
                 </div>
               </div>
             ))}
@@ -511,43 +807,8 @@ export default function AssessmentResults({ data, onReset }: Props) {
           {grantGroups.map((group) => (
             <div key={group.label}>
               <h3 className="text-sm font-semibold text-teal-400 mb-4">{group.label}</h3>
-              <div className="space-y-4">
-                {group.grants.map((g) => {
-                  const badge = matchBadge(g.score);
-                  const soon = isDeadlineSoon(g.deadline);
-                  return (
-                    <div key={g.id} className="rounded-xl bg-navy-light border border-white/10 p-5">
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400 mb-2">
-                        <span>{g.agency}</span>
-                        {(g.country ?? g.region) && <span>{g.country ?? g.region}</span>}
-                        {g.value_range && <span>{g.value_range}</span>}
-                        {g.deadline && (
-                          <span className={soon ? "text-red font-medium" : ""}>Deadline: {formatDate(g.deadline)}</span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap items-start gap-2 mb-3">
-                        <h4 className="text-base font-semibold flex-1">{g.title}</h4>
-                        <span className="rounded bg-teal-500/20 border border-teal-500/40 px-2 py-0.5 text-[10px] font-semibold text-teal-300 uppercase flex-shrink-0">Grant</span>
-                        {g.org_type_mismatch && (
-                          <span className="rounded bg-orange-500/15 border border-orange-500/40 px-2 py-0.5 text-[10px] font-medium text-orange-400 flex-shrink-0">⚠ Check eligibility</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badge.cls}`}>{g.score}% match</span>
-                        <span className="text-xs text-gray-400">{badge.label}</span>
-                      </div>
-                      {g.description && <p className="text-xs text-gray-300 mb-3 line-clamp-2">{g.description}</p>}
-                      {g.source_url ? (
-                        <a href={g.source_url} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 rounded bg-teal-500/20 border border-teal-500/40 px-3 py-1.5 text-xs font-semibold text-teal-300 hover:bg-teal-500/30 transition-colors">
-                          Apply / Learn More →
-                        </a>
-                      ) : (
-                        <span className="text-xs text-gray-500 italic">Contact {g.agency} directly for application details</span>
-                      )}
-                    </div>
-                  );
-                })}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {group.grants.map((g) => <GrantCard key={g.id} g={g} />)}
               </div>
             </div>
           ))}
@@ -563,20 +824,22 @@ export default function AssessmentResults({ data, onReset }: Props) {
       </div>
 
       <div className="rounded-xl border border-gold/30 bg-navy-light p-6 mb-8">
-        <p className="text-xs font-bold tracking-wider uppercase text-gold mb-4">Your Recommended Path to Your First UN Contract</p>
+        <p className="text-xs font-bold tracking-wider uppercase text-gold mb-4">Your Recommended Path to Your First Contract</p>
         <div className="space-y-4">
           {[
             {
               title: "Close the capability gaps",
-              body: "Obtain ISO 9001, document past performance with measurable outcomes, and prepare your full vendor documentation package — these are what procurement panels score first",
+              body: topGap
+                ? `Start with: ${topGap.fix}`
+                : `Obtain relevant certifications, document past performance with measurable outcomes, and prepare your full vendor documentation package — these are what procurement panels score first.`,
             },
             {
-              title: "Monitor matched opportunities",
-              body: "Real-time alerts for tenders matching your exact capabilities and target countries — start with SME-friendly contracts under $200K",
+              title: `Monitor ${sectorLabel} opportunities`,
+              body: `Real-time alerts for tenders matching your exact capabilities and target countries — start with SME-friendly contracts that fit your capacity.`,
             },
             {
               title: "Submit a winning proposal",
-              body: "Professional technical and financial proposal writing that follows the scoring criteria used by UN evaluation panels",
+              body: "Professional technical and financial proposal writing that follows the scoring criteria used by UN evaluation panels.",
             },
           ].map((step, i) => (
             <div key={i} className="flex gap-3">

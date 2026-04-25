@@ -8,7 +8,8 @@ import { crawlUNDPAtlas } from "./undp-atlas";
 // import { crawlWFP } from "./wfp"; // disabled — posts to UNGM
 import { crawlReliefWeb } from "./reliefweb";
 import { crawlTED } from "./ted-eu";
-import { crawlUKFTS } from "./uk-fts";
+// UK FTS disabled — local UK councils/cities are out of ICP scope (Sprint 4)
+// import { crawlUKFTS } from "./uk-fts";
 import { crawlWorldBank } from "./world-bank";
 import { crawlSAMGov } from "./sam-gov";
 import { crawlGIZ } from "./giz";
@@ -46,7 +47,7 @@ const SOURCE_PRIORITY: Record<string, number> = {
   "World Bank": 95,
   "TED EU": 90,
   "SAM.gov": 85,
-  "UK Find a Tender": 80,
+  // "UK Find a Tender": 80,  — disabled Sprint 4
   "UNDP Atlas": 75,
   ADB: 75,
   EBRD: 75,
@@ -205,7 +206,7 @@ export async function syncAllTenders(): Promise<SyncSummary> {
     crawlUNGM(),
     crawlReliefWeb(),
     crawlTED(),
-    crawlUKFTS(),
+    // crawlUKFTS() — disabled: local UK councils out of ICP scope
     crawlWorldBank(),
     crawlSAMGov(),
     crawlGIZ(),

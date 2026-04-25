@@ -63,6 +63,13 @@ const SLUG_KEYWORDS: Record<SectorSlug, string[]> = {
     "port handling", "cargo handling", "cross-dock", "material handling",
     "packing service", "port service", "courier service", "parcel deliver",
     "transit storage", "in-transit storage",
+    // Extended warehouse/storage terms (DevelopmentAid / UNGM patterns)
+    "inventory storage", "inventory management",
+    "records storage", "archive storage", "document storage",
+    "storage facility", "storage facilities", "warehousing services",
+    "rental of storage", "storage space", "temporary storage",
+    "container depot", "bulk storage", "secure storage",
+    "yard management", "open storage", "fulfillment center",
   ],
   construction: [
     "construction", "building work", "civil work", "infrastructure",

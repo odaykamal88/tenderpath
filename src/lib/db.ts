@@ -207,6 +207,19 @@ export async function initializeDatabase() {
   `;
 
   await sql`
+    CREATE TABLE IF NOT EXISTS user_tender_feedback (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      assessment_id INTEGER REFERENCES assessments(id) ON DELETE CASCADE,
+      tender_id INTEGER NOT NULL,
+      status VARCHAR(32) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (user_id, tender_id)
+    )
+  `;
+
+  await sql`
     CREATE TABLE IF NOT EXISTS bid_analyses (
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

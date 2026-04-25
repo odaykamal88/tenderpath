@@ -35,6 +35,11 @@ export const SOURCE_RULES: SourceRule[] = [
     ],
     label: "US Federal procurement — requires US entity registration / CAGE code",
   },
+  {
+    domain: "find-tender.service.gov.uk",
+    requiresAnyCountry: ["united kingdom", "uk", "great britain", "england", "scotland", "wales", "northern ireland"],
+    label: "UK Find a Tender — local UK councils out of ICP scope (Sprint 4)",
+  },
 ];
 
 /**
@@ -50,7 +55,10 @@ export function shouldSuppressSource(
     if (!urlLower.includes(rule.domain)) continue;
     if (rule.requiresAnyCountry) {
       const hasRequired = rule.requiresAnyCountry.some((c) => countrySet.has(c));
-      if (!hasRequired) return true;
+      if (!hasRequired) {
+        console.log(`[source-rules] suppressed ${rule.domain} tender — no matching country in user set`);
+        return true;
+      }
     }
   }
   return false;

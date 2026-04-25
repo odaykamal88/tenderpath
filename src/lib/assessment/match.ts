@@ -1,5 +1,5 @@
 import { sql } from "@/lib/db";
-import type { MatchedTender, MatchedGrant, AIAnalysis } from "@/lib/types";
+import type { MatchedTender, MatchedGrant, AIAnalysis, MatchReason, GeographyMode } from "@/lib/types";
 import { normalizeSector, userSectorSlugs, type SectorSlug } from "@/lib/crawlers/sector-map";
 import { computeAdjacentSlugs } from "./sector-adjacency";
 import { shouldSuppressSource } from "./source-rules";
@@ -296,6 +296,14 @@ export async function matchTenders(
       "port handling", "cargo handling", "cross-dock", "material handling",
       "packing service", "courier service", "parcel deliver",
       "transit storage", "in-transit storage",
+      // Extended warehouse/storage terms (DevelopmentAid / UNGM patterns)
+      "inventory storage", "inventory management",
+      "records storage", "archive storage", "document storage",
+      "storage facility", "storage facilities", "warehousing services",
+      "rental of storage", "storage space", "temporary storage",
+      "container depot", "bulk storage", "secure storage",
+      "yard management", "open storage",
+      "fulfillment center",
     ],
     construction: ["construction", "civil works", "infrastructure", "building", "rehabilitation", "refurbishment"],
     consulting: ["consulting", "consultancy", "advisory", "technical assistance", "feasibility", "evaluation service", "mid-term evaluation", "final evaluation", "external evaluation", "impact evaluation"],
@@ -370,12 +378,16 @@ export async function matchTenders(
   const candidates = Array.from(byId.values());
   if (!candidates.length) return [];
 
-  // Build user capability token bag from services + capabilities + detected_industry.
-  const userTokens = new Set<string>([
+  // Build user token bags. capabilityTokens and serviceTokens are tracked
+  // separately so structured_reasons can report which capabilities vs keywords
+  // triggered each match. userTokens remains the full union for scoring.
+  const capabilityTokens = new Set<string>(tokenize((analysis.capabilities ?? []).join(" ")));
+  const serviceTokens = new Set<string>([
     ...tokenize((analysis.services ?? []).join(" ")),
-    ...tokenize((analysis.capabilities ?? []).join(" ")),
     ...tokenize(analysis.detected_industry ?? ""),
   ]);
+  const userTokens = new Set<string>([...capabilityTokens, ...serviceTokens]);
+  const sparseProfile = (analysis.services ?? []).length === 0 && (analysis.capabilities ?? []).length === 0;
 
   type Scored = MatchedTender & { _strict: boolean; _regional: boolean; _geoOpen: boolean; _sectorScore: number };
   const scored: Scored[] = [];
@@ -464,11 +476,10 @@ export async function matchTenders(
     if (sectorScore === 0 && tokenHits === 0) continue;
     if (total < 15) continue;
 
+    // Flat match_reasons (legacy compat)
     const matchReasons: string[] = [];
-    if (sectorScore > 0) {
-      const matchedSlugs = [...effectiveUserSlugs].filter((s) => tSlugs.has(s));
-      if (matchedSlugs.length) matchReasons.push(`Sector: ${matchedSlugs.map((s) => s.replace(/_/g, " ")).join(", ")}`);
-    }
+    const matchedSlugs = [...effectiveUserSlugs].filter((s) => tSlugs.has(s));
+    if (matchedSlugs.length) matchReasons.push(`Sector: ${matchedSlugs.map((s) => s.replace(/_/g, " ")).join(", ")}`);
     if (tokenHits > 0) {
       const matchedTokens = [...userTokens].filter((tok) => tenderTokens.has(tok)).slice(0, 3);
       if (matchedTokens.length) matchReasons.push(`Keywords: ${matchedTokens.join(", ")}`);
@@ -476,9 +487,48 @@ export async function matchTenders(
     if (strictGeoMatch) matchReasons.push(`Country: ${t.country}`);
     else if (regionalGeoMatch) matchReasons.push(`Regional: ${t.country}`);
     else if (isGeoOpen && (acceptsGlobal || autoGeoOpen)) {
-      const label = tCountry === "remote" ? "Remote (location-agnostic)" : "Global (no country required)";
-      matchReasons.push(label);
+      matchReasons.push(tCountry === "remote" ? "Remote (location-agnostic)" : "Global (no country required)");
     }
+
+    // Structured match reason (Sprint 5)
+    const srSectorNames = matchedSlugs.map((s) => s.replace(/_/g, " "));
+    const srCaps = [...capabilityTokens].filter((tok) => tenderTokens.has(tok)).slice(0, 5);
+    const srKws = [...serviceTokens].filter((tok) => tenderTokens.has(tok) && !capabilityTokens.has(tok)).slice(0, 5);
+
+    let geoMode: GeographyMode = "unknown";
+    if (strictGeoMatch) geoMode = "direct";
+    else if (regionalGeoMatch) geoMode = "regional";
+    else if (isGeoOpen && acceptsGlobal) geoMode = "global-open";
+    else if (isGeoOpen && autoGeoOpen) geoMode = "auto-expanded";
+    else if (isGeoOpen) geoMode = "global-open";
+
+    let srConfidence: "high" | "medium" | "low" = "low";
+    if (sectorScore >= 40 && strictGeoMatch && tokenHits >= 2) srConfidence = "high";
+    else if ((sectorScore >= 20 && tokenHits >= 1) || strictGeoMatch) srConfidence = "medium";
+
+    const srCaveats: string[] = [];
+    if (tDescription.length < 50) srCaveats.push("Tender description is sparse.");
+    if (autoGeoOpen && !strictGeoMatch) srCaveats.push("Geography widened beyond your selected countries.");
+    if (sparseProfile) srCaveats.push("Company profile based on limited website content.");
+
+    const srSummary: string[] = [];
+    if (srSectorNames.length) srSummary.push(`Matched on ${srSectorNames.join(", ")} sector${srSectorNames.length > 1 ? "s" : ""}.`);
+    if (srCaps.length) srSummary.push(`Capabilities: ${srCaps.join(", ")}.`);
+    else if (srKws.length) srSummary.push(`Keywords: ${srKws.join(", ")}.`);
+    if (geoMode === "direct") srSummary.push(`Posted in ${t.country as string}.`);
+    else if (geoMode === "regional") srSummary.push("Regional opportunity near your target countries.");
+    else if (geoMode === "global-open") srSummary.push("Open globally — no country restriction.");
+    else if (geoMode === "auto-expanded") srSummary.push("Geography auto-expanded — limited local supply.");
+
+    const structured_reasons: MatchReason = {
+      summary: srSummary,
+      matchedSectors: srSectorNames.length ? srSectorNames : undefined,
+      matchedCapabilities: srCaps.length ? srCaps : undefined,
+      matchedKeywords: srKws.length ? srKws : undefined,
+      geographyAlignment: { userCountries: countries, tenderCountry: t.country as string | null, mode: geoMode },
+      confidence: srConfidence,
+      caveats: srCaveats.length ? srCaveats : undefined,
+    };
 
     const tendBucket: "country" | "regional" | "global" | "remote" =
       strictGeoMatch ? "country"
@@ -497,6 +547,7 @@ export async function matchTenders(
       reference_id: t.reference_id as string,
       source_url: (t.source_url as string | null) ?? null,
       match_reasons: matchReasons,
+      structured_reasons,
       bucket: tendBucket,
       _strict: strictGeoMatch,
       _regional: regionalGeoMatch,
@@ -621,19 +672,45 @@ export async function matchTenders(
       const total = Math.round((sectorScore + tokenScore + agencyScore + geoScore) * 0.6);
       if (total < 10) continue;
 
-      const matchReasons: string[] = [];
       const matchedAdjSlugs = [...adjacentSlugs].filter((s) => tSlugs.has(s));
-      if (matchedAdjSlugs.length) matchReasons.push(`Adjacent: ${matchedAdjSlugs.map((s) => s.replace(/_/g, " ")).join(", ")}`);
+      const adjMatchReasons: string[] = [];
+      if (matchedAdjSlugs.length) adjMatchReasons.push(`Adjacent: ${matchedAdjSlugs.map((s) => s.replace(/_/g, " ")).join(", ")}`);
       if (tokenHits > 0) {
         const matchedTokens = [...userTokens].filter((tok) => tenderTokens.has(tok)).slice(0, 3);
-        if (matchedTokens.length) matchReasons.push(`Keywords: ${matchedTokens.join(", ")}`);
+        if (matchedTokens.length) adjMatchReasons.push(`Keywords: ${matchedTokens.join(", ")}`);
       }
-      if (strictGeoMatch) matchReasons.push(`Country: ${t.country as string}`);
-      else if (regionalGeoMatch) matchReasons.push(`Regional: ${t.country as string}`);
+      if (strictGeoMatch) adjMatchReasons.push(`Country: ${t.country as string}`);
+      else if (regionalGeoMatch) adjMatchReasons.push(`Regional: ${t.country as string}`);
       else if (isGeoOpen && (acceptsGlobal || autoGeoOpen)) {
         const adjTCountry = (t.country as string ?? "").toLowerCase();
-        matchReasons.push(adjTCountry === "remote" ? "Remote (location-agnostic)" : "Global (no country required)");
+        adjMatchReasons.push(adjTCountry === "remote" ? "Remote (location-agnostic)" : "Global (no country required)");
       }
+
+      // Structured reasons for adjacent
+      const adjSectorNames = matchedAdjSlugs.map((s) => s.replace(/_/g, " "));
+      const adjCaps = [...capabilityTokens].filter((tok) => tenderTokens.has(tok)).slice(0, 5);
+      const adjKws = [...serviceTokens].filter((tok) => tenderTokens.has(tok) && !capabilityTokens.has(tok)).slice(0, 5);
+      let adjGeoMode: GeographyMode = "unknown";
+      if (strictGeoMatch) adjGeoMode = "direct";
+      else if (regionalGeoMatch) adjGeoMode = "regional";
+      else if (isGeoOpen && acceptsGlobal) adjGeoMode = "global-open";
+      else if (isGeoOpen && autoGeoOpen) adjGeoMode = "auto-expanded";
+      else if (isGeoOpen) adjGeoMode = "global-open";
+      const adjSummary: string[] = ["Adjacent sector match."];
+      if (adjSectorNames.length) adjSummary.push(`Near-sector: ${adjSectorNames.join(", ")}.`);
+      if (adjCaps.length) adjSummary.push(`Capabilities: ${adjCaps.join(", ")}.`);
+      else if (adjKws.length) adjSummary.push(`Keywords: ${adjKws.join(", ")}.`);
+      const adjCaveats = ["Adjacent sector — lower direct relevance."];
+      if (sparseProfile) adjCaveats.push("Company profile based on limited website content.");
+      const adj_structured_reasons: MatchReason = {
+        summary: adjSummary,
+        matchedSectors: adjSectorNames.length ? adjSectorNames : undefined,
+        matchedCapabilities: adjCaps.length ? adjCaps : undefined,
+        matchedKeywords: adjKws.length ? adjKws : undefined,
+        geographyAlignment: { userCountries: countries, tenderCountry: t.country as string | null, mode: adjGeoMode },
+        confidence: "low",
+        caveats: adjCaveats,
+      };
 
       const adjTCountry2 = (t.country as string ?? "").toLowerCase();
       const adjBucket: "country" | "regional" | "global" | "remote" =
@@ -652,7 +729,8 @@ export async function matchTenders(
         score: Math.min(100, total),
         reference_id: t.reference_id as string,
         source_url: (t.source_url as string | null) ?? null,
-        match_reasons: matchReasons,
+        match_reasons: adjMatchReasons,
+        structured_reasons: adj_structured_reasons,
         bucket: adjBucket,
         is_adjacent: true,
       });
@@ -660,6 +738,15 @@ export async function matchTenders(
     adjOut.sort((a, b) => b.score - a.score);
     for (const s of adjOut.slice(0, 50)) out.push(s);
   }
+
+  // EPIC E: confidence distribution observability
+  const confidenceDist = out.reduce((acc, t) => {
+    const c = t.structured_reasons?.confidence ?? "none";
+    acc[c] = (acc[c] ?? 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const withoutStructured = out.filter((t) => !t.structured_reasons).length;
+  console.log("[tp:match:confidence]", confidenceDist, { total: out.length, withoutStructured });
 
   return out;
 }
