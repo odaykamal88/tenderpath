@@ -3,18 +3,40 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
+interface MatchReason {
+  summary?: string[];
+  matchedSectors?: string[];
+  matchedCapabilities?: string[];
+  matchedKeywords?: string[];
+  confidence?: number;
+  caveats?: string[];
+}
+
 interface BridgeData {
   assessment_id: number;
   readiness_score: number;
   company_name: string;
   matched_tenders: Array<{
+    id?: number;
     title: string;
     agency: string;
     deadline: string | null;
     estimated_value: string | null;
     fit_score?: number;
+    structured_reasons?: MatchReason | null;
   }>;
   gaps: Array<{ gap: string; severity: string }>;
+}
+
+interface ReadinessData {
+  id: number;
+  company_name: string;
+  readiness_score: number;
+  recommended_tier: string | null;
+  matched_tenders_count: number;
+  high_severity_gaps: Array<{ gap: string; severity: string; fix: string }>;
+  gap_count: number;
+  created_at: string;
 }
 
 function authHeaders(): HeadersInit {
@@ -40,6 +62,8 @@ export default function DashboardOverview() {
     tender_deadline: string | null;
     fit_score: number;
   }>>([]);
+  const [readiness, setReadiness] = useState<ReadinessData | null>(null);
+  const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const raw = localStorage.getItem("tp_bridge");
@@ -56,22 +80,43 @@ export default function DashboardOverview() {
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
     if (!token) return;
-    fetch("/api/dashboard/pipeline", {
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-    })
-      .then((r) => r.ok ? r.json() : null)
-      .then((body) => {
-        if (!body?.items) return;
-        const items = body.items as Array<{ id: number; stage: string; tender_title: string; tender_agency: string | null; tender_deadline: string | null; fit_score: number }>;
+
+    // Load feedback (not_relevant) and pipeline concurrently
+    Promise.all([
+      fetch("/api/dashboard/pipeline", {
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      }).then((r) => r.ok ? r.json() : null),
+      fetch("/api/dashboard/tender-feedback?status=not_relevant", {
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      }).then((r) => r.ok ? r.json() : null),
+      fetch("/api/dashboard/readiness", {
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      }).then((r) => r.ok ? r.json() : null),
+    ]).then(([pipelineBody, feedbackBody, readinessBody]) => {
+      const dismissed = new Set<number>(
+        (feedbackBody?.feedback ?? []).map((f: { tender_id: number }) => f.tender_id)
+      );
+      setDismissedIds(dismissed);
+
+      if (pipelineBody?.items) {
+        const items = pipelineBody.items as Array<{ id: number; stage: string; tender_title: string; tender_agency: string | null; tender_deadline: string | null; fit_score: number; tender_id: number | null }>;
         setPipelineStats({
           total: items.length,
           matched: items.filter((i) => i.stage === "matched").length,
           active: items.filter((i) => ["evaluating", "preparing", "submitted"].includes(i.stage)).length,
           won: items.filter((i) => i.stage === "won").length,
         });
-        setMatchedTenders(items.filter((i) => i.stage === "matched").slice(0, 5));
-      })
-      .catch(() => null);
+        // filter dismissed from matched widget
+        const matched = items.filter(
+          (i) => i.stage === "matched" && !(i.tender_id != null && dismissed.has(i.tender_id))
+        ).slice(0, 5);
+        setMatchedTenders(matched);
+      }
+
+      if (readinessBody?.assessment) {
+        setReadiness(readinessBody.assessment as ReadinessData);
+      }
+    }).catch(() => null);
   }, []);
 
   async function seedPipeline(data: BridgeData) {
@@ -82,12 +127,15 @@ export default function DashboardOverview() {
             method: "POST",
             headers: authHeaders(),
             body: JSON.stringify({
+              tender_id: t.id ?? null,
+              assessment_id: data.assessment_id,
               tender_title: t.title,
               tender_agency: t.agency,
               tender_deadline: t.deadline ?? undefined,
               tender_value: t.estimated_value ?? undefined,
               fit_score: t.fit_score ?? data.readiness_score,
               stage: "matched",
+              match_reasons: t.structured_reasons ?? null,
             }),
           })
         )
@@ -105,6 +153,57 @@ export default function DashboardOverview() {
       <p className="mt-1 text-sm text-gray-600">
         Track your tenders from match to award, and keep compliance docs ready.
       </p>
+
+      {/* Readiness score + high-severity blockers */}
+      {readiness && (
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="rounded-lg border border-gray-200 bg-white px-5 py-4 flex items-center gap-4">
+            <div
+              className={`text-3xl font-bold ${
+                readiness.readiness_score >= 70
+                  ? "text-green-600"
+                  : readiness.readiness_score >= 50
+                  ? "text-amber-600"
+                  : "text-red-600"
+              }`}
+            >
+              {readiness.readiness_score}%
+            </div>
+            <div>
+              <div className="text-sm font-medium text-gray-900">Readiness Score</div>
+              <div className="text-xs text-gray-500 mt-0.5">
+                {readiness.company_name}
+                {readiness.recommended_tier && (
+                  <span className="ml-2 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
+                    {readiness.recommended_tier}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {readiness.high_severity_gaps.length > 0 && (
+            <div className="md:col-span-2 rounded-lg border border-red-200 bg-red-50 px-5 py-4">
+              <div className="text-sm font-semibold text-red-800 mb-2">
+                {readiness.high_severity_gaps.length} Critical Gap{readiness.high_severity_gaps.length > 1 ? "s" : ""} to Close
+              </div>
+              <ul className="space-y-1">
+                {readiness.high_severity_gaps.slice(0, 3).map((g, i) => (
+                  <li key={i} className="text-xs text-red-700 flex gap-2">
+                    <span className="mt-0.5 flex-shrink-0">•</span>
+                    <span><span className="font-medium">{g.gap}</span>{g.fix && ` — ${g.fix}`}</span>
+                  </li>
+                ))}
+              </ul>
+              {readiness.gap_count > 3 && (
+                <div className="mt-2 text-xs text-red-600">
+                  +{readiness.gap_count - 3} more gaps · Upload docs to the Vault to resolve them
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Stats bar */}
       <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3">

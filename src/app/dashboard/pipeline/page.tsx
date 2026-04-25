@@ -11,8 +11,18 @@ import {
 
 type Stage = "matched" | "evaluating" | "preparing" | "submitted" | "won" | "lost";
 
+interface MatchReason {
+  summary?: string[];
+  matchedSectors?: string[];
+  matchedCapabilities?: string[];
+  matchedKeywords?: string[];
+  confidence?: number;
+  caveats?: string[];
+}
+
 interface PipelineItem {
   id: number;
+  tender_id: number | null;
   tender_title: string;
   tender_agency: string | null;
   tender_deadline: string | null;
@@ -21,6 +31,8 @@ interface PipelineItem {
   stage: Stage;
   position: number;
   notes: string | null;
+  match_reasons: MatchReason | null;
+  assessment_id: number | null;
 }
 
 const UN_AGENCIES = [
@@ -51,6 +63,7 @@ export default function PipelinePage() {
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [analysingId, setAnalysingId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const [form, setForm] = useState({
     tender_title: "",
     tender_agency: "",
@@ -134,6 +147,17 @@ export default function PipelinePage() {
   async function remove(id: number) {
     await fetch(`/api/dashboard/pipeline/${id}`, { method: "DELETE", headers: authHeaders() });
     setItems((prev) => prev.filter((it) => it.id !== id));
+  }
+
+  async function moveStage(id: number, newStage: Stage) {
+    setItems((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, stage: newStage } : it))
+    );
+    await fetch(`/api/dashboard/pipeline/${id}`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ stage: newStage }),
+    });
   }
 
   async function handleAnalyse(item: PipelineItem) {
@@ -305,7 +329,51 @@ export default function PipelinePage() {
                                   </span>
                                 )}
                               </div>
-                              <div className="mt-2 flex items-center gap-3">
+
+                              {/* Why this match? expandable panel */}
+                              {item.match_reasons && (
+                                <div className="mt-2">
+                                  <button
+                                    onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                                    className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                                  >
+                                    <svg className={`h-3 w-3 transition-transform ${expandedId === item.id ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                    </svg>
+                                    Why this match?
+                                  </button>
+                                  {expandedId === item.id && (
+                                    <div className="mt-2 rounded bg-indigo-50 border border-indigo-100 p-2 text-xs text-indigo-800 space-y-1">
+                                      {item.match_reasons.summary?.map((s, i) => (
+                                        <div key={i}>• {s}</div>
+                                      ))}
+                                      {item.match_reasons.matchedSectors && item.match_reasons.matchedSectors.length > 0 && (
+                                        <div className="text-indigo-600">Sectors: {item.match_reasons.matchedSectors.join(", ")}</div>
+                                      )}
+                                      {item.match_reasons.matchedCapabilities && item.match_reasons.matchedCapabilities.length > 0 && (
+                                        <div className="text-indigo-600">Capabilities: {item.match_reasons.matchedCapabilities.join(", ")}</div>
+                                      )}
+                                      {item.match_reasons.confidence != null && (
+                                        <div className="text-indigo-500">Confidence: {Math.round(item.match_reasons.confidence * 100)}%</div>
+                                      )}
+                                      {item.match_reasons.caveats?.map((c, i) => (
+                                        <div key={i} className="text-amber-700">⚠ {c}</div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="mt-2 flex items-center gap-3 flex-wrap">
+                                {/* Quick-action: move matched → evaluating */}
+                                {item.stage === "matched" && (
+                                  <button
+                                    onClick={() => moveStage(item.id, "evaluating")}
+                                    className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 border border-emerald-200 rounded px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+                                  >
+                                    Start Evaluating
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => handleAnalyse(item)}
                                   disabled={analysingId === item.id}

@@ -125,6 +125,45 @@ ALTER TABLE crawl_logs ADD COLUMN IF NOT EXISTS broken_links INTEGER DEFAULT 0;
 
 ALTER TABLE tenders ADD COLUMN IF NOT EXISTS last_link_check TIMESTAMPTZ;
 ALTER TABLE tenders ADD COLUMN IF NOT EXISTS has_broken_link BOOLEAN DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS pipeline_items (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  assessment_id INTEGER REFERENCES assessments(id) ON DELETE SET NULL,
+  tender_id INTEGER REFERENCES tenders(id) ON DELETE SET NULL,
+  tender_title TEXT NOT NULL,
+  tender_agency TEXT,
+  tender_deadline TIMESTAMPTZ,
+  tender_value TEXT,
+  fit_score INTEGER DEFAULT 0,
+  stage TEXT NOT NULL DEFAULT 'matched',
+  position INTEGER DEFAULT 0,
+  notes TEXT,
+  match_reasons JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS pipeline_items_user_id ON pipeline_items (user_id);
+CREATE INDEX IF NOT EXISTS pipeline_items_stage ON pipeline_items (user_id, stage);
+
+CREATE TABLE IF NOT EXISTS user_tender_feedback (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  assessment_id INTEGER REFERENCES assessments(id) ON DELETE SET NULL,
+  tender_id INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  reason TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (user_id, tender_id)
+);
+CREATE INDEX IF NOT EXISTS user_tender_feedback_user_id ON user_tender_feedback (user_id);
+CREATE INDEX IF NOT EXISTS user_tender_feedback_status ON user_tender_feedback (user_id, status);
+
+ALTER TABLE pipeline_items ADD COLUMN IF NOT EXISTS assessment_id INTEGER REFERENCES assessments(id) ON DELETE SET NULL;
+ALTER TABLE pipeline_items ADD COLUMN IF NOT EXISTS match_reasons JSONB;
+ALTER TABLE user_tender_feedback ADD COLUMN IF NOT EXISTS reason TEXT;
+ALTER TABLE user_tender_feedback ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 `;
 
 async function migrate() {

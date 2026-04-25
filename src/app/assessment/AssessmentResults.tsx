@@ -904,7 +904,15 @@ export default function AssessmentResults({ data, onReset }: Props) {
               assessment_id: data.id,
               readiness_score: data.readiness_score,
               company_name: data.company_name,
-              matched_tenders: data.matched_tenders.slice(0, 5),
+              matched_tenders: data.matched_tenders.slice(0, 10).map((t) => ({
+                id: t.id,
+                title: t.title,
+                agency: t.agency,
+                deadline: t.deadline ?? null,
+                estimated_value: typeof t.estimated_value === "string" ? t.estimated_value : null,
+                fit_score: t.score,
+                structured_reasons: t.structured_reasons ?? null,
+              })),
               gaps: data.gaps.filter((g) => g.severity === "high").slice(0, 5),
             };
             localStorage.setItem("tp_bridge", JSON.stringify(bridge));
