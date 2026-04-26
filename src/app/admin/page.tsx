@@ -26,6 +26,38 @@ interface Stats {
   openTenders: number;
   activeSubscriptions: SubscriptionRow[];
   recentCrawls: CrawlLog[];
+  platformHealth: Array<{
+    platform: string;
+    role: "primary" | "supplement" | "observed";
+    status: "healthy" | "degraded" | "down" | "never_run";
+    last_run: string | null;
+    last_success: string | null;
+    added_24h: number;
+    updated_24h: number;
+    failures_24h: number;
+    open_tenders: number;
+    message: string;
+  }>;
+  ungmFamilyHealth: {
+    status: "healthy" | "degraded" | "critical";
+    message: string;
+    agencies: Array<{
+      agency: string;
+      open_tenders: number;
+    }>;
+  };
+  workerHealth: {
+    configured: boolean;
+    ok: boolean;
+    status: "healthy" | "degraded" | "unconfigured" | "unreachable";
+    endpoint?: string;
+    browser?: string;
+    browserError?: string | null;
+    version?: string;
+    checkedAt: string;
+    durationMs?: number;
+    error?: string;
+  };
 }
 
 const TIER_LABELS: Record<string, string> = {
@@ -84,9 +116,16 @@ function StatusPill({ status }: { status: string }) {
   const map: Record<string, string> = {
     success: "bg-green-500/15 text-green-400 border-green-500/30",
     completed: "bg-green-500/15 text-green-400 border-green-500/30",
+    healthy: "bg-green-500/15 text-green-400 border-green-500/30",
     running: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+    degraded: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+    never_run: "bg-amber-500/15 text-amber-400 border-amber-500/30",
     failed: "bg-red-500/15 text-red-400 border-red-500/30",
     error: "bg-red-500/15 text-red-400 border-red-500/30",
+    down: "bg-red-500/15 text-red-400 border-red-500/30",
+    critical: "bg-red-500/15 text-red-400 border-red-500/30",
+    unreachable: "bg-red-500/15 text-red-400 border-red-500/30",
+    unconfigured: "bg-red-500/15 text-red-400 border-red-500/30",
   };
   const cls = map[status.toLowerCase()] ?? "bg-slate-500/15 text-slate-400 border-slate-500/30";
   return (
@@ -276,6 +315,126 @@ export default function AdminPage() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+
+          {/* Worker health */}
+          <div className="rounded-xl bg-white/5 border border-white/8 p-6 mb-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+                  <svg className="w-4 h-4 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  Browser Worker Health
+                </h2>
+                <div className="flex flex-wrap items-center gap-3">
+                  <StatusPill status={stats.workerHealth.status} />
+                  <span className="text-xs text-slate-500">
+                    Browser: {stats.workerHealth.browser ?? "—"}
+                  </span>
+                  {stats.workerHealth.version && (
+                    <span className="text-xs text-slate-500">{stats.workerHealth.version}</span>
+                  )}
+                  {stats.workerHealth.durationMs != null && (
+                    <span className="text-xs text-slate-500">{duration(stats.workerHealth.durationMs)}</span>
+                  )}
+                </div>
+                {(stats.workerHealth.error || stats.workerHealth.browserError) && (
+                  <p className="mt-2 text-xs text-red-400">
+                    {stats.workerHealth.error ?? stats.workerHealth.browserError}
+                  </p>
+                )}
+              </div>
+              <div className="text-right text-xs text-slate-500">
+                <div>Checked {formatDate(stats.workerHealth.checkedAt)}</div>
+                {stats.workerHealth.endpoint && (
+                  <div className="mt-1 max-w-sm truncate" title={stats.workerHealth.endpoint}>
+                    {stats.workerHealth.endpoint}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* UNGM family coverage */}
+          <div className="rounded-xl bg-white/5 border border-white/8 p-6 mb-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+                  <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7.5 4.5v9L12 21l-7.5-4.5v-9L12 3z" />
+                  </svg>
+                  UNGM Family Coverage
+                </h2>
+                <div className="flex flex-wrap items-center gap-3">
+                  <StatusPill status={stats.ungmFamilyHealth.status} />
+                  <span className="text-xs text-slate-400">{stats.ungmFamilyHealth.message}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                {stats.ungmFamilyHealth.agencies.map((agency) => (
+                  <div key={agency.agency} className="rounded-lg border border-white/8 bg-black/10 px-3 py-2 text-center">
+                    <div className="text-[11px] text-slate-500 font-medium">{agency.agency}</div>
+                    <div className={`text-sm font-semibold ${agency.open_tenders > 0 ? "text-teal-400" : "text-red-400"}`}>
+                      {agency.open_tenders}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Platform health */}
+          <div className="rounded-xl bg-white/5 border border-white/8 overflow-hidden mb-6">
+            <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h10a4 4 0 100-8h-1.26A8 8 0 103 15z" />
+                </svg>
+                Source Health
+              </h2>
+              <span className="text-xs text-slate-500">Expected sources + observed sources</span>
+            </div>
+            {stats.platformHealth.length === 0 ? (
+              <div className="px-6 py-8 text-sm text-slate-500 text-center">No platform health yet.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-white/5 text-xs text-slate-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left font-medium">Platform</th>
+                      <th className="px-6 py-3 text-left font-medium">Status</th>
+                      <th className="px-6 py-3 text-left font-medium">Role</th>
+                      <th className="px-6 py-3 text-left font-medium">Last Success</th>
+                      <th className="px-6 py-3 text-left font-medium">Last Run</th>
+                      <th className="px-6 py-3 text-right font-medium">Open</th>
+                      <th className="px-6 py-3 text-right font-medium">24h Added</th>
+                      <th className="px-6 py-3 text-right font-medium">24h Failures</th>
+                      <th className="px-6 py-3 text-left font-medium">Signal</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {stats.platformHealth.map((row) => (
+                      <tr key={row.platform} className="hover:bg-white/3 transition-colors">
+                        <td className="px-6 py-3 text-slate-300 whitespace-nowrap">{row.platform}</td>
+                        <td className="px-6 py-3 whitespace-nowrap"><StatusPill status={row.status} /></td>
+                        <td className="px-6 py-3 text-slate-500 whitespace-nowrap capitalize">{row.role}</td>
+                        <td className="px-6 py-3 text-slate-400 whitespace-nowrap">{formatDate(row.last_success)}</td>
+                        <td className="px-6 py-3 text-slate-500 whitespace-nowrap">{formatDate(row.last_run)}</td>
+                        <td className="px-6 py-3 text-right text-slate-300 font-medium">{row.open_tenders}</td>
+                        <td className="px-6 py-3 text-right text-teal-400 font-medium">{row.added_24h}</td>
+                        <td className={`px-6 py-3 text-right font-medium ${row.failures_24h > 0 ? "text-red-400" : "text-slate-500"}`}>
+                          {row.failures_24h}
+                        </td>
+                        <td className="px-6 py-3 text-xs text-slate-500 min-w-56">
+                          {row.message}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>

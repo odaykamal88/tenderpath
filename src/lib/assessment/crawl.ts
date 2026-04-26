@@ -120,10 +120,10 @@ function isLoginWall(html: string, finalUrl: string): boolean {
  */
 async function fetchViaBrowserWorker(url: string): Promise<FetchResult | null> {
   const workerUrl = process.env.CRAWLER_WORKER_URL;
-  const crawlerKey = process.env.CRAWLER_KEY;
+  const crawlerKey = process.env.CRAWLER_WORKER_KEY;
 
   if (!workerUrl || !crawlerKey) {
-    console.warn("[crawl] CRAWLER_WORKER_URL or CRAWLER_KEY not set — skipping browser fallback");
+    console.warn("[crawl] CRAWLER_WORKER_URL or CRAWLER_WORKER_KEY not set — skipping browser fallback");
     return null;
   }
 

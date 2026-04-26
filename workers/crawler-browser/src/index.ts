@@ -4,6 +4,7 @@
  * instance (proper TLS/JA3 fingerprint).
  *
  * Endpoints:
+ *   GET  /health      — health probe (launches Chromium when authorized)
  *   POST /fetch        — single request (launch, warmup, one fetch, close)
  *   POST /fetch-many   — batch request (launch, warmup ONCE, N fetches, close).
  *                        Critical for paginated crawls: re-warming per page
@@ -26,6 +27,8 @@ export interface Env {
   BROWSER: Fetcher;           // browser_rendering binding
   CRAWLER_KEY: string;        // wrangler secret
 }
+
+const WORKER_VERSION = "crawler-browser@0.1.0";
 
 type FetchMode = "fetch" | "navigate";
 
@@ -60,16 +63,58 @@ type PuppeteerPage = Awaited<ReturnType<Awaited<ReturnType<typeof puppeteer.laun
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
+    const path = new URL(req.url).pathname;
+    if (path === "/health" && req.method === "GET") return handleHealth(req, env);
     if (req.method !== "POST") return new Response("Not found", { status: 404 });
     if (req.headers.get("X-Crawler-Key") !== env.CRAWLER_KEY) {
       return new Response("Unauthorized", { status: 401 });
     }
-    const path = new URL(req.url).pathname;
     if (path === "/fetch") return handleFetch(req, env);
     if (path === "/fetch-many") return handleFetchMany(req, env);
     return new Response("Not found", { status: 404 });
   },
 };
+
+async function handleHealth(req: Request, env: Env): Promise<Response> {
+  const startedAt = Date.now();
+  const authorized = req.headers.get("X-Crawler-Key") === env.CRAWLER_KEY;
+
+  if (!authorized) {
+    return json({
+      ok: true,
+      status: "alive",
+      browser: "not_checked",
+      version: WORKER_VERSION,
+      checkedAt: new Date().toISOString(),
+    });
+  }
+
+  let browserOk = false;
+  let browserError: string | null = null;
+  try {
+    const browser = await puppeteer.launch(env.BROWSER);
+    try {
+      const page = await browser.newPage();
+      await setupPage(page);
+      await page.close().catch(() => {});
+      browserOk = true;
+    } finally {
+      await browser.close();
+    }
+  } catch (err) {
+    browserError = err instanceof Error ? err.message : String(err);
+  }
+
+  return json({
+    ok: browserOk,
+    status: browserOk ? "healthy" : "degraded",
+    browser: browserOk ? "ok" : "failed",
+    browserError,
+    version: WORKER_VERSION,
+    checkedAt: new Date().toISOString(),
+    durationMs: Date.now() - startedAt,
+  }, browserOk ? 200 : 503);
+}
 
 async function handleFetch(req: Request, env: Env): Promise<Response> {
   let input: FetchBody;
