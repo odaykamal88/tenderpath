@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripe, tierFromPriceId } from "@/lib/stripe";
 import { sql } from "@/lib/db";
 import type Stripe from "stripe";
+import { createWorkOrderFromCheckout } from "@/lib/work-orders";
 
 /**
  * FIX #1: Proper Stripe webhook with constructEvent verification.
@@ -95,6 +96,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     INSERT INTO purchase_logs (plan, stripe_session_id, stripe_customer_id, user_id, amount_cents, currency)
     VALUES (${tier ?? 'unknown'}, ${session.id}, ${customerId}, ${userId}, ${session.amount_total ?? 0}, ${session.currency ?? 'usd'})
   `;
+
+  await createWorkOrderFromCheckout(session, userId);
 
   // Create subscription record
   if (tier) {

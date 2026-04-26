@@ -80,6 +80,14 @@ export interface MatchReason {
     mode: GeographyMode;
   };
   tenderTypeAlignment?: string[];
+  scoreBreakdown?: {
+    sector: number;
+    capabilities: number;
+    geography: number;
+    agency: number;
+    feedback?: number;
+  };
+  evidenceQuality?: "rich" | "thin";
   confidence?: "high" | "medium" | "low";
   caveats?: string[];
 }

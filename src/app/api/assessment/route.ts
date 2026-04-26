@@ -71,7 +71,10 @@ export async function POST(request: Request) {
 
     // Match tenders & grants concurrently
     const [matchedTenders, matchedGrants] = await Promise.all([
-      matchTenders(analysis, body.countries, { includeConsultancies: body.includeConsultancies }),
+      matchTenders(analysis, body.countries, {
+        includeConsultancies: body.includeConsultancies,
+        userEmail: body.email,
+      }),
       matchGrants(
         classification.sectors,
         body.orgType ?? null,

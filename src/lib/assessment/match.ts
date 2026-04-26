@@ -211,6 +211,69 @@ function detectRegtechSignal(analysis: AIAnalysis): boolean {
   return REGTECH_TERMS.some((term) => texts.includes(term));
 }
 
+type FeedbackProfile = {
+  dismissedTenderIds: Set<number>;
+  positiveAgencies: Set<string>;
+  positiveSectorSlugs: Set<SectorSlug>;
+};
+
+async function loadFeedbackProfile(email: string | null | undefined): Promise<FeedbackProfile> {
+  const empty = {
+    dismissedTenderIds: new Set<number>(),
+    positiveAgencies: new Set<string>(),
+    positiveSectorSlugs: new Set<SectorSlug>(),
+  };
+  if (!email) return empty;
+
+  const users = await sql`
+    SELECT id FROM users
+    WHERE LOWER(email) = LOWER(${email})
+    LIMIT 1
+  `;
+  const userId = users[0]?.id as number | undefined;
+  if (!userId) return empty;
+
+  const feedbackRows = await sql`
+    SELECT
+      f.tender_id,
+      f.status,
+      t.agency,
+      t.sector,
+      t.title,
+      t.description
+    FROM user_tender_feedback f
+    LEFT JOIN tenders t ON t.id = f.tender_id
+    WHERE f.user_id = ${userId}
+  `;
+
+  const dismissedTenderIds = new Set<number>();
+  const positiveAgencies = new Set<string>();
+  const positiveSectorSlugs = new Set<SectorSlug>();
+  const positiveStatuses = new Set(["saved", "evaluating", "preparing", "submitted", "in_progress", "applied"]);
+
+  for (const row of feedbackRows) {
+    const tenderId = Number(row.tender_id);
+    const status = String(row.status ?? "");
+    if (status === "not_relevant" && Number.isFinite(tenderId)) {
+      dismissedTenderIds.add(tenderId);
+      continue;
+    }
+    if (!positiveStatuses.has(status)) continue;
+
+    const agency = typeof row.agency === "string" ? row.agency.trim().toLowerCase() : "";
+    if (agency) positiveAgencies.add(agency);
+
+    const slugs = normalizeSector(
+      typeof row.sector === "string" ? row.sector : "",
+      typeof row.title === "string" ? row.title : "",
+      typeof row.description === "string" ? row.description : "",
+    );
+    for (const slug of slugs) positiveSectorSlugs.add(slug);
+  }
+
+  return { dismissedTenderIds, positiveAgencies, positiveSectorSlugs };
+}
+
 /**
  * Match open tenders using text-signal scoring.
  *
@@ -224,7 +287,7 @@ function detectRegtechSignal(analysis: AIAnalysis): boolean {
 export async function matchTenders(
   analysis: AIAnalysis,
   countries: string[],
-  options?: { includeConsultancies?: boolean },
+  options?: { includeConsultancies?: boolean; userEmail?: string },
 ): Promise<MatchedTender[]> {
   // Expand user country list through alias table so "Syria" matches tenders
   // posted as "Syrian Arab Republic", "Palestine" matches "West Bank and Gaza",
@@ -236,6 +299,7 @@ export async function matchTenders(
   // Remove any overlap — strict always wins over regional.
   for (const c of countrySet) regionalSet.delete(c);
   const acceptsGlobal = countrySet.has("global");
+  const feedbackProfile = await loadFeedbackProfile(options?.userEmail);
 
   // Pre-probe the strict-geo pool size for this user. When country-specific
   // supply is thin (common for logistics in Syria/Lebanon/Palestine etc.),
@@ -406,6 +470,8 @@ export async function matchTenders(
     if (!allowConsultancies && INDIVIDUAL_ROLE_RE.test(rawTitle)) continue;
 
     // Gate sources per configurable rules (e.g. SAM.gov for non-US companies).
+    if (feedbackProfile.dismissedTenderIds.has(t.id as number)) continue;
+
     const tSourceUrl = (t.source_url as string | null) ?? "";
     if (shouldSuppressSource(tSourceUrl, countrySet)) continue;
 
@@ -457,7 +523,15 @@ export async function matchTenders(
     else if (isGeoOpen && (acceptsGlobal || autoGeoOpen)) geoScore = 10;
     // else: geo-open, user didn't opt in and strict supply is healthy — held at 0.
 
-    let total = sectorScore + tokenScore + agencyScore + geoScore;
+    let feedbackScore = 0;
+    const normalizedAgency = tAgency.toLowerCase();
+    if (normalizedAgency && feedbackProfile.positiveAgencies.has(normalizedAgency)) feedbackScore += 5;
+    for (const slug of tSlugs) {
+      if (feedbackProfile.positiveSectorSlugs.has(slug)) feedbackScore += 5;
+    }
+    feedbackScore = Math.min(10, feedbackScore);
+
+    let total = sectorScore + tokenScore + agencyScore + geoScore + feedbackScore;
 
     // Value × company-size sanity check. A 2-person freelance outfit has no
     // realistic path to bid on a $50M WB civil-works contract. Parse the
@@ -507,14 +581,22 @@ export async function matchTenders(
     else if ((sectorScore >= 20 && tokenHits >= 1) || strictGeoMatch) srConfidence = "medium";
 
     const srCaveats: string[] = [];
-    if (tDescription.length < 50) srCaveats.push("Tender description is sparse.");
+    const evidenceQuality: "rich" | "thin" = tDescription.length >= 250 || reqs.length > 0 ? "rich" : "thin";
+    if (evidenceQuality === "thin") srCaveats.push("Tender evidence is thin; verify the source notice before committing.");
+    if (sectorScore === 0 && tokenHits > 0) srCaveats.push("Keyword-only match; sector alignment is weak.");
     if (autoGeoOpen && !strictGeoMatch) srCaveats.push("Geography widened beyond your selected countries.");
     if (sparseProfile) srCaveats.push("Company profile based on limited website content.");
+    const deadline = new Date(t.deadline as string);
+    if (!Number.isNaN(deadline.getTime())) {
+      const daysLeft = Math.ceil((deadline.getTime() - Date.now()) / 86_400_000);
+      if (daysLeft >= 0 && daysLeft <= 7) srCaveats.push(`Deadline is soon (${daysLeft} day${daysLeft === 1 ? "" : "s"} left).`);
+    }
 
     const srSummary: string[] = [];
     if (srSectorNames.length) srSummary.push(`Matched on ${srSectorNames.join(", ")} sector${srSectorNames.length > 1 ? "s" : ""}.`);
     if (srCaps.length) srSummary.push(`Capabilities: ${srCaps.join(", ")}.`);
     else if (srKws.length) srSummary.push(`Keywords: ${srKws.join(", ")}.`);
+    if (feedbackScore > 0) srSummary.push("Boosted by your prior tender feedback.");
     if (geoMode === "direct") srSummary.push(`Posted in ${t.country as string}.`);
     else if (geoMode === "regional") srSummary.push("Regional opportunity near your target countries.");
     else if (geoMode === "global-open") srSummary.push("Open globally — no country restriction.");
@@ -526,6 +608,14 @@ export async function matchTenders(
       matchedCapabilities: srCaps.length ? srCaps : undefined,
       matchedKeywords: srKws.length ? srKws : undefined,
       geographyAlignment: { userCountries: countries, tenderCountry: t.country as string | null, mode: geoMode },
+      scoreBreakdown: {
+        sector: sectorScore,
+        capabilities: tokenScore,
+        geography: geoScore,
+        agency: agencyScore,
+        feedback: feedbackScore || undefined,
+      },
+      evidenceQuality,
       confidence: srConfidence,
       caveats: srCaveats.length ? srCaveats : undefined,
     };
@@ -630,6 +720,7 @@ export async function matchTenders(
     for (const t of adjacentById.values()) {
       const rawTitle = (t.title as string ?? "");
       if (!isEnglishTitle(rawTitle, t.submission_language as string | null)) continue;
+      if (feedbackProfile.dismissedTenderIds.has(t.id as number)) continue;
       if (!allowConsultancies && (t.opportunity_type as string | null) === "Consultancy") continue;
       if (!allowConsultancies && INDIVIDUAL_ROLE_RE.test(rawTitle)) continue;
 
@@ -673,8 +764,16 @@ export async function matchTenders(
       else if (regionalGeoMatch) geoScore = 20;
       else if (isGeoOpen && (acceptsGlobal || autoGeoOpen)) geoScore = 10;
 
+      let feedbackScore = 0;
+      const normalizedAgency = tAgency.toLowerCase();
+      if (normalizedAgency && feedbackProfile.positiveAgencies.has(normalizedAgency)) feedbackScore += 5;
+      for (const slug of tSlugs) {
+        if (feedbackProfile.positiveSectorSlugs.has(slug)) feedbackScore += 5;
+      }
+      feedbackScore = Math.min(10, feedbackScore);
+
       if (sectorScore === 0 && tokenHits === 0) continue;
-      const total = Math.round((sectorScore + tokenScore + agencyScore + geoScore) * 0.6);
+      const total = Math.round((sectorScore + tokenScore + agencyScore + geoScore + feedbackScore) * 0.6);
       if (total < 10) continue;
 
       const matchedAdjSlugs = [...adjacentSlugs].filter((s) => tSlugs.has(s));
@@ -705,14 +804,25 @@ export async function matchTenders(
       if (adjSectorNames.length) adjSummary.push(`Near-sector: ${adjSectorNames.join(", ")}.`);
       if (adjCaps.length) adjSummary.push(`Capabilities: ${adjCaps.join(", ")}.`);
       else if (adjKws.length) adjSummary.push(`Keywords: ${adjKws.join(", ")}.`);
+      if (feedbackScore > 0) adjSummary.push("Boosted by your prior tender feedback.");
       const adjCaveats = ["Adjacent sector — lower direct relevance."];
       if (sparseProfile) adjCaveats.push("Company profile based on limited website content.");
+      const evidenceQuality: "rich" | "thin" = tDescription.length >= 250 || reqs.length > 0 ? "rich" : "thin";
+      if (evidenceQuality === "thin") adjCaveats.push("Tender evidence is thin; verify the source notice before committing.");
       const adj_structured_reasons: MatchReason = {
         summary: adjSummary,
         matchedSectors: adjSectorNames.length ? adjSectorNames : undefined,
         matchedCapabilities: adjCaps.length ? adjCaps : undefined,
         matchedKeywords: adjKws.length ? adjKws : undefined,
         geographyAlignment: { userCountries: countries, tenderCountry: t.country as string | null, mode: adjGeoMode },
+        scoreBreakdown: {
+          sector: sectorScore,
+          capabilities: tokenScore,
+          geography: geoScore,
+          agency: agencyScore,
+          feedback: feedbackScore || undefined,
+        },
+        evidenceQuality,
         confidence: "low",
         caveats: adjCaveats,
       };

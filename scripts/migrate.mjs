@@ -164,6 +164,27 @@ ALTER TABLE pipeline_items ADD COLUMN IF NOT EXISTS assessment_id INTEGER REFERE
 ALTER TABLE pipeline_items ADD COLUMN IF NOT EXISTS match_reasons JSONB;
 ALTER TABLE user_tender_feedback ADD COLUMN IF NOT EXISTS reason TEXT;
 ALTER TABLE user_tender_feedback ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+
+CREATE TABLE IF NOT EXISTS work_orders (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  plan TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'new',
+  payment_status TEXT DEFAULT 'paid',
+  stripe_session_id TEXT UNIQUE,
+  stripe_customer_id TEXT,
+  amount_cents INTEGER,
+  currency TEXT DEFAULT 'usd',
+  email TEXT,
+  pipeline_item_id INTEGER REFERENCES pipeline_items(id) ON DELETE SET NULL,
+  tender_title TEXT,
+  agency TEXT,
+  fulfillment_notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS work_orders_status ON work_orders (status, created_at DESC);
+CREATE INDEX IF NOT EXISTS work_orders_user_id ON work_orders (user_id);
 `;
 
 async function migrate() {

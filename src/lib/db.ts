@@ -238,4 +238,25 @@ export async function initializeDatabase() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS work_orders (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      plan TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'new',
+      payment_status TEXT DEFAULT 'paid',
+      stripe_session_id TEXT UNIQUE,
+      stripe_customer_id TEXT,
+      amount_cents INTEGER,
+      currency TEXT DEFAULT 'usd',
+      email TEXT,
+      pipeline_item_id INTEGER REFERENCES pipeline_items(id) ON DELETE SET NULL,
+      tender_title TEXT,
+      agency TEXT,
+      fulfillment_notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 }
