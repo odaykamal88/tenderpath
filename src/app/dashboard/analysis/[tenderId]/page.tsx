@@ -245,12 +245,20 @@ export default function AnalysisPage() {
             Generate a full submission package with pre-filled documents.
           </p>
         </div>
-        <Link
-          href="/pricing"
-          className="flex-shrink-0 px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors"
-        >
-          Generate Proposal Package →
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Link
+            href={`/pay?plan=proposal-draft&pipeline_item_id=${encodeURIComponent(pipelineItemId)}`}
+            className="flex-shrink-0 px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors text-center"
+          >
+            Generate proposal package
+          </Link>
+          <Link
+            href={`/pay?plan=roster-fast-track&pipeline_item_id=${encodeURIComponent(pipelineItemId)}`}
+            className="flex-shrink-0 px-5 py-2.5 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:border-gray-400 transition-colors text-center"
+          >
+            Roster/LTA support
+          </Link>
+        </div>
       </div>
     </div>
   );

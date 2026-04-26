@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   DragDropContext,
   Droppable,
@@ -55,6 +56,24 @@ function authHeaders(): HeadersInit {
   return token
     ? { "content-type": "application/json", authorization: `Bearer ${token}` }
     : { "content-type": "application/json" };
+}
+
+function isRosterAgency(agency: string | null): boolean {
+  if (!agency) return false;
+  return /\b(UNDP|UNICEF|WFP|UNHCR|UNOPS|IOM|ILO|FAO|WHO|UNFPA)\b/i.test(agency);
+}
+
+function payHref(
+  plan: "proposal-draft" | "roster-fast-track",
+  item: PipelineItem,
+): string {
+  const params = new URLSearchParams({
+    plan,
+    pipeline_item_id: String(item.id),
+    tender: item.tender_title,
+  });
+  if (item.tender_agency) params.set("agency", item.tender_agency);
+  return `/pay?${params.toString()}`;
 }
 
 export default function PipelinePage() {
@@ -385,6 +404,20 @@ export default function PipelinePage() {
                                   </svg>
                                   {analysingId === item.id ? "Checking…" : "Bid Analysis"}
                                 </button>
+                                <Link
+                                  href={payHref("proposal-draft", item)}
+                                  className="text-xs font-semibold text-gray-700 hover:text-gray-900 border border-gray-200 rounded px-2 py-0.5 bg-white hover:bg-gray-50 transition-colors"
+                                >
+                                  Draft Proposal
+                                </Link>
+                                {isRosterAgency(item.tender_agency) && (
+                                  <Link
+                                    href={payHref("roster-fast-track", item)}
+                                    className="text-xs font-semibold text-amber-800 hover:text-amber-950 border border-amber-200 rounded px-2 py-0.5 bg-amber-50 hover:bg-amber-100 transition-colors"
+                                  >
+                                    Roster/LTA
+                                  </Link>
+                                )}
                                 <button
                                   onClick={() => {
                                     if (confirm(`Remove "${item.tender_title}" from your pipeline?`)) {

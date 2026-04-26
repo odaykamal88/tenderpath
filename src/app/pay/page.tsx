@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { TIERS } from "@/lib/pricing";
 
 /* ── Payment config ─────────────────────────────────────────────────────────
@@ -25,6 +26,12 @@ const CONFIG = {
 
 type Tab = "card" | "usdt" | "whish" | "wire";
 
+interface PayContext {
+  tender: string | null;
+  agency: string | null;
+  pipelineItemId: string | null;
+}
+
 /* ── Shared helpers ─────────────────────────────────────────────────────────*/
 
 function CopyBtn({ value }: { value: string }) {
@@ -43,10 +50,19 @@ function CopyBtn({ value }: { value: string }) {
   );
 }
 
-function NotifyButton({ plan }: { plan: string }) {
+function contextLines(context: PayContext): string[] {
+  return [
+    context.tender ? `Tender: ${context.tender}` : null,
+    context.agency ? `Agency: ${context.agency}` : null,
+    context.pipelineItemId ? `Pipeline item ID: ${context.pipelineItemId}` : null,
+  ].filter((line): line is string => Boolean(line));
+}
+
+function NotifyButton({ plan, context }: { plan: string; context: PayContext }) {
   const subject = encodeURIComponent(`Payment sent – ${plan}`);
+  const lines = contextLines(context);
   const body = encodeURIComponent(
-    `Hi TenderPath team,\n\nI have completed my payment for: ${plan}\nMy account email: [your email here]\n\nI have attached my payment receipt / transaction ID.\n\nPlease activate my account.\n\nThank you.`
+    `Hi TenderPath team,\n\nI have completed my payment for: ${plan}\nMy account email: [your email here]${lines.length ? `\n\nWork context:\n${lines.join("\n")}` : ""}\n\nI have attached my payment receipt / transaction ID.\n\nPlease activate my account.\n\nThank you.`
   );
   return (
     <a
@@ -63,7 +79,7 @@ function NotifyButton({ plan }: { plan: string }) {
 
 /* ── Tab: Credit Card (Stripe) ──────────────────────────────────────────────*/
 
-function CardTab({ plan }: { plan: string | null }) {
+function CardTab({ plan, context }: { plan: string | null; context: PayContext }) {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -77,7 +93,13 @@ function CardTab({ plan }: { plan: string | null }) {
       const res = await fetch("/api/pay/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan, email }),
+        body: JSON.stringify({
+          plan,
+          email,
+          tender: context.tender,
+          agency: context.agency,
+          pipeline_item_id: context.pipelineItemId,
+        }),
       });
       const data = (await res.json()) as { url?: string; error?: string };
       if (data.url) {
@@ -135,7 +157,7 @@ function CardTab({ plan }: { plan: string | null }) {
 
 /* ── Tab: USDT ──────────────────────────────────────────────────────────────*/
 
-function UsdtTab({ plan }: { plan: string | null }) {
+function UsdtTab({ plan, context }: { plan: string | null; context: PayContext }) {
   const tier = TIERS.find((t) => t.slug === plan);
   const address = CONFIG.usdt.trc20;
 
@@ -204,14 +226,14 @@ function UsdtTab({ plan }: { plan: string | null }) {
         </div>
       </div>
 
-      <NotifyButton plan={plan ?? "unknown plan"} />
+      <NotifyButton plan={plan ?? "unknown plan"} context={context} />
     </div>
   );
 }
 
 /* ── Tab: Whish / OMT ───────────────────────────────────────────────────────*/
 
-function WhishTab({ plan }: { plan: string | null }) {
+function WhishTab({ plan, context }: { plan: string | null; context: PayContext }) {
   const hasAny = CONFIG.whish || CONFIG.omt;
 
   if (!hasAny) {
@@ -275,14 +297,14 @@ function WhishTab({ plan }: { plan: string | null }) {
         </a>
       )}
 
-      <NotifyButton plan={plan ?? "unknown plan"} />
+      <NotifyButton plan={plan ?? "unknown plan"} context={context} />
     </div>
   );
 }
 
 /* ── Tab: Wire Transfer ─────────────────────────────────────────────────────*/
 
-function WireTab({ plan }: { plan: string | null }) {
+function WireTab({ plan, context }: { plan: string | null; context: PayContext }) {
   const w = CONFIG.wire;
   const rows: [string, string][] = ([
     ["Bank",         w.bankName],
@@ -311,7 +333,35 @@ function WireTab({ plan }: { plan: string | null }) {
         Wire transfers are reflected within 1–3 business days.
       </p>
 
-      <NotifyButton plan={plan ?? "unknown plan"} />
+      <NotifyButton plan={plan ?? "unknown plan"} context={context} />
+    </div>
+  );
+}
+
+function ContextCard({ context }: { context: PayContext }) {
+  if (!context.tender && !context.agency && !context.pipelineItemId) return null;
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-5">
+      <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-3">
+        Work context
+      </p>
+      <div className="space-y-2 text-sm">
+        {context.tender && (
+          <div>
+            <p className="text-xs text-gray-400">Tender</p>
+            <p className="font-medium text-gray-900 leading-snug">{context.tender}</p>
+          </div>
+        )}
+        {context.agency && (
+          <div>
+            <p className="text-xs text-gray-400">Agency</p>
+            <p className="font-medium text-gray-900">{context.agency}</p>
+          </div>
+        )}
+        {context.pipelineItemId && (
+          <p className="text-xs text-gray-500">Pipeline item #{context.pipelineItemId}</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -321,6 +371,11 @@ function WireTab({ plan }: { plan: string | null }) {
 function PayPage() {
   const searchParams = useSearchParams();
   const planSlug = searchParams.get("plan");
+  const context: PayContext = {
+    tender: searchParams.get("tender"),
+    agency: searchParams.get("agency"),
+    pipelineItemId: searchParams.get("pipeline_item_id"),
+  };
   const [selectedSlug, setSelectedSlug] = useState<string | null>(planSlug);
   const [activeTab, setActiveTab] = useState<Tab>("card");
 
@@ -336,12 +391,12 @@ function PayPage() {
       {/* Nav */}
       <nav className="bg-white border-b border-gray-100 sticky top-0 z-50">
         <div className="mx-auto max-w-lg px-6 flex h-14 items-center justify-between">
-          <a href="/" className="text-base font-semibold text-gray-900">
+          <Link href="/" className="text-base font-semibold text-gray-900">
             Tender<span className="text-gold">Path</span>
-          </a>
-          <a href="/" className="text-sm text-gray-500 hover:text-gray-900 transition">
+          </Link>
+          <Link href="/" className="text-sm text-gray-500 hover:text-gray-900 transition">
             ← Back
-          </a>
+          </Link>
         </div>
       </nav>
 
@@ -351,6 +406,8 @@ function PayPage() {
           <h1 className="text-2xl font-bold text-gray-900">Complete your purchase</h1>
           <p className="text-sm text-gray-500 mt-1">Select a plan and pay your preferred way.</p>
         </div>
+
+        <ContextCard context={context} />
 
         {/* Step 1: Plan selector */}
         <div className="bg-white rounded-2xl border border-gray-200 p-5">
@@ -407,10 +464,10 @@ function PayPage() {
           </div>
 
           {/* Tab content */}
-          {activeTab === "card"  && <CardTab  plan={selectedSlug} />}
-          {activeTab === "usdt"  && <UsdtTab  plan={selectedSlug} />}
-          {activeTab === "whish" && <WhishTab plan={selectedSlug} />}
-          {activeTab === "wire"  && <WireTab  plan={selectedSlug} />}
+          {activeTab === "card"  && <CardTab  plan={selectedSlug} context={context} />}
+          {activeTab === "usdt"  && <UsdtTab  plan={selectedSlug} context={context} />}
+          {activeTab === "whish" && <WhishTab plan={selectedSlug} context={context} />}
+          {activeTab === "wire"  && <WireTab  plan={selectedSlug} context={context} />}
         </div>
 
         {/* After payment instructions (manual methods only) */}

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface MatchReason {
   summary?: string[];
@@ -46,9 +47,25 @@ function authHeaders(): HeadersInit {
     : { "content-type": "application/json" };
 }
 
+function payHref(
+  plan: "proposal-draft" | "roster-fast-track",
+  item: { id: number; tender_title: string; tender_agency: string | null },
+): string {
+  const params = new URLSearchParams({
+    plan,
+    pipeline_item_id: String(item.id),
+    tender: item.tender_title,
+  });
+  if (item.tender_agency) params.set("agency", item.tender_agency);
+  return `/pay?${params.toString()}`;
+}
+
 export default function DashboardOverview() {
+  const router = useRouter();
   const [bridge, setBridge] = useState<BridgeData | null>(null);
   const [seeded, setSeeded] = useState(false);
+  const [analysingId, setAnalysingId] = useState<number | null>(null);
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [pipelineStats, setPipelineStats] = useState<{
     total: number;
     active: number;
@@ -57,69 +74,15 @@ export default function DashboardOverview() {
   } | null>(null);
   const [matchedTenders, setMatchedTenders] = useState<Array<{
     id: number;
+    tender_id: number | null;
     tender_title: string;
     tender_agency: string | null;
     tender_deadline: string | null;
     fit_score: number;
   }>>([]);
   const [readiness, setReadiness] = useState<ReadinessData | null>(null);
-  const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set());
 
-  useEffect(() => {
-    const raw = localStorage.getItem("tp_bridge");
-    if (!raw) return;
-    try {
-      const data: BridgeData = JSON.parse(raw);
-      setBridge(data);
-      seedPipeline(data);
-    } catch {
-      localStorage.removeItem("tp_bridge");
-    }
-  }, []);
-
-  useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-    if (!token) return;
-
-    // Load feedback (not_relevant) and pipeline concurrently
-    Promise.all([
-      fetch("/api/dashboard/pipeline", {
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      }).then((r) => r.ok ? r.json() : null),
-      fetch("/api/dashboard/tender-feedback?status=not_relevant", {
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      }).then((r) => r.ok ? r.json() : null),
-      fetch("/api/dashboard/readiness", {
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      }).then((r) => r.ok ? r.json() : null),
-    ]).then(([pipelineBody, feedbackBody, readinessBody]) => {
-      const dismissed = new Set<number>(
-        (feedbackBody?.feedback ?? []).map((f: { tender_id: number }) => f.tender_id)
-      );
-      setDismissedIds(dismissed);
-
-      if (pipelineBody?.items) {
-        const items = pipelineBody.items as Array<{ id: number; stage: string; tender_title: string; tender_agency: string | null; tender_deadline: string | null; fit_score: number; tender_id: number | null }>;
-        setPipelineStats({
-          total: items.length,
-          matched: items.filter((i) => i.stage === "matched").length,
-          active: items.filter((i) => ["evaluating", "preparing", "submitted"].includes(i.stage)).length,
-          won: items.filter((i) => i.stage === "won").length,
-        });
-        // filter dismissed from matched widget
-        const matched = items.filter(
-          (i) => i.stage === "matched" && !(i.tender_id != null && dismissed.has(i.tender_id))
-        ).slice(0, 5);
-        setMatchedTenders(matched);
-      }
-
-      if (readinessBody?.assessment) {
-        setReadiness(readinessBody.assessment as ReadinessData);
-      }
-    }).catch(() => null);
-  }, []);
-
-  async function seedPipeline(data: BridgeData) {
+  const seedPipeline = useCallback(async (data: BridgeData) => {
     try {
       await Promise.all(
         data.matched_tenders.map((t) =>
@@ -143,8 +106,100 @@ export default function DashboardOverview() {
       localStorage.removeItem("tp_bridge");
       setSeeded(true);
     } catch {
-      // silently fail — pipeline still usable
+      // Pipeline is still usable if bridge seeding fails.
     }
+  }, []);
+
+  useEffect(() => {
+    const raw = localStorage.getItem("tp_bridge");
+    if (!raw) return;
+    try {
+      const data: BridgeData = JSON.parse(raw);
+      setBridge(data);
+      seedPipeline(data);
+    } catch {
+      localStorage.removeItem("tp_bridge");
+    }
+  }, [seedPipeline]);
+
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+    if (!token) return;
+
+    // Load feedback (not_relevant) and pipeline concurrently
+    Promise.all([
+      fetch("/api/dashboard/pipeline", {
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      }).then((r) => r.ok ? r.json() : null),
+      fetch("/api/dashboard/tender-feedback?status=not_relevant", {
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      }).then((r) => r.ok ? r.json() : null),
+      fetch("/api/dashboard/readiness", {
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      }).then((r) => r.ok ? r.json() : null),
+    ]).then(([pipelineBody, feedbackBody, readinessBody]) => {
+      const dismissed = new Set<number>(
+        (feedbackBody?.feedback ?? []).map((f: { tender_id: number }) => f.tender_id)
+      );
+
+      if (pipelineBody?.items) {
+        const items = pipelineBody.items as Array<{ id: number; stage: string; tender_title: string; tender_agency: string | null; tender_deadline: string | null; fit_score: number; tender_id: number | null }>;
+        setPipelineStats({
+          total: items.length,
+          matched: items.filter((i) => i.stage === "matched").length,
+          active: items.filter((i) => ["evaluating", "preparing", "submitted"].includes(i.stage)).length,
+          won: items.filter((i) => i.stage === "won").length,
+        });
+        // filter dismissed from matched widget
+        const matched = items.filter(
+          (i) => i.stage === "matched" && !(i.tender_id != null && dismissed.has(i.tender_id))
+        ).slice(0, 5);
+        setMatchedTenders(matched);
+      }
+
+      if (readinessBody?.assessment) {
+        setReadiness(readinessBody.assessment as ReadinessData);
+      }
+    }).catch(() => null);
+  }, []);
+
+  async function handleAnalyse(item: { id: number; tender_title: string }) {
+    setAnalysingId(item.id);
+    setWorkflowError(null);
+    try {
+      const checkRes = await fetch(
+        `/api/analysis/bid-no-bid?pipeline_item_id=${item.id}`,
+        { headers: authHeaders() }
+      );
+      if (checkRes.ok) {
+        router.push(`/dashboard/analysis/${item.id}`);
+        return;
+      }
+
+      const checkoutRes = await fetch("/api/analysis/bid-no-bid/checkout", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          pipeline_item_id: item.id,
+          tender_title: item.tender_title,
+        }),
+      });
+      const data = await checkoutRes.json().catch(() => ({})) as { url?: string; error?: string };
+      if (!checkoutRes.ok || !data.url) {
+        setWorkflowError(data.error ?? "Could not start bid analysis checkout.");
+        return;
+      }
+      window.location.href = data.url;
+    } catch {
+      setWorkflowError("Could not start bid analysis checkout. Please try again.");
+    } finally {
+      setAnalysingId(null);
+    }
+  }
+
+  function isRosterAgency(agency: string | null): boolean {
+    if (!agency) return false;
+    return /\b(UNDP|UNICEF|WFP|UNHCR|UNOPS|IOM|ILO|FAO|WHO|UNFPA)\b/i.test(agency);
   }
 
   return (
@@ -200,8 +255,28 @@ export default function DashboardOverview() {
                   +{readiness.gap_count - 3} more gaps · Upload docs to the Vault to resolve them
                 </div>
               )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link
+                  href="/dashboard/vault"
+                  className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:border-red-300"
+                >
+                  Close gaps in Vault
+                </Link>
+                <Link
+                  href="/pay?plan=roster-fast-track"
+                  className="rounded-md bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800"
+                >
+                  Get roster help
+                </Link>
+              </div>
             </div>
           )}
+        </div>
+      )}
+
+      {workflowError && (
+        <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {workflowError}
         </div>
       )}
 
@@ -231,7 +306,7 @@ export default function DashboardOverview() {
           </div>
           <div className="rounded-lg border border-gray-200 bg-white overflow-hidden divide-y divide-gray-100">
             {matchedTenders.map((t) => (
-              <div key={t.id} className="px-4 py-3 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
+              <div key={t.id} className="px-4 py-3 flex flex-col gap-3 hover:bg-gray-50 transition-colors sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <div className="text-sm font-medium text-gray-900 truncate">{t.tender_title}</div>
                   <div className="text-xs text-gray-500 mt-0.5">
@@ -251,11 +326,32 @@ export default function DashboardOverview() {
                       {t.fit_score}% fit
                     </span>
                   )}
+                  <button
+                    onClick={() => handleAnalyse(t)}
+                    disabled={analysingId === t.id}
+                    className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-50"
+                  >
+                    {analysingId === t.id ? "Checking..." : "Bid/no-bid $39"}
+                  </button>
+                  <Link
+                    href={payHref("proposal-draft", t)}
+                    className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-400"
+                  >
+                    Draft proposal
+                  </Link>
+                  {isRosterAgency(t.tender_agency) && (
+                    <Link
+                      href={payHref("roster-fast-track", t)}
+                      className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:border-amber-300"
+                    >
+                      Roster/LTA help
+                    </Link>
+                  )}
                   <Link
                     href="/dashboard/pipeline"
                     className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
                   >
-                    Track →
+                    Track
                   </Link>
                 </div>
               </div>
@@ -283,6 +379,38 @@ export default function DashboardOverview() {
       )}
 
       <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Link
+          href="/dashboard/pipeline"
+          className="block rounded-lg border border-gray-200 bg-white p-6 hover:border-gray-900 transition group"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm uppercase tracking-wide text-gray-500">Bid/No-Bid</div>
+            <svg className="h-4 w-4 text-gray-400 group-hover:text-gray-900 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </div>
+          <div className="text-lg font-semibold text-gray-900">Analyze a tender</div>
+          <div className="mt-1 text-sm text-gray-500">
+            Pick a live tender from your pipeline and get win probability, risks, required documents, and a bid/no-bid recommendation.
+          </div>
+        </Link>
+
+        <Link
+          href="/pay?plan=proposal-draft"
+          className="block rounded-lg border border-gray-200 bg-white p-6 hover:border-gray-900 transition group"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm uppercase tracking-wide text-gray-500">Proposal Draft</div>
+            <svg className="h-4 w-4 text-gray-400 group-hover:text-gray-900 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </div>
+          <div className="text-lg font-semibold text-gray-900">Build a submission package</div>
+          <div className="mt-1 text-sm text-gray-500">
+            Move from decision to draft: technical narrative, compliance checklist, and financial template.
+          </div>
+        </Link>
+
         <Link
           href="/dashboard/pipeline"
           className="block rounded-lg border border-gray-200 bg-white p-6 hover:border-gray-900 transition group"
