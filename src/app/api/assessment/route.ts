@@ -75,7 +75,8 @@ export async function POST(request: Request) {
       matchGrants(
         classification.sectors,
         body.orgType ?? null,
-        body.devThemes ?? []
+        body.devThemes ?? [],
+        body.countries ?? []
       ),
     ]);
 

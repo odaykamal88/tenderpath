@@ -17,6 +17,12 @@ import { crawlDevelopmentAidNPO } from "./developmentaid-npo";
 import { crawlADB } from "./adb";
 import { crawlEBRD } from "./ebrd";
 import { crawlUNRWA } from "./unrwa";
+import { crawlNRC } from "./nrc";
+import { crawlKfW } from "./kfw";
+import { crawlAFD } from "./afd";
+import { crawlADA } from "./ada";
+// crawlJICA — disabled: English listing returns 404; real listing is Japanese-only with PDF-only detail pages
+// crawlUNOPS — disabled: UNOPS posts to UNGM by mandate; already captured by crawlUNGM()
 
 export interface PlatformSyncResult {
   platform: string;
@@ -53,8 +59,13 @@ const SOURCE_PRIORITY: Record<string, number> = {
   EBRD: 75,
   UNRWA: 72,
   ReliefWeb: 70,
+  NRC: 65,
+  JICA: 65,
+  KfW: 65,
   UNDP: 60,
   GIZ: 60,
+  AFD: 60,
+  ADA: 55,
   "DevelopmentAid NPO": 40,
 };
 
@@ -216,7 +227,13 @@ export async function syncAllTenders(): Promise<SyncSummary> {
     crawlEBRD(),
     crawlUNRWA(),
     crawlDevelopmentAidNPO(),
+    crawlNRC(),
+    crawlKfW(),
+    crawlAFD(),
+    crawlADA(),
     // crawlWFP(),    — disabled, posts to UNGM
+    // crawlJICA()   — disabled: English page 404, real listing Japanese-only with PDF details
+    // crawlUNOPS()  — disabled: already covered by UNGM (UNOPS posts to UNGM by mandate)
   ]);
 
   const settledResults: CrawlResult[] = [];

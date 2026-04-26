@@ -274,6 +274,7 @@ export async function crawlUNGM(): Promise<CrawlResult> {
     }
 
     const tenders: RawTender[] = [];
+    let parseErrors = 0;
     for (let i = 0; i < results.length; i++) {
       let notices: UNGMNotice[];
       try {
@@ -282,11 +283,27 @@ export async function crawlUNGM(): Promise<CrawlResult> {
         // One bad page shouldn't drop the whole run. Log and continue — the
         // worker-level retry already covered transient failures.
         console.error(`[ungm] page ${i} parse failed:`, err instanceof Error ? err.message : err);
+        parseErrors++;
         continue;
       }
       if (!notices.length) break; // empty page = end of active notices
       tenders.push(...notices.map(mapNotice));
     }
+
+    // 0-tender success is not a real success — it means the worker silently
+    // returned empty bodies (CF edge error, stale cookies, warmup miss). Surface
+    // it as a failure so crawl_logs shows a red entry and ops can investigate.
+    if (tenders.length === 0) {
+      const detail = parseErrors > 0
+        ? `all ${parseErrors} pages failed to parse`
+        : "worker returned results but all pages were empty";
+      return {
+        platform: "UNGM", status: "failure", tenders: [],
+        durationMs: Date.now() - start,
+        error: `UNGM yielded 0 tenders — ${detail}`,
+      };
+    }
+
     return { platform: "UNGM", status: "success", tenders, durationMs: Date.now() - start };
   } catch (err) {
     return {

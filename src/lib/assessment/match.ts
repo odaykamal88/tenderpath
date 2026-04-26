@@ -592,8 +592,13 @@ export async function matchTenders(
     }
   }
 
+  // Track which tenders actually made it into the final output so we can
+  // exclude them from the adjacent pass without also excluding tenders that
+  // were in the baseline pool but never surfaced (zero primary-sector score).
+  const outIds = new Set(out.map((t) => t.id));
+
   // Adjacent-sector pass — pull tenders for neighbouring sectors not already
-  // matched, score with 0.6× discount, cap at 50 results.
+  // in the final output, score with 0.6× discount, cap at 50 results.
   const adjacentSlugs = computeAdjacentSlugs(effectiveUserSlugs);
   if (adjacentSlugs.size) {
     const adjacentById = new Map<number, Row>();
@@ -617,7 +622,7 @@ export async function matchTenders(
       `;
       for (const r of rows) {
         const rid = r.id as number;
-        if (!byId.has(rid) && !adjacentById.has(rid)) adjacentById.set(rid, r as Row);
+        if (!outIds.has(rid) && !adjacentById.has(rid)) adjacentById.set(rid, r as Row);
       }
     }
 
@@ -763,16 +768,40 @@ function stripMeta(s: MatchedTender & { _strict: boolean; _regional: boolean; _g
 export async function matchGrants(
   sectors: string[],
   orgType: string | null,
-  devThemes: string[]
+  devThemes: string[],
+  countries: string[] = []
 ): Promise<MatchedGrant[]> {
-  const candidates = await sql`
-    SELECT id, title, agency, deadline, sector, themes, eligible_org_types, source_url, description
-    FROM grants
-    WHERE status = 'open'
-      AND (deadline IS NULL OR deadline >= NOW())
-    ORDER BY deadline ASC NULLS LAST
-    LIMIT 200
-  `;
+  // Normalise user countries for matching
+  const userCountries = countries.map((c) => c.toLowerCase());
+  const globalTerms = ["global", "international", "worldwide", "multiple", "multi-country", "regional", "all countries"];
+
+  // When no countries provided (legacy calls), skip country filtering so we
+  // don't accidentally return zero grants for existing assessments.
+  const candidates = userCountries.length
+    ? await sql`
+        SELECT id, title, agency, deadline, sector, themes, eligible_org_types,
+               source_url, description, value_range, country, region
+        FROM grants
+        WHERE status = 'open'
+          AND (deadline IS NULL OR deadline >= NOW())
+          AND (
+            country IS NULL
+            OR country = ''
+            OR LOWER(country) = ANY(${globalTerms}::text[])
+            OR LOWER(country) = ANY(${userCountries}::text[])
+          )
+        ORDER BY deadline ASC NULLS LAST
+        LIMIT 200
+      `
+    : await sql`
+        SELECT id, title, agency, deadline, sector, themes, eligible_org_types,
+               source_url, description, value_range, country, region
+        FROM grants
+        WHERE status = 'open'
+          AND (deadline IS NULL OR deadline >= NOW())
+        ORDER BY deadline ASC NULLS LAST
+        LIMIT 200
+      `;
 
   if (!candidates.length) return [];
 
@@ -843,6 +872,9 @@ export async function matchGrants(
       score: Math.min(100, score),
       source_url: (g.source_url as string | null) ?? null,
       description: gDescription || null,
+      value_range: (g.value_range as string | null) ?? null,
+      country: (g.country as string | null) ?? null,
+      region: (g.region as string | null) ?? null,
     });
   }
 
@@ -854,10 +886,10 @@ export async function matchGrants(
   for (const g of scored) {
     const agency = g.agency ?? "";
     const count = agencyCounts.get(agency) ?? 0;
-    if (count >= 2) continue;
+    if (count >= 3) continue;
     agencyCounts.set(agency, count + 1);
     out.push(g);
-    if (out.length >= 8) break;
+    if (out.length >= 20) break;
   }
   return out;
 }
