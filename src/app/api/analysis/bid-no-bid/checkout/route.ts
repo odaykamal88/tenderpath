@@ -26,20 +26,29 @@ export async function POST(request: Request) {
   const stripe = getStripe();
   const origin = request.headers.get("origin") ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    customer_email: user.email,
-    line_items: [{ price: priceId, quantity: 1 }],
-    // {CHECKOUT_SESSION_ID} is a Stripe template variable, not a JS template literal
-    success_url: `${origin}/dashboard/analysis/${pipeline_item_id}?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/dashboard/pipeline`,
-    metadata: {
-      userId: String(user.id),
-      pipeline_item_id: String(pipeline_item_id),
-      product: "bid-no-bid",
-      tender_title: tender_title ?? "",
-    },
-  });
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      customer_email: user.email,
+      line_items: [{ price: priceId, quantity: 1 }],
+      // {CHECKOUT_SESSION_ID} is a Stripe template variable, not a JS template literal
+      success_url: `${origin}/dashboard/analysis/${pipeline_item_id}?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/dashboard/pipeline`,
+      metadata: {
+        userId: String(user.id),
+        pipeline_item_id: String(pipeline_item_id),
+        product: "bid-no-bid",
+        tender_title: tender_title ?? "",
+      },
+    });
 
-  return NextResponse.json({ url: session.url });
+    return NextResponse.json({ url: session.url });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown Stripe checkout error";
+    console.error("[api/analysis/bid-no-bid/checkout]", message);
+    return NextResponse.json(
+      { error: `Could not start bid/no-bid checkout: ${message}` },
+      { status: 500 }
+    );
+  }
 }

@@ -75,9 +75,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ url: session.url });
   } catch (err) {
-    console.error("[api/pay/checkout]", err);
+    const message = err instanceof Error ? err.message : "Unknown checkout error";
+    console.error("[api/pay/checkout]", message);
     return NextResponse.json(
-      { error: "Failed to create checkout session. Please try again." },
+      { error: `Failed to create checkout session: ${message}` },
       { status: 500 }
     );
   }
