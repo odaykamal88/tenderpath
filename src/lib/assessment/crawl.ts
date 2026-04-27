@@ -101,6 +101,35 @@ function isSpaShell(html: string, visibleText: string): boolean {
   return ratio < SPA_RATIO_THRESHOLD && visibleText.length < SPA_TEXT_MAX;
 }
 
+/**
+ * True when the page is a domain parking / for-sale page.
+ * These pass the thin-content threshold but contain no company data,
+ * causing the LLM to classify the parking provider as the business.
+ */
+function isParkingPage(html: string, text: string): boolean {
+  const combined = (text + " " + html).toLowerCase();
+  const signals = [
+    "buy this domain",
+    "this domain is for sale",
+    "domain for sale",
+    "domain may be for sale",
+    "domain is registered",
+    "parked by",
+    "domain parking",
+    "this web page is parked",
+    "this page is parked",
+    "register your domain",
+    "domain registration",
+    "sedo.com",
+    "dan.com/buy",
+    "hugedomains.com",
+    "afternic.com",
+    "undeveloped.com",
+    "domainmarket.com",
+  ];
+  return signals.some((s) => combined.includes(s));
+}
+
 /** True when the page redirected to a login/auth wall. */
 function isLoginWall(html: string, finalUrl: string): boolean {
   if (!/<input[^>]+type=["']?password/i.test(html)) return false;
@@ -276,6 +305,21 @@ export async function crawlWebsite(url: string): Promise<CrawledData | null> {
   const finalHomeText =
     renderMethod === "browser" ? htmlToText(homeResult.html) : homeText;
   const meta = extractMeta(homeResult.html);
+
+  // --- Stage 3b: parking-page guard ---
+  // Check after browser rendering so we don't misclassify SPA shells as parked.
+  if (isParkingPage(homeResult.html, finalHomeText)) {
+    console.warn(`[crawl] Parking page detected at ${homeResult.finalUrl}`);
+    return {
+      title: meta.title,
+      metaDescription: meta.metaDescription,
+      ogDescription: meta.ogDescription,
+      content: "",
+      isThinContent: true,
+      finalUrl: homeResult.finalUrl,
+      renderMethod: "parked",
+    };
+  }
 
   // Probe subpaths against the resolved origin (avoids repeated redirect overhead)
   const subBase = originOf(homeResult.finalUrl);

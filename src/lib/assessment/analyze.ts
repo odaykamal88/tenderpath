@@ -51,7 +51,9 @@ function buildCompanyContext(
     if (crawledData.content)
       ctx += `\nWebsite Content:\n${crawledData.content}\n`;
     if (crawledData.isThinContent) {
-      if (crawledData.renderMethod === "failed") {
+      if (crawledData.renderMethod === "parked") {
+        ctx += `\nNote: Website appears to be a parked or for-sale domain — no company content available. Rely entirely on the company description above.\n`;
+      } else if (crawledData.renderMethod === "failed") {
         ctx += `\nNote: Website could not be crawled (domain redirect, login wall, or browser render failure) — rely primarily on the company description above.\n`;
       } else if (crawledData.renderMethod === "browser") {
         ctx += `\nNote: Website required browser rendering — content may still be incomplete.\n`;

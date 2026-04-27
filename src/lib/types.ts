@@ -34,7 +34,7 @@ export interface CrawledData {
   /** Final URL after redirect following (may differ from user-supplied URL). */
   finalUrl?: string | null;
   /** How the page was rendered. Absent on assessments saved before this field was added. */
-  renderMethod?: "static" | "browser" | "failed";
+  renderMethod?: "static" | "browser" | "failed" | "parked";
 }
 
 export interface AIAnalysis {
