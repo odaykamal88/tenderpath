@@ -11,6 +11,7 @@ const PUBLIC_PATHS = new Set([
   "/api/cron/sync-tenders",
   "/api/cron/crawl",
   "/api/assessment/public",
+  "/api/pay/checkout",
 ]);
 
 function isPublicPath(pathname: string): boolean {
