@@ -871,22 +871,48 @@ export async function matchTenders(
     for (const s of adjOut.slice(0, 50)) out.push(s);
   }
 
+  const finalOut = dedupeFinalMatches(out);
+
   // EPIC E: confidence distribution observability
-  const confidenceDist = out.reduce((acc, t) => {
+  const confidenceDist = finalOut.reduce((acc, t) => {
     const c = t.structured_reasons?.confidence ?? "none";
     acc[c] = (acc[c] ?? 0) + 1;
     return acc;
   }, {} as Record<string, number>);
-  const withoutStructured = out.filter((t) => !t.structured_reasons).length;
-  console.log("[tp:match:confidence]", confidenceDist, { total: out.length, withoutStructured });
+  const withoutStructured = finalOut.filter((t) => !t.structured_reasons).length;
+  console.log("[tp:match:confidence]", confidenceDist, { total: finalOut.length, withoutStructured });
 
-  return out;
+  return finalOut;
 }
 
 function stripMeta(s: MatchedTender & { _strict: boolean; _regional: boolean; _geoOpen: boolean; _sectorScore: number }): MatchedTender {
   const { _strict, _regional, _geoOpen, _sectorScore, ...rest } = s;
   void _strict; void _regional; void _geoOpen; void _sectorScore;
   return rest;
+}
+
+function finalMatchKey(tender: MatchedTender): string {
+  const title = tender.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 120);
+  const agency = (tender.agency ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const deadline = tender.deadline ? new Date(tender.deadline).toISOString().slice(0, 10) : "";
+  return `${title}|${agency}|${deadline}`;
+}
+
+function dedupeFinalMatches(matches: MatchedTender[]): MatchedTender[] {
+  const byKey = new Map<string, MatchedTender>();
+  for (const match of matches) {
+    const key = finalMatchKey(match);
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, match);
+      continue;
+    }
+
+    const existingRank = (existing.is_adjacent ? 0 : 8) + existing.score;
+    const newRank = (match.is_adjacent ? 0 : 8) + match.score;
+    if (newRank > existingRank) byKey.set(key, match);
+  }
+  return [...byKey.values()].sort((a, b) => b.score - a.score);
 }
 
 /**
