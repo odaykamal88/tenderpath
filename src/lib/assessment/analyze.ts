@@ -1,6 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { CrawledData, AIAnalysis, Gap, TierSlug } from "@/lib/types";
 
+type IndustryClassification = {
+  detected_industry: string;
+  sectors: string[];
+  services: string[];
+};
+
 let _client: Anthropic | null = null;
 
 function getClient(): Anthropic {
@@ -58,6 +64,82 @@ function buildCompanyContext(
   return ctx;
 }
 
+function hasAnySignal(text: string, signals: string[]): boolean {
+  return signals.some((signal) => text.includes(signal));
+}
+
+function addUnique(items: string[], additions: string[]): string[] {
+  const seen = new Set(items.map((item) => item.toLowerCase()));
+  const out = [...items];
+  for (const item of additions) {
+    const key = item.toLowerCase();
+    if (!seen.has(key)) {
+      out.push(item);
+      seen.add(key);
+    }
+  }
+  return out;
+}
+
+/**
+ * Deterministic correction layer for common LLM over-classification.
+ *
+ * Procurement pages use words like "solutions", "management", and "services"
+ * for concrete trades. Without a guard, the model can drift toward
+ * "consulting" even when the evidence says warehousing, transport, security,
+ * or facility operations. Keep this narrow and evidence-driven.
+ */
+function applyConcreteIndustryGuards(
+  classification: IndustryClassification,
+  context: string,
+): IndustryClassification {
+  const text = [
+    context,
+    classification.detected_industry,
+    ...classification.sectors,
+    ...classification.services,
+  ].join(" ").toLowerCase();
+
+  const logisticsSignals = [
+    "warehouse", "warehousing", "storage", "supply chain", "logistics",
+    "freight", "transport", "distribution", "last-mile", "last mile",
+    "cargo", "fleet", "food packaging", "food distribution",
+  ];
+  const securitySignals = [
+    "security service", "security services", "guard", "guarding",
+    "surveillance", "crowd management", "event security",
+    "operational safety", "access control",
+  ];
+  const facilitySignals = [
+    "janitorial", "maintenance", "facility management", "waste management",
+    "cleaning service", "catering",
+  ];
+
+  const hasLogistics = hasAnySignal(text, logisticsSignals);
+  const hasSecurity = hasAnySignal(text, securitySignals);
+  const hasFacility = hasAnySignal(text, facilitySignals);
+
+  if (!hasLogistics && !hasSecurity && !hasFacility) return classification;
+
+  const sectors = addUnique(classification.sectors, [
+    ...(hasLogistics ? ["Logistics & Supply Chain", "Warehousing & Distribution"] : []),
+    ...(hasSecurity ? ["Security Services"] : []),
+    ...(hasFacility ? ["Facility Management"] : []),
+  ]);
+
+  const detected_industry =
+    hasLogistics ? "logistics"
+    : hasSecurity ? "security"
+    : classification.detected_industry === "consulting" ? "logistics"
+    : classification.detected_industry;
+
+  return {
+    ...classification,
+    detected_industry,
+    sectors,
+  };
+}
+
 /**
  * Stage 1: Classify the company's industry and extract initial sector/services.
  */
@@ -65,11 +147,7 @@ export async function classifyIndustry(
   crawledData: CrawledData | null,
   description: string,
   countries: string[]
-): Promise<{
-  detected_industry: string;
-  sectors: string[];
-  services: string[];
-}> {
+): Promise<IndustryClassification> {
   const client = getClient();
   const context = buildCompanyContext(crawledData, description, countries);
 
@@ -106,11 +184,13 @@ Return ONLY valid JSON, no explanation.`,
   // poisoning the Consultancy filter for every company whose classification
   // JSON happened to fail parsing. Use empty string so userIsConsulting stays
   // false and the Consultancy/individual-role guards keep firing.
-  return safeParseJSON(text, {
+  const parsed = safeParseJSON<IndustryClassification>(text, {
     detected_industry: "",
     sectors: [],
     services: [],
   });
+
+  return applyConcreteIndustryGuards(parsed, context);
 }
 
 /**
@@ -120,11 +200,7 @@ export async function fullAnalysis(
   crawledData: CrawledData | null,
   description: string,
   countries: string[],
-  classification: {
-    detected_industry: string;
-    sectors: string[];
-    services: string[];
-  },
+  classification: IndustryClassification,
   orgType?: string,
   devThemes?: string[]
 ): Promise<AIAnalysis> {
@@ -204,18 +280,17 @@ Return ONLY valid JSON, no explanation.`,
 
   const parsed = safeParseJSON<Partial<AIAnalysis>>(text, {});
 
-  // Merge classification data into parsed result
+  const guardedClassification = applyConcreteIndustryGuards(classification, context);
+
+  // Merge analysis fields, but keep Stage 1 company identity authoritative.
+  // The full-readiness prompt evaluates readiness; it must not reclassify a
+  // logistics/warehouse/security company back into generic consulting.
   return {
     ...defaultAnalysis,
     ...parsed,
-    detected_industry:
-      parsed.detected_industry ?? classification.detected_industry,
-    sectors: parsed.sectors?.length
-      ? parsed.sectors
-      : classification.sectors,
-    services: parsed.services?.length
-      ? parsed.services
-      : classification.services,
+    detected_industry: guardedClassification.detected_industry,
+    sectors: guardedClassification.sectors,
+    services: guardedClassification.services,
     // Validate gaps have correct upsell_tier
     gaps: (parsed.gaps ?? []).map((g: Partial<Gap>) => ({
       gap: g.gap ?? "Unknown gap",

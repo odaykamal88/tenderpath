@@ -3,9 +3,10 @@ import type { SectorSlug } from "@/lib/crawlers/sector-map";
 export const ADJACENT_SECTORS: Partial<Record<SectorSlug, SectorSlug[]>> = {
   agriculture:     ["food", "environment", "water_sanitation", "logistics"],
   food:            ["agriculture", "logistics", "healthcare", "environment", "water_sanitation"],
-  // Logistics expands to cargo security, agricultural supply chains, and
-  // engineering (vehicles, handling equipment, port infrastructure).
-  logistics:       ["food", "construction", "water_sanitation", "agriculture", "security", "engineering"],
+  // Logistics expands only to closely bid-adjacent operational services.
+  // Construction/agriculture/engineering produced noisy infrastructure and
+  // landscape matches for warehouse/transport companies.
+  logistics:       ["security", "environment", "food"],
   // Remove consulting — IT companies should not see consultant/advisory tenders.
   it:              ["education", "language_services"],
   // Remove consulting — language/doc firms should not see advisory tenders.

@@ -162,7 +162,7 @@ function expandCountrySet(countries: string[]): Set<string> {
 // Many crawlers (UNGM, SAM.gov, UNDP Atlas) tag these as "RFP" or "Individual
 // Contractor" rather than "Consultancy", so the type filter alone misses them.
 // Pattern is conservative — substrings that only appear in recruitment.
-const INDIVIDUAL_ROLE_RE = /\b(individual contractor|individual consultant|ssa \d|special service agreement|short[- ]term expert|long[- ]term expert|roster of experts?|roster of consultants?|expert(s)? roster|consultant roster|national consultant|international consultant|junior consultant|senior consultant|home[- ]based consultant|un volunteer|unv [a-z]+|request for cv|call for cv|call for experts?|national professional officer)\b/i;
+const INDIVIDUAL_ROLE_RE = /\b(individual contractor|individual consultant|ssa \d|special service agreement|short[- ]term expert|long[- ]term expert|roster of experts?|roster of consultants?|expert(s)? roster|consultant roster|national consultant|international consultant|junior consultant|senior consultant|home[- ]based consultant|un volunteer|unv [a-z]+|request for cv|call for cv|call for experts?|national professional officer)\b|(?:^|[-_/])ic[-_/]/i;
 
 // Parse estimated_value strings like "$50,000,000", "USD 2.5M", "EUR 500k"
 // into a rough USD number. Conservative — if we can't parse, return null and
@@ -349,7 +349,7 @@ export async function matchTenders(
       "logistics", "transport", "freight", "shipping", "warehouse", "warehousing",
       "supply chain", "distribution", "fleet", "customs", "cargo", "storage",
       "forwarding", "forwarder", "haulage", "trucking", "delivery of",
-      "supply and delivery", "supply of", "procurement and delivery",
+      "supply and delivery", "procurement and delivery",
       "procurement services", "last mile", "last-mile", "stockpile",
       "prepositioning", "pre-positioning", "clearing", "clearance",
       "loading", "unloading", "import", "export", "dispatch",

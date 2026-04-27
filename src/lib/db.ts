@@ -119,6 +119,7 @@ export async function initializeDatabase() {
   await sql`
     CREATE TABLE IF NOT EXISTS grants (
       id SERIAL PRIMARY KEY,
+      reference_id TEXT,
       title TEXT NOT NULL,
       agency VARCHAR(100),
       deadline TIMESTAMPTZ,
@@ -127,11 +128,25 @@ export async function initializeDatabase() {
       eligible_org_types JSONB DEFAULT '[]',
       countries JSONB DEFAULT '[]',
       description TEXT,
+      value_range TEXT,
+      country TEXT,
+      region TEXT,
+      source_name TEXT,
       source_url TEXT,
       status VARCHAR(50) DEFAULT 'open',
-      created_at TIMESTAMPTZ DEFAULT NOW()
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+
+  await sql`ALTER TABLE grants ADD COLUMN IF NOT EXISTS reference_id TEXT`;
+  await sql`ALTER TABLE grants ADD COLUMN IF NOT EXISTS source_name TEXT`;
+  await sql`ALTER TABLE grants ADD COLUMN IF NOT EXISTS description TEXT`;
+  await sql`ALTER TABLE grants ADD COLUMN IF NOT EXISTS countries JSONB DEFAULT '[]'`;
+  await sql`ALTER TABLE grants ADD COLUMN IF NOT EXISTS value_range TEXT`;
+  await sql`ALTER TABLE grants ADD COLUMN IF NOT EXISTS country TEXT`;
+  await sql`ALTER TABLE grants ADD COLUMN IF NOT EXISTS region TEXT`;
+  await sql`ALTER TABLE grants ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS email_queue (

@@ -140,6 +140,12 @@ const LABEL_TO_SLUG: Record<string, SectorSlug> = {
   "logistics": "logistics",
   "logistics & supply chain": "logistics",
   "supply chain": "logistics",
+  "warehousing": "logistics",
+  "warehousing & distribution": "logistics",
+  "storage": "logistics",
+  "storage & warehousing": "logistics",
+  "food security & supply chain": "logistics",
+  "food security & humanitarian logistics": "logistics",
   "transport": "logistics",
   "construction": "construction",
   "infrastructure": "construction",
@@ -164,6 +170,7 @@ const LABEL_TO_SLUG: Record<string, SectorSlug> = {
   "nutrition": "food",
   "security": "security",
   "security services": "security",
+  "operational safety & security": "security",
   "language services": "language_services",
   "translation": "language_services",
   "publishing & communications": "language_services",
@@ -178,6 +185,7 @@ const LABEL_TO_SLUG: Record<string, SectorSlug> = {
   "waste management": "environment",
   "waste management & environmental services": "environment",
   "facility management": "environment",
+  "janitorial & maintenance": "environment",
   "agriculture": "agriculture",
   "rural development": "agriculture",
   "water and sanitation": "water_sanitation",
@@ -348,7 +356,10 @@ export function userSectorSlugs(
   }
   for (const label of sectorLabels ?? []) {
     const slug = slugFromLabel(label);
-    if (slug) slugs.add(slug);
+    if (slug) {
+      slugs.add(slug);
+      continue;
+    }
     // Fall back to keyword match on the label itself so "Water & Sanitation"
     // still resolves even if LABEL_TO_SLUG misses a variant.
     const fromKeywords = normalizeSector(label, null);
