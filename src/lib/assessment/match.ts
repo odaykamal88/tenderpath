@@ -1,5 +1,5 @@
 import { sql } from "@/lib/db";
-import type { MatchedTender, MatchedGrant, AIAnalysis, MatchReason, GeographyMode } from "@/lib/types";
+import type { MatchedTender, MatchedGrant, AIAnalysis, MatchReason, GeographyMode, OpportunityBucket } from "@/lib/types";
 import { normalizeSector, userSectorSlugs, type SectorSlug } from "@/lib/crawlers/sector-map";
 import { computeAdjacentSlugs } from "./sector-adjacency";
 import { shouldSuppressSource } from "./source-rules";
@@ -164,6 +164,97 @@ function expandCountrySet(countries: string[]): Set<string> {
 // Contractor" rather than "Consultancy", so the type filter alone misses them.
 // Pattern is conservative — substrings that only appear in recruitment.
 const INDIVIDUAL_ROLE_RE = /\b(individual contractor|individual consultant|ssa \d|special service agreement|short[- ]term expert|long[- ]term expert|roster of experts?|roster of consultants?|expert(s)? roster|consultant roster|national consultant|international consultant|junior consultant|senior consultant|home[- ]based consultant|un volunteer|unv [a-z]+|request for cv|call for cv|call for experts?|national professional officer)\b|(?:^|[-_/])ic[-_/]/i;
+
+const OPPORTUNITY_BUCKET_META: Record<OpportunityBucket, { label: string; priority: number }> = {
+  act_now: { label: "Act Now", priority: 1 },
+  strong_fit: { label: "Strong Fit", priority: 2 },
+  strategic: { label: "Strategic Expansion", priority: 3 },
+  adjacent: { label: "Adjacent Bet", priority: 4 },
+  watchlist: { label: "Watchlist", priority: 5 },
+};
+
+function daysUntil(deadline: string | null | undefined): number | null {
+  if (!deadline) return null;
+  const time = new Date(deadline).getTime();
+  if (Number.isNaN(time)) return null;
+  return Math.ceil((time - Date.now()) / 86_400_000);
+}
+
+function opportunityBucketForTender(tender: MatchedTender): {
+  key: OpportunityBucket;
+  reason: string;
+} {
+  const geoMode = tender.structured_reasons?.geographyAlignment?.mode;
+  const confidence = tender.structured_reasons?.confidence ?? "low";
+  const evidenceQuality = tender.structured_reasons?.evidenceQuality ?? "thin";
+  const days = daysUntil(tender.deadline);
+  const directGeo = tender.bucket === "country" || geoMode === "direct";
+  const widerGeo = tender.bucket === "regional" || tender.bucket === "global" || tender.bucket === "remote";
+  const urgent = days != null && days >= 0 && days <= 21;
+
+  if (tender.is_adjacent) {
+    return {
+      key: "adjacent",
+      reason: "Adjacent to the company profile; good for partnerships, expansion, or monitoring.",
+    };
+  }
+
+  if (tender.score >= 70 && directGeo && urgent && confidence !== "low") {
+    return {
+      key: "act_now",
+      reason: days == null
+        ? "High fit and direct geography; review immediately."
+        : `High fit, direct geography, and ${days} day${days === 1 ? "" : "s"} until deadline.`,
+    };
+  }
+
+  if (tender.score >= 70 && directGeo) {
+    return {
+      key: "strong_fit",
+      reason: "High fit with direct geography; shortlist for bid/no-bid review.",
+    };
+  }
+
+  if (tender.score >= 55 && (widerGeo || confidence === "high")) {
+    return {
+      key: "strategic",
+      reason: widerGeo
+        ? "Relevant beyond the selected country; useful for regional or globally open pursuit."
+        : "Strong evidence match that may be strategically useful.",
+    };
+  }
+
+  if (evidenceQuality === "thin" || confidence === "low" || tender.score < 50) {
+    return {
+      key: "watchlist",
+      reason: "Potential signal, but evidence or fit is not strong enough to pursue without source verification.",
+    };
+  }
+
+  return {
+    key: "strategic",
+    reason: "Moderate fit worth reviewing if capacity and documents are already in place.",
+  };
+}
+
+function assignOpportunityBuckets(tenders: MatchedTender[]): MatchedTender[] {
+  return tenders
+    .map((tender) => {
+      const bucket = opportunityBucketForTender(tender);
+      const meta = OPPORTUNITY_BUCKET_META[bucket.key];
+      return {
+        ...tender,
+        opportunity_bucket: bucket.key,
+        opportunity_bucket_label: meta.label,
+        opportunity_bucket_reason: bucket.reason,
+        opportunity_bucket_priority: meta.priority,
+      };
+    })
+    .sort((a, b) =>
+      (a.opportunity_bucket_priority ?? 99) - (b.opportunity_bucket_priority ?? 99)
+      || b.score - a.score
+    );
+}
 
 // Parse estimated_value strings like "$50,000,000", "USD 2.5M", "EUR 500k"
 // into a rough USD number. Conservative — if we can't parse, return null and
@@ -872,7 +963,7 @@ export async function matchTenders(
     for (const s of adjOut.slice(0, 50)) out.push(s);
   }
 
-  const finalOut = await enrichTopMatches(dedupeFinalMatches(out));
+  const finalOut = await enrichTopMatches(assignOpportunityBuckets(dedupeFinalMatches(out)));
 
   // EPIC E: confidence distribution observability
   const confidenceDist = finalOut.reduce((acc, t) => {

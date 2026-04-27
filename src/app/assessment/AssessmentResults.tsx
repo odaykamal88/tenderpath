@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import type { TierSlug, Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
+import type { TierSlug, Gap, MatchedTender, MatchedGrant, ReadinessDimensions, OpportunityBucket } from "@/lib/types";
 import { TIER_INFO_BY_SLUG } from "@/lib/pricing";
 
 interface AssessmentData {
@@ -90,40 +90,72 @@ const DIMENSION_LABELS: { key: keyof ReadinessDimensions; label: string }[] = [
   { key: "experience_relevance", label: "Experience" },
 ];
 
-type GroupVariant = "high" | "medium" | "adjacent" | "geo";
+type GroupVariant = "act" | "high" | "medium" | "adjacent" | "geo" | "watch";
 
 interface TenderGroup {
   label: string;
   sub?: string;
   tenders: MatchedTender[];
   variant: GroupVariant;
+  priority: number;
+}
+
+const OPPORTUNITY_GROUPS: Record<OpportunityBucket, { label: string; sub: string; variant: GroupVariant; priority: number }> = {
+  act_now: {
+    label: "Act Now",
+    sub: "High-fit opportunities with deadline pressure. These deserve bid/no-bid attention first.",
+    variant: "act",
+    priority: 1,
+  },
+  strong_fit: {
+    label: "Strong Fit",
+    sub: "Direct-fit tenders that match your profile and geography well.",
+    variant: "high",
+    priority: 2,
+  },
+  strategic: {
+    label: "Strategic Expansion",
+    sub: "Regional, global, or evidence-backed opportunities worth reviewing if capacity allows.",
+    variant: "geo",
+    priority: 3,
+  },
+  adjacent: {
+    label: "Adjacent Bets",
+    sub: "Near your core sectors — useful for partnerships, expansion, or market sensing.",
+    variant: "adjacent",
+    priority: 4,
+  },
+  watchlist: {
+    label: "Watchlist",
+    sub: "Potentially relevant, but verify evidence, scope, or fit before spending proposal time.",
+    variant: "watch",
+    priority: 5,
+  },
+};
+
+function fallbackOpportunityBucket(t: MatchedTender): OpportunityBucket {
+  if (t.is_adjacent) return "adjacent";
+  if (t.score >= 70 && t.bucket === "country") return "strong_fit";
+  if (t.bucket === "regional" || t.bucket === "global" || t.bucket === "remote") return "strategic";
+  return t.score >= 50 ? "strategic" : "watchlist";
 }
 
 function groupTenders(tenders: MatchedTender[]): TenderGroup[] {
   const sorted = [...tenders].sort((a, b) => b.score - a.score);
-  const highFit: MatchedTender[] = [];
-  const mediumLow: MatchedTender[] = [];
-  const adjacent: MatchedTender[] = [];
-  const geo: MatchedTender[] = [];
-
+  const byBucket = new Map<OpportunityBucket, MatchedTender[]>();
   for (const t of sorted) {
-    if (t.is_adjacent) { adjacent.push(t); continue; }
-    if (t.bucket === "regional" || t.bucket === "global" || t.bucket === "remote") { geo.push(t); continue; }
-    if (t.score >= 70) highFit.push(t);
-    else mediumLow.push(t);
+    const bucket = t.opportunity_bucket ?? fallbackOpportunityBucket(t);
+    byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), t]);
   }
 
-  const groups: TenderGroup[] = [];
-  if (highFit.length) groups.push({ label: "High-Fit Opportunities", tenders: highFit, variant: "high" });
-  if (mediumLow.length) groups.push({ label: "Medium & Low Matches", tenders: mediumLow, variant: "medium" });
-  if (adjacent.length) groups.push({
-    label: "Adjacent Sector Opportunities",
-    sub: "In sectors near your core — lower direct fit, but worth monitoring for partnerships or expansion.",
-    tenders: adjacent,
-    variant: "adjacent",
-  });
-  if (geo.length) groups.push({ label: "Regional & Global Opportunities", tenders: geo, variant: "geo" });
-  if (!groups.length) groups.push({ label: "Matched Tenders", tenders: sorted, variant: "medium" });
+  const groups = [...byBucket.entries()]
+    .map(([bucket, bucketTenders]) => {
+      const meta = OPPORTUNITY_GROUPS[bucket];
+      return { ...meta, tenders: bucketTenders };
+    })
+    .sort((a, b) => a.priority - b.priority);
+
+  if (!groups.length) groups.push({ label: "Matched Tenders", sub: "All matched tender opportunities.", tenders: sorted, variant: "medium", priority: 99 });
   return groups;
 }
 
@@ -200,6 +232,13 @@ function TenderCard({ t, gaps, feedbackStatus, onFeedback }: TenderCardProps) {
     t.is_adjacent ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
     : "bg-purple-500/20 text-purple-300 border border-purple-500/30";
 
+  const opportunityBucketCls =
+    t.opportunity_bucket === "act_now" ? "bg-red/15 text-red border border-red/30"
+    : t.opportunity_bucket === "strong_fit" ? "bg-green/15 text-green border border-green/30"
+    : t.opportunity_bucket === "strategic" ? "bg-purple-500/15 text-purple-300 border border-purple-500/30"
+    : t.opportunity_bucket === "adjacent" ? "bg-blue-500/15 text-blue-300 border border-blue-500/30"
+    : "bg-gray-600/20 text-gray-300 border border-gray-600/30";
+
   const sr = t.structured_reasons;
   const summaryLines = sr?.summary?.length
     ? sr.summary.slice(0, 2)
@@ -243,6 +282,11 @@ function TenderCard({ t, gaps, feedbackStatus, onFeedback }: TenderCardProps) {
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-wrap gap-1">
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>{badge.label}</span>
+          {t.opportunity_bucket_label && (
+            <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${opportunityBucketCls}`}>
+              {t.opportunity_bucket_label}
+            </span>
+          )}
           {bucketLabel && (
             <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${bucketCls}`}>{bucketLabel}</span>
           )}
@@ -391,6 +435,12 @@ function TenderCard({ t, gaps, feedbackStatus, onFeedback }: TenderCardProps) {
               <span className="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Source Check</span>
               <p className="text-gray-400">{brief.source_confidence_reason}</p>
               {t.enriched_summary && <p className="text-gray-300">{t.enriched_summary}</p>}
+            </div>
+          )}
+          {t.opportunity_bucket_reason && (
+            <div className="space-y-1">
+              <span className="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Bucket Logic</span>
+              <p className="text-gray-400">{t.opportunity_bucket_reason}</p>
             </div>
           )}
           {sr?.caveats?.length && (
@@ -553,10 +603,12 @@ function BidNoBidCTA({ count }: { count: number }) {
 /* ── Group header styles ── */
 
 const GROUP_HEADER: Record<GroupVariant, string> = {
+  act: "text-red",
   high: "text-green",
   medium: "text-gold",
   adjacent: "text-blue-400",
   geo: "text-purple-400",
+  watch: "text-gray-400",
 };
 
 /* ── Action Plan with High/Medium/Low grouping ── */
@@ -991,7 +1043,14 @@ export default function AssessmentResults({ data, onReset }: Props) {
                 deadline: t.deadline ?? null,
                 estimated_value: typeof t.estimated_value === "string" ? t.estimated_value : null,
                 fit_score: t.score,
-                structured_reasons: t.structured_reasons ?? null,
+                structured_reasons: t.structured_reasons
+                  ? {
+                      ...t.structured_reasons,
+                      opportunityBucket: t.opportunity_bucket ?? null,
+                      opportunityBucketLabel: t.opportunity_bucket_label ?? null,
+                      opportunityBucketReason: t.opportunity_bucket_reason ?? null,
+                    }
+                  : null,
               })),
               gaps: data.gaps.filter((g) => g.severity === "high").slice(0, 5),
             };

@@ -68,6 +68,7 @@ export interface Gap {
 }
 
 export type GeographyMode = "direct" | "regional" | "global-open" | "auto-expanded" | "unknown";
+export type OpportunityBucket = "act_now" | "strong_fit" | "strategic" | "adjacent" | "watchlist";
 
 export interface MatchReason {
   summary: string[];
@@ -111,6 +112,10 @@ export interface MatchedTender {
   confidence?: string | null;
   bucket?: "country" | "regional" | "global" | "remote";
   is_adjacent?: boolean;
+  opportunity_bucket?: OpportunityBucket;
+  opportunity_bucket_label?: string;
+  opportunity_bucket_reason?: string;
+  opportunity_bucket_priority?: number;
   enriched_summary?: string | null;
   decision_brief?: {
     headline: string;
