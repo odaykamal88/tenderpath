@@ -44,6 +44,9 @@ const STOPWORDS = new Set([
   // regardless of industry and drown out real capability signal.
   "management", "specialist", "coordinator", "project", "program", "programme",
   "manager", "assistant", "consultant",
+  // Generic procurement verbs. "Supply and delivery of laptops" is an IT
+  // goods tender, not a logistics-services tender.
+  "supply", "delivery", "deliver", "procurement", "provision",
 ]);
 
 function tokenize(text: string): string[] {
@@ -173,6 +176,16 @@ const OPPORTUNITY_BUCKET_META: Record<OpportunityBucket, { label: string; priori
   watchlist: { label: "Watchlist", priority: 5 },
 };
 
+const HARD_LOGISTICS_RE = /\b(logistics?|supply chain|warehous(?:e|ing)|freight|transport(?:ation)? services?|shipping|distribution services?|last[- ]mile|fleet|customs|cargo|stockpil(?:e|ing)|preposition(?:ing)?|pre-position(?:ing)?|clearing agent|clearance service|storage service|cold chain|cold storage|distribution cent(?:er|re)|3pl|third-party logistic|stevedoring|port handling|cargo handling|cross-dock|material handling|packing service|courier service|parcel deliver(?:y)?|inventory storage|records storage|archive storage|document storage|storage facilit(?:y|ies)|warehousing services|storage space|temporary storage|container depot|bulk storage|secure storage|yard management|fulfillment cent(?:er|re))\b/i;
+
+function refineTenderSlugs(slugs: Set<SectorSlug>, evidenceText: string): Set<SectorSlug> {
+  const refined = new Set(slugs);
+  if (refined.has("logistics") && !HARD_LOGISTICS_RE.test(evidenceText)) {
+    refined.delete("logistics");
+  }
+  return refined;
+}
+
 function daysUntil(deadline: string | null | undefined): number | null {
   if (!deadline) return null;
   const time = new Date(deadline).getTime();
@@ -244,6 +257,67 @@ function assignOpportunityBuckets(tenders: MatchedTender[]): MatchedTender[] {
       const meta = OPPORTUNITY_BUCKET_META[bucket.key];
       return {
         ...tender,
+        opportunity_bucket: bucket.key,
+        opportunity_bucket_label: meta.label,
+        opportunity_bucket_reason: bucket.reason,
+        opportunity_bucket_priority: meta.priority,
+      };
+    })
+    .sort((a, b) =>
+      (a.opportunity_bucket_priority ?? 99) - (b.opportunity_bucket_priority ?? 99)
+      || b.score - a.score
+    );
+}
+
+function grantOpportunityBucket(grant: MatchedGrant): { key: OpportunityBucket; reason: string } {
+  const days = daysUntil(grant.deadline);
+  const urgent = days != null && days >= 0 && days <= 30;
+  const location = (grant.country ?? grant.region ?? "").toLowerCase();
+  const globalOrRegional = !location || /global|international|worldwide|multiple|regional|multi-country/.test(location);
+
+  if (grant.org_type_mismatch) {
+    return {
+      key: "watchlist",
+      reason: "Eligibility may not match your organization type; verify before applying.",
+    };
+  }
+
+  if (grant.score >= 65 && urgent) {
+    return {
+      key: "act_now",
+      reason: days == null
+        ? "Strong grant fit; review application requirements now."
+        : `Strong grant fit with ${days} day${days === 1 ? "" : "s"} until deadline.`,
+    };
+  }
+
+  if (grant.score >= 65) {
+    return {
+      key: "strong_fit",
+      reason: "Strong alignment with your sectors, themes, and eligibility profile.",
+    };
+  }
+
+  if (grant.score >= 45 && globalOrRegional) {
+    return {
+      key: "strategic",
+      reason: "Relevant regional or global funder opportunity worth monitoring.",
+    };
+  }
+
+  return {
+    key: "watchlist",
+    reason: "Some alignment exists, but fit or eligibility should be verified before investing time.",
+  };
+}
+
+function assignGrantOpportunityBuckets(grants: MatchedGrant[]): MatchedGrant[] {
+  return grants
+    .map((grant) => {
+      const bucket = grantOpportunityBucket(grant);
+      const meta = OPPORTUNITY_BUCKET_META[bucket.key];
+      return {
+        ...grant,
         opportunity_bucket: bucket.key,
         opportunity_bucket_label: meta.label,
         opportunity_bucket_reason: bucket.reason,
@@ -586,8 +660,10 @@ export async function matchTenders(
     // Sector overlap via canonical slugs — symmetric, so "it" on both sides scores.
     // Description is a huge signal lift for UN feeds where `sector` is often
     // a bare UNSPSC code and the title is boilerplate ("Request for Proposal").
-    const tSlugs = new Set<SectorSlug>(
-      normalizeSector(tSector, tTitle, `${reqs.join(" ")} ${tDescription}`.trim()),
+    const evidenceText = `${tTitle} ${tSector} ${reqs.join(" ")} ${tDescription}`.trim();
+    const tSlugs = refineTenderSlugs(
+      new Set<SectorSlug>(normalizeSector(tSector, tTitle, `${reqs.join(" ")} ${tDescription}`.trim())),
+      evidenceText,
     );
     let sectorScore = 0;
     for (const s of effectiveUserSlugs) if (tSlugs.has(s)) sectorScore += 40;
@@ -835,8 +911,10 @@ export async function matchTenders(
       const regionalGeoMatch = !strictGeoMatch && !isGeoOpen && regionalSet.has(tCountry);
       if (!strictGeoMatch && !regionalGeoMatch && !isGeoOpen) continue;
 
-      const tSlugs = new Set<SectorSlug>(
-        normalizeSector(tSector, tTitle, `${reqs.join(" ")} ${tDescription}`.trim()),
+      const adjEvidenceText = `${tTitle} ${tSector} ${reqs.join(" ")} ${tDescription}`.trim();
+      const tSlugs = refineTenderSlugs(
+        new Set<SectorSlug>(normalizeSector(tSector, tTitle, `${reqs.join(" ")} ${tDescription}`.trim())),
+        adjEvidenceText,
       );
       let sectorScore = 0;
       for (const s of adjacentSlugs) if (tSlugs.has(s)) sectorScore += 40;
@@ -1136,5 +1214,5 @@ export async function matchGrants(
     out.push(g);
     if (out.length >= 20) break;
   }
-  return out;
+  return assignGrantOpportunityBuckets(out);
 }

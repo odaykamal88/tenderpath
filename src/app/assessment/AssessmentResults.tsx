@@ -159,18 +159,22 @@ function groupTenders(tenders: MatchedTender[]): TenderGroup[] {
   return groups;
 }
 
-function groupGrants(grants: MatchedGrant[]): { label: string; grants: MatchedGrant[] }[] {
+function groupGrants(grants: MatchedGrant[]): { label: string; sub: string; grants: MatchedGrant[]; variant: GroupVariant; priority: number }[] {
   const sorted = [...grants].sort((a, b) => b.score - a.score);
-  const high: MatchedGrant[] = [];
-  const rest: MatchedGrant[] = [];
+  const byBucket = new Map<OpportunityBucket, MatchedGrant[]>();
   for (const g of sorted) {
-    if (g.score >= 50) high.push(g);
-    else rest.push(g);
+    const bucket = g.opportunity_bucket ?? (g.score >= 65 ? "strong_fit" : g.score >= 45 ? "strategic" : "watchlist");
+    byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), g]);
   }
-  const groups: { label: string; grants: MatchedGrant[] }[] = [];
-  if (high.length) groups.push({ label: "Strong Grant Matches", grants: high });
-  if (rest.length) groups.push({ label: "Additional Opportunities", grants: rest });
-  if (!groups.length) groups.push({ label: "Matched Grants", grants: sorted });
+
+  const groups = [...byBucket.entries()]
+    .map(([bucket, bucketGrants]) => {
+      const meta = OPPORTUNITY_GROUPS[bucket];
+      return { ...meta, grants: bucketGrants };
+    })
+    .sort((a, b) => a.priority - b.priority);
+
+  if (!groups.length) groups.push({ label: "Matched Grants", sub: "All matched grant opportunities.", grants: sorted, variant: "medium", priority: 99 });
   return groups;
 }
 
@@ -506,6 +510,11 @@ function GrantCard({ g }: { g: MatchedGrant }) {
   const soon = isDeadlineSoon(g.deadline);
   const amount = g.value_range ? g.value_range : null;
   const location = g.country ?? g.region ?? null;
+  const opportunityBucketCls =
+    g.opportunity_bucket === "act_now" ? "bg-red/15 text-red border border-red/30"
+    : g.opportunity_bucket === "strong_fit" ? "bg-green/15 text-green border border-green/30"
+    : g.opportunity_bucket === "strategic" ? "bg-purple-500/15 text-purple-300 border border-purple-500/30"
+    : "bg-gray-600/20 text-gray-300 border border-gray-600/30";
 
   return (
     <div className="rounded-xl bg-navy-light border border-white/10 p-4 flex flex-col gap-3 h-full">
@@ -514,6 +523,11 @@ function GrantCard({ g }: { g: MatchedGrant }) {
         <div className="flex flex-wrap gap-1">
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>{badge.label}</span>
           <span className="rounded bg-teal-500/20 border border-teal-500/40 px-2 py-0.5 text-[10px] font-semibold text-teal-300 uppercase">Grant</span>
+          {g.opportunity_bucket_label && (
+            <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${opportunityBucketCls}`}>
+              {g.opportunity_bucket_label}
+            </span>
+          )}
           {g.org_type_mismatch && (
             <span className="rounded bg-orange-500/15 border border-orange-500/40 px-2 py-0.5 text-[10px] font-medium text-orange-400">⚠ Check eligibility</span>
           )}
@@ -555,6 +569,12 @@ function GrantCard({ g }: { g: MatchedGrant }) {
       {/* Description */}
       {g.description && (
         <p className="text-[11px] text-gray-300 line-clamp-2">{g.description}</p>
+      )}
+      {g.opportunity_bucket_reason && (
+        <div className="rounded-lg bg-white/3 border border-white/8 p-3">
+          <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500">Bucket Logic</span>
+          <p className="mt-1 text-[11px] leading-relaxed text-gray-400">{g.opportunity_bucket_reason}</p>
+        </div>
       )}
 
       {/* Action — pushed to bottom */}
@@ -938,7 +958,8 @@ export default function AssessmentResults({ data, onReset }: Props) {
           {data.matched_grants.length === 0 && <p className="text-gray-500 text-sm">No matching grants found.</p>}
           {grantGroups.map((group) => (
             <div key={group.label}>
-              <h3 className="text-sm font-semibold text-teal-400 mb-4">{group.label}</h3>
+              <h3 className={`text-sm font-semibold mb-1 ${GROUP_HEADER[group.variant]}`}>{group.label}</h3>
+              <p className="text-xs text-gray-500 mb-4">{group.sub}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {group.grants.map((g) => <GrantCard key={g.id} g={g} />)}
               </div>

@@ -140,6 +140,10 @@ export interface MatchedGrant {
   value_range?: string | null;
   description?: string | null;
   org_type_mismatch?: boolean;
+  opportunity_bucket?: OpportunityBucket;
+  opportunity_bucket_label?: string;
+  opportunity_bucket_reason?: string;
+  opportunity_bucket_priority?: number;
 }
 
 export type TierSlug =
