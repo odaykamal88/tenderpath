@@ -30,6 +30,14 @@ export interface Env {
 
 const WORKER_VERSION = "crawler-browser@0.1.0";
 
+const USER_AGENTS = [
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+];
+
 type FetchMode = "fetch" | "navigate";
 
 interface FetchRequest {
@@ -191,10 +199,8 @@ async function handleFetchMany(req: Request, env: Env): Promise<Response> {
 }
 
 async function setupPage(page: PuppeteerPage): Promise<void> {
-  await page.setUserAgent(
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
-      "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-  );
+  const ua = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+  await page.setUserAgent(ua);
 }
 
 /**
