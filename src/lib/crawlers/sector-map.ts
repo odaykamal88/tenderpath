@@ -87,7 +87,7 @@ const SLUG_KEYWORDS: Record<SectorSlug, string[]> = {
   ],
   food: [
     "food", "nutrition supply", "catering", "meal", "commodit",
-    "foodstuff", "ration", "grain",
+    "foodstuff", "ration pack", "emergency ration", "grain",
   ],
   security: [
     "security service", "guard", "surveillance", "safety service",
