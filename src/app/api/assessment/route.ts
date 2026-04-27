@@ -41,11 +41,14 @@ export async function POST(request: Request) {
       ? await crawlWebsite(body.website)
       : null;
 
-    const description = [
+    const analysisDescription = [
       body.description,
       body.additionalCapabilities?.trim()
         ? `Additional capabilities shared by the user: ${body.additionalCapabilities.trim()}`
         : null,
+    ].filter(Boolean).join("\n\n");
+    const storedDescription = [
+      analysisDescription,
       body.adjacentSectors?.length
         ? `Adjacent fields the user wants monitored: ${body.adjacentSectors.join(", ")}`
         : null,
@@ -54,14 +57,14 @@ export async function POST(request: Request) {
     // Stage 2: Classify industry
     const classification = await classifyIndustry(
       crawledData,
-      description,
+      analysisDescription,
       body.countries
     );
 
     // Stage 3: Full analysis with Claude Haiku 3.5
     const analysis = await fullAnalysis(
       crawledData,
-      description,
+      analysisDescription,
       body.countries,
       classification,
       body.orgType,
@@ -104,7 +107,7 @@ export async function POST(request: Request) {
         include_consultancies
       ) VALUES (
         ${body.companyName}, ${body.email}, ${body.website ?? null},
-        ${description}, ${classification.detected_industry},
+        ${storedDescription}, ${classification.detected_industry},
         ${JSON.stringify(body.countries)}, ${JSON.stringify(crawledData)},
         ${JSON.stringify(analysis)}, ${analysis.overall_score},
         ${JSON.stringify(matchedTenders)}, ${JSON.stringify(analysis.gaps)},

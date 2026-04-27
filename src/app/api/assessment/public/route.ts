@@ -21,15 +21,11 @@ function synthesizeDescription(crawl: Awaited<ReturnType<typeof crawlWebsite>> |
 
 function enrichDescription(
   description: string,
-  adjacentSectors?: string[],
   additionalCapabilities?: string,
 ): string {
   const additions: string[] = [];
   if (additionalCapabilities?.trim()) {
     additions.push(`Additional capabilities shared by the user: ${additionalCapabilities.trim()}`);
-  }
-  if (adjacentSectors?.length) {
-    additions.push(`Adjacent fields the user wants monitored: ${adjacentSectors.join(", ")}`);
   }
   return [description, ...additions].filter(Boolean).join("\n\n");
 }
@@ -68,23 +64,25 @@ export async function POST(request: Request) {
 
     // If user skipped description, synthesize one from the crawl
     const baseDescription = body.description?.trim() || synthesizeDescription(crawledData);
-    const description = enrichDescription(
-      baseDescription,
-      body.adjacentSectors,
-      body.additionalCapabilities,
-    );
+    const analysisDescription = enrichDescription(baseDescription, body.additionalCapabilities);
+    const storedDescription = [
+      analysisDescription,
+      body.adjacentSectors?.length
+        ? `Adjacent fields the user wants monitored: ${body.adjacentSectors.join(", ")}`
+        : null,
+    ].filter(Boolean).join("\n\n");
 
     // Stage 2: Classify industry
     const classification = await classifyIndustry(
       crawledData,
-      description,
+      analysisDescription,
       body.countries
     );
 
     // Stage 3: Full analysis
     const analysis = await fullAnalysis(
       crawledData,
-      description,
+      analysisDescription,
       body.countries,
       classification,
       body.orgType,
@@ -126,7 +124,7 @@ export async function POST(request: Request) {
         include_consultancies
       ) VALUES (
         ${body.companyName}, ${body.email}, ${body.website ?? null},
-        ${description}, ${classification.detected_industry},
+        ${storedDescription}, ${classification.detected_industry},
         ${JSON.stringify(body.countries)}, ${JSON.stringify(crawledData)},
         ${JSON.stringify(analysis)}, ${analysis.overall_score},
         ${JSON.stringify(matchedTenders)}, ${JSON.stringify(analysis.gaps)},
