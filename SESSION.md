@@ -73,7 +73,7 @@ Based on git history — treat as implemented but not fully audited against prom
 
 | Prompt | Scope | Status |
 |--------|-------|--------|
-| Prompt 4 | Website crawl fidelity (`crawl.ts`, SPA detection, browser fallback) | **Partially done** — `f96a441 Fix assessment classification and matching` — needs audit |
+| Prompt 4 | Website crawl fidelity (`crawl.ts`, SPA detection, browser fallback) | **Complete** — all spec items confirmed; parking-page detection added `1667157` |
 | Prompt 5 | Persisted match quality, match reasons, explainability | **Complete** — confirmed by audit; all structured_reasons fields implemented; embeddings deferred to Sprint 4 |
 | Prompt 6 | Matched-tender dashboard improvements | **Complete (UI gap closed)** — bucket badges, deadline urgency, geography/keyword in match panel; `4131010` |
 
@@ -92,28 +92,23 @@ Prompts 1, 2, 3, 5, and 6 are complete and committed.
 
 **Prompt 6** (matched-tender dashboard improvements) — UI gap closed. All bucket/geography data was already in `pipeline_items.match_reasons` JSONB; the gap was in client-side typing and rendering. Both dashboard pages now show opportunity bucket badges and deadline urgency. "Why this match?" panel now surfaces matchedKeywords, geographyAlignment, and opportunityBucketReason. Committed `4131010`. Remaining deferred item: adding `tender_geography`, `tender_type`, `tender_source` as explicit pipeline_items columns — requires schema migration and is lower priority than activation reliability.
 
-**Prompt 4** (website crawl fidelity) — not yet audited. Still the next target.
+**Prompt 4** (website crawl fidelity) — complete. Audited `src/lib/assessment/crawl.ts`: all spec items (finalUrl, SPA detection, browser fallback, subpath probing, content ordering, login-wall detection, renderMethod/finalUrl output) were already implemented in a prior session. One real gap found and fixed: parking-page detection. Added `isParkingPage()` with 17 unambiguous signals; parking pages now return `renderMethod: "parked"`, `isThinContent: true`, empty content — and analyze.ts gives the LLM a specific note to ignore website evidence and rely on user-supplied description. Committed `1667157`.
 
 ---
 
 ## Next Recommended Task
 
-**Prompt 4 — Website crawl fidelity** in `src/lib/assessment/crawl.ts`.
+**Activation reliability audit** — all six prompts are complete.
 
-All five launch priorities now have solid foundations except "First-try trust" — which depends on crawl quality. Prompt 4 is the remaining unaudited piece.
+The top Launch Priority in `AGENTS.md` is now the focus: verify that the end-to-end flow (assessment → tp_bridge → login → dashboard seed → email) completes without manual intervention for a real user.
 
-Act as the Tender Assessment Agent. Read `AGENTS.md` and `docs/agents/assessment-architecture.md` first, then open `src/lib/assessment/crawl.ts` and audit whether it:
-- resolves and stores the final URL after redirect chains,
-- detects SPA/JS-rendered shells,
-- falls back to `workers/crawler-browser/` for browser rendering,
-- probes a broader subpath list (`/about`, `/services`, `/what-we-do`, `/solutions`),
-- prioritizes business-description text over boilerplate,
-- marks thin/parked/login-walled sites as low-confidence,
-- returns `renderMethod` and `finalUrl` fields.
+Key things to verify:
+- `tp_bridge` LocalStorage key is correctly assembled in `AssessmentResults.tsx` and consumed in `dashboard/page.tsx` on first load after login.
+- `seedPipeline()` actually fires and writes rows to `pipeline_items` with `match_reasons` populated.
+- The follow-up email sends reliably after assessment completes.
+- A user with no prior data sees a populated dashboard (not an empty state) immediately after assessment → login.
 
-Add anything missing. Preserve graceful fallback behavior throughout.
-
-**After Prompt 4**, the natural next focus is activation reliability end-to-end: verify that assessment → bridge → login → dashboard → email all succeed for a real user without manual intervention. See Launch Priority 1 in `AGENTS.md`.
+Act as the Tender Ops Agent. Read `AGENTS.md` and `docs/agents/dashboard-architecture.md`. Then trace the flow from `src/app/assessment/AssessmentResults.tsx` → `src/app/dashboard/page.tsx` → `/api/dashboard/pipeline` POST → email route, and identify any silent failure points. Fix or flag anything that could cause a user's assessment to complete without their dashboard populating.
 
 ---
 
