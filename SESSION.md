@@ -74,8 +74,8 @@ Based on git history — treat as implemented but not fully audited against prom
 | Prompt | Scope | Status |
 |--------|-------|--------|
 | Prompt 4 | Website crawl fidelity (`crawl.ts`, SPA detection, browser fallback) | **Partially done** — `f96a441 Fix assessment classification and matching` — needs audit |
-| Prompt 5 | Persisted match quality, match reasons, explainability | **Substantially done** — multiple commits: dedup, buckets, adjacent fields, briefs, logistics/food/grants tuning |
-| Prompt 6 | Matched-tender dashboard improvements | **Partially done** — `01e1c3f Deepen workflows and source quality ops` — needs audit |
+| Prompt 5 | Persisted match quality, match reasons, explainability | **Complete** — confirmed by audit; all structured_reasons fields implemented; embeddings deferred to Sprint 4 |
+| Prompt 6 | Matched-tender dashboard improvements | **Complete (UI gap closed)** — bucket badges, deadline urgency, geography/keyword in match panel; `4131010` |
 
 Additional work done outside the prompt sequence:
 - Email delivery fixed and auth email validation added (`7fa71c1`, `249de9e`)
@@ -86,17 +86,21 @@ Additional work done outside the prompt sequence:
 
 ## Current Status
 
-Prompts 1, 2, and 3 are complete and committed.
+Prompts 1, 2, 3, 5, and 6 are complete and committed.
 
-Prompt 4 (website crawl fidelity) is the active next target. The assessment architecture doc specifies: final URL resolution, SPA shell detection, browser-rendered fallback, expanded subpath probing, business-description text prioritization, `renderMethod` and `finalUrl` fields on crawl output. These need to be audited against `src/lib/assessment/crawl.ts` — some may be partially in place from `f96a441`.
+**Prompt 5** (persisted match quality, match reasons, explainability) — confirmed complete. `match.ts` fully implements `structured_reasons` with summary, matchedSectors, matchedCapabilities, matchedKeywords, geographyAlignment, scoreBreakdown, evidenceQuality, confidence, caveats, and all opportunityBucket fields. Embedding retrieval is intentionally stubbed (Sprint 4, documented). Opportunity buckets (act_now / strong_fit / strategic / adjacent / watchlist) are computed and persisted.
 
-Prompts 5 and 6 have been substantially worked ahead of schedule but need audit against the prompt specs before being marked complete.
+**Prompt 6** (matched-tender dashboard improvements) — UI gap closed. All bucket/geography data was already in `pipeline_items.match_reasons` JSONB; the gap was in client-side typing and rendering. Both dashboard pages now show opportunity bucket badges and deadline urgency. "Why this match?" panel now surfaces matchedKeywords, geographyAlignment, and opportunityBucketReason. Committed `4131010`. Remaining deferred item: adding `tender_geography`, `tender_type`, `tender_source` as explicit pipeline_items columns — requires schema migration and is lower priority than activation reliability.
+
+**Prompt 4** (website crawl fidelity) — not yet audited. Still the next target.
 
 ---
 
 ## Next Recommended Task
 
 **Prompt 4 — Website crawl fidelity** in `src/lib/assessment/crawl.ts`.
+
+All five launch priorities now have solid foundations except "First-try trust" — which depends on crawl quality. Prompt 4 is the remaining unaudited piece.
 
 Act as the Tender Assessment Agent. Read `AGENTS.md` and `docs/agents/assessment-architecture.md` first, then open `src/lib/assessment/crawl.ts` and audit whether it:
 - resolves and stores the final URL after redirect chains,
@@ -108,6 +112,8 @@ Act as the Tender Assessment Agent. Read `AGENTS.md` and `docs/agents/assessment
 - returns `renderMethod` and `finalUrl` fields.
 
 Add anything missing. Preserve graceful fallback behavior throughout.
+
+**After Prompt 4**, the natural next focus is activation reliability end-to-end: verify that assessment → bridge → login → dashboard → email all succeed for a real user without manual intervention. See Launch Priority 1 in `AGENTS.md`.
 
 ---
 
@@ -184,9 +190,9 @@ Until Prompt 2 and 3 are confirmed complete:
 ## Open Questions
 
 1. Are the Prompt 4 crawl fidelity improvements (`renderMethod`, `finalUrl`, SPA detection) already reflected in `src/lib/assessment/crawl.ts`? Read the file before implementing to avoid double work.
-2. Prompts 5 and 6 have been substantially worked — do they need a gap audit against the prompt specs, or are they good enough to mark complete?
+2. ~~Prompts 5 and 6 have been substantially worked — do they need a gap audit?~~ **Resolved**: both audited and confirmed/closed this session.
 3. Should Codex be restricted to additive crawler and test work only, with Claude Code owning architecture, migrations, and docs?
-4. Is the production match quality now stable enough to shift focus to activation reliability (assessment → email → dashboard flow)?
+4. ~~Is the production match quality now stable enough to shift focus to activation reliability?~~ **Resolved**: yes. Activation reliability is the next area after Prompt 4.
 
 ---
 
@@ -197,12 +203,14 @@ Until Prompt 2 and 3 are confirmed complete:
 - `AGENTS.md` — committed expansion (Launch Priorities, Agent Priority items 6–9, three additional Golden Rules)
 - `docs/agents/managed-agents-setup.md` — committed expansion (richer system prompts, field-completeness language)
 - `workers/crawler-browser/src/index.ts` — added UA rotation (5-entry `USER_AGENTS` array, random pick per session)
+- `src/app/dashboard/page.tsx` — extended MatchReason interface; added BUCKET_STYLES + isDeadlineSoon(); bucket badge + deadline urgency on matched tender cards (`4131010`)
+- `src/app/dashboard/pipeline/page.tsx` — extended MatchReason interface; BUCKET_STYLES + isDeadlineSoon(); bucket badge in card header; deadline urgency; enhanced "Why this match?" with keywords, geography, bucketReason (`4131010`)
 
 ---
 
 ## Blockers
 
-None recorded. The uncommitted docs changes should be reviewed and committed before the next implementation task begins.
+None. All dashboard UI changes are committed and TypeScript clean.
 
 ---
 
