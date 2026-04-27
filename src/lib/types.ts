@@ -111,6 +111,15 @@ export interface MatchedTender {
   confidence?: string | null;
   bucket?: "country" | "regional" | "global" | "remote";
   is_adjacent?: boolean;
+  enriched_summary?: string | null;
+  decision_brief?: {
+    headline: string;
+    reasons_to_act: string[];
+    verify_before_bidding: string[];
+    recommended_action: string;
+    source_confidence: "high" | "medium" | "low";
+    source_confidence_reason: string;
+  };
 }
 
 export interface MatchedGrant {

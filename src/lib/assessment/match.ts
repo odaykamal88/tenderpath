@@ -3,6 +3,7 @@ import type { MatchedTender, MatchedGrant, AIAnalysis, MatchReason, GeographyMod
 import { normalizeSector, userSectorSlugs, type SectorSlug } from "@/lib/crawlers/sector-map";
 import { computeAdjacentSlugs } from "./sector-adjacency";
 import { shouldSuppressSource } from "./source-rules";
+import { enrichTopMatches } from "./enrich";
 
 // Non-Latin scripts: Arabic, CJK, Cyrillic, Greek, Hebrew, Thai, Devanagari, etc.
 const NON_LATIN_SCRIPT = /[\u0370-\u03FF\u0400-\u04FF\u0500-\u052F\u0590-\u05FF\u0600-\u06FF\u0900-\u097F\u0E00-\u0E7F\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF]/;
@@ -871,7 +872,7 @@ export async function matchTenders(
     for (const s of adjOut.slice(0, 50)) out.push(s);
   }
 
-  const finalOut = dedupeFinalMatches(out);
+  const finalOut = await enrichTopMatches(dedupeFinalMatches(out));
 
   // EPIC E: confidence distribution observability
   const confidenceDist = finalOut.reduce((acc, t) => {

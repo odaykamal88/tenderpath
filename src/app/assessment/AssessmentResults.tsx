@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import type { TierSlug, Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
 import { TIER_INFO_BY_SLUG } from "@/lib/pricing";
 
@@ -55,6 +56,16 @@ function matchBadge(score: number): { label: string; cls: string } {
   if (score >= 70) return { label: "High Fit", cls: "bg-green/20 text-green border border-green/30" };
   if (score >= 50) return { label: "Medium Fit", cls: "bg-amber-500/20 text-amber-400 border border-amber-500/30" };
   return { label: "Low Fit", cls: "bg-gray-500/20 text-gray-400 border border-gray-500/30" };
+}
+
+function readStoredFeedback(assessmentId: number): Record<number, FeedbackStatus> {
+  if (typeof window === "undefined") return {};
+  try {
+    const stored = localStorage.getItem(`tp_feedback_${assessmentId}`);
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
 }
 
 function severityColor(s: string): string {
@@ -201,6 +212,12 @@ function TenderCard({ t, gaps, feedbackStatus, onFeedback }: TenderCardProps) {
     : sr?.confidence === "medium" ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
     : "bg-gray-600/20 text-gray-400 border-gray-600/30";
 
+  const brief = t.decision_brief;
+  const sourceConfidenceCls =
+    brief?.source_confidence === "high" ? "bg-green/15 text-green border-green/25"
+    : brief?.source_confidence === "medium" ? "bg-amber-500/15 text-amber-300 border-amber-500/25"
+    : "bg-gray-600/20 text-gray-300 border-gray-600/30";
+
   const geoModeLabel: Record<string, string> = {
     direct: "Direct — your target country",
     regional: "Regional — neighbouring country",
@@ -276,6 +293,41 @@ function TenderCard({ t, gaps, feedbackStatus, onFeedback }: TenderCardProps) {
         </p>
       )}
 
+      {brief && (
+        <div className="rounded-lg bg-white/3 border border-white/8 p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500">Decision Brief</span>
+            <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase border ${sourceConfidenceCls}`}>
+              {brief.source_confidence} source
+            </span>
+          </div>
+          <p className="text-[11px] leading-relaxed text-gray-300 line-clamp-3">{brief.headline}</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {brief.reasons_to_act.length > 0 && (
+              <div>
+                <span className="text-[9px] font-bold uppercase tracking-wider text-green/70">Why Act</span>
+                <ul className="mt-1 space-y-1">
+                  {brief.reasons_to_act.slice(0, 2).map((reason) => (
+                    <li key={reason} className="text-[10px] leading-snug text-gray-400">{reason}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {brief.verify_before_bidding.length > 0 && (
+              <div>
+                <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400/80">Verify</span>
+                <ul className="mt-1 space-y-1">
+                  {brief.verify_before_bidding.slice(0, 2).map((item) => (
+                    <li key={item} className="text-[10px] leading-snug text-gray-400">{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+          <p className="text-[10px] font-semibold text-gold/80">{brief.recommended_action}</p>
+        </div>
+      )}
+
       {/* Why matched toggle */}
       <button
         onClick={handleWhyToggle}
@@ -332,6 +384,13 @@ function TenderCard({ t, gaps, feedbackStatus, onFeedback }: TenderCardProps) {
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold border ${confidenceCls}`}>
                 {sr.confidence.charAt(0).toUpperCase() + sr.confidence.slice(1)}
               </span>
+            </div>
+          )}
+          {brief && (
+            <div className="space-y-1">
+              <span className="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Source Check</span>
+              <p className="text-gray-400">{brief.source_confidence_reason}</p>
+              {t.enriched_summary && <p className="text-gray-300">{t.enriched_summary}</p>}
             </div>
           )}
           {sr?.caveats?.length && (
@@ -580,13 +639,11 @@ export default function AssessmentResults({ data, onReset }: Props) {
   const [expandedGaps, setExpandedGaps] = useState<Set<number>>(new Set());
   const [copied, setCopied] = useState(false);
   const [showFullSummary, setShowFullSummary] = useState(false);
-  const [feedback, setFeedback] = useState<Record<number, FeedbackStatus>>({});
+  const [feedback, setFeedback] = useState<Record<number, FeedbackStatus>>(() => readStoredFeedback(data.id));
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(`tp_feedback_${data.id}`);
-      if (stored) setFeedback(JSON.parse(stored));
-    } catch {}
+    const handle = window.setTimeout(() => setFeedback(readStoredFeedback(data.id)), 0);
+    return () => window.clearTimeout(handle);
   }, [data.id]);
 
   const onFeedback = useCallback((tenderId: number, status: FeedbackStatus) => {
@@ -614,7 +671,8 @@ export default function AssessmentResults({ data, onReset }: Props) {
   const toggleGap = (i: number) => {
     setExpandedGaps((prev) => {
       const next = new Set(prev);
-      next.has(i) ? next.delete(i) : next.add(i);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
       return next;
     });
   };
@@ -948,7 +1006,7 @@ export default function AssessmentResults({ data, onReset }: Props) {
 
       {/* Bottom links */}
       <div className="text-center space-y-3 mt-8">
-        <a href="/#services" className="text-sm text-gray-400 hover:text-white transition-colors">See all services →</a>
+        <Link href="/#services" className="text-sm text-gray-400 hover:text-white transition-colors">See all services →</Link>
         <div>
           <button onClick={onReset} className="text-sm text-gray-500 hover:text-gold underline transition-colors">
             Run Another Assessment
