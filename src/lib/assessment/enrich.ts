@@ -11,6 +11,7 @@ type DetailEvidence = {
 
 function stripHtml(html: string): string {
   return html
+    .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ")
@@ -20,6 +21,25 @@ function stripHtml(html: string): string {
     .replace(/&#39;/g, "'")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function isPageChrome(sentence: string): boolean {
+  const lower = sentence.toLowerCase();
+  const chromeHits = [
+    "this page in",
+    "dropdown",
+    "email print",
+    "tweet share",
+    "share linkedin",
+    "feedback survey",
+    "what we do",
+    "projects & operations",
+    "skip to main content",
+    "privacy notice",
+    "terms and conditions",
+  ].filter((token) => lower.includes(token)).length;
+
+  return chromeHits >= 2 || lower.startsWith("-->") || lower.split(/\s+/).length > 70;
 }
 
 function sentenceSummary(text: string, fallbackTitle: string): string | null {
@@ -32,7 +52,7 @@ function sentenceSummary(text: string, fallbackTitle: string): string | null {
   const sentences = cleaned
     .split(/(?<=[.!?])\s+/)
     .map((sentence) => sentence.trim())
-    .filter((sentence) => sentence.length >= 80 && sentence.length <= 420);
+    .filter((sentence) => sentence.length >= 80 && sentence.length <= 420 && !isPageChrome(sentence));
 
   const scored = sentences
     .map((sentence) => {
@@ -44,7 +64,8 @@ function sentenceSummary(text: string, fallbackTitle: string): string | null {
     })
     .sort((a, b) => b.score - a.score);
 
-  return scored[0]?.sentence.slice(0, 360) ?? null;
+  const best = scored.find((item) => item.score > 0);
+  return best?.sentence.slice(0, 360) ?? null;
 }
 
 async function fetchDetailEvidence(tender: MatchedTender): Promise<DetailEvidence> {
