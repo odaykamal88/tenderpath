@@ -11,14 +11,24 @@ CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
   name TEXT,
+  password_hash TEXT,
   tier TEXT,
   subscription_status TEXT,
   subscription_expires_at TIMESTAMPTZ,
   is_super_admin BOOLEAN DEFAULT FALSE,
+  stripe_customer_id TEXT,
+  stripe_subscription_id TEXT,
   magic_token TEXT,
   magic_token_expires_at TIMESTAMPTZ,
+  trial_start_date TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_start_date TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 CREATE TABLE IF NOT EXISTS subscriptions (
   id SERIAL PRIMARY KEY,
@@ -115,12 +125,19 @@ CREATE TABLE IF NOT EXISTS crawl_logs (
 CREATE TABLE IF NOT EXISTS purchase_logs (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id),
-  tier TEXT NOT NULL,
+  plan TEXT NOT NULL,
   stripe_session_id TEXT,
-  amount INTEGER,
+  stripe_customer_id TEXT,
+  amount_cents INTEGER,
   currency TEXT DEFAULT 'usd',
+  referrer TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE purchase_logs ADD COLUMN IF NOT EXISTS plan TEXT;
+ALTER TABLE purchase_logs ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
+ALTER TABLE purchase_logs ADD COLUMN IF NOT EXISTS amount_cents INTEGER;
+ALTER TABLE purchase_logs ADD COLUMN IF NOT EXISTS referrer TEXT;
 
 ALTER TABLE crawl_logs ADD COLUMN IF NOT EXISTS status TEXT;
 ALTER TABLE crawl_logs ADD COLUMN IF NOT EXISTS duration_ms INTEGER;

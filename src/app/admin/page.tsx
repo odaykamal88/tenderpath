@@ -38,6 +38,18 @@ interface Stats {
     open_tenders: number;
     message: string;
   }>;
+  sourceQuality: Array<{
+    platform: string;
+    open_tenders: number;
+    description_complete_pct: number;
+    deadline_complete_pct: number;
+    sector_complete_pct: number;
+    source_url_complete_pct: number;
+    broken_link_pct: number;
+    thin_descriptions: number;
+    quality_status: "healthy" | "degraded" | "critical";
+    message: string;
+  }>;
   ungmFamilyHealth: {
     status: "healthy" | "degraded" | "critical";
     message: string;
@@ -430,6 +442,72 @@ export default function AdminPage() {
                         </td>
                         <td className="px-6 py-3 text-xs text-slate-500 min-w-56">
                           {row.message}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Source quality */}
+          <div className="rounded-xl bg-white/5 border border-white/8 overflow-hidden mb-6">
+            <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                <svg className="w-4 h-4 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-6h6v6m-8 4h10a2 2 0 002-2V7.8a2 2 0 00-.59-1.42l-3.79-3.79A2 2 0 0013.2 2H7a2 2 0 00-2 2v15a2 2 0 002 2z" />
+                </svg>
+                Source Data Quality
+              </h2>
+              <span className="text-xs text-slate-500">Open tender field completeness</span>
+            </div>
+            {stats.sourceQuality.length === 0 ? (
+              <div className="px-6 py-8 text-sm text-slate-500 text-center">No source quality metrics yet.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-white/5 text-xs text-slate-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left font-medium">Platform</th>
+                      <th className="px-6 py-3 text-left font-medium">Quality</th>
+                      <th className="px-6 py-3 text-right font-medium">Open</th>
+                      <th className="px-6 py-3 text-right font-medium">Descriptions</th>
+                      <th className="px-6 py-3 text-right font-medium">Deadlines</th>
+                      <th className="px-6 py-3 text-right font-medium">Sectors</th>
+                      <th className="px-6 py-3 text-right font-medium">URLs</th>
+                      <th className="px-6 py-3 text-right font-medium">Broken</th>
+                      <th className="px-6 py-3 text-left font-medium">Signal</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {stats.sourceQuality.map((row) => (
+                      <tr key={row.platform} className="hover:bg-white/3 transition-colors">
+                        <td className="px-6 py-3 text-slate-300 whitespace-nowrap">{row.platform}</td>
+                        <td className="px-6 py-3 whitespace-nowrap"><StatusPill status={row.quality_status} /></td>
+                        <td className="px-6 py-3 text-right text-slate-300 font-medium">{row.open_tenders}</td>
+                        <td className={`px-6 py-3 text-right font-medium ${row.description_complete_pct < 70 ? "text-amber-400" : "text-teal-400"}`}>
+                          {row.description_complete_pct}%
+                        </td>
+                        <td className={`px-6 py-3 text-right font-medium ${row.deadline_complete_pct < 70 ? "text-amber-400" : "text-teal-400"}`}>
+                          {row.deadline_complete_pct}%
+                        </td>
+                        <td className={`px-6 py-3 text-right font-medium ${row.sector_complete_pct < 70 ? "text-amber-400" : "text-teal-400"}`}>
+                          {row.sector_complete_pct}%
+                        </td>
+                        <td className={`px-6 py-3 text-right font-medium ${row.source_url_complete_pct < 95 ? "text-amber-400" : "text-teal-400"}`}>
+                          {row.source_url_complete_pct}%
+                        </td>
+                        <td className={`px-6 py-3 text-right font-medium ${row.broken_link_pct > 10 ? "text-red-400" : "text-slate-500"}`}>
+                          {row.broken_link_pct}%
+                        </td>
+                        <td className="px-6 py-3 text-xs text-slate-500 min-w-56">
+                          {row.message}
+                          {row.thin_descriptions > 0 && (
+                            <span className="block text-slate-600">
+                              {row.thin_descriptions} thin description{row.thin_descriptions === 1 ? "" : "s"}
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))}

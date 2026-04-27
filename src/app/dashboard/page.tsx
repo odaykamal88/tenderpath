@@ -36,6 +36,23 @@ interface ReadinessData {
   recommended_tier: string | null;
   matched_tenders_count: number;
   high_severity_gaps: Array<{ gap: string; severity: string; fix: string }>;
+  action_plan: Array<{
+    gap: string;
+    severity: "high" | "medium" | "low";
+    fix: string;
+    action_steps: string[];
+    recommended_doc_type: string;
+    covered_by_vault: boolean;
+    vault_document_count: number;
+    primary_action_label: string;
+    primary_action_href: string;
+    paid_action_label: string;
+    paid_action_href: string;
+  }>;
+  vault_coverage: {
+    covered_gaps: number;
+    total_gaps: number;
+  };
   gap_count: number;
   created_at: string;
 }
@@ -202,6 +219,8 @@ export default function DashboardOverview() {
     return /\b(UNDP|UNICEF|WFP|UNHCR|UNOPS|IOM|ILO|FAO|WHO|UNFPA)\b/i.test(agency);
   }
 
+  const nextReadinessActions = readiness?.action_plan.slice(0, 4) ?? [];
+
   return (
     <div>
       <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
@@ -257,20 +276,86 @@ export default function DashboardOverview() {
               )}
               <div className="mt-3 flex flex-wrap gap-2">
                 <Link
-                  href="/dashboard/vault"
+                  href={readiness.action_plan[0]?.primary_action_href ?? "/dashboard/vault"}
                   className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:border-red-300"
                 >
-                  Close gaps in Vault
+                  {readiness.action_plan[0]?.primary_action_label ?? "Close gaps in Vault"}
                 </Link>
                 <Link
-                  href="/pay?plan=roster-fast-track"
+                  href={readiness.action_plan[0]?.paid_action_href ?? "/pay?plan=roster-fast-track"}
                   className="rounded-md bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800"
                 >
-                  Get roster help
+                  {readiness.action_plan[0]?.paid_action_label ?? "Get roster help"}
                 </Link>
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {readiness && nextReadinessActions.length > 0 && (
+        <div className="mt-6 rounded-lg border border-gray-200 bg-white">
+          <div className="border-b border-gray-100 px-5 py-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Readiness Action Plan</h2>
+              <p className="text-xs text-gray-500">
+                {readiness.vault_coverage.covered_gaps}/{readiness.vault_coverage.total_gaps} gap
+                {readiness.vault_coverage.total_gaps === 1 ? "" : "s"} have supporting Vault evidence.
+              </p>
+            </div>
+            <Link href="/dashboard/vault" className="text-xs font-semibold text-gray-700 hover:text-gray-900 underline">
+              Open Vault
+            </Link>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {nextReadinessActions.map((action) => (
+              <div key={`${action.severity}-${action.gap}`} className="px-5 py-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${
+                        action.severity === "high"
+                          ? "bg-red-100 text-red-700"
+                          : action.severity === "medium"
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-gray-100 text-gray-600"
+                      }`}>
+                        {action.severity}
+                      </span>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        action.covered_by_vault ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"
+                      }`}>
+                        {action.covered_by_vault
+                          ? `${action.vault_document_count} Vault doc${action.vault_document_count === 1 ? "" : "s"}`
+                          : `Needs ${action.recommended_doc_type.replace("_", " ")}`}
+                      </span>
+                    </div>
+                    <div className="mt-2 text-sm font-medium text-gray-900">{action.gap}</div>
+                    <p className="mt-1 text-xs text-gray-500">{action.fix}</p>
+                    {action.action_steps.length > 0 && (
+                      <p className="mt-1 text-xs text-gray-400">
+                        Next: {action.action_steps[0]}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 lg:justify-end">
+                    <Link
+                      href={action.primary_action_href}
+                      className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-400"
+                    >
+                      {action.primary_action_label}
+                    </Link>
+                    <Link
+                      href={action.paid_action_href}
+                      className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700"
+                    >
+                      {action.paid_action_label}
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

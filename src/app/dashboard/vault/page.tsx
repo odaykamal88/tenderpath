@@ -47,6 +47,7 @@ export default function VaultPage() {
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [requestedGap, setRequestedGap] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -57,6 +58,15 @@ export default function VaultPage() {
       }
       setLoading(false);
     })();
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requestedType = params.get("type");
+    if (requestedType && TYPES.some((t) => t.value === requestedType)) {
+      setForm((prev) => ({ ...prev, type: requestedType as DocType }));
+    }
+    setRequestedGap(params.get("gap"));
   }, []);
 
   const expiring = useMemo(
@@ -142,6 +152,16 @@ export default function VaultPage() {
       <p className="text-sm text-gray-600 mb-6">
         Store the compliance docs you reuse across tender submissions.
       </p>
+
+      {requestedGap && (
+        <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">Readiness gap</div>
+          <p className="mt-1 text-sm text-amber-900">{requestedGap}</p>
+          <p className="mt-1 text-xs text-amber-700">
+            Upload or review the evidence that proves this blocker is handled.
+          </p>
+        </div>
+      )}
 
       {expiring.length > 0 && (
         <div className="mb-6 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-900">

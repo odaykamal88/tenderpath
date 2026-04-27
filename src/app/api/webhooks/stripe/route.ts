@@ -65,8 +65,9 @@ export async function POST(request: Request) {
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const email = session.customer_email ?? session.customer_details?.email;
-  const customerId = session.customer as string;
-  const subscriptionId = session.subscription as string;
+  const customerId = typeof session.customer === "string" ? session.customer : null;
+  const subscriptionId = typeof session.subscription === "string" ? session.subscription : null;
+  const isSubscriptionCheckout = session.mode === "subscription" && Boolean(subscriptionId);
 
   if (!email) return;
 
@@ -75,32 +76,41 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
   const priceId = lineItems.data[0]?.price?.id;
   const tier = priceId ? tierFromPriceId(priceId) : null;
+  const plan = session.metadata?.plan ?? tier ?? "unknown";
 
-  // Upsert user
-  const users = await sql`
-    INSERT INTO users (email, stripe_customer_id, stripe_subscription_id, tier, subscription_status)
-    VALUES (${email}, ${customerId}, ${subscriptionId}, ${tier}, 'active')
-    ON CONFLICT (email) DO UPDATE SET
-      stripe_customer_id = ${customerId},
-      stripe_subscription_id = ${subscriptionId},
-      tier = COALESCE(${tier}, users.tier),
-      subscription_status = 'active',
-      updated_at = NOW()
-    RETURNING id
-  `;
+  const users = isSubscriptionCheckout
+    ? await sql`
+      INSERT INTO users (email, stripe_customer_id, stripe_subscription_id, tier, subscription_status)
+      VALUES (${email}, ${customerId}, ${subscriptionId}, ${tier}, 'active')
+      ON CONFLICT (email) DO UPDATE SET
+        stripe_customer_id = COALESCE(${customerId}, users.stripe_customer_id),
+        stripe_subscription_id = COALESCE(${subscriptionId}, users.stripe_subscription_id),
+        tier = COALESCE(${tier}, users.tier),
+        subscription_status = 'active',
+        updated_at = NOW()
+      RETURNING id
+    `
+    : await sql`
+      INSERT INTO users (email, stripe_customer_id)
+      VALUES (${email}, ${customerId})
+      ON CONFLICT (email) DO UPDATE SET
+        stripe_customer_id = COALESCE(${customerId}, users.stripe_customer_id),
+        updated_at = NOW()
+      RETURNING id
+    `;
 
   const userId = users[0]?.id as number;
 
   // Log the purchase
   await sql`
     INSERT INTO purchase_logs (plan, stripe_session_id, stripe_customer_id, user_id, amount_cents, currency)
-    VALUES (${tier ?? 'unknown'}, ${session.id}, ${customerId}, ${userId}, ${session.amount_total ?? 0}, ${session.currency ?? 'usd'})
+    VALUES (${plan}, ${session.id}, ${customerId}, ${userId}, ${session.amount_total ?? 0}, ${session.currency ?? 'usd'})
   `;
 
   await createWorkOrderFromCheckout(session, userId);
 
   // Create subscription record
-  if (tier) {
+  if (isSubscriptionCheckout && tier) {
     await sql`
       INSERT INTO subscriptions (user_id, tier, stripe_customer_id, stripe_subscription_id, status)
       VALUES (${userId}, ${tier}, ${customerId}, ${subscriptionId}, 'active')

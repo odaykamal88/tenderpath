@@ -51,6 +51,33 @@ const STAGES: { key: Stage; label: string }[] = [
   { key: "lost", label: "Lost" },
 ];
 
+const STAGE_GUIDANCE: Record<Stage, { next: string; button?: string; moveTo?: Stage }> = {
+  matched: {
+    next: "Decide if this deserves pursuit.",
+    button: "Start Evaluating",
+    moveTo: "evaluating",
+  },
+  evaluating: {
+    next: "Run bid/no-bid, check blockers, then prepare.",
+    button: "Move to Preparing",
+    moveTo: "preparing",
+  },
+  preparing: {
+    next: "Draft proposal, assemble docs, and confirm compliance.",
+    button: "Mark Submitted",
+    moveTo: "submitted",
+  },
+  submitted: {
+    next: "Track outcome and keep follow-up notes current.",
+  },
+  won: {
+    next: "Capture evidence for future past-performance proof.",
+  },
+  lost: {
+    next: "Archive the lesson and tune future fit signals.",
+  },
+};
+
 function authHeaders(): HeadersInit {
   const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
   return token
@@ -304,8 +331,13 @@ export default function PipelinePage() {
                     }`}
                   >
                     <div className="flex items-center justify-between mb-3">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-600">
-                        {label}
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                          {label}
+                        </div>
+                        <div className="mt-0.5 text-[11px] normal-case tracking-normal text-gray-400">
+                          {STAGE_GUIDANCE[key].next}
+                        </div>
                       </div>
                       <div className="text-xs text-gray-400">
                         {byStage[key].length}
@@ -384,13 +416,12 @@ export default function PipelinePage() {
                               )}
 
                               <div className="mt-2 flex items-center gap-3 flex-wrap">
-                                {/* Quick-action: move matched → evaluating */}
-                                {item.stage === "matched" && (
+                                {STAGE_GUIDANCE[item.stage].moveTo && (
                                   <button
-                                    onClick={() => moveStage(item.id, "evaluating")}
+                                    onClick={() => moveStage(item.id, STAGE_GUIDANCE[item.stage].moveTo!)}
                                     className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 border border-emerald-200 rounded px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 transition-colors"
                                   >
-                                    Start Evaluating
+                                    {STAGE_GUIDANCE[item.stage].button}
                                   </button>
                                 )}
                                 <button

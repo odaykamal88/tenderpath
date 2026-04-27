@@ -69,7 +69,7 @@ export async function requireDashboardAccess(
         {
           error: "Trial expired. Subscribe to continue.",
           code: "TRIAL_EXPIRED",
-          upgradeUrl: "/pricing",
+          upgradeUrl: "/pay?plan=grants-tenders-matching",
         },
         { status: 402 }
       ),

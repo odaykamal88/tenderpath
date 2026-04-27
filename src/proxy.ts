@@ -52,7 +52,7 @@ export async function proxy(request: NextRequest) {
       if (!isAdmin && subscriptionStatus !== "active") {
         if (trialExpiresAt && new Date(trialExpiresAt) < new Date()) {
           return NextResponse.redirect(
-            new URL("/pricing?trial_expired=1", request.url)
+            new URL("/pay?plan=grants-tenders-matching&trial_expired=1", request.url)
           );
         }
       }

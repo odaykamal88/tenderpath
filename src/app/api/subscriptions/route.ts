@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     customer_email: user.email,
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${origin}/dashboard?checkout=success`,
-    cancel_url: `${origin}/pricing?checkout=canceled`,
+    cancel_url: `${origin}/pay?plan=grants-tenders-matching&checkout=canceled`,
     metadata: { userId: String(user.id), tier },
   });
 

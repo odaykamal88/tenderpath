@@ -37,6 +37,19 @@ type SourceHealth = {
   message: string;
 };
 
+type SourceQuality = {
+  platform: string;
+  open_tenders: number;
+  description_complete_pct: number;
+  deadline_complete_pct: number;
+  sector_complete_pct: number;
+  source_url_complete_pct: number;
+  broken_link_pct: number;
+  thin_descriptions: number;
+  quality_status: "healthy" | "degraded" | "critical";
+  message: string;
+};
+
 type UngmFamilyHealth = {
   status: "healthy" | "degraded" | "critical";
   message: string;
@@ -245,6 +258,64 @@ function buildUngmFamilyHealth(
   };
 }
 
+function pct(value: number | string | null | undefined): number {
+  return Math.round(Number(value ?? 0));
+}
+
+function buildSourceQuality(
+  rows: Array<{
+    platform: string;
+    open_tenders: number | string | null;
+    description_complete_pct: number | string | null;
+    deadline_complete_pct: number | string | null;
+    sector_complete_pct: number | string | null;
+    source_url_complete_pct: number | string | null;
+    broken_link_pct: number | string | null;
+    thin_descriptions: number | string | null;
+  }>,
+): SourceQuality[] {
+  return rows.map((row) => {
+    const descriptionPct = pct(row.description_complete_pct);
+    const deadlinePct = pct(row.deadline_complete_pct);
+    const sectorPct = pct(row.sector_complete_pct);
+    const sourceUrlPct = pct(row.source_url_complete_pct);
+    const brokenPct = pct(row.broken_link_pct);
+    const thinDescriptions = Number(row.thin_descriptions ?? 0);
+    const weakFields: string[] = [];
+
+    if (descriptionPct < 70) weakFields.push("descriptions");
+    if (deadlinePct < 70) weakFields.push("deadlines");
+    if (sectorPct < 70) weakFields.push("sectors");
+    if (sourceUrlPct < 95) weakFields.push("source URLs");
+    if (brokenPct > 10) weakFields.push("broken links");
+
+    const qualityStatus: SourceQuality["quality_status"] =
+      descriptionPct < 50 || deadlinePct < 50 || sourceUrlPct < 85 || brokenPct > 20
+        ? "critical"
+        : weakFields.length > 0
+        ? "degraded"
+        : "healthy";
+
+    return {
+      platform: row.platform,
+      open_tenders: Number(row.open_tenders ?? 0),
+      description_complete_pct: descriptionPct,
+      deadline_complete_pct: deadlinePct,
+      sector_complete_pct: sectorPct,
+      source_url_complete_pct: sourceUrlPct,
+      broken_link_pct: brokenPct,
+      thin_descriptions: thinDescriptions,
+      quality_status: qualityStatus,
+      message: weakFields.length > 0
+        ? `Weak field coverage: ${weakFields.join(", ")}.`
+        : "Core matching fields look usable.",
+    };
+  }).sort((a, b) => {
+    const order: Record<SourceQuality["quality_status"], number> = { critical: 0, degraded: 1, healthy: 2 };
+    return order[a.quality_status] - order[b.quality_status] || a.platform.localeCompare(b.platform);
+  });
+}
+
 export async function GET(request: Request) {
   const guard = await requireAdmin(request);
   if (!guard.authorized) return guard.response!;
@@ -257,6 +328,7 @@ export async function GET(request: Request) {
     recentCrawls,
     platformLogRows,
     platformOpenRows,
+    sourceQualityRows,
     ungmFamilyRows,
     workerHealth,
   ] = await Promise.all([
@@ -301,6 +373,21 @@ export async function GET(request: Request) {
       GROUP BY source_name
     `,
     sql`
+      SELECT
+        source_name AS platform,
+        COUNT(*) AS open_tenders,
+        AVG(CASE WHEN description IS NOT NULL AND LENGTH(TRIM(description)) >= 120 THEN 100 ELSE 0 END) AS description_complete_pct,
+        AVG(CASE WHEN deadline IS NOT NULL THEN 100 ELSE 0 END) AS deadline_complete_pct,
+        AVG(CASE WHEN sector IS NOT NULL AND TRIM(sector) <> '' THEN 100 ELSE 0 END) AS sector_complete_pct,
+        AVG(CASE WHEN source_url IS NOT NULL AND TRIM(source_url) <> '' THEN 100 ELSE 0 END) AS source_url_complete_pct,
+        AVG(CASE WHEN has_broken_link IS TRUE THEN 100 ELSE 0 END) AS broken_link_pct,
+        SUM(CASE WHEN description IS NULL OR LENGTH(TRIM(description)) < 120 THEN 1 ELSE 0 END) AS thin_descriptions
+      FROM tenders
+      WHERE status = 'open' AND source_name IS NOT NULL
+      GROUP BY source_name
+      HAVING COUNT(*) > 0
+    `,
+    sql`
       SELECT agency, COUNT(*) AS open_tenders
       FROM tenders
       WHERE status = 'open'
@@ -326,6 +413,18 @@ export async function GET(request: Request) {
   const ungmFamilyHealth = buildUngmFamilyHealth(
     ungmFamilyRows as Array<{ agency: string; open_tenders: number | string | null }>,
   );
+  const sourceQuality = buildSourceQuality(
+    sourceQualityRows as Array<{
+      platform: string;
+      open_tenders: number | string | null;
+      description_complete_pct: number | string | null;
+      deadline_complete_pct: number | string | null;
+      sector_complete_pct: number | string | null;
+      source_url_complete_pct: number | string | null;
+      broken_link_pct: number | string | null;
+      thin_descriptions: number | string | null;
+    }>,
+  );
 
   return NextResponse.json({
     totalUsers: users[0]?.count ?? 0,
@@ -334,6 +433,7 @@ export async function GET(request: Request) {
     activeSubscriptions: subscriptions,
     recentCrawls,
     platformHealth,
+    sourceQuality,
     ungmFamilyHealth,
     workerHealth,
   });

@@ -8,6 +8,16 @@ const TIER_HIERARCHY: Record<TierSlug, number> = {
   "strategic-partnership": 3,
 };
 
+const TIER_TO_PAY_PLAN: Record<TierSlug, string> = {
+  "tender-intelligence": "grants-tenders-matching",
+  "submission-package": "proposal-draft",
+  "strategic-partnership": "roster-fast-track",
+};
+
+function payUrlForTier(tier: TierSlug) {
+  return `/pay?plan=${TIER_TO_PAY_PLAN[tier]}`;
+}
+
 interface GuardResult {
   authorized: boolean;
   user: User | null;
@@ -52,7 +62,7 @@ export async function requireSubscription(
           code: "SUBSCRIPTION_REQUIRED",
           requiredTier: minimumTier,
           currentTier: user.tier,
-          upgradeUrl: `/pricing?tier=${minimumTier}`,
+          upgradeUrl: payUrlForTier(minimumTier),
         },
         { status: 403 }
       ),
@@ -73,7 +83,7 @@ export async function requireSubscription(
           code: "TIER_INSUFFICIENT",
           requiredTier: minimumTier,
           currentTier: user.tier,
-          upgradeUrl: `/pricing?tier=${minimumTier}`,
+          upgradeUrl: payUrlForTier(minimumTier),
         },
         { status: 403 }
       ),
@@ -92,7 +102,7 @@ export async function requireSubscription(
             error: "Subscription has expired",
             code: "SUBSCRIPTION_EXPIRED",
             expiredAt: user.subscription_expires_at,
-            renewUrl: "/pricing",
+            renewUrl: payUrlForTier(minimumTier),
           },
           { status: 403 }
         ),

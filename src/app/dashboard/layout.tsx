@@ -157,7 +157,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               )}
             </span>
             <Link
-              href="/pricing"
+              href="/pay?plan=grants-tenders-matching"
               className="flex-shrink-0 font-semibold underline whitespace-nowrap"
             >
               {state.locked ? "Subscribe to unlock" : "Subscribe — $49/mo"}
