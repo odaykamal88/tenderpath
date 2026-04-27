@@ -19,6 +19,24 @@ interface MatchReason {
   matchedKeywords?: string[];
   confidence?: number;
   caveats?: string[];
+  geographyAlignment?: { mode?: string; tenderCountry?: string | null };
+  opportunityBucket?: string | null;
+  opportunityBucketLabel?: string | null;
+  opportunityBucketReason?: string | null;
+}
+
+const BUCKET_STYLES: Record<string, string> = {
+  act_now: "bg-red-100 text-red-800 border-red-200",
+  strong_fit: "bg-green-100 text-green-700 border-green-200",
+  strategic: "bg-blue-100 text-blue-700 border-blue-200",
+  adjacent: "bg-amber-100 text-amber-700 border-amber-200",
+  watchlist: "bg-gray-100 text-gray-600 border-gray-200",
+};
+
+function isDeadlineSoon(deadline: string | null): boolean {
+  if (!deadline) return false;
+  const days = (new Date(deadline).getTime() - Date.now()) / 86_400_000;
+  return days >= 0 && days <= 7;
 }
 
 interface PipelineItem {
@@ -359,8 +377,15 @@ export default function PipelinePage() {
                                 s.isDragging ? "ring-2 ring-gray-900" : "border-gray-200"
                               }`}
                             >
-                              <div className="font-medium text-gray-900 line-clamp-2">
-                                {item.tender_title}
+                              <div className="flex items-start gap-2 justify-between">
+                                <div className="font-medium text-gray-900 line-clamp-2 flex-1">
+                                  {item.tender_title}
+                                </div>
+                                {item.match_reasons?.opportunityBucketLabel && (
+                                  <span className={`flex-shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${BUCKET_STYLES[item.match_reasons.opportunityBucket ?? ""] ?? "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                                    {item.match_reasons.opportunityBucketLabel}
+                                  </span>
+                                )}
                               </div>
                               {item.tender_agency && (
                                 <div className="mt-1 text-xs text-gray-600">
@@ -369,8 +394,9 @@ export default function PipelinePage() {
                               )}
                               <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
                                 {item.tender_deadline && (
-                                  <span>
-                                    Due {new Date(item.tender_deadline).toLocaleDateString()}
+                                  <span className={isDeadlineSoon(item.tender_deadline) ? "font-semibold text-red-600" : ""}>
+                                    {isDeadlineSoon(item.tender_deadline) ? "⚡ Due " : "Due "}
+                                    {new Date(item.tender_deadline).toLocaleDateString()}
                                   </span>
                                 )}
                                 {item.tender_value && <span>{item.tender_value}</span>}
@@ -403,6 +429,18 @@ export default function PipelinePage() {
                                       )}
                                       {item.match_reasons.matchedCapabilities && item.match_reasons.matchedCapabilities.length > 0 && (
                                         <div className="text-indigo-600">Capabilities: {item.match_reasons.matchedCapabilities.join(", ")}</div>
+                                      )}
+                                      {item.match_reasons.matchedKeywords && item.match_reasons.matchedKeywords.length > 0 && (
+                                        <div className="text-indigo-600">Keywords: {item.match_reasons.matchedKeywords.join(", ")}</div>
+                                      )}
+                                      {item.match_reasons.geographyAlignment?.mode && item.match_reasons.geographyAlignment.mode !== "unknown" && (
+                                        <div className="text-indigo-600">
+                                          Geography: {item.match_reasons.geographyAlignment.mode.replace(/-/g, " ")}
+                                          {item.match_reasons.geographyAlignment.tenderCountry ? ` · ${item.match_reasons.geographyAlignment.tenderCountry}` : ""}
+                                        </div>
+                                      )}
+                                      {item.match_reasons.opportunityBucketReason && (
+                                        <div className="text-indigo-500 italic">{item.match_reasons.opportunityBucketReason}</div>
                                       )}
                                       {item.match_reasons.confidence != null && (
                                         <div className="text-indigo-500">Confidence: {Math.round(item.match_reasons.confidence * 100)}%</div>

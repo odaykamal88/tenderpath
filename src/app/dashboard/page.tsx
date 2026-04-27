@@ -11,6 +11,24 @@ interface MatchReason {
   matchedKeywords?: string[];
   confidence?: number;
   caveats?: string[];
+  geographyAlignment?: { mode?: string; tenderCountry?: string | null };
+  opportunityBucket?: string | null;
+  opportunityBucketLabel?: string | null;
+  opportunityBucketReason?: string | null;
+}
+
+const BUCKET_STYLES: Record<string, string> = {
+  act_now: "bg-red-100 text-red-800",
+  strong_fit: "bg-green-100 text-green-700",
+  strategic: "bg-blue-100 text-blue-700",
+  adjacent: "bg-amber-100 text-amber-700",
+  watchlist: "bg-gray-100 text-gray-600",
+};
+
+function isDeadlineSoon(deadline: string | null): boolean {
+  if (!deadline) return false;
+  const days = (new Date(deadline).getTime() - Date.now()) / 86_400_000;
+  return days >= 0 && days <= 7;
 }
 
 interface BridgeData {
@@ -97,6 +115,7 @@ export default function DashboardOverview() {
     tender_deadline: string | null;
     tender_value: string | null;
     fit_score: number;
+    match_reasons?: MatchReason | null;
   }>>([]);
   const [readiness, setReadiness] = useState<ReadinessData | null>(null);
 
@@ -161,7 +180,7 @@ export default function DashboardOverview() {
       );
 
       if (pipelineBody?.items) {
-        const items = pipelineBody.items as Array<{ id: number; stage: string; tender_title: string; tender_agency: string | null; tender_deadline: string | null; tender_value: string | null; fit_score: number; tender_id: number | null }>;
+        const items = pipelineBody.items as Array<{ id: number; stage: string; tender_title: string; tender_agency: string | null; tender_deadline: string | null; tender_value: string | null; fit_score: number; tender_id: number | null; match_reasons?: MatchReason | null }>;
         setPipelineStats({
           total: items.length,
           matched: items.filter((i) => i.stage === "matched").length,
@@ -394,11 +413,21 @@ export default function DashboardOverview() {
             {matchedTenders.map((t) => (
               <div key={t.id} className="px-4 py-3 flex flex-col gap-3 hover:bg-gray-50 transition-colors sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <div className="text-sm font-medium text-gray-900 truncate">{t.tender_title}</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="text-sm font-medium text-gray-900 truncate">{t.tender_title}</div>
+                    {t.match_reasons?.opportunityBucketLabel && (
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${BUCKET_STYLES[t.match_reasons.opportunityBucket ?? ""] ?? "bg-gray-100 text-gray-600"}`}>
+                        {t.match_reasons.opportunityBucketLabel}
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-gray-500 mt-0.5">
                     {t.tender_agency && <span>{t.tender_agency}</span>}
                     {t.tender_deadline && (
-                      <span className="ml-2">· Due {new Date(t.tender_deadline).toLocaleDateString()}</span>
+                      <span className={`ml-2 ${isDeadlineSoon(t.tender_deadline) ? "font-semibold text-red-600" : ""}`}>
+                        {isDeadlineSoon(t.tender_deadline) ? "⚡ Due " : "· Due "}
+                        {new Date(t.tender_deadline).toLocaleDateString()}
+                      </span>
                     )}
                     {t.tender_value && (
                       <span className="ml-2">· {t.tender_value}</span>
