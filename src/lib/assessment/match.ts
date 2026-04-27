@@ -1085,6 +1085,23 @@ function dedupeFinalMatches(matches: MatchedTender[]): MatchedTender[] {
   return [...byKey.values()].sort((a, b) => b.score - a.score);
 }
 
+function finalGrantKey(grant: MatchedGrant): string {
+  const title = grant.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 120);
+  const agency = (grant.agency ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const deadline = grant.deadline ? new Date(grant.deadline).toISOString().slice(0, 10) : "";
+  return `${title}|${agency}|${deadline}`;
+}
+
+function dedupeGrantMatches(grants: MatchedGrant[]): MatchedGrant[] {
+  const byKey = new Map<string, MatchedGrant>();
+  for (const grant of grants) {
+    const key = finalGrantKey(grant);
+    const existing = byKey.get(key);
+    if (!existing || grant.score > existing.score) byKey.set(key, grant);
+  }
+  return [...byKey.values()].sort((a, b) => b.score - a.score);
+}
+
 /**
  * Match open grants against org type, development themes, and sectors.
  */
@@ -1214,5 +1231,5 @@ export async function matchGrants(
     out.push(g);
     if (out.length >= 20) break;
   }
-  return assignGrantOpportunityBuckets(out);
+  return assignGrantOpportunityBuckets(dedupeGrantMatches(out));
 }
