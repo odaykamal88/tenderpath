@@ -164,6 +164,10 @@ export interface AssessmentInput {
   website?: string;
   description: string;
   countries: string[];
+  /** Optional near-sector areas the user wants TenderPath to monitor. */
+  adjacentSectors?: string[];
+  /** Free-form capabilities not obvious from a thin website. */
+  additionalCapabilities?: string;
   orgType?: string;
   devThemes?: string[];
   /** Include individual-consultant / consultancy-style tenders. Default OFF for org/company flows. */

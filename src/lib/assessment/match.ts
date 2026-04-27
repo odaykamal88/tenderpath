@@ -287,7 +287,7 @@ async function loadFeedbackProfile(email: string | null | undefined): Promise<Fe
 export async function matchTenders(
   analysis: AIAnalysis,
   countries: string[],
-  options?: { includeConsultancies?: boolean; userEmail?: string },
+  options?: { includeConsultancies?: boolean; userEmail?: string; adjacentSectorLabels?: string[] },
 ): Promise<MatchedTender[]> {
   // Expand user country list through alias table so "Syria" matches tenders
   // posted as "Syrian Arab Republic", "Palestine" matches "West Bank and Gaza",
@@ -316,6 +316,7 @@ export async function matchTenders(
   const autoGeoOpen = !acceptsGlobal && strictPoolSize < 25;
 
   const userSlugs = userSectorSlugs(analysis.detected_industry, analysis.sectors);
+  const explicitAdjacentSlugs = userSectorSlugs(null, options?.adjacentSectorLabels ?? []);
   const regtechSignal = detectRegtechSignal(analysis);
   const effectiveUserSlugs = new Set(userSlugs);
   if (regtechSignal && !effectiveUserSlugs.has("it")) effectiveUserSlugs.add("it" as SectorSlug);
@@ -690,6 +691,9 @@ export async function matchTenders(
   // Adjacent-sector pass — pull tenders for neighbouring sectors not already
   // in the final output, score with 0.6× discount, cap at 50 results.
   const adjacentSlugs = computeAdjacentSlugs(effectiveUserSlugs);
+  for (const slug of explicitAdjacentSlugs) {
+    if (!effectiveUserSlugs.has(slug)) adjacentSlugs.add(slug);
+  }
   if (adjacentSlugs.size) {
     const adjacentById = new Map<number, Row>();
     for (const slug of adjacentSlugs) {
@@ -777,8 +781,13 @@ export async function matchTenders(
       if (total < 10) continue;
 
       const matchedAdjSlugs = [...adjacentSlugs].filter((s) => tSlugs.has(s));
+      const matchedExplicitAdjSlugs = matchedAdjSlugs.filter((s) => explicitAdjacentSlugs.has(s));
       const adjMatchReasons: string[] = [];
-      if (matchedAdjSlugs.length) adjMatchReasons.push(`Adjacent: ${matchedAdjSlugs.map((s) => s.replace(/_/g, " ")).join(", ")}`);
+      if (matchedAdjSlugs.length) {
+        adjMatchReasons.push(
+          `${matchedExplicitAdjSlugs.length ? "Requested adjacent" : "Adjacent"}: ${matchedAdjSlugs.map((s) => s.replace(/_/g, " ")).join(", ")}`
+        );
+      }
       if (tokenHits > 0) {
         const matchedTokens = [...userTokens].filter((tok) => tenderTokens.has(tok)).slice(0, 3);
         if (matchedTokens.length) adjMatchReasons.push(`Keywords: ${matchedTokens.join(", ")}`);
@@ -800,12 +809,20 @@ export async function matchTenders(
       else if (isGeoOpen && acceptsGlobal) adjGeoMode = "global-open";
       else if (isGeoOpen && autoGeoOpen) adjGeoMode = "auto-expanded";
       else if (isGeoOpen) adjGeoMode = "global-open";
-      const adjSummary: string[] = ["Adjacent sector match."];
+      const adjSummary: string[] = [
+        matchedExplicitAdjSlugs.length
+          ? "Matches an adjacent field you asked TenderPath to watch."
+          : "Adjacent sector match inferred from your profile.",
+      ];
       if (adjSectorNames.length) adjSummary.push(`Near-sector: ${adjSectorNames.join(", ")}.`);
       if (adjCaps.length) adjSummary.push(`Capabilities: ${adjCaps.join(", ")}.`);
       else if (adjKws.length) adjSummary.push(`Keywords: ${adjKws.join(", ")}.`);
       if (feedbackScore > 0) adjSummary.push("Boosted by your prior tender feedback.");
-      const adjCaveats = ["Adjacent sector — lower direct relevance."];
+      const adjCaveats = [
+        matchedExplicitAdjSlugs.length
+          ? "Adjacent field requested by you; verify fit before bidding."
+          : "Adjacent sector inferred by TenderPath; lower direct relevance.",
+      ];
       if (sparseProfile) adjCaveats.push("Company profile based on limited website content.");
       const evidenceQuality: "rich" | "thin" = tDescription.length >= 250 || reqs.length > 0 ? "rich" : "thin";
       if (evidenceQuality === "thin") adjCaveats.push("Tender evidence is thin; verify the source notice before committing.");

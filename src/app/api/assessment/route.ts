@@ -41,17 +41,27 @@ export async function POST(request: Request) {
       ? await crawlWebsite(body.website)
       : null;
 
+    const description = [
+      body.description,
+      body.additionalCapabilities?.trim()
+        ? `Additional capabilities shared by the user: ${body.additionalCapabilities.trim()}`
+        : null,
+      body.adjacentSectors?.length
+        ? `Adjacent fields the user wants monitored: ${body.adjacentSectors.join(", ")}`
+        : null,
+    ].filter(Boolean).join("\n\n");
+
     // Stage 2: Classify industry
     const classification = await classifyIndustry(
       crawledData,
-      body.description,
+      description,
       body.countries
     );
 
     // Stage 3: Full analysis with Claude Haiku 3.5
     const analysis = await fullAnalysis(
       crawledData,
-      body.description,
+      description,
       body.countries,
       classification,
       body.orgType,
@@ -74,6 +84,7 @@ export async function POST(request: Request) {
       matchTenders(analysis, body.countries, {
         includeConsultancies: body.includeConsultancies,
         userEmail: body.email,
+        adjacentSectorLabels: body.adjacentSectors,
       }),
       matchGrants(
         classification.sectors,
@@ -93,7 +104,7 @@ export async function POST(request: Request) {
         include_consultancies
       ) VALUES (
         ${body.companyName}, ${body.email}, ${body.website ?? null},
-        ${body.description}, ${classification.detected_industry},
+        ${description}, ${classification.detected_industry},
         ${JSON.stringify(body.countries)}, ${JSON.stringify(crawledData)},
         ${JSON.stringify(analysis)}, ${analysis.overall_score},
         ${JSON.stringify(matchedTenders)}, ${JSON.stringify(analysis.gaps)},

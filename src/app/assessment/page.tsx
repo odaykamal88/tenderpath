@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
+import Link from "next/link";
 import type { AssessmentInput, TierSlug, Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
 import AssessmentResults from "./AssessmentResults";
 import { REGION_GROUPS } from "@/lib/countries";
@@ -31,6 +32,21 @@ const PROGRESS_STEPS = [
   "Scoring readiness & identifying gaps",
 ];
 
+const ADJACENT_FIELD_OPTIONS = [
+  { label: "IT & digital systems", value: "Information Technology", signals: ["software", "platform", "data", "digital", "document", "system", "automation"] },
+  { label: "Training & capacity building", value: "Education & Training", signals: ["training", "capacity", "workshop", "curriculum", "learning"] },
+  { label: "Logistics & supply chain", value: "Logistics & Supply Chain", signals: ["logistics", "warehouse", "storage", "delivery", "transport", "supply chain", "cold chain"] },
+  { label: "Healthcare & medical supply", value: "Healthcare", signals: ["health", "medical", "clinic", "pharma", "hospital", "vaccine", "cold chain"] },
+  { label: "Water, sanitation & hygiene", value: "Water & Sanitation", signals: ["water", "sanitation", "wash", "hygiene", "wastewater"] },
+  { label: "Energy & solar", value: "Renewable Energy", signals: ["solar", "energy", "power", "renewable", "electric"] },
+  { label: "Environment & waste", value: "Environmental Services", signals: ["environment", "climate", "waste", "recycling", "cleaning"] },
+  { label: "Construction & infrastructure", value: "Construction", signals: ["construction", "civil", "infrastructure", "renovation", "building"] },
+  { label: "Monitoring, evaluation & research", value: "Monitoring and Evaluation", signals: ["monitoring", "evaluation", "research", "survey", "assessment"] },
+  { label: "Translation & language services", value: "Language Services", signals: ["translation", "interpretation", "language", "localization", "editorial"] },
+  { label: "Security & safety", value: "Security Services", signals: ["security", "guard", "safety", "surveillance", "protection"] },
+  { label: "Food & nutrition", value: "Food Services", signals: ["food", "nutrition", "catering", "meal", "agriculture"] },
+];
+
 export default function AssessmentPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [form, setForm] = useState<Partial<AssessmentInput>>({
@@ -39,6 +55,7 @@ export default function AssessmentPage() {
   });
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
   const [includeConsultancies, setIncludeConsultancies] = useState(false);
+  const [adjacentSectors, setAdjacentSectors] = useState<string[]>([]);
   const [countrySearch, setCountrySearch] = useState("");
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
   const [progressStage, setProgressStage] = useState(0);
@@ -64,6 +81,28 @@ export default function AssessmentPage() {
       .filter((g) => g.countries.length > 0);
   }, [countrySearch]);
 
+  const profileText = `${form.website ?? ""} ${form.description ?? ""}`.toLowerCase();
+  const suggestedAdjacentFields = useMemo(() => {
+    const scored = ADJACENT_FIELD_OPTIONS.map((option) => ({
+      ...option,
+      hits: option.signals.filter((signal) => profileText.includes(signal)).length,
+    }))
+      .filter((option) => option.hits > 0)
+      .sort((a, b) => b.hits - a.hits)
+      .slice(0, 5);
+
+    if (scored.length) return scored;
+    return ADJACENT_FIELD_OPTIONS.slice(0, 6);
+  }, [profileText]);
+
+  const toggleAdjacentSector = useCallback((value: string) => {
+    setAdjacentSectors((prev) =>
+      prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]
+    );
+  }, []);
+
+  const websiteLooksThin = Boolean(form.website) && (form.description ?? "").trim().length < 80;
+
   const handleSubmit = useCallback(async () => {
     if (!form.companyName || !form.email) {
       setError("Please enter your company name and email.");
@@ -85,6 +124,8 @@ export default function AssessmentPage() {
       website: form.website || undefined,
       description: form.description || "",
       countries: Array.from(new Set(countries)),
+      adjacentSectors,
+      additionalCapabilities: form.additionalCapabilities,
       includeConsultancies,
     };
     setError(null);
@@ -124,7 +165,7 @@ export default function AssessmentPage() {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setStep(1);
     }
-  }, [form, selectedCountries, includeConsultancies]);
+  }, [form, selectedCountries, adjacentSectors, includeConsultancies]);
 
   const resetAssessment = useCallback(() => {
     setStep(1);
@@ -132,6 +173,7 @@ export default function AssessmentPage() {
     setForm({ companyName: "", email: "", website: "", description: "", countries: [] });
     setSelectedCountries([]);
     setIncludeConsultancies(false);
+    setAdjacentSectors([]);
     setCountrySearch("");
     setError(null);
   }, []);
@@ -141,10 +183,10 @@ export default function AssessmentPage() {
       {/* Nav */}
       <nav className="border-b border-white/10">
         <div className="mx-auto max-w-7xl px-6 flex h-14 items-center justify-between">
-          <a href="/" className="text-lg font-semibold">Tender<span className="text-gold">Path</span></a>
+          <Link href="/" className="text-lg font-semibold">Tender<span className="text-gold">Path</span></Link>
           <div className="hidden sm:flex items-center gap-6 text-sm text-gray-400">
-            <a href="/#how-it-works" className="hover:text-white transition-colors">How It Works</a>
-            <a href="/#services" className="hover:text-white transition-colors">Services</a>
+            <Link href="/#how-it-works" className="hover:text-white transition-colors">How It Works</Link>
+            <Link href="/#services" className="hover:text-white transition-colors">Services</Link>
           </div>
         </div>
       </nav>
@@ -243,6 +285,49 @@ export default function AssessmentPage() {
                 className="w-full rounded-lg bg-navy-light border border-white/10 px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none resize-none"
                 placeholder="Skip this if you provided a website — we'll read it for you. Otherwise, share what you do in a sentence or two."
               />
+              {websiteLooksThin && (
+                <p className="mt-1.5 text-xs text-amber-300/80">
+                  Add a few capabilities below if your website is mostly a landing page or does not list all services.
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-white/10 bg-navy-light/50 p-4">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Extra Capabilities <span className="text-gray-500">(optional)</span>
+              </label>
+              <textarea
+                value={form.additionalCapabilities ?? ""}
+                onChange={(e) => setForm({ ...form, additionalCapabilities: e.target.value })}
+                rows={2}
+                className="w-full rounded-lg bg-navy border border-white/10 px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none resize-none"
+                placeholder="Examples: cold-chain installation, staff training, document digitization, compliance audits, last-mile distribution..."
+              />
+              <p className="mt-3 text-xs font-semibold text-gold uppercase tracking-wider">
+                Adjacent fields to watch
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                TenderPath will label these as adjacent matches so you can review nearby opportunities without polluting your core fit.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {suggestedAdjacentFields.map((option) => {
+                  const active = adjacentSectors.includes(option.value);
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => toggleAdjacentSector(option.value)}
+                      className={`rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
+                        active
+                          ? "border-gold bg-gold/20 text-white"
+                          : "border-white/10 bg-navy text-gray-400 hover:border-white/25 hover:text-white"
+                      }`}
+                    >
+                      {active ? "✓ " : ""}{option.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div>
@@ -410,7 +495,7 @@ export default function AssessmentPage() {
 
       {/* Footer */}
       <footer className="border-t border-white/5 py-6 text-center text-xs text-gray-500">
-        &copy; {new Date().getFullYear()} TenderPath. All rights reserved. | <a href="/" className="underline hover:text-gray-300">Back to Home</a>
+        &copy; {new Date().getFullYear()} TenderPath. All rights reserved. | <Link href="/" className="underline hover:text-gray-300">Back to Home</Link>
       </footer>
     </div>
   );

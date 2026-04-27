@@ -19,6 +19,21 @@ function synthesizeDescription(crawl: Awaited<ReturnType<typeof crawlWebsite>> |
   return [head, body].filter(Boolean).join("\n\n");
 }
 
+function enrichDescription(
+  description: string,
+  adjacentSectors?: string[],
+  additionalCapabilities?: string,
+): string {
+  const additions: string[] = [];
+  if (additionalCapabilities?.trim()) {
+    additions.push(`Additional capabilities shared by the user: ${additionalCapabilities.trim()}`);
+  }
+  if (adjacentSectors?.length) {
+    additions.push(`Adjacent fields the user wants monitored: ${adjacentSectors.join(", ")}`);
+  }
+  return [description, ...additions].filter(Boolean).join("\n\n");
+}
+
 /**
  * Public assessment endpoint — no auth required.
  * Used by the lead-generation assessment page.
@@ -52,7 +67,12 @@ export async function POST(request: Request) {
       : null;
 
     // If user skipped description, synthesize one from the crawl
-    const description = body.description?.trim() || synthesizeDescription(crawledData);
+    const baseDescription = body.description?.trim() || synthesizeDescription(crawledData);
+    const description = enrichDescription(
+      baseDescription,
+      body.adjacentSectors,
+      body.additionalCapabilities,
+    );
 
     // Stage 2: Classify industry
     const classification = await classifyIndustry(
@@ -87,6 +107,7 @@ export async function POST(request: Request) {
       matchTenders(analysis, body.countries, {
         includeConsultancies: body.includeConsultancies,
         userEmail: body.email,
+        adjacentSectorLabels: body.adjacentSectors,
       }),
       matchGrants(
         classification.sectors,
