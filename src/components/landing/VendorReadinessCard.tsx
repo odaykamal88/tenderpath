@@ -39,7 +39,7 @@ export default function VendorReadinessCard() {
         <Row label="Documentation Compliance" value="Gaps Found" variant="gold" />
         <Row label="Financial Requirements" value="Compliant" variant="green" />
         <Row label="Active Tenders Matched" value="12 opportunities" variant="navy" />
-        <Row label="Competitor Activity" value="View 8 vendors" variant="link" />
+        <Row label="Nearest Deadline" value="14 days — Act Now" variant="link" />
       </div>
 
       {/* Footer */}

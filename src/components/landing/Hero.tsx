@@ -8,23 +8,26 @@ export default function Hero() {
           {/* Left content */}
           <div className="max-w-xl">
             <p className="text-xs font-bold tracking-[0.2em] uppercase text-gold mb-6">
-              $40B UN Market — You&apos;re Being Locked Out
+              UN Procurement Intelligence
             </p>
             <h1 className="font-serif text-4xl sm:text-5xl lg:text-[3.25rem] font-bold leading-[1.15] text-navy mb-6">
-              Qualified businesses lose millions in UN contracts they never even
-              find.
+              You may already qualify for UN contracts — and still be missing
+              them.
             </h1>
             <p className="text-base lg:text-lg text-gray-600 leading-relaxed mb-10">
-              The UN spends $40B a year on procurement. 70% goes to repeat
-              vendors — not because they&apos;re better, but because they know
-              the system. TenderPath decodes the maze so you don&apos;t have to.
+              The UN bought $25.7B in goods and services in 2024 from suppliers
+              across 222 countries and territories, but new vendors still get
+              filtered out by fragmented portals, compliance gaps, and missed
+              fit signals. TenderPath helps you see where you stand, decide
+              whether a tender is worth pursuing, and move faster on the ones
+              you can actually win.
             </p>
             <div className="flex flex-wrap gap-4">
               <a
                 href="/assessment"
                 className="inline-flex items-center gap-2 rounded-lg bg-gold px-6 py-3.5 text-sm font-semibold text-white shadow-md shadow-gold/20 hover:bg-gold-dark transition-colors"
               >
-                Get Your Free Readiness Score
+                Get My Free Vendor Readiness Score
                 <svg
                   className="h-4 w-4"
                   fill="none"
@@ -43,33 +46,28 @@ export default function Hero() {
                 href="#how-it-works"
                 className="inline-flex items-center rounded-lg border-2 border-navy/15 px-6 py-3.5 text-sm font-semibold text-navy hover:border-navy/30 transition-colors"
               >
-                See How It Works
+                See how it works ↓
               </a>
             </div>
-            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2">
-              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide"
-                style={{ animation: "fadeInUp 0.5s ease-out both" }}>
-                Trusted by vendors in
+            <div className="mt-8 space-y-1">
+              <p className="text-xs text-gray-400 leading-relaxed">
+                Used by vendors exploring UN procurement across Africa, the
+                Middle East, and beyond
               </p>
-              <div className="flex flex-wrap gap-x-4 gap-y-1">
-                {["🇯🇴 Jordan","🇬🇭 Ghana","🇰🇪 Kenya","🇪🇬 Egypt","🇵🇰 Pakistan","🇳🇬 Nigeria"].map((c, i) => (
+              <div className="flex flex-wrap gap-x-2 gap-y-1">
+                {["🇯🇴", "🇬🇭", "🇰🇪", "🇪🇬", "🇵🇰", "🇳🇬"].map((flag, i) => (
                   <span
-                    key={c}
-                    className="text-xs text-gray-500"
+                    key={flag}
+                    className="text-base"
                     style={{
                       animation: "fadeInUp 0.5s ease-out both",
-                      animationDelay: `${0.1 + i * 0.08}s`,
+                      animationDelay: `${0.1 + i * 0.06}s`,
                     }}
                   >
-                    {c}
+                    {flag}
                   </span>
                 ))}
-                <span
-                  className="text-xs text-gray-400"
-                  style={{ animation: "fadeInUp 0.5s ease-out both", animationDelay: "0.6s" }}
-                >
-                  + 35 more countries
-                </span>
+                <span className="text-xs text-gray-400 self-center">+ more</span>
               </div>
             </div>
           </div>

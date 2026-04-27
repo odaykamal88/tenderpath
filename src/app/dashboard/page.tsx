@@ -119,51 +119,10 @@ export default function DashboardOverview() {
   }>>([]);
   const [readiness, setReadiness] = useState<ReadinessData | null>(null);
 
-  const seedPipeline = useCallback(async (data: BridgeData) => {
-    try {
-      await Promise.all(
-        data.matched_tenders.map((t) =>
-          fetch("/api/dashboard/pipeline", {
-            method: "POST",
-            headers: authHeaders(),
-            body: JSON.stringify({
-              tender_id: t.id ?? null,
-              assessment_id: data.assessment_id,
-              tender_title: t.title,
-              tender_agency: t.agency,
-              tender_deadline: t.deadline ?? undefined,
-              tender_value: t.estimated_value ?? undefined,
-              fit_score: t.fit_score ?? data.readiness_score,
-              stage: "matched",
-              match_reasons: t.structured_reasons ?? null,
-            }),
-          })
-        )
-      );
-      localStorage.removeItem("tp_bridge");
-      setSeeded(true);
-    } catch {
-      // Pipeline is still usable if bridge seeding fails.
-    }
-  }, []);
-
-  useEffect(() => {
-    const raw = localStorage.getItem("tp_bridge");
-    if (!raw) return;
-    try {
-      const data: BridgeData = JSON.parse(raw);
-      setBridge(data);
-      seedPipeline(data);
-    } catch {
-      localStorage.removeItem("tp_bridge");
-    }
-  }, [seedPipeline]);
-
-  useEffect(() => {
+  const loadDashboard = useCallback(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
     if (!token) return;
 
-    // Load feedback (not_relevant) and pipeline concurrently
     Promise.all([
       fetch("/api/dashboard/pipeline", {
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
@@ -187,7 +146,6 @@ export default function DashboardOverview() {
           active: items.filter((i) => ["evaluating", "preparing", "submitted"].includes(i.stage)).length,
           won: items.filter((i) => i.stage === "won").length,
         });
-        // filter dismissed from matched widget
         const matched = items.filter(
           (i) => i.stage === "matched" && !(i.tender_id != null && dismissed.has(i.tender_id))
         ).slice(0, 5);
@@ -199,6 +157,54 @@ export default function DashboardOverview() {
       }
     }).catch(() => null);
   }, []);
+
+  const seedPipeline = useCallback(async (data: BridgeData) => {
+    try {
+      await Promise.all(
+        data.matched_tenders.map((t) =>
+          fetch("/api/dashboard/pipeline", {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify({
+              tender_id: t.id ?? null,
+              assessment_id: data.assessment_id,
+              tender_title: t.title,
+              tender_agency: t.agency,
+              tender_deadline: t.deadline ?? undefined,
+              tender_value: t.estimated_value ?? undefined,
+              fit_score: t.fit_score ?? data.readiness_score,
+              stage: "matched",
+              match_reasons: t.structured_reasons ?? null,
+            }),
+          }).then((res) => {
+            if (!res.ok) throw new Error(`Pipeline POST failed: ${res.status}`);
+            return res;
+          })
+        )
+      );
+      localStorage.removeItem("tp_bridge");
+      setSeeded(true);
+      loadDashboard();
+    } catch {
+      // Bridge preserved for retry on next load.
+    }
+  }, [loadDashboard]);
+
+  useEffect(() => {
+    const raw = localStorage.getItem("tp_bridge");
+    if (!raw) return;
+    try {
+      const data: BridgeData = JSON.parse(raw);
+      setBridge(data);
+      seedPipeline(data);
+    } catch {
+      localStorage.removeItem("tp_bridge");
+    }
+  }, [seedPipeline]);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
 
   async function handleAnalyse(item: { id: number; tender_title: string }) {
     setAnalysingId(item.id);

@@ -1,31 +1,31 @@
 const steps = [
   {
     number: "01",
-    title: "Free Readiness Assessment",
+    title: "Describe Your Business — In 2 Minutes",
     description:
-      "Answer a short questionnaire about your business — sector, capabilities, certifications, and experience. Takes 2 minutes.",
-    detail: "We evaluate your UNGM registration, documentation, and financial compliance instantly.",
+      "Answer a short intake form: what your company does, where you operate, and which sectors you serve. No website required.",
+    detail: "TenderPath uses your answers to classify your business, check UNGM registration status, and build a readiness score — instantly. You get a gap analysis before you spend anything.",
   },
   {
     number: "02",
-    title: "Know Before You Bid",
+    title: "See Matched Tenders — With Reasons",
     description:
-      "Paste a tender URL and get an instant bid/no-bid recommendation with win probability, scoring criteria breakdown, and a gap analysis.",
-    detail: "Stop wasting 30 hours on proposals you can't win. Devex shows the tender — TenderPath tells you whether to bother.",
+      "Your dashboard shows live tenders scored by fit for your exact profile. Each opportunity explains why it matched: sectors, capabilities, geography, and deadline urgency.",
+    detail: "Opportunities are bucketed by strength: Act Now, Strong Fit, Strategic, Adjacent. No noise — only what's relevant to your business.",
   },
   {
     number: "03",
-    title: "Get Weekly Matched Opportunities",
+    title: "Know Whether to Bid Before You Start",
     description:
-      "Receive a curated digest of 5–10 AI-matched tenders and grants scored by fit for your exact profile. Arabic and English.",
-    detail: "Real-time matching across UNDP, UNICEF, WHO, WFP, and 190+ UN agencies.",
+      "Paste a tender URL and get an instant bid/no-bid recommendation with fit reasoning, gap analysis, and required-documents checklist.",
+    detail: "Stop investing 30 hours in proposals you can't win. TenderPath tells you whether the opportunity is worth pursuing — before you write a single line.",
   },
   {
     number: "04",
-    title: "Submit and Win",
+    title: "Draft Faster",
     description:
-      "Use our proposal drafting service to get an 80% complete submission package in 48–72 hours — then review, sign, and send.",
-    detail: "Also: fast-track your vendor roster registration for WFP, UNICEF, UNDP at a fraction of consultant rates.",
+      "Use our proposal drafting service to receive an 80% complete submission package in 48–72 hours — technical proposal, compliance docs, and financial template.",
+    detail: "Or fast-track your vendor roster registration for a specific UN agency at a fraction of consultant rates.",
   },
 ];
 
@@ -39,7 +39,7 @@ export default function HowItWorks() {
             How It Works
           </p>
           <h2 className="font-serif text-3xl sm:text-4xl font-bold text-navy mb-4">
-            From assessment to award in four steps
+            From readiness to submission in four steps
           </h2>
           <p className="text-gray-500 text-base leading-relaxed">
             No jargon, no guesswork. A clear path from &quot;where do I

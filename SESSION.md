@@ -86,6 +86,12 @@ Additional work done outside the prompt sequence:
 
 ## Current Status
 
+All six prompts complete and committed. Activation reliability audit complete.
+
+Two silent failures in `seedPipeline()` found and fixed (`src/app/dashboard/page.tsx`):
+1. `fetch()` does not throw on HTTP errors — non-ok POSTs (e.g. 401) were silently swallowing failures while still clearing `tp_bridge`, permanently losing match data. Fixed by adding `.then(res => { if (!res.ok) throw ... })` so failures propagate and bridge is preserved for retry.
+2. Dashboard data GET fired before seeding POSTs completed — users saw empty matched-tenders on first load and had to manually refresh. Fixed by extracting pipeline/readiness fetch into `loadDashboard` callback and calling it at the end of successful `seedPipeline()`.
+
 Prompts 1, 2, 3, 5, and 6 are complete and committed.
 
 **Prompt 5** (persisted match quality, match reasons, explainability) — confirmed complete. `match.ts` fully implements `structured_reasons` with summary, matchedSectors, matchedCapabilities, matchedKeywords, geographyAlignment, scoreBreakdown, evidenceQuality, confidence, caveats, and all opportunityBucket fields. Embedding retrieval is intentionally stubbed (Sprint 4, documented). Opportunity buckets (act_now / strong_fit / strategic / adjacent / watchlist) are computed and persisted.
@@ -98,7 +104,7 @@ Prompts 1, 2, 3, 5, and 6 are complete and committed.
 
 ## Next Recommended Task
 
-**Activation reliability audit** — all six prompts are complete.
+**Activation reliability — complete.** All known silent failure points in the assessment → bridge → dashboard seed → email flow have been found and fixed.
 
 The top Launch Priority in `AGENTS.md` is now the focus: verify that the end-to-end flow (assessment → tp_bridge → login → dashboard seed → email) completes without manual intervention for a real user.
 
@@ -198,14 +204,26 @@ Until Prompt 2 and 3 are confirmed complete:
 - `AGENTS.md` — committed expansion (Launch Priorities, Agent Priority items 6–9, three additional Golden Rules)
 - `docs/agents/managed-agents-setup.md` — committed expansion (richer system prompts, field-completeness language)
 - `workers/crawler-browser/src/index.ts` — added UA rotation (5-entry `USER_AGENTS` array, random pick per session)
-- `src/app/dashboard/page.tsx` — extended MatchReason interface; added BUCKET_STYLES + isDeadlineSoon(); bucket badge + deadline urgency on matched tender cards (`4131010`)
+- `src/app/dashboard/page.tsx` — extended MatchReason interface; added BUCKET_STYLES + isDeadlineSoon(); bucket badge + deadline urgency on matched tender cards (`4131010`); seedPipeline() silent-failure fixes (non-ok HTTP now throws; loadDashboard moved to post-seed callback)
 - `src/app/dashboard/pipeline/page.tsx` — extended MatchReason interface; BUCKET_STYLES + isDeadlineSoon(); bucket badge in card header; deadline urgency; enhanced "Why this match?" with keywords, geography, bucketReason (`4131010`)
+
+### Landing page overhaul (uncommitted, working tree)
+- `src/app/page.tsx` — added STAT_BAR stat block between Hero and Challenge (4 stats: $25.7B procurement spend, 222 countries, 32 agencies, 3-year average time to first contract)
+- `src/components/landing/Hero.tsx` — copy/layout update
+- `src/components/landing/Challenge.tsx` — copy/layout update
+- `src/components/landing/HowItWorks.tsx` — copy/layout update
+- `src/components/landing/Services.tsx` — copy/layout update
+- `src/components/landing/Testimonials.tsx` — copy/layout update
+- `src/components/landing/WhyUs.tsx` — copy/layout update
+- `src/components/landing/CTA.tsx` — copy/layout update
+- `src/components/landing/VendorReadinessCard.tsx` — minor update
+- `src/lib/pricing.ts` — copy edits: bid/no-bid tier tagline and description tightened; "Win probability score" and "Scoring criteria breakdown" reframed as fit/gap reasoning; roster tier tagline softened; "WFP, UNICEF, UNDP, and more" feature bullet removed
 
 ---
 
 ## Blockers
 
-None. All dashboard UI changes are committed and TypeScript clean.
+None. Dashboard changes are committed. Landing page + pricing changes are in the working tree, uncommitted.
 
 ---
 

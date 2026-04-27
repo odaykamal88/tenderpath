@@ -3,18 +3,19 @@ export default function CTA() {
     <section id="cta" className="bg-navy py-20 lg:py-28">
       <div className="mx-auto max-w-3xl px-6 lg:px-8 text-center">
         <h2 className="font-serif text-3xl sm:text-4xl font-bold text-white mb-4">
-          Stop missing contracts you were made to win
+          Stop wasting time on tenders you shouldn&apos;t chase
         </h2>
         <p className="text-gray-300 text-base leading-relaxed mb-10 max-w-xl mx-auto">
-          Take the free Vendor Readiness Assessment. In 2 minutes,
-          you&apos;ll know exactly where you stand — and what to do next.
+          The free Vendor Readiness Assessment tells you where you stand, what
+          gaps you need to fix, and which opportunities match your profile
+          right now — in minutes.
         </p>
         <div className="flex flex-wrap justify-center gap-4">
           <a
             href="/assessment"
-            className="inline-flex items-center gap-2 rounded-lg bg-gold px-8 py-4 text-base font-semibold text-white shadow-lg shadow-gold/25 hover:bg-gold-light transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-gold px-8 py-4 text-base font-semibold text-white shadow-lg shadow-gold/25 hover:bg-gold-dark transition-colors"
           >
-            Start Your Free Assessment
+            Start My Free Assessment
             <svg
               className="h-5 w-5"
               fill="none"
@@ -31,7 +32,7 @@ export default function CTA() {
           </a>
         </div>
         <p className="mt-6 text-xs text-gray-400">
-          Free — No credit card required — Results in 2 minutes
+          Free · No credit card required · Results in minutes
         </p>
       </div>
     </section>
