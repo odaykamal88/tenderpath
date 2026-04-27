@@ -154,7 +154,7 @@ export async function classifyIndustry(
   const msg = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 600,
-    temperature: 0.2,
+    temperature: 0.1,
     messages: [
       {
         role: "user",

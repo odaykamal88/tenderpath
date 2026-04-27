@@ -71,6 +71,8 @@ function mapNotice(n: WBNotice): RawTender | null {
     region: n.region ?? null,
     sector: n.major_sector ?? n.sector ?? null,
     deadline: n.submission_deadline_date?.slice(0, 10) ?? null,
+    // The /procnotices API does not expose contract value or budget amounts —
+    // those fields are absent from the response schema and the WB portal UI.
     estimated_value: null,
     source_url: n.url ?? (n.id ? `https://projects.worldbank.org/en/projects-operations/procurement-detail/${n.id}` : null),
     opportunity_type: mapType(n.notice_type, n.procurement_method_name),

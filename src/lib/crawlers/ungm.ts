@@ -222,6 +222,8 @@ function mapNotice(n: UNGMNotice): RawTender {
     region: null,
     sector: null,
     deadline: n.DeadlineDate ?? null,
+    // UNGM listing rows do not include contract value; the field is not part
+    // of the Search API response payload.
     estimated_value: null,
     source_url: n.ID ? `https://www.ungm.org/Public/Notice/${n.ID}` : null,
     opportunity_type: n.NoticeType ?? "RFP",

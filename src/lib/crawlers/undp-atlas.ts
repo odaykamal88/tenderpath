@@ -238,7 +238,13 @@ function isMena(country: string): boolean {
   return MENA_COUNTRIES.has(country.toLowerCase());
 }
 
+// Label variants that UNDP detail pages use for budget/value fields (checked
+// empirically; new labels can be added here without touching the parser).
+const VALUE_KEYS = ["Budget", "Estimated Budget", "Total Budget", "Contract Value", "Estimated Value"];
+
 function rowToTender(row: ListingRow, detail: NoticeDetail | null): RawTender {
+  const rawValue = VALUE_KEYS.map((k) => detail?.metadata[k]).find((v) => v) ?? null;
+
   return {
     reference_id: `UNDP-ATLAS-${row.refNo ?? row.noticeId}`,
     title: row.title,
@@ -249,7 +255,7 @@ function rowToTender(row: ListingRow, detail: NoticeDetail | null): RawTender {
     region: "MENA",
     sector: null,
     deadline: row.deadline ?? parseDate(detail?.metadata["Deadline"] ?? null),
-    estimated_value: null,
+    estimated_value: rawValue,
     source_url: `${BASE}${row.href}`,
     opportunity_type: mapProcess(row.process || detail?.metadata["Procurement Process"]),
     eligibility_summary: null,

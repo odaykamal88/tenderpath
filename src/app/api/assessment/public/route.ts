@@ -135,12 +135,15 @@ export async function POST(request: Request) {
     `;
 
     const assessmentId = rows[0].id;
+    console.log("[tp:assessment:complete]", { assessmentId, email: body.email, tenderCount: matchedTenders.length, grantCount: matchedGrants.length });
 
     // Queue + send results email (fire-and-forget; failures don't block response)
     await sql`
       INSERT INTO email_queue (assessment_id, email, status)
       VALUES (${assessmentId}, ${body.email}, 'pending')
     `;
+    console.log("[tp:email:queued]", { assessmentId, email: body.email });
+    console.log("[tp:email:attempt]", { assessmentId, email: body.email });
     sendAssessmentEmail({
       assessmentId,
       email: body.email,

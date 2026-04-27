@@ -95,6 +95,7 @@ export default function DashboardOverview() {
     tender_title: string;
     tender_agency: string | null;
     tender_deadline: string | null;
+    tender_value: string | null;
     fit_score: number;
   }>>([]);
   const [readiness, setReadiness] = useState<ReadinessData | null>(null);
@@ -160,7 +161,7 @@ export default function DashboardOverview() {
       );
 
       if (pipelineBody?.items) {
-        const items = pipelineBody.items as Array<{ id: number; stage: string; tender_title: string; tender_agency: string | null; tender_deadline: string | null; fit_score: number; tender_id: number | null }>;
+        const items = pipelineBody.items as Array<{ id: number; stage: string; tender_title: string; tender_agency: string | null; tender_deadline: string | null; tender_value: string | null; fit_score: number; tender_id: number | null }>;
         setPipelineStats({
           total: items.length,
           matched: items.filter((i) => i.stage === "matched").length,
@@ -398,6 +399,9 @@ export default function DashboardOverview() {
                     {t.tender_agency && <span>{t.tender_agency}</span>}
                     {t.tender_deadline && (
                       <span className="ml-2">· Due {new Date(t.tender_deadline).toLocaleDateString()}</span>
+                    )}
+                    {t.tender_value && (
+                      <span className="ml-2">· {t.tender_value}</span>
                     )}
                   </div>
                 </div>

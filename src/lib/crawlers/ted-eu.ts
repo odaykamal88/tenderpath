@@ -9,6 +9,11 @@ const TED_API = "https://api.ted.europa.eu/v3/notices/search";
 const PAGE_SIZE = 100;
 const MAX_PAGES = 3;
 
+interface TEDLotValue {
+  amount?: number;
+  currency?: string;
+}
+
 interface TEDNotice {
   "publication-number"?: string;
   "notice-type"?: string;
@@ -16,6 +21,9 @@ interface TEDNotice {
   "BT-5141-Lot"?: string[];                       // ISO country
   "deadline-receipt-tender-date-lot"?: string[];  // ISO datetime
   "organisation-name-buyer"?: Record<string, string[]>;
+  // Estimated value of the lot(s). TED v3 returns either a single object or
+  // an array when multiple lots are present; we take the first entry.
+  "BT-27-Lot"?: TEDLotValue | TEDLotValue[];
   links?: { html?: Record<string, string>; pdf?: Record<string, string> };
 }
 
@@ -32,7 +40,7 @@ async function searchPage(page: number): Promise<TEDNotice[]> {
     query: `publication-date>=${since} AND (notice-type=cn-standard OR notice-type=cn-social OR notice-type=cn-desg)`,
     fields: [
       "publication-number", "notice-type", "BT-21-Lot", "BT-5141-Lot",
-      "deadline-receipt-tender-date-lot", "organisation-name-buyer", "links",
+      "deadline-receipt-tender-date-lot", "organisation-name-buyer", "BT-27-Lot", "links",
     ],
     page,
     limit: PAGE_SIZE,
@@ -56,11 +64,22 @@ const TYPE_MAP: Record<string, string> = {
   "pin-only": "Prior Information",
 };
 
+// Language codes whose scripts are reliably Latin and English-readable as-is.
+// Turkish (tur) uses Latin script but is not English and contains non-ASCII
+// diacritics (ü, ş, ğ, İ, ç) that produce confusing titles in the UI.
+// Bulgarian (bul) uses Cyrillic; Greek (ell) uses Greek script — excluded.
+const ENGLISH_READABLE_LANGS = new Set(["eng", "fra", "deu", "spa", "ita", "por", "nld", "pol", "ron", "ces", "slk", "hun", "hrv", "slv", "lav", "lit", "est", "fin", "swe", "dan", "nor"]);
+
 function pickML(ml?: Record<string, string[]>): { value: string; lang: string } | null {
   if (!ml) return null;
-  const order = ["eng", "ENG", "fra", "FRA", "deu", "DEU"];
-  for (const k of order) if (ml[k]?.[0]) return { value: ml[k][0], lang: k.toLowerCase() };
+  // Strong preference for English
+  for (const k of ["eng", "ENG"]) if (ml[k]?.[0]) return { value: ml[k][0], lang: "eng" };
+  // Fall back to other EU working languages, excluding Turkish and non-Latin-script codes
   const entries = Object.entries(ml);
+  for (const [k, v] of entries) {
+    if (v?.[0] && ENGLISH_READABLE_LANGS.has(k.toLowerCase())) return { value: v[0], lang: k.toLowerCase() };
+  }
+  // Last resort: any language (keeps coverage but may have non-ASCII titles)
   for (const [k, v] of entries) if (v?.[0]) return { value: v[0], lang: k.toLowerCase() };
   return null;
 }
@@ -81,6 +100,12 @@ function mapNotice(n: TEDNotice): RawTender | null {
   const deadline = n["deadline-receipt-tender-date-lot"]?.[0]?.slice(0, 10) ?? null;
   const url = n.links?.html?.ENG ?? `https://ted.europa.eu/en/notice/-/detail/${ref}`;
 
+  const valueRaw = n["BT-27-Lot"];
+  const valueObj = Array.isArray(valueRaw) ? valueRaw[0] : valueRaw;
+  const estimated_value = valueObj?.amount != null
+    ? `${valueObj.currency ?? "EUR"} ${valueObj.amount.toLocaleString()}`
+    : null;
+
   return {
     reference_id: `TED-${ref}`,
     title: titlePick.value.slice(0, 500),
@@ -91,7 +116,7 @@ function mapNotice(n: TEDNotice): RawTender | null {
     region: "Europe",
     sector: null,
     deadline,
-    estimated_value: null,
+    estimated_value,
     source_url: url,
     opportunity_type: TYPE_MAP[n["notice-type"] ?? ""] ?? "RFP",
     eligibility_summary: null,

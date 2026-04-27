@@ -158,6 +158,9 @@ function mapNotice(n: ParsedNotice): RawTender {
     region: null,
     sector: null,
     deadline: n.deadline,
+    // ECEPP listing rows don't include contract value; it appears only on
+    // individual notice detail pages (JSF SPA, requires a separate browser
+    // render per notice). Not fetched here to avoid multiplying worker calls.
     estimated_value: null,
     source_url: `https://ecepp.ebrd.com/delta/viewNotice.html?displayId=${n.id}`,
     opportunity_type: mapType(n.noticeType),

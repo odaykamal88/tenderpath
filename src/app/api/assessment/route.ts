@@ -9,6 +9,7 @@ import {
 } from "@/lib/assessment/analyze";
 import { computeGrantReadinessScore } from "@/lib/assessment/score";
 import { matchTenders, matchGrants } from "@/lib/assessment/match";
+import { sendAssessmentEmail } from "@/lib/email/sendAssessment";
 import type { AssessmentInput } from "@/lib/types";
 
 export async function POST(request: Request) {
@@ -118,12 +119,37 @@ export async function POST(request: Request) {
     `;
 
     const assessmentId = rows[0].id;
+    console.log("[tp:assessment:complete]", { assessmentId, email: body.email, tenderCount: matchedTenders.length, grantCount: matchedGrants.length });
 
-    // Queue results email
+    // Queue results email (kept for audit trail)
     await sql`
       INSERT INTO email_queue (assessment_id, email, status)
       VALUES (${assessmentId}, ${body.email}, 'pending')
     `;
+    console.log("[tp:email:queued]", { assessmentId, email: body.email });
+
+    try {
+      console.log("[tp:email:attempt]", { assessmentId, email: body.email });
+      await sendAssessmentEmail({
+        assessmentId,
+        email: body.email,
+        companyName: body.companyName,
+        readinessScore: analysis.overall_score,
+        recommendedTier,
+        summary: analysis.summary,
+        topGap: analysis.gaps?.[0]?.gap ?? null,
+        tenderCount: matchedTenders.length,
+        grantCount: matchedGrants.length,
+        topTenders: matchedTenders.slice(0, 3).map((t) => ({
+          title: t.title,
+          agency: t.agency,
+          country: t.country,
+          match_reasons: t.match_reasons ?? [],
+        })),
+      });
+    } catch (emailErr) {
+      console.error("Assessment email failed:", emailErr);
+    }
 
     return NextResponse.json({
       id: assessmentId,

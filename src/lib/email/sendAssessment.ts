@@ -51,7 +51,7 @@ export async function sendAssessmentEmail(args: SendArgs): Promise<void> {
   }
 
   const tier = TIER_COPY[args.recommendedTier];
-  const resultsUrl = `${appUrl}/api/assessment/${args.assessmentId}`;
+  const resultsUrl = `${appUrl}/dashboard`;
   const ctaUrl = `${appUrl}/#services`;
 
   const html = renderHtml({ ...args, tier, resultsUrl, ctaUrl });
@@ -67,6 +67,7 @@ export async function sendAssessmentEmail(args: SendArgs): Promise<void> {
   });
 
   if (error) {
+    console.error("[tp:email:failed]", { assessmentId: args.assessmentId, email: args.email, error: error.message });
     await sql`
       UPDATE email_queue SET status = 'failed'
       WHERE assessment_id = ${args.assessmentId} AND status = 'pending'
@@ -78,6 +79,7 @@ export async function sendAssessmentEmail(args: SendArgs): Promise<void> {
     UPDATE email_queue SET status = 'sent', sent_at = NOW()
     WHERE assessment_id = ${args.assessmentId} AND status = 'pending'
   `;
+  console.log("[tp:email:sent]", { assessmentId: args.assessmentId, email: args.email });
 }
 
 function renderText(d: SendArgs & { tier: { name: string; price: string; pitch: string }; resultsUrl: string; ctaUrl: string }): string {
