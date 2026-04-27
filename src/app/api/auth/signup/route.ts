@@ -3,6 +3,11 @@ import { Resend } from "resend";
 import { sql } from "@/lib/db";
 import { generateMagicToken } from "@/lib/auth";
 
+function envValue(key: string): string | null {
+  const value = process.env[key]?.trim();
+  return value ? value : null;
+}
+
 export async function POST(request: Request) {
   const body = await request.json();
   const { email, name } = body;
@@ -32,9 +37,9 @@ export async function POST(request: Request) {
   const isDev = process.env.NODE_ENV === "development";
 
   // Send magic link via Resend (skip in dev if no API key)
-  const resendKey = process.env.RESEND_API_KEY;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://tenderpath.me";
-  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "TenderPath <no-reply@tenderpath.me>";
+  const resendKey = envValue("RESEND_API_KEY");
+  const appUrl = envValue("NEXT_PUBLIC_APP_URL") ?? "https://www.tenderpath.me";
+  const fromEmail = envValue("RESEND_FROM_EMAIL") ?? "TenderPath <no-reply@tenderpath.me>";
   const magicLink = `${appUrl}/login?token=${magicToken}`;
 
   if (resendKey) {
@@ -57,10 +62,19 @@ export async function POST(request: Request) {
 
     if (emailError) {
       console.error("Magic link email failed:", emailError);
-      // Don't expose the error to the client — token is still valid in DB
+      if (!isDev) {
+        return NextResponse.json(
+          { error: "Could not send magic link email. Please contact support." },
+          { status: 502 }
+        );
+      }
     }
   } else if (!isDev) {
     console.warn("RESEND_API_KEY not set — magic link email not sent");
+    return NextResponse.json(
+      { error: "Magic link email is not configured. Please contact support." },
+      { status: 503 }
+    );
   }
 
   return NextResponse.json({
