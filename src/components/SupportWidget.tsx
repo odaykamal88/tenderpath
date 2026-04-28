@@ -64,7 +64,7 @@ export default function SupportWidget() {
                   </svg>
                 ),
                 label: "WhatsApp",
-                sub: "MENA region support",
+                sub: "Quick questions via WhatsApp",
                 href: "https://wa.me/message/tenderpath",
               },
             ].map((item) => (

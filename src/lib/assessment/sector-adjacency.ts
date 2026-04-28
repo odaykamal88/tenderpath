@@ -8,9 +8,11 @@ export const ADJACENT_SECTORS: Partial<Record<SectorSlug, SectorSlug[]>> = {
   // engineering (vehicle maintenance, cold-chain infrastructure).
   logistics:       ["security", "food", "construction", "engineering"],
   // Remove consulting — IT companies should not see consultant/advisory tenders.
-  it:              ["education", "language_services"],
-  // Remove consulting — language/doc firms should not see advisory tenders.
-  language_services: ["it", "education"],
+  it:              ["education"],
+  // Remove consulting/IT/education — language/doc firms should see tenders
+  // with direct language evidence, not broad curriculum or digital-adjacent
+  // work that happens to mention training.
+  language_services: [],
   construction:    ["water_sanitation", "energy", "environment", "engineering"],
   engineering:     ["construction", "energy", "environment", "water_sanitation"],
   healthcare:      ["food", "water_sanitation", "environment"],

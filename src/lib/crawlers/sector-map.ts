@@ -101,11 +101,16 @@ const SLUG_KEYWORDS: Record<SectorSlug, string[]> = {
   security: [
     "security service", "guard", "surveillance", "safety service",
     "protection service", "demining", "de-mining", "risk manage",
-    "fire safety",
+    "fire safety", "security assessment", "security training",
+    "ngo safety", "ngo security", "security risk", "security management",
+    "security analysis", "defensive driving", "armored vehicle",
+    "armoured vehicle", "protective service",
   ],
   language_services: [
     "translation", "interpret", "language service", "linguist",
-    "localization", "localisation",
+    "localization", "localisation", "proofreading", "editing",
+    "subtitling", "voice-over", "voice over", "dubbing",
+    "multilingual",
   ],
   engineering: [
     "engineering", "mechanical", "electrical install", "structural",
@@ -122,7 +127,10 @@ const SLUG_KEYWORDS: Record<SectorSlug, string[]> = {
   ],
   water_sanitation: [
     "water", "sanitation", "wash ", "hygiene", "sewer", "latrine",
-    "borehole", "water supply", "water and sanitation",
+    "borehole", "boreholes", "water supply", "water and sanitation",
+    "wastewater", "water network", "water networks", "pumping line",
+    "pump station", "sewage network", "sewage networks",
+    "water infrastructure", "water supply system", "water harvesting",
   ],
   energy: [
     "energy", "electricity", "solar", "power supply", "renewable",

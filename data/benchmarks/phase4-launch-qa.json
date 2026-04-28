@@ -1,0 +1,367 @@
+{
+  "name": "phase4-launch-qa",
+  "description": "Launch QA profiles for the full Tenderpath loop: classification fit, match relevance, actionable dashboard data, CTA/product routing, payment readiness, and ops fulfillment readiness.",
+  "profiles": [
+    {
+      "key": "syria-general-supplier",
+      "company": "Levant Relief Supply Co.",
+      "email": "qa+syria-supplier@tenderpath.local",
+      "websiteContains": "levantsupply",
+      "countries": ["Syria"],
+      "expectedIndustry": "logistics",
+      "expectedSectors": ["Logistics & Supply Chain", "Food Services", "Facility Management"],
+      "minTenderMatches": 5,
+      "expectedServices": ["bid-no-bid", "digest", "proposal", "lta-roster"],
+      "analysis": {
+        "detected_industry": "logistics",
+        "sectors": ["Logistics & Supply Chain", "Food Services", "Facility Management", "Construction"],
+        "services": ["supply and delivery", "warehousing", "transportation", "non-food items", "food basket assembly", "light maintenance"],
+        "capabilities": ["local supplier coordination", "fleet coordination", "warehouse operations", "emergency delivery", "framework agreement fulfilment"],
+        "certifications_detected": [],
+        "company_size_signal": "small",
+        "strengths": ["Syria operating context", "general supply coverage", "delivery capability"],
+        "gaps": [],
+        "readiness_dimensions": {
+          "technical_capability": 65,
+          "compliance_readiness": 55,
+          "financial_stability": 50,
+          "geographic_reach": 70,
+          "experience_relevance": 65
+        },
+        "overall_score": 61,
+        "summary": "General supplier and logistics operator for humanitarian goods, warehousing, fleet coordination, and light facility support in Syria."
+      }
+    },
+    {
+      "key": "jordan-ict-document-platform",
+      "company": "MENA Document Systems",
+      "email": "qa+docs@tenderpath.local",
+      "websiteContains": "docsystems",
+      "countries": ["Jordan", "Syria"],
+      "expectedIndustry": "it",
+      "expectedSectors": ["Information Technology", "Consulting Services"],
+      "minTenderMatches": 3,
+      "expectedServices": ["bid-no-bid", "digest", "proposal"],
+      "analysis": {
+        "detected_industry": "it",
+        "sectors": ["Information Technology", "Publishing & Communications", "Consulting Services"],
+        "services": ["document management", "workflow automation", "records management", "knowledge management", "technical documentation"],
+        "capabilities": ["enterprise content management", "stakeholder documentation", "digital workflows", "programme documentation"],
+        "certifications_detected": [],
+        "company_size_signal": "small",
+        "strengths": ["Document workflows", "regional programme support"],
+        "gaps": [],
+        "readiness_dimensions": {
+          "technical_capability": 70,
+          "compliance_readiness": 58,
+          "financial_stability": 52,
+          "geographic_reach": 62,
+          "experience_relevance": 64
+        },
+        "overall_score": 63,
+        "summary": "Digital document and workflow platform company supporting programme documentation, records, and knowledge management."
+      }
+    },
+    {
+      "key": "lebanon-construction",
+      "company": "Cedar Works Contracting",
+      "email": "qa+construction@tenderpath.local",
+      "websiteContains": "cedarworks",
+      "countries": ["Lebanon", "Syria"],
+      "expectedIndustry": "construction",
+      "expectedSectors": ["Construction", "Engineering", "Water & Sanitation"],
+      "minTenderMatches": 3,
+      "expectedServices": ["bid-no-bid", "proposal", "lta-roster"],
+      "analysis": {
+        "detected_industry": "construction",
+        "sectors": ["Construction", "Civil Engineering", "Water & Sanitation", "Facility Management"],
+        "services": ["light construction", "rehabilitation works", "water network repairs", "school rehabilitation", "site supervision"],
+        "capabilities": ["civil works crews", "BoQ review", "site mobilization", "local subcontractor coordination"],
+        "certifications_detected": [],
+        "company_size_signal": "medium",
+        "strengths": ["Civil works", "rehabilitation", "site delivery"],
+        "gaps": [],
+        "readiness_dimensions": {
+          "technical_capability": 72,
+          "compliance_readiness": 58,
+          "financial_stability": 55,
+          "geographic_reach": 64,
+          "experience_relevance": 70
+        },
+        "overall_score": 64,
+        "summary": "Construction contractor focused on rehabilitation, light civil works, WASH repairs, and facility upgrades."
+      }
+    },
+    {
+      "key": "egypt-medical-supplier",
+      "company": "Nile Med Supply",
+      "email": "qa+medical@tenderpath.local",
+      "websiteContains": "nilemed",
+      "countries": ["Egypt", "Sudan"],
+      "expectedIndustry": "healthcare",
+      "expectedSectors": ["Healthcare", "Logistics & Supply Chain"],
+      "minTenderMatches": 2,
+      "expectedServices": ["bid-no-bid", "digest", "proposal"],
+      "analysis": {
+        "detected_industry": "healthcare",
+        "sectors": ["Healthcare", "Medical Supplies", "Logistics & Supply Chain"],
+        "services": ["medical consumables supply", "hospital equipment sourcing", "healthcare logistics", "cold chain coordination"],
+        "capabilities": ["supplier qualification", "medical stock coordination", "delivery documentation"],
+        "certifications_detected": [],
+        "company_size_signal": "small",
+        "strengths": ["Medical supply sourcing", "regional delivery"],
+        "gaps": [],
+        "readiness_dimensions": {
+          "technical_capability": 66,
+          "compliance_readiness": 56,
+          "financial_stability": 52,
+          "geographic_reach": 60,
+          "experience_relevance": 64
+        },
+        "overall_score": 60,
+        "summary": "Healthcare supplier for medical consumables, basic hospital equipment, and delivery documentation."
+      }
+    },
+    {
+      "key": "kenya-solar-energy",
+      "company": "East Africa Solar Works",
+      "email": "qa+solar@tenderpath.local",
+      "websiteContains": "easolar",
+      "countries": ["Kenya", "Uganda", "Tanzania"],
+      "expectedIndustry": "energy",
+      "expectedSectors": ["Energy", "Environment"],
+      "minTenderMatches": 2,
+      "expectedServices": ["bid-no-bid", "digest", "proposal"],
+      "analysis": {
+        "detected_industry": "energy",
+        "sectors": ["Renewable Energy", "Electrical Engineering", "Environment"],
+        "services": ["solar PV installation", "mini-grid maintenance", "energy audits", "battery storage"],
+        "capabilities": ["field installation", "O&M planning", "technical design", "rural electrification"],
+        "certifications_detected": [],
+        "company_size_signal": "medium",
+        "strengths": ["Renewable energy delivery", "regional field teams"],
+        "gaps": [],
+        "readiness_dimensions": {
+          "technical_capability": 72,
+          "compliance_readiness": 58,
+          "financial_stability": 55,
+          "geographic_reach": 68,
+          "experience_relevance": 70
+        },
+        "overall_score": 65,
+        "summary": "Solar engineering and installation company for mini-grids, PV systems, batteries, and O&M."
+      }
+    },
+    {
+      "key": "ghana-agri-coop",
+      "company": "Savanna Agro Services",
+      "email": "qa+agri@tenderpath.local",
+      "websiteContains": "savannaagro",
+      "countries": ["Ghana", "Nigeria"],
+      "expectedIndustry": "agriculture",
+      "expectedSectors": ["Agriculture", "Food Systems & Livelihoods"],
+      "minTenderMatches": 2,
+      "expectedServices": ["bid-no-bid", "digest", "proposal"],
+      "analysis": {
+        "detected_industry": "agriculture",
+        "sectors": ["Agriculture", "Food Systems & Livelihoods", "Training"],
+        "services": ["farmer training", "seed distribution", "post-harvest handling", "agricultural inputs"],
+        "capabilities": ["extension support", "rural logistics", "input supply", "cooperative coordination"],
+        "certifications_detected": [],
+        "company_size_signal": "small",
+        "strengths": ["Farmer network", "input distribution"],
+        "gaps": [],
+        "readiness_dimensions": {
+          "technical_capability": 64,
+          "compliance_readiness": 54,
+          "financial_stability": 50,
+          "geographic_reach": 62,
+          "experience_relevance": 64
+        },
+        "overall_score": 59,
+        "summary": "Agricultural input and farmer-support provider for training, seed distribution, and post-harvest services."
+      }
+    },
+    {
+      "key": "iraq-security",
+      "company": "Tigris Secure Services",
+      "email": "qa+security@tenderpath.local",
+      "websiteContains": "tigrissecure",
+      "countries": ["Iraq"],
+      "expectedIndustry": "security",
+      "expectedSectors": ["Security Services", "Facility Management"],
+      "minTenderMatches": 1,
+      "expectedServices": ["bid-no-bid", "digest", "proposal"],
+      "analysis": {
+        "detected_industry": "security",
+        "sectors": ["Security Services", "Facility Management"],
+        "services": ["guarding", "access control", "site security", "risk assessment"],
+        "capabilities": ["security staffing", "site supervision", "incident reporting", "facility access control"],
+        "certifications_detected": [],
+        "company_size_signal": "medium",
+        "strengths": ["Operational security staffing", "local coverage"],
+        "gaps": [],
+        "readiness_dimensions": {
+          "technical_capability": 68,
+          "compliance_readiness": 55,
+          "financial_stability": 52,
+          "geographic_reach": 64,
+          "experience_relevance": 66
+        },
+        "overall_score": 61,
+        "summary": "Security services firm providing guarding, access control, site security, and incident reporting."
+      }
+    },
+    {
+      "key": "turkey-translation",
+      "company": "BridgeLang Services",
+      "email": "qa+language@tenderpath.local",
+      "websiteContains": "bridgelang",
+      "countries": ["Turkey", "Syria"],
+      "expectedIndustry": "language_services",
+      "expectedSectors": ["Language Services", "Publishing & Communications"],
+      "minTenderMatches": 1,
+      "expectedServices": ["bid-no-bid", "digest", "proposal"],
+      "analysis": {
+        "detected_industry": "language_services",
+        "sectors": ["Language Services", "Publishing & Communications"],
+        "services": ["translation", "interpretation", "localization", "editing", "subtitling"],
+        "capabilities": ["Arabic-English translation", "conference interpretation", "technical editing", "localization workflows"],
+        "certifications_detected": [],
+        "company_size_signal": "small",
+        "strengths": ["Language pair coverage", "humanitarian terminology"],
+        "gaps": [],
+        "readiness_dimensions": {
+          "technical_capability": 67,
+          "compliance_readiness": 54,
+          "financial_stability": 50,
+          "geographic_reach": 62,
+          "experience_relevance": 66
+        },
+        "overall_score": 60,
+        "summary": "Translation and interpretation company for humanitarian, public-sector, and technical communications."
+      }
+    },
+    {
+      "key": "morocco-water",
+      "company": "Atlas Water Engineering",
+      "email": "qa+water@tenderpath.local",
+      "websiteContains": "atlaswater",
+      "countries": ["Morocco", "Tunisia"],
+      "expectedIndustry": "water_sanitation",
+      "expectedSectors": ["Water & Sanitation", "Engineering"],
+      "minTenderMatches": 2,
+      "expectedServices": ["bid-no-bid", "digest", "proposal"],
+      "analysis": {
+        "detected_industry": "water_sanitation",
+        "sectors": ["Water & Sanitation", "Civil Engineering", "Environment"],
+        "services": ["water network design", "wastewater systems", "pump station rehabilitation", "WASH assessments"],
+        "capabilities": ["hydraulic design", "site assessment", "BoQ preparation", "field supervision"],
+        "certifications_detected": [],
+        "company_size_signal": "medium",
+        "strengths": ["WASH engineering", "field supervision"],
+        "gaps": [],
+        "readiness_dimensions": {
+          "technical_capability": 72,
+          "compliance_readiness": 58,
+          "financial_stability": 55,
+          "geographic_reach": 62,
+          "experience_relevance": 70
+        },
+        "overall_score": 64,
+        "summary": "Water and sanitation engineering firm for networks, wastewater systems, pump stations, and WASH assessments."
+      }
+    },
+    {
+      "key": "uganda-education",
+      "company": "Learning Bridge Africa",
+      "email": "qa+education@tenderpath.local",
+      "websiteContains": "learningbridge",
+      "countries": ["Uganda", "Rwanda"],
+      "expectedIndustry": "education",
+      "expectedSectors": ["Education", "Training"],
+      "minTenderMatches": 2,
+      "expectedServices": ["bid-no-bid", "digest", "proposal"],
+      "analysis": {
+        "detected_industry": "education",
+        "sectors": ["Education", "Training", "Community Development & NGOs"],
+        "services": ["teacher training", "curriculum development", "e-learning content", "youth skills training"],
+        "capabilities": ["training facilitation", "curriculum design", "learning assessment", "community outreach"],
+        "certifications_detected": [],
+        "company_size_signal": "small",
+        "strengths": ["Training delivery", "curriculum design"],
+        "gaps": [],
+        "readiness_dimensions": {
+          "technical_capability": 66,
+          "compliance_readiness": 54,
+          "financial_stability": 50,
+          "geographic_reach": 60,
+          "experience_relevance": 66
+        },
+        "overall_score": 60,
+        "summary": "Education and training provider for teacher training, curriculum development, e-learning, and youth skills."
+      }
+    },
+    {
+      "key": "serbia-governance-consulting",
+      "company": "Civic Systems Advisory",
+      "email": "qa+governance@tenderpath.local",
+      "websiteContains": "civicsystems",
+      "countries": ["Serbia", "Bosnia and Herzegovina"],
+      "expectedIndustry": "consulting",
+      "expectedSectors": ["Consulting Services", "Public Sector Governance"],
+      "minTenderMatches": 3,
+      "expectedServices": ["bid-no-bid", "digest", "proposal"],
+      "includeConsultancies": true,
+      "analysis": {
+        "detected_industry": "consulting",
+        "sectors": ["Consulting Services", "Public Sector Governance", "Monitoring & Evaluation"],
+        "services": ["policy research", "civil society support", "monitoring and evaluation", "institutional capacity building"],
+        "capabilities": ["stakeholder engagement", "research design", "governance diagnostics", "workshop facilitation"],
+        "certifications_detected": [],
+        "company_size_signal": "small",
+        "strengths": ["Governance expertise", "civil society networks"],
+        "gaps": [],
+        "readiness_dimensions": {
+          "technical_capability": 70,
+          "compliance_readiness": 56,
+          "financial_stability": 52,
+          "geographic_reach": 62,
+          "experience_relevance": 68
+        },
+        "overall_score": 62,
+        "summary": "Governance consulting firm supporting civil society, policy research, M&E, and institutional strengthening."
+      }
+    },
+    {
+      "key": "uae-event-logistics",
+      "company": "Gulf Event Operations",
+      "email": "qa+events@tenderpath.local",
+      "websiteContains": "gulfevents",
+      "countries": ["United Arab Emirates", "Saudi Arabia"],
+      "expectedIndustry": "logistics",
+      "expectedSectors": ["Logistics & Supply Chain", "Facility Management"],
+      "minTenderMatches": 2,
+      "expectedServices": ["bid-no-bid", "digest", "proposal"],
+      "analysis": {
+        "detected_industry": "logistics",
+        "sectors": ["Logistics & Supply Chain", "Facility Management", "Event Management"],
+        "services": ["event logistics", "temporary facilities", "transport coordination", "venue operations", "crowd flow support"],
+        "capabilities": ["supplier coordination", "venue setup", "fleet scheduling", "temporary staffing"],
+        "certifications_detected": [],
+        "company_size_signal": "medium",
+        "strengths": ["Event operations", "supplier coordination"],
+        "gaps": [],
+        "readiness_dimensions": {
+          "technical_capability": 68,
+          "compliance_readiness": 55,
+          "financial_stability": 54,
+          "geographic_reach": 66,
+          "experience_relevance": 64
+        },
+        "overall_score": 61,
+        "summary": "Event operations and logistics provider for venue setup, temporary facilities, transport coordination, and supplier management."
+      }
+    }
+  ]
+}

@@ -63,8 +63,8 @@ export default function Footer() {
               {[
                 { label: "About", href: "#" },
                 { label: "Contact", href: "/contact" },
-                { label: "Privacy Policy", href: "#" },
-                { label: "Terms of Service", href: "#" },
+                { label: "Disclaimer", href: "/disclaimer" },
+                { label: "Security", href: "/security" },
               ].map((link) => (
                 <li key={link.label}>
                   <a href={link.href} className="text-sm text-gray-400 hover:text-white transition-colors">
@@ -76,10 +76,23 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-white/5 text-center">
+        <div className="mt-12 pt-8 border-t border-white/5 text-center space-y-3">
           <p className="text-xs text-gray-500">
             &copy; {new Date().getFullYear()} TenderPath. All rights reserved.
           </p>
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-gray-600">
+            {[
+              { label: "Privacy Policy", href: "/privacy" },
+              { label: "Terms", href: "/terms" },
+              { label: "Cookie Policy", href: "/cookie-policy" },
+              { label: "Disclaimer", href: "/disclaimer" },
+              { label: "Security", href: "/security" },
+            ].map((link) => (
+              <a key={link.href} href={link.href} className="hover:text-gray-400 transition-colors underline underline-offset-2">
+                {link.label}
+              </a>
+            ))}
+          </div>
         </div>
       </div>
     </footer>

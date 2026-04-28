@@ -32,7 +32,13 @@ function extractLinks(html: string): string[] {
 
 function extractText(html: string, re: RegExp): string | null {
   const m = html.match(re);
-  return m?.[1]?.replace(/&amp;/g, "&").replace(/&#\d+;/g, "").trim() ?? null;
+  return m?.[1]
+    ?.replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/\s+/g, " ")
+    .trim() ?? null;
 }
 
 function parseNrcDate(raw: string): string | null {

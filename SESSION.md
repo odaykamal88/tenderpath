@@ -898,9 +898,152 @@ Preserve existing payment, webhook, work_order, and dashboard contracts. Do not 
 
 ---
 
+### Phase 4 Launch QA Baseline — 2026-04-28
+
+- **Agent**: Codex
+- **Date**: 2026-04-28
+- **Task Completed**: Started the Phase 4 launch QA loop with a repeatable 12-profile benchmark covering classification expectations, match relevance/actionability, CTA route availability, payment readiness, and ops fulfillment readiness.
+- **Files Changed**:
+  - `data/benchmarks/phase4-launch-qa.json` — added 12 realistic company profiles across logistics, ICT/document workflows, construction, healthcare supply, renewable energy, agriculture, security, language services, WASH, education, governance consulting, and event logistics.
+  - `scripts/phase4-launch-qa.ts` — added a non-mutating launch QA harness that runs each profile through `matchTenders()`, checks classification expectations from stored assessment or fixture baseline, verifies top-match actionability, checks service CTA route availability, and reports payment/ops readiness.
+  - `src/lib/crawlers/nrc.ts` — fixed NRC title extraction to strip inline HTML tags and decode basic entities so future crawls do not store titles like `<span>Pre-Qualification...</span>`.
+  - `SESSION.md` — updated handoff.
+- **Tests Run**:
+  - `npx tsx scripts/phase4-launch-qa.ts` — passed and produced the first baseline:
+    - profiles: `12`
+    - classificationsOk: `12`
+    - matchCountsOk: `12`
+    - actionableOk: `9`
+    - ctasOk: `12`
+    - paymentReady: `false`
+    - opsReady: `true`
+  - `npx eslint scripts/phase4-launch-qa.ts src/lib/crawlers/nrc.ts` — passed.
+  - `npx tsc --noEmit` — passed.
+- **Result**: Phase 4 now has a repeatable launch QA harness. The current system performs well on broad classification expectations, baseline match volume, CTA routing, and ops work-order readiness. The QA loop identified three weak profile/actionability areas and confirmed payment remains blocked by missing Stripe secrets.
+- **Blockers**:
+  - `iraq-security`: match count passes but top matches are weak/adjacent and not enough are actionable.
+  - `turkey-translation`: language-services matching is weak; current top matches skew toward IT/adjacent opportunities.
+  - `morocco-water`: match count is low and one existing NRC DB row still contains an old raw `<span>` title until the next NRC sync/backfill updates it.
+  - Payment remains not ready because `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are still missing locally.
+- **Important Decisions**:
+  - Kept Phase 4 harness non-mutating: it does not create assessments, send emails, submit payments, or write work orders.
+  - Used fixture AI profiles as the baseline unless a matching stored assessment already exists; this keeps the first Phase 4 pass repeatable without generating 12 external emails.
+  - Fixed the NRC parser source bug instead of masking the bad title in the QA script.
+- **Contracts or Interfaces Changed**: None. Added a benchmark fixture and script only; NRC parser output is cleaner but still conforms to the existing `RawTender` contract.
+- **Docs Updated**: `SESSION.md` only.
+- **Next Recommended Task**: Phase 4B: close the three QA findings. Improve language-services matching, security-services matching, and WASH/actionability coverage with the smallest matcher/source fixes; run an NRC sync or narrow backfill so the existing raw HTML NRC title is corrected; then rerun `npx tsx scripts/phase4-launch-qa.ts`. Stripe test secrets remain required before payment can pass.
+- **Recommended Agent**: Codex for narrow matcher/source fixes and rerunning the benchmark; Claude Code only if the fixes become schema or architecture changes.
+- **Paste-Ready Next Prompt**:
+
+```text
+Read SESSION.md first, then AGENTS.md, CLAUDE.md, docs/agents/dashboard-architecture.md, docs/agents/crawler-architecture.md if touching NRC/source parsing, and the relevant Next.js App Router docs under node_modules/next/dist/docs/.
+
+Act as the Tender Launch QA Agent for Phase 4B.
+
+Use `npx tsx scripts/phase4-launch-qa.ts` as the source of truth. Close the current QA findings with the smallest compatible changes:
+- improve language-services matching so translation/localization profiles do not receive mostly IT-adjacent matches,
+- improve security-services matching/actionability for Iraq-style profiles,
+- improve WASH/actionability coverage for Morocco/WASH profiles,
+- run an NRC sync or narrow DB backfill so existing NRC titles no longer contain raw `<span>` HTML.
+
+Do not broaden scope into schema redesign or dashboard redesign. Preserve `RawTender`, `CrawlResult`, payment, work-order, and dashboard contracts. Stripe payment readiness remains blocked until `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are configured. Update SESSION.md when finished.
+```
+
+---
+
+### Phase 4B Launch QA Fixes — 2026-04-28
+
+- **Agent**: Codex
+- **Date**: 2026-04-28
+- **Task Completed**: Closed the Phase 4B launch QA findings using `npx tsx scripts/phase4-launch-qa.ts` as the scoreboard. Improved language-services matching, security-services matching/actionability, WASH/actionability, and cleaned existing NRC raw HTML titles with a narrow DB backfill.
+- **Files Changed**:
+  - `src/lib/assessment/match.ts` — added geo-open country normalization for values like `Multiple destinations`; tightened language-services B2B consultancy allowance to procurement-like titles; expanded security and WASH matcher keywords; let exact geo-open opportunities retain enough geography signal; sorted actionable scored matches ahead of low-scoring adjacent/watchlist rows.
+  - `src/lib/assessment/sector-adjacency.ts` — removed IT/education adjacency from language-services profiles so translation/localization companies only receive tenders with direct language evidence.
+  - `src/lib/crawlers/sector-map.ts` — expanded canonical sector normalization for security assessment/training, language-service production terms, and WASH infrastructure terms.
+  - `src/lib/crawlers/nrc.ts` — retained the NRC parser fix from Phase 4A so future crawls strip inline tags and decode basic entities in titles.
+  - `SESSION.md` — updated handoff.
+- **DB Backfill Run**:
+  - Narrow NRC title cleanup: updated `17` existing `tenders` rows where `source_name = 'NRC'` and `title` contained raw HTML tags. This corrected the visible `<span>` WASH title without changing crawler contracts.
+- **Tests Run**:
+  - `DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS='-r dotenv/config' npx tsx scripts/phase4-launch-qa.ts` — passed:
+    - profiles: `12`
+    - classificationsOk: `12`
+    - matchCountsOk: `12`
+    - actionableOk: `12`
+    - ctasOk: `12`
+    - paymentReady: `false`
+    - opsReady: `true`
+    - remaining blockers: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
+  - `npx eslint src/lib/assessment/match.ts src/lib/assessment/sector-adjacency.ts src/lib/crawlers/sector-map.ts src/lib/crawlers/nrc.ts scripts/phase4-launch-qa.ts` — passed.
+  - `npx tsc --noEmit` — passed.
+- **Result**: Phase 4B matching/actionability QA is green across all 12 launch profiles. Security profiles now surface actionable security opportunities, language profiles no longer get mostly IT-adjacent results, and WASH profiles now get actionable geo-open WASH rows with cleaned NRC titles.
+- **Blockers**: Payment readiness still blocked by missing local/production `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`. No code blocker remains for Phase 4B.
+- **Important Decisions**:
+  - Kept changes inside matcher/source-normalization boundaries; no schema, dashboard, work-order, payment, or API contract changes.
+  - Treated `Multiple destinations`, blank NRC country rows, and similar values as geo-open rather than impossible geography.
+  - Removed language-sector adjacency instead of trying to downscore broad IT/training opportunities; direct language evidence is the safer launch behavior.
+  - Used a narrow DB backfill instead of broad recrawl because the issue was existing stored NRC titles, not only future parsing.
+- **Contracts or Interfaces Changed**: None. `RawTender`, `CrawlResult`, match output, dashboard, payment, and work-order contracts remain compatible.
+- **Docs Updated**: `SESSION.md` only.
+- **Next Recommended Task**: Phase 4C payment and fulfillment E2E: configure Stripe test secrets locally and in Vercel (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and any missing service price IDs), then run a real test-mode Checkout + signed webhook flow for a demo work order. Confirm purchase log, paid work order, user/ops emails, customer work-order page, admin fulfillment view, and rerun `npx tsx scripts/phase4-launch-qa.ts` until `paymentReady` is true.
+- **Recommended Agent**: Codex for payment smoke/E2E and narrow fixes; Claude Code only if a schema/payment architecture migration becomes necessary.
+- **Paste-Ready Next Prompt**:
+
+```text
+Read SESSION.md first, then AGENTS.md, CLAUDE.md, docs/agents/dashboard-architecture.md, and the relevant Next.js App Router docs under node_modules/next/dist/docs/.
+
+Act as the Tender Dashboard + Ops Agent for Phase 4C payment and fulfillment QA.
+
+Configure or verify local test-mode payment env first:
+- STRIPE_SECRET_KEY
+- STRIPE_WEBHOOK_SECRET
+- any missing service price IDs needed for the services being tested
+- WORK_ORDER_OPS_EMAIL if ops mail should not default to info@tenderpath.me
+
+Then run one real Stripe test-mode Checkout + signed webhook E2E for a demo work order:
+- confirm before submitting the final test payment,
+- verify `purchase_logs`,
+- verify `work_orders.payment_status = paid`,
+- verify paid user and ops emails,
+- verify the customer work-order page,
+- verify the admin fulfillment view,
+- rerun `npx tsx scripts/phase4-launch-qa.ts` and confirm the only remaining blockers are resolved or explicitly documented.
+
+Preserve existing payment, webhook, work_order, and dashboard contracts. Do not push or deploy unless explicitly asked. Update SESSION.md when finished.
+```
+
+---
+
+### Assessment Results UX Overhaul — 2026-04-28
+
+- **Agent**: Claude Code
+- **Date**: 2026-04-28
+- **Task Completed**: Simplified the assessment results UI to feel like a procurement workflow rather than a noisy data panel. Audited the screen, redesigned tender cards as compact Trello-style collapsibles, replaced the readiness score progress bar with a circular SVG ring, replaced the grant readiness bar with the same ring (teal accent), and sorted cards by fit tier + deadline proximity.
+- **Files Changed**:
+  - `src/app/assessment/AssessmentResults.tsx` — four coordinated changes:
+    1. **`ReadinessRing` SVG component** added after `severityBadgeCls`. Uses `stroke-dasharray/stroke-dashoffset` technique, rotated -90°, 96×96px, color-coded by score tier.
+    2. **`sortTendersByPriority`** added — sorts by fit tier (High ≥70, Medium ≥50, Low <50) then by deadline proximity within each tier (nearest first, nulls last). `groupTenders` now uses this sort before bucketing.
+    3. **`TenderCard` fully replaced** — compact Trello-style collapsible. Collapsed: fit badge + bucket label + saved status + amount (right), title (2-line clamp), 1-line summary, meta row (agency · country chip · deadline + clock). Expanded: "About this tender", "Why matched" (sector/capability/keyword/geography chips + caveats), "Readiness blockers" (high-severity only, ✕ prefix), "Source" (confidence badge + reason), "Why this bucket", action buttons (View Notice / Save / Skip). All action buttons use `e.stopPropagation()`.
+    4. **Readiness Score panel redesigned** — ring on left, dimension scores as coloured numeric values (no bars) on right, high-severity gap checklist (✕ prefix) below the ring row.
+    5. **Grant Readiness panel redesigned** — same ring layout with `accentColor="#2dd4bf"` / `accentClass="text-teal-400"`, text description replacing bar.
+- **Tests Run**:
+  - `npm run build` — passed. All pages compiled cleanly, no TypeScript errors.
+- **Result**: Assessment results now have a clear visual hierarchy. Collapsed cards scan in seconds; detail is one tap away. The readiness ring gives an at-a-glance score without the bar noise. High-severity blockers surface directly under the ring as a concise checklist.
+- **Blockers**: None.
+- **Important Decisions**:
+  - Moved the full Decision Brief panel entirely to the expanded state — it was the primary noise source in the collapsed view.
+  - Dimension scores kept as numeric text values only; bars removed to reduce visual clutter.
+  - Sort is per-group within each opportunity bucket (tiers + deadline), not a global sort that would break bucket grouping.
+- **Contracts or Interfaces Changed**: None. All `MatchedTender`, `Gap`, and `ReadinessDimensions` fields consumed read-only; no API or DB contract touched.
+- **Docs Updated**: `SESSION.md` only.
+- **Next Recommended Task**: Phase 4C payment and fulfillment E2E (unchanged priority): configure Stripe test secrets (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) and run a real test-mode Checkout + signed webhook flow.
+- **Recommended Agent**: Codex for payment smoke/E2E.
+
+---
+
 ## Next Recommended Task
 
-Configure Stripe test-mode secrets locally and in Vercel (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, plus any missing service price IDs), set `WORK_ORDER_OPS_EMAIL` if ops mail should not default to `info@tenderpath.me`, then run the real card Checkout + signed webhook E2E once. After that, move to Phase 4 launch QA across assessment → matched dashboard → service purchase → fulfillment.
+Phase 4C payment and fulfillment E2E: configure Stripe test secrets locally and in Vercel (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and any missing service price IDs), then run a real test-mode Checkout + signed webhook flow for a demo work order. Confirm purchase log, paid work order, user/ops emails, customer work-order page, admin fulfillment view, and rerun `npx tsx scripts/phase4-launch-qa.ts` until `paymentReady` is true.
 
 ---
 
@@ -924,22 +1067,24 @@ Paste this into the next Claude Code or Codex session:
 ```
 Read SESSION.md first, then AGENTS.md, CLAUDE.md, docs/agents/dashboard-architecture.md, and the relevant Next.js App Router docs under node_modules/next/dist/docs/.
 
-Act as the Tender Dashboard + Ops Agent for final payment launch QA.
+Act as the Tender Dashboard + Ops Agent for Phase 4C payment and fulfillment QA.
 
-Stripe readiness is now observable through `/api/admin/payment-health` and `npx tsx scripts/phase3d-payment-smoke.ts`. Configure local test-mode Stripe secrets first:
+Configure or verify local test-mode payment env first:
 - STRIPE_SECRET_KEY
 - STRIPE_WEBHOOK_SECRET
-- missing service price IDs if testing non-bid/no-bid plans
+- any missing service price IDs needed for the services being tested
 - WORK_ORDER_OPS_EMAIL if ops mail should not default to info@tenderpath.me
 
 Then run one real Stripe test-mode Checkout + signed webhook E2E for a demo work order:
 - confirm before submitting the final test payment,
 - verify `purchase_logs`,
-- verify `work_orders.payment_status`,
-- verify paid user/ops emails,
-- verify the customer work-order page.
+- verify `work_orders.payment_status = paid`,
+- verify paid user and ops emails,
+- verify the customer work-order page,
+- verify the admin fulfillment view,
+- rerun `npx tsx scripts/phase4-launch-qa.ts` and confirm the only remaining blockers are resolved or explicitly documented.
 
-Preserve existing payment, webhook, work_order, and dashboard contracts. Do not push or deploy. Update SESSION.md when finished.
+Preserve existing payment, webhook, work_order, and dashboard contracts. Do not push or deploy unless explicitly asked. Update SESSION.md when finished.
 ```
 
 ---

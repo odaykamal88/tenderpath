@@ -59,7 +59,7 @@ export default function ContactPage() {
                 label: "WhatsApp",
                 value: "Message us on WhatsApp",
                 href: "https://wa.me/message/tenderpath",
-                note: "For quick questions — MENA region preferred",
+                note: "For quick questions via WhatsApp",
               },
             ].map((contact) => (
               <a

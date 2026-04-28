@@ -168,6 +168,27 @@ function expandCountrySet(countries: string[]): Set<string> {
 // Pattern is conservative — substrings that only appear in recruitment.
 const INDIVIDUAL_ROLE_RE = /\b(individual contractor|individual consultant|ssa \d|special service agreement|short[- ]term expert|long[- ]term expert|roster of experts?|roster of consultants?|expert(s)? roster|consultant roster|national consultant|international consultant|junior consultant|senior consultant|home[- ]based consultant|un volunteer|unv [a-z]+|request for cv|call for cv|call for experts?|national professional officer)\b|(?:^|[-_/])ic[-_/]/i;
 
+const LANGUAGE_B2B_RE = /\b(translation|interpretation|interpreter|translator|linguistic|language service|locali[sz]ation|proofreading|editing|subtitling|voice[- ]over|dubbing|multilingual)\b/i;
+const B2B_TENDER_RE = /\b(call for tenders?|request for proposals?|rfp|rfq|provision of|services?|lta|framework|translation\/revision)\b/i;
+
+function isLanguageB2BTender(userSlugs: Set<SectorSlug>, text: string): boolean {
+  return userSlugs.has("language_services") && LANGUAGE_B2B_RE.test(text) && B2B_TENDER_RE.test(text);
+}
+
+function isGeoOpenCountry(country: string): boolean {
+  const normalized = country.toLowerCase().trim();
+  return !normalized
+    || normalized === "global"
+    || normalized === "remote"
+    || normalized === "multiple"
+    || normalized === "multiple destinations"
+    || normalized === "various"
+    || normalized === "international"
+    || normalized === "worldwide"
+    || normalized === "multi-country"
+    || normalized === "multicountry";
+}
+
 const OPPORTUNITY_BUCKET_META: Record<OpportunityBucket, { label: string; priority: number }> = {
   act_now: { label: "Act Now", priority: 1 },
   strong_fit: { label: "Strong Fit", priority: 2 },
@@ -264,7 +285,8 @@ function assignOpportunityBuckets(tenders: MatchedTender[]): MatchedTender[] {
       };
     })
     .sort((a, b) =>
-      (a.opportunity_bucket_priority ?? 99) - (b.opportunity_bucket_priority ?? 99)
+      Number(b.score >= 40) - Number(a.score >= 40)
+      || (a.opportunity_bucket_priority ?? 99) - (b.opportunity_bucket_priority ?? 99)
       || b.score - a.score
     );
 }
@@ -553,7 +575,13 @@ export async function matchTenders(
       "bread", "ready-to-eat", "ready to eat", "food basket", "food baskets",
       "rte basket",
     ],
-    security: ["security", "guarding", "surveillance", "protection", "guard service", "safety service", "access control", "fire safety"],
+    security: [
+      "security", "guarding", "surveillance", "protection", "guard service",
+      "safety service", "access control", "fire safety", "security assessment",
+      "security training", "ngo safety", "ngo security", "security risk",
+      "security management", "security analysis", "defensive driving",
+      "armored vehicle", "armoured vehicle", "protective service",
+    ],
     language_services: [
       "translation", "interpretation", "interpreter", "translator", "linguistic", "language service",
       "transcription", "proofreading", "editorial", "document translation", "certified translation",
@@ -567,7 +595,13 @@ export async function matchTenders(
     ],
     environment: ["environment", "climate", "biodiversity", "pollution", "waste management", "cleaning service", "janitorial", "sanitation service", "recycling"],
     agriculture: ["agriculture", "agricultural", "farming", "livestock", "crop", "irrigation"],
-    water_sanitation: ["water", "sanitation", "wash", "hygiene", "sewage", "latrine"],
+    water_sanitation: [
+      "water", "sanitation", "wash", "hygiene", "sewage", "latrine",
+      "borehole", "boreholes", "wastewater", "water network",
+      "water networks", "pumping line", "pump station", "sewage network",
+      "sewage networks", "water infrastructure", "water supply system",
+      "water harvesting",
+    ],
     energy: ["energy", "solar", "electricity", "power", "renewable", "grid"],
   };
 
@@ -659,15 +693,17 @@ export async function matchTenders(
   for (const t of candidates) {
     const rawTitle = (t.title as string ?? "");
     if (!isEnglishTitle(rawTitle, t.submission_language as string | null)) continue;
+    const earlyEvidenceText = `${rawTitle} ${t.sector ?? ""}`;
+    const languageB2B = isLanguageB2BTender(effectiveUserSlugs, earlyEvidenceText);
 
     // Drop individual-consultant recruitments (ReliefWeb jobs feed, UN rosters)
     // unless the user is itself a consulting firm or has opted in explicitly.
-    if (!allowConsultancies && (t.opportunity_type as string | null) === "Consultancy") continue;
+    if (!allowConsultancies && (t.opportunity_type as string | null) === "Consultancy" && !languageB2B) continue;
 
     // Second line of defence: many crawlers tag individual-contractor/roster
     // postings as plain "RFP" or "Individual Contractor" rather than
     // "Consultancy". Catch those by title pattern.
-    if (!allowConsultancies && INDIVIDUAL_ROLE_RE.test(rawTitle)) continue;
+    if (!allowConsultancies && INDIVIDUAL_ROLE_RE.test(rawTitle) && !languageB2B) continue;
 
     // Gate sources per configurable rules (e.g. SAM.gov for non-US companies).
     if (feedbackProfile.dismissedTenderIds.has(t.id as number)) continue;
@@ -682,7 +718,7 @@ export async function matchTenders(
     const tDescription = (t.description as string | null) ?? "";
     const reqs = (t.requirements as string[] | null) ?? [];
 
-    const isGeoOpen = !tCountry || tCountry === "global" || tCountry === "remote" || tCountry === "multiple";
+    const isGeoOpen = isGeoOpenCountry(tCountry);
     const strictGeoMatch = countrySet.has(tCountry);
     const regionalGeoMatch = !strictGeoMatch && !isGeoOpen && regionalSet.has(tCountry);
     // Skip tenders that are geographically impossible. Keep geo-open (global)
@@ -722,8 +758,7 @@ export async function matchTenders(
     let geoScore = 0;
     if (strictGeoMatch) geoScore = 30;
     else if (regionalGeoMatch) geoScore = 20;
-    else if (isGeoOpen && (acceptsGlobal || autoGeoOpen)) geoScore = 10;
-    // else: geo-open, user didn't opt in and strict supply is healthy — held at 0.
+    else if (isGeoOpen) geoScore = 10;
 
     let feedbackScore = 0;
     const normalizedAgency = tAgency.toLowerCase();
@@ -879,7 +914,7 @@ export async function matchTenders(
   // Global: only show when user opted in OR strict+regional supply is thin.
   const wantGlobal = acceptsGlobal || autoGeoOpen || out.length < 8;
   if (wantGlobal) {
-    const globalDiscount = acceptsGlobal ? 0.9 : (autoGeoOpen ? 0.75 : 0.6);
+    const globalDiscount = acceptsGlobal ? 0.9 : (autoGeoOpen ? 0.75 : 0.65);
     for (const s of globalPool.slice(0, 8)) {
       out.push({ ...stripMeta(s), score: Math.max(20, Math.round(s.score * globalDiscount)) });
     }
@@ -926,9 +961,11 @@ export async function matchTenders(
     for (const t of adjacentById.values()) {
       const rawTitle = (t.title as string ?? "");
       if (!isEnglishTitle(rawTitle, t.submission_language as string | null)) continue;
+      const earlyEvidenceText = `${rawTitle} ${t.sector ?? ""}`;
+      const languageB2B = isLanguageB2BTender(effectiveUserSlugs, earlyEvidenceText);
       if (feedbackProfile.dismissedTenderIds.has(t.id as number)) continue;
-      if (!allowConsultancies && (t.opportunity_type as string | null) === "Consultancy") continue;
-      if (!allowConsultancies && INDIVIDUAL_ROLE_RE.test(rawTitle)) continue;
+      if (!allowConsultancies && (t.opportunity_type as string | null) === "Consultancy" && !languageB2B) continue;
+      if (!allowConsultancies && INDIVIDUAL_ROLE_RE.test(rawTitle) && !languageB2B) continue;
 
       const adjSourceUrl = (t.source_url as string | null) ?? "";
       if (shouldSuppressSource(adjSourceUrl, countrySet)) continue;
@@ -940,7 +977,7 @@ export async function matchTenders(
       const tDescription = (t.description as string | null) ?? "";
       const reqs = (t.requirements as string[] | null) ?? [];
 
-      const isGeoOpen = !tCountry || tCountry === "global" || tCountry === "remote" || tCountry === "multiple";
+      const isGeoOpen = isGeoOpenCountry(tCountry);
       const strictGeoMatch = countrySet.has(tCountry);
       const regionalGeoMatch = !strictGeoMatch && !isGeoOpen && regionalSet.has(tCountry);
       if (!strictGeoMatch && !regionalGeoMatch && !isGeoOpen) continue;

@@ -15,6 +15,8 @@ Tenderpath is a procurement intelligence platform that crawls live tenders, asse
 - `src/app/`: App Router pages and API routes.
 - `workers/crawler-browser/`: Cloudflare Browser Rendering worker used for anti-bot and JS-rendered pages.
 - `scripts/`: migrations, sync scripts, operational helpers.
+- `src/app/`: App Router pages and API routes, including public-facing resource/legal/support pages.
+
 
 ## Agent Priorities
 
@@ -27,6 +29,8 @@ Tenderpath is a procurement intelligence platform that crawls live tenders, asse
 7. Make the post-assessment dashboard immediately useful and actionable.
 8. Optimize for conversion from assessment → matched workflow → paid action.
 9. Favor workflow clarity and explainability over feature sprawl.
+10. Keep legal-content and policy pages aligned with actual product behavior and data practices.
+
 
 ## Launch Priorities
 
@@ -73,6 +77,9 @@ Near launch, optimize for the following in order:
 - Do not optimize for source count at the expense of match quality or dashboard usefulness.
 - Do not ship generic dashboard filler; every UI module should help the user qualify, prepare, or act.
 - Treat user-facing pipeline failures as production issues, not cosmetic bugs.
+- Do not publish legal or privacy language that overstates compliance, security, uptime, or support commitments.
+- Any public policy or legal-page draft must reflect actual product behavior, third-party tooling, and data handling as implemented or explicitly confirmed.
+
 
 ## Coding Conventions
 
@@ -166,3 +173,12 @@ Also read product strategy when working on flow, monetization, or dashboard dire
 4. Add logs, comments, or docs only where they improve maintainability or diagnosability.
 5. If schema/API contracts change, update scripts/docs in the same change set.
 6. When near-launch issues are involved, prioritize activation reliability, first-try trust, and matched-dashboard usefulness over feature expansion.
+
+## Legal / Policy Standards
+
+- Privacy Policy must accurately describe real data collection, use, sharing, cookies/analytics, storage, and contact channels.
+- Terms pages should define usage rules, disclaimers, liability boundaries, and account/billing basics without inventing commitments.
+- SLA language should only be published if the team can actually support and monitor the promised service levels.
+- Contact, support, privacy, and security-reporting channels should be easy to find from the footer/resources area.
+- Legal/resource pages should reduce ambiguity, not create new promises or regulatory claims.
+- Unknown legal details must remain explicit placeholders until confirmed.
