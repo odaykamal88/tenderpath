@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import type { AssessmentInput, TierSlug, Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
 import AssessmentResults from "./AssessmentResults";
-import { REGION_GROUPS } from "@/lib/countries";
+import { Step1, Step2, Step3, type WizardData, type CrawlPreview } from "./WizardSteps";
 
 interface AssessmentResponse {
   id: number;
@@ -25,477 +25,321 @@ interface AssessmentResponse {
   matched_grants: MatchedGrant[];
 }
 
-const PROGRESS_STEPS = [
-  "Crawling your website",
-  "Extracting capabilities & services",
-  "Matching tenders & grants",
-  "Scoring readiness & identifying gaps",
+type WizardPhase = "entry" | "crawling" | "step1" | "step2" | "step3" | "analyzing" | "results";
+
+const STEP_LABELS = ["Company basics", "What you do", "Experience"];
+
+const ANALYZING_MESSAGES = [
+  "Crawling your website and confirming your profile…",
+  "Classifying your sectors and capabilities…",
+  "Scanning 2,000+ live tenders across 15+ UN agencies…",
+  "Matching tenders to your confirmed capabilities…",
+  "Scoring readiness dimensions and identifying gaps…",
 ];
 
-const ADJACENT_FIELD_OPTIONS = [
-  { label: "IT & digital systems", value: "Information Technology", signals: ["software", "platform", "data", "digital", "document", "system", "automation"] },
-  { label: "Training & capacity building", value: "Education & Training", signals: ["training", "capacity", "workshop", "curriculum", "learning"] },
-  { label: "Logistics & supply chain", value: "Logistics & Supply Chain", signals: ["logistics", "warehouse", "storage", "delivery", "transport", "supply chain", "cold chain"] },
-  { label: "Healthcare & medical supply", value: "Healthcare", signals: ["health", "medical", "clinic", "pharma", "hospital", "vaccine", "cold chain"] },
-  { label: "Water, sanitation & hygiene", value: "Water & Sanitation", signals: ["water", "sanitation", "wash", "hygiene", "wastewater"] },
-  { label: "Energy & solar", value: "Renewable Energy", signals: ["solar", "energy", "power", "renewable", "electric"] },
-  { label: "Environment & waste", value: "Environmental Services", signals: ["environment", "climate", "waste", "recycling", "cleaning"] },
-  { label: "Construction & infrastructure", value: "Construction", signals: ["construction", "civil", "infrastructure", "renovation", "building"] },
-  { label: "Monitoring, evaluation & research", value: "Monitoring and Evaluation", signals: ["monitoring", "evaluation", "research", "survey", "assessment"] },
-  { label: "Translation & language services", value: "Language Services", signals: ["translation", "interpretation", "language", "localization", "editorial"] },
-  { label: "Security & safety", value: "Security Services", signals: ["security", "guard", "safety", "surveillance", "protection"] },
-  { label: "Food & nutrition", value: "Food Services", signals: ["food", "nutrition", "catering", "meal", "agriculture"] },
-];
+const INITIAL_DATA: WizardData = {
+  website: "",
+  companyName: "",
+  email: "",
+  orgType: "",
+  operatingCountries: [],
+  submissionLanguage: "",
+  description: "",
+  sectors: [],
+  capabilities: [],
+  devThemes: [],
+  contractVolume: "",
+  maxContractValue: "",
+  unRegistered: "",
+  certifications: [],
+};
+
+function buildAssessmentInput(data: WizardData): AssessmentInput {
+  const parts: string[] = [];
+  if (data.capabilities.length) parts.push(`Services: ${data.capabilities.join(", ")}`);
+  if (data.certifications.length) parts.push(`Certifications: ${data.certifications.join(", ")}`);
+  if (data.contractVolume) parts.push(`Past contract volume: ${data.contractVolume}`);
+  if (data.maxContractValue) parts.push(`Largest contract value: ${data.maxContractValue}`);
+  if (data.unRegistered) parts.push(`UNGM registration: ${data.unRegistered}`);
+  if (data.submissionLanguage) parts.push(`Submission language: ${data.submissionLanguage}`);
+
+  return {
+    companyName: data.companyName,
+    email: data.email,
+    website: data.website || undefined,
+    description: data.description || data.sectors.join(", "),
+    countries: data.operatingCountries,
+    adjacentSectors: [],
+    additionalCapabilities: parts.join(". ") || undefined,
+    orgType: data.orgType || undefined,
+    devThemes: data.devThemes.length ? data.devThemes : undefined,
+    includeConsultancies: false,
+  };
+}
+
+function WizardProgress({ phase }: { phase: WizardPhase }) {
+  const stepPhases: WizardPhase[] = ["step1", "step2", "step3"];
+  const activeIdx = stepPhases.indexOf(phase);
+  return (
+    <div className="flex items-center justify-center gap-0 mb-8">
+      {STEP_LABELS.map((label, i) => (
+        <div key={label} className="flex items-center">
+          <div className="flex flex-col items-center">
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
+              activeIdx > i ? "bg-green border-green text-white" :
+              activeIdx === i ? "border-gold text-gold" :
+              "border-gray-600 text-gray-600"
+            }`}>
+              {activeIdx > i ? (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              ) : i + 1}
+            </div>
+            <span className={`text-[10px] mt-1 whitespace-nowrap ${activeIdx >= i ? "text-gray-300" : "text-gray-600"}`}>
+              {label}
+            </span>
+          </div>
+          {i < 2 && <div className={`w-14 sm:w-20 h-px mx-2 mb-4 ${activeIdx > i ? "bg-green" : "bg-gray-700"}`} />}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function AssessmentPage() {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [form, setForm] = useState<Partial<AssessmentInput>>({
-    companyName: "", email: "", website: "", description: "",
-    countries: [],
-  });
-  const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
-  const [includeConsultancies, setIncludeConsultancies] = useState(false);
-  const [adjacentSectors, setAdjacentSectors] = useState<string[]>([]);
-  const [countrySearch, setCountrySearch] = useState("");
-  const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
-  const [progressStage, setProgressStage] = useState(0);
+  const [phase, setPhase] = useState<WizardPhase>("entry");
+  const [entryUrl, setEntryUrl] = useState("");
+  const [preview, setPreview] = useState<CrawlPreview | null>(null);
+  const [wizard, setWizard] = useState<WizardData>(INITIAL_DATA);
   const [results, setResults] = useState<AssessmentResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [analysisMsg, setAnalysisMsg] = useState(0);
+  const msgTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const toggleCountry = useCallback((country: string) => {
-    setSelectedCountries((prev) =>
-      prev.includes(country) ? prev.filter((c) => c !== country) : [...prev, country]
-    );
-    setCountrySearch("");
-    setCountryDropdownOpen(false);
-  }, []);
+  const patch = useCallback((p: Partial<WizardData>) => setWizard((d) => ({ ...d, ...p })), []);
 
-  const filteredGroups = useMemo(() => {
-    const q = countrySearch.trim().toLowerCase();
-    if (!q) return REGION_GROUPS;
-    return REGION_GROUPS
-      .map((g) => ({
-        ...g,
-        countries: g.countries.filter((c) => c.toLowerCase().includes(q)),
-      }))
-      .filter((g) => g.countries.length > 0);
-  }, [countrySearch]);
-
-  const profileText = `${form.website ?? ""} ${form.description ?? ""}`.toLowerCase();
-  const suggestedAdjacentFields = useMemo(() => {
-    const scored = ADJACENT_FIELD_OPTIONS.map((option) => ({
-      ...option,
-      hits: option.signals.filter((signal) => profileText.includes(signal)).length,
-    }))
-      .filter((option) => option.hits > 0)
-      .sort((a, b) => b.hits - a.hits)
-      .slice(0, 5);
-
-    if (scored.length) return scored;
-    return ADJACENT_FIELD_OPTIONS.slice(0, 6);
-  }, [profileText]);
-
-  const toggleAdjacentSector = useCallback((value: string) => {
-    setAdjacentSectors((prev) =>
-      prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]
-    );
-  }, []);
-
-  const websiteLooksThin = Boolean(form.website) && (form.description ?? "").trim().length < 80;
-
-  const handleSubmit = useCallback(async () => {
-    if (!form.companyName || !form.email) {
-      setError("Please enter your company name and email.");
-      return;
+  useEffect(() => {
+    if (phase === "analyzing") {
+      setAnalysisMsg(0);
+      msgTimer.current = setInterval(() => {
+        setAnalysisMsg((n) => Math.min(n + 1, ANALYZING_MESSAGES.length - 1));
+      }, 4000);
+    } else {
+      if (msgTimer.current) clearInterval(msgTimer.current);
     }
-    if (!form.website && !form.description) {
-      setError("Please share either your website or a short description of your business.");
-      return;
-    }
-    if (!selectedCountries.length) {
-      setError("Please select at least one country where you deliver work.");
-      return;
-    }
+    return () => { if (msgTimer.current) clearInterval(msgTimer.current); };
+  }, [phase]);
 
-    const countries = [...selectedCountries];
-    const payload: AssessmentInput = {
-      companyName: form.companyName!,
-      email: form.email!,
-      website: form.website || undefined,
-      description: form.description || "",
-      countries: Array.from(new Set(countries)),
-      adjacentSectors,
-      additionalCapabilities: form.additionalCapabilities,
-      includeConsultancies,
-    };
+  const startCrawl = useCallback(async () => {
+    if (!entryUrl.trim()) { setPhase("step1"); return; }
+    setPhase("crawling");
     setError(null);
-    setStep(2);
-    setProgressStage(0);
-
-    // Simulate progress while API runs
-    const timers = [
-      setTimeout(() => setProgressStage(1), 2000),
-      setTimeout(() => setProgressStage(2), 5000),
-      setTimeout(() => setProgressStage(3), 8000),
-    ];
-
     try {
-      const resp = await fetch("/api/assessment/public", {
+      const res = await fetch("/api/assessment/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ website: entryUrl.trim() }),
       });
-
-      timers.forEach(clearTimeout);
-
-      if (!resp.ok) {
-        const data = await resp.json();
-        throw new Error(data.error || "Assessment failed");
+      const data = await res.json() as CrawlPreview & { error?: string };
+      if (!data.error) {
+        setPreview(data);
+        setWizard((d) => ({
+          ...d,
+          website: entryUrl.trim(),
+          companyName: d.companyName || data.detectedName || "",
+          description: d.description || data.detectedDescription || "",
+          sectors: d.sectors.length ? d.sectors : data.detectedSectors,
+          capabilities: d.capabilities.length ? d.capabilities : data.detectedServices,
+          orgType: d.orgType || data.detectedOrgType || "",
+          operatingCountries: d.operatingCountries.length ? d.operatingCountries : (data.detectedCountries ?? []),
+          submissionLanguage: d.submissionLanguage || data.detectedLanguage || "",
+        }));
+      } else {
+        setWizard((d) => ({ ...d, website: entryUrl.trim() }));
       }
-
-      const data: AssessmentResponse = await resp.json();
-      setProgressStage(4);
-      // Brief pause to show all checkmarks before transition
-      setTimeout(() => {
-        setResults(data);
-        setStep(3);
-      }, 600);
-    } catch (err) {
-      timers.forEach(clearTimeout);
-      setError(err instanceof Error ? err.message : "Something went wrong");
-      setStep(1);
+    } catch {
+      setWizard((d) => ({ ...d, website: entryUrl.trim() }));
     }
-  }, [form, selectedCountries, adjacentSectors, includeConsultancies]);
+    setPhase("step1");
+  }, [entryUrl]);
 
-  const resetAssessment = useCallback(() => {
-    setStep(1);
+  const runAssessment = useCallback(async () => {
+    setPhase("analyzing");
+    setError(null);
+    try {
+      const res = await fetch("/api/assessment/public", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildAssessmentInput(wizard)),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Assessment failed");
+      }
+      setResults(await res.json());
+      setPhase("results");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+      setPhase("step3");
+    }
+  }, [wizard]);
+
+  const reset = useCallback(() => {
+    setPhase("entry");
+    setEntryUrl("");
+    setPreview(null);
+    setWizard(INITIAL_DATA);
     setResults(null);
-    setForm({ companyName: "", email: "", website: "", description: "", countries: [] });
-    setSelectedCountries([]);
-    setIncludeConsultancies(false);
-    setAdjacentSectors([]);
-    setCountrySearch("");
     setError(null);
   }, []);
+
+  const stepPhases: WizardPhase[] = ["step1", "step2", "step3"];
 
   return (
     <div className="min-h-screen bg-navy text-white">
-      {/* Nav */}
       <nav className="border-b border-white/10">
         <div className="mx-auto max-w-7xl px-6 flex h-14 items-center justify-between">
           <Link href="/" className="text-lg font-semibold">Tender<span className="text-gold">Path</span></Link>
           <div className="hidden sm:flex items-center gap-6 text-sm text-gray-400">
             <Link href="/#how-it-works" className="hover:text-white transition-colors">How It Works</Link>
-            <Link href="/#services" className="hover:text-white transition-colors">Services</Link>
           </div>
         </div>
       </nav>
 
-      {/* Step indicator */}
-      <div className="mx-auto max-w-xl px-6 pt-8 pb-6">
-        <div className="flex items-center justify-center gap-0">
-          {[1, 2, 3].map((s, i) => (
-            <div key={s} className="flex items-center">
-              <div className="flex flex-col items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
-                  step > s ? "bg-green border-green text-white" :
-                  step === s ? "border-gold text-gold" :
-                  "border-gray-600 text-gray-600"
-                }`}>
-                  {step > s ? (
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : s}
+      <div className="mx-auto max-w-2xl px-6 pt-8 pb-16">
+        {stepPhases.includes(phase) && <WizardProgress phase={phase} />}
+
+        {error && (
+          <div className="mb-6 rounded-lg bg-red/10 border border-red/30 px-4 py-3 text-sm text-red">{error}</div>
+        )}
+
+        {/* Entry */}
+        {phase === "entry" && (
+          <div>
+            <div className="text-center mb-8">
+              <h1 className="font-serif text-3xl font-bold mb-2">Free Vendor Readiness Assessment</h1>
+              <p className="text-gray-400 text-sm">Match your business to 2,000+ live UN tenders. Takes 3 minutes.</p>
+            </div>
+            <div className="max-w-md mx-auto space-y-3">
+              <div className="rounded-xl border border-white/10 bg-navy-light/40 p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Your company website</label>
+                  <input
+                    type="text"
+                    value={entryUrl}
+                    onChange={(e) => setEntryUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && entryUrl.trim() && startCrawl()}
+                    placeholder="yourcompany.com"
+                    className="w-full rounded-lg bg-navy border border-white/10 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none"
+                  />
                 </div>
-                <span className={`text-[10px] mt-1 ${step >= s ? "text-gray-300" : "text-gray-600"}`}>
-                  {["Company Info", "AI Analysis", "Results"][i]}
-                </span>
-              </div>
-              {i < 2 && <div className={`w-20 sm:w-28 h-px mx-2 mb-4 ${step > s ? "bg-green" : "bg-gray-700"}`} />}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Step 1: Company Form */}
-      {step === 1 && (
-        <div className="mx-auto max-w-2xl px-6 pb-16">
-          <h1 className="font-serif text-3xl font-bold text-center mb-2">Free Vendor Readiness Assessment</h1>
-          <p className="text-center text-gray-400 text-sm mb-8">
-            Find out how ready you are to win UN tenders and grants. Takes 2 minutes.
-          </p>
-
-          {error && (
-            <div className="mb-6 rounded-lg bg-red/10 border border-red/30 px-4 py-3 text-sm text-red">{error}</div>
-          )}
-
-          <div className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Company / Organization Name *</label>
-              <input
-                type="text"
-                value={form.companyName}
-                onChange={(e) => setForm({ ...form, companyName: e.target.value })}
-                className="w-full rounded-lg bg-navy-light border border-white/10 px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none"
-                placeholder="e.g. Mwamba Consulting Ltd"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Work Email *</label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full rounded-lg bg-navy-light border border-white/10 px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none"
-                placeholder="you@company.com"
-              />
-              <p className="mt-1.5 text-xs text-gray-500 flex items-center gap-1.5">
-                <svg className="h-3 w-3 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-                No spam — your report is sent to this address only.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Website URL <span className="text-gray-500">(optional)</span></label>
-              <input
-                type="text"
-                inputMode="url"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                value={form.website}
-                onChange={(e) => setForm({ ...form, website: e.target.value })}
-                className="w-full rounded-lg bg-navy-light border border-white/10 px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none"
-                placeholder="yourcompany.com"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Describe Your Business <span className="text-gray-500">(optional if website provided)</span>
-              </label>
-              <textarea
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                rows={3}
-                className="w-full rounded-lg bg-navy-light border border-white/10 px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none resize-none"
-                placeholder="Skip this if you provided a website — we'll read it for you. Otherwise, share what you do in a sentence or two."
-              />
-              {websiteLooksThin && (
-                <p className="mt-1.5 text-xs text-amber-300/80">
-                  Add a few capabilities below if your website is mostly a landing page or does not list all services.
-                </p>
-              )}
-            </div>
-
-            <div className="rounded-lg border border-white/10 bg-navy-light/50 p-4">
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Extra Capabilities <span className="text-gray-500">(optional)</span>
-              </label>
-              <textarea
-                value={form.additionalCapabilities ?? ""}
-                onChange={(e) => setForm({ ...form, additionalCapabilities: e.target.value })}
-                rows={2}
-                className="w-full rounded-lg bg-navy border border-white/10 px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none resize-none"
-                placeholder="Examples: cold-chain installation, staff training, document digitization, compliance audits, last-mile distribution..."
-              />
-              <p className="mt-3 text-xs font-semibold text-gold uppercase tracking-wider">
-                Adjacent fields to watch
-              </p>
-              <p className="mt-1 text-xs text-gray-500">
-                TenderPath will label these as adjacent matches so you can review nearby opportunities without polluting your core fit.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {suggestedAdjacentFields.map((option) => {
-                  const active = adjacentSectors.includes(option.value);
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => toggleAdjacentSector(option.value)}
-                      className={`rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
-                        active
-                          ? "border-gold bg-gold/20 text-white"
-                          : "border-white/10 bg-navy text-gray-400 hover:border-white/25 hover:text-white"
-                      }`}
-                    >
-                      {active ? "✓ " : ""}{option.label}
+                {entryUrl.trim() ? (
+                  <>
+                    <button onClick={startCrawl}
+                      className="w-full rounded-lg bg-gold py-3 text-sm font-semibold text-white hover:bg-gold-dark transition-colors flex items-center justify-center gap-2">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                      </svg>
+                      Autocomplete with AI →
                     </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Where You Operate * <span className="text-gray-500 text-xs">(countries where you deliver work)</span>
-              </label>
-
-              {selectedCountries.length > 0 && (
-                <div className="mb-2 flex flex-wrap gap-1.5">
-                  {selectedCountries.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => toggleCountry(c)}
-                      className="group rounded-md bg-gold/15 border border-gold/40 px-2 py-0.5 text-xs text-white hover:bg-gold/25"
-                    >
-                      {c} <span className="text-gold/70 group-hover:text-white">×</span>
+                    <button type="button"
+                      onClick={() => { setWizard((d) => ({ ...d, website: entryUrl.trim() })); setPhase("step1"); }}
+                      className="w-full text-center text-xs text-gray-500 hover:text-gray-300 transition-colors py-1">
+                      Skip AI — I&apos;ll fill manually instead
                     </button>
-                  ))}
-                </div>
-              )}
-
-              <div className="relative">
-                <input
-                  type="text"
-                  value={countrySearch}
-                  onChange={(e) => { setCountrySearch(e.target.value); setCountryDropdownOpen(true); }}
-                  onFocus={() => setCountryDropdownOpen(true)}
-                  onBlur={() => setTimeout(() => setCountryDropdownOpen(false), 150)}
-                  className="w-full rounded-lg bg-navy-light border border-white/10 px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none"
-                  placeholder="Type a country to search…"
-                />
-
-                {countryDropdownOpen && (
-                  <div className="absolute z-10 mt-1 w-full max-h-64 overflow-y-auto rounded-lg border border-white/10 bg-navy-light shadow-xl">
-                    {filteredGroups.length === 0 ? (
-                      <div className="px-3 py-4 text-xs text-gray-500">No countries match &ldquo;{countrySearch}&rdquo;.</div>
-                    ) : (
-                      filteredGroups.map((g) => (
-                        <div key={g.label}>
-                          <div className="sticky top-0 bg-navy-light/95 backdrop-blur px-3 py-1.5 text-[10px] font-semibold tracking-wider text-gold uppercase border-b border-white/5">
-                            {g.label}
-                          </div>
-                          <div className="py-1">
-                            {g.countries.map((c) => {
-                              const active = selectedCountries.includes(c);
-                              return (
-                                <button
-                                  key={c}
-                                  type="button"
-                                  onMouseDown={(e) => { e.preventDefault(); toggleCountry(c); }}
-                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 hover:bg-white/5 cursor-pointer text-left"
-                                >
-                                  <span className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center ${active ? "bg-gold border-gold" : "border-white/20 bg-navy"}`}>
-                                    {active && (
-                                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                      </svg>
-                                    )}
-                                  </span>
-                                  <span className={active ? "text-white" : ""}>{c}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => setPhase("step1")}
+                      className="w-full rounded-lg border border-white/15 bg-white/5 py-3 text-sm font-medium text-gray-300 hover:bg-white/10 hover:text-white transition-colors">
+                      Start assessment →
+                    </button>
+                    <p className="text-center text-xs text-gray-600">Enter your website above to auto-fill your profile with AI</p>
+                  </>
                 )}
               </div>
 
-              <label className="mt-3 flex items-start gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={includeConsultancies}
-                  onChange={(e) => setIncludeConsultancies(e.target.checked)}
-                  className="mt-0.5 w-3.5 h-3.5 rounded border-white/20 bg-navy text-gold focus:ring-gold focus:ring-offset-0"
-                />
-                <span className="text-xs text-gray-400">
-                  Include <span className="text-white">individual consultant / sole-trader opportunities</span> (off by default for companies &amp; organisations)
-                </span>
-              </label>
-            </div>
-
-            {/* Report preview */}
-            <div className="rounded-lg border border-white/10 bg-navy-light/50 p-4 mt-2">
-              <p className="text-xs font-semibold text-gold uppercase tracking-wider mb-3">What you&apos;ll receive</p>
-              <ul className="space-y-2">
-                {[
-                  "Vendor Readiness Score (0–100) across 5 dimensions",
-                  "Matched tenders & grants from 15+ UN agencies",
-                  "Compliance gap analysis with specific fixes",
-                  "Recommended next steps based on your profile",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2 text-xs text-gray-300">
-                    <svg className="h-3.5 w-3.5 mt-0.5 text-gold flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                    </svg>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <button
-              onClick={handleSubmit}
-              className="w-full rounded-lg bg-gold py-3 text-sm font-semibold text-white hover:bg-gold-dark transition-colors mt-4"
-            >
-              Run Free Assessment
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Step 2: Analysis Progress */}
-      {step === 2 && (
-        <div
-          className="mx-auto max-w-lg px-6 py-16 text-center"
-          style={{ animation: "fadeIn 0.4s ease-out both" }}
-        >
-          {/* Spinner with pulsing glow ring */}
-          <div className="relative mx-auto mb-8 w-16 h-16">
-            <div className="absolute inset-0 rounded-full bg-gold/10 animate-ping" />
-            <div className="relative w-16 h-16 border-4 border-gold/20 border-t-gold rounded-full animate-spin" />
-          </div>
-          <h2 className="font-serif text-2xl font-bold mb-2">Analyzing your profile…</h2>
-          <p className="text-gray-400 text-sm mb-8">Our AI is reading your website, matching tenders, and scoring your readiness — 15–30 seconds.</p>
-          <div className="text-left space-y-4 max-w-sm mx-auto">
-            {PROGRESS_STEPS.map((label, i) => (
-              <div
-                key={label}
-                className="flex items-center gap-3"
-                style={{ animation: "fadeInUp 0.4s ease-out both", animationDelay: `${i * 0.15}s` }}
-              >
-                <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300"
-                  style={{
-                    background: progressStage > i ? "var(--color-green)" : progressStage === i ? "rgba(200,151,62,0.15)" : "rgba(255,255,255,0.05)",
-                    border: progressStage > i ? "none" : progressStage === i ? "1px solid var(--color-gold)" : "1px solid rgba(255,255,255,0.1)",
-                  }}
-                >
-                  {progressStage > i ? (
-                    <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : progressStage === i ? (
-                    <div className="w-2 h-2 rounded-full bg-gold animate-pulse" />
-                  ) : (
-                    <div className="w-1.5 h-1.5 rounded-full bg-gray-600" />
-                  )}
-                </div>
-                <span className={`text-sm transition-colors duration-300 ${progressStage > i ? "text-green" : progressStage === i ? "text-gold font-medium" : "text-gray-600"}`}>
-                  {label}
-                </span>
+              <div className="rounded-xl border border-white/8 bg-navy-light/20 p-4">
+                <p className="text-xs font-semibold text-gold uppercase tracking-wider mb-3">What you&apos;ll receive</p>
+                <ul className="space-y-2">
+                  {[
+                    "Vendor Readiness Score across 5 dimensions",
+                    "Matched tenders & grants from 15+ UN agencies",
+                    "Compliance gap analysis with specific fixes",
+                    "Recommended next steps based on your profile",
+                  ].map((item) => (
+                    <li key={item} className="flex items-start gap-2 text-xs text-gray-400">
+                      <svg className="h-3.5 w-3.5 mt-0.5 text-gold flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                      </svg>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
               </div>
-            ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Step 3: Results */}
-      {step === 3 && results && (
-        <AssessmentResults data={results} onReset={resetAssessment} />
-      )}
+        {/* Crawling */}
+        {phase === "crawling" && (
+          <div className="text-center py-16">
+            <div className="relative mx-auto mb-6 w-14 h-14">
+              <div className="absolute inset-0 rounded-full bg-gold/10 animate-ping" />
+              <div className="relative w-14 h-14 border-4 border-gold/20 border-t-gold rounded-full animate-spin" />
+            </div>
+            <h2 className="font-serif text-xl font-bold mb-2">Reading your website…</h2>
+            <p className="text-gray-400 text-sm">AI is detecting your business profile. 5–10 seconds.</p>
+          </div>
+        )}
 
-      {/* Footer */}
+        {/* Wizard steps */}
+        {phase === "step1" && <Step1 data={wizard} preview={preview} onChange={patch} onNext={() => setPhase("step2")} />}
+        {phase === "step2" && <Step2 data={wizard} preview={preview} onChange={patch} onBack={() => setPhase("step1")} onNext={() => setPhase("step3")} />}
+        {phase === "step3" && <Step3 data={wizard} onChange={patch} onBack={() => setPhase("step2")} onNext={runAssessment} />}
+
+        {/* Analyzing */}
+        {phase === "analyzing" && (
+          <div className="text-center py-12">
+            <div className="relative mx-auto mb-8 w-16 h-16">
+              <div className="absolute inset-0 rounded-full bg-gold/10 animate-ping" />
+              <div className="relative w-16 h-16 border-4 border-gold/20 border-t-gold rounded-full animate-spin" />
+            </div>
+            <h2 className="font-serif text-2xl font-bold mb-2">Running your assessment…</h2>
+            <p className="text-sm text-gray-400 mb-8">Matching tenders and scoring readiness — 15–30 seconds.</p>
+            <div className="max-w-sm mx-auto space-y-3 text-left">
+              {ANALYZING_MESSAGES.map((msg, i) => (
+                <div key={msg} className="flex items-center gap-3">
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
+                    analysisMsg > i ? "bg-green" : analysisMsg === i ? "border border-gold bg-gold/10" : "border border-white/10"
+                  }`}>
+                    {analysisMsg > i ? (
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : analysisMsg === i ? (
+                      <div className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
+                    ) : null}
+                  </div>
+                  <span className={`text-sm transition-colors ${
+                    analysisMsg > i ? "text-green" : analysisMsg === i ? "text-gold font-medium" : "text-gray-600"
+                  }`}>{msg}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Results */}
+        {phase === "results" && results && (
+          <AssessmentResults data={results} onReset={reset} />
+        )}
+      </div>
+
       <footer className="border-t border-white/5 py-6 text-center text-xs text-gray-500">
-        &copy; {new Date().getFullYear()} TenderPath. All rights reserved. | <Link href="/" className="underline hover:text-gray-300">Back to Home</Link>
+        &copy; {new Date().getFullYear()} TenderPath. All rights reserved.{" "}
+        <Link href="/" className="underline hover:text-gray-300">Back to Home</Link>
       </footer>
     </div>
   );

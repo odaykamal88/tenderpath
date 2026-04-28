@@ -710,7 +710,6 @@ export default function AssessmentResults({ data, onReset }: Props) {
   const [activeTab, setActiveTab] = useState<"tenders" | "grants">("tenders");
   const [expandedGaps, setExpandedGaps] = useState<Set<number>>(new Set());
   const [copied, setCopied] = useState(false);
-  const [showFullSummary, setShowFullSummary] = useState(false);
   const [feedback, setFeedback] = useState<Record<number, FeedbackStatus>>(() => readStoredFeedback(data.id));
 
   useEffect(() => {
@@ -761,12 +760,6 @@ export default function AssessmentResults({ data, onReset }: Props) {
   const strongMatchCount = visibleTenders.filter((t) => t.score >= 50).length;
   const criticalGapCount = data.gaps.filter((g) => g.severity === "high").length;
 
-  const SUMMARY_LIMIT = 130;
-  const summaryTruncated = data.summary.length > SUMMARY_LIMIT;
-  const summaryDisplay = showFullSummary || !summaryTruncated
-    ? data.summary
-    : data.summary.slice(0, SUMMARY_LIMIT).trimEnd() + "…";
-
   const grantTotal = data.grant_readiness_score;
 
   // Derive a sector display label for the "Next Step" copy
@@ -793,54 +786,35 @@ export default function AssessmentResults({ data, onReset }: Props) {
         </button>
       </div>
 
-      {/* Summary */}
-      <div className="mb-4">
-        <p className="text-sm italic text-gray-300 leading-relaxed inline">
-          {summaryDisplay}
-        </p>
-        {summaryTruncated && (
-          <button
-            onClick={() => setShowFullSummary((v) => !v)}
-            className="ml-2 text-xs text-gold hover:text-white transition-colors underline underline-offset-2"
-          >
-            {showFullSummary ? "Show less" : "Show more"}
-          </button>
-        )}
-      </div>
-
-      {/* Industry badge */}
-      <div className="mb-8">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-900/40 border border-blue-500/30 px-4 py-1.5 text-xs font-medium text-blue-300">
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          Industry detected: {data.sector}
-        </span>
-      </div>
-
       {/* Readiness Score */}
-      <div className="rounded-xl bg-navy-light border border-white/10 p-6 mb-6">
-        <div className="flex flex-col sm:flex-row gap-6">
-          <div className="flex-shrink-0 text-center sm:text-left">
-            <div className="text-4xl font-bold">
-              {data.readiness_score}<span className="text-lg text-gray-500">/100</span>
-            </div>
-            <div className="text-xs text-gray-400 mt-1">Readiness Score</div>
+      <div className="rounded-xl bg-navy-light border border-white/10 p-5 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">Readiness Score</h3>
+          <div className="flex items-baseline gap-1">
+            <span className={`text-3xl font-bold ${data.readiness_score >= 70 ? "text-green" : data.readiness_score >= 50 ? "text-yellow-400" : data.readiness_score >= 35 ? "text-orange-400" : "text-red"}`}>
+              {data.readiness_score}
+            </span>
+            <span className="text-sm text-gray-500">/100</span>
           </div>
-          <div className="flex-1 space-y-2.5">
-            {DIMENSION_LABELS.map(({ key, label }) => {
-              const val = data.readiness_dimensions[key];
-              return (
-                <div key={key} className="flex items-center gap-3">
-                  <span className="text-xs text-gray-400 w-24 text-right">{label}</span>
-                  <div className="flex-1 bg-gray-800 rounded-full h-2.5 overflow-hidden">
-                    <div className={`h-full rounded-full transition-all ${scoreColor(val)}`} style={{ width: `${val}%` }} />
-                  </div>
-                  <span className="text-xs text-gray-400 w-8">{val}</span>
+        </div>
+        <div className="bg-gray-800 rounded-full h-2 overflow-hidden mb-4">
+          <div className={`h-full rounded-full transition-all ${scoreColor(data.readiness_score)}`} style={{ width: `${data.readiness_score}%` }} />
+        </div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+          {DIMENSION_LABELS.map(({ key, label }) => {
+            const val = data.readiness_dimensions[key];
+            return (
+              <div key={key}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] text-gray-400">{label}</span>
+                  <span className="text-[11px] font-semibold text-gray-300">{val}</span>
                 </div>
-              );
-            })}
-          </div>
+                <div className="bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                  <div className={`h-full rounded-full transition-all ${scoreColor(val)}`} style={{ width: `${val}%` }} />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -860,29 +834,27 @@ export default function AssessmentResults({ data, onReset }: Props) {
 
       {/* Grant Readiness Score */}
       {data.grant_readiness_score > 0 && (
-        <div className="rounded-xl bg-navy-light border border-white/10 p-6 mb-6">
-          <h3 className="font-serif text-lg font-bold mb-1">Grant Readiness Score</h3>
-          <p className="text-xs text-gray-500 mb-4">Overall readiness to apply for institutional and donor grants</p>
-          <div className="flex items-center gap-6">
-            <div className="text-center">
-              <div className="text-4xl font-bold">
-                {grantTotal}<span className="text-lg text-gray-500">/100</span>
-              </div>
-              <div className="text-xs text-gray-400 mt-1">Grant Readiness</div>
+        <div className="rounded-xl bg-navy-light border border-white/10 p-5 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">Grant Readiness</h3>
+              <p className="text-[11px] text-gray-500 mt-0.5">Institutional &amp; donor grants</p>
             </div>
-            <div className="flex-1">
-              <div className="bg-gray-800 rounded-full h-3 overflow-hidden">
-                <div className="h-full rounded-full bg-teal-500 transition-all" style={{ width: `${grantTotal}%` }} />
-              </div>
-              <p className="text-xs text-gray-500 mt-2">
-                {grantTotal >= 70
-                  ? "Strong grant readiness — focus on tailoring proposals to each funder's criteria."
-                  : grantTotal >= 40
-                  ? "Moderate grant readiness — address capacity and M&E gaps before applying."
-                  : "Early-stage grant readiness — build core organizational capacity first."}
-              </p>
+            <div className="flex items-baseline gap-1">
+              <span className="text-3xl font-bold text-teal-400">{grantTotal}</span>
+              <span className="text-sm text-gray-500">/100</span>
             </div>
           </div>
+          <div className="bg-gray-800 rounded-full h-2 overflow-hidden mb-2">
+            <div className="h-full rounded-full bg-teal-500 transition-all" style={{ width: `${grantTotal}%` }} />
+          </div>
+          <p className="text-[11px] text-gray-500">
+            {grantTotal >= 70
+              ? "Strong — tailor proposals to each funder's criteria."
+              : grantTotal >= 40
+              ? "Moderate — address capacity and M&E gaps before applying."
+              : "Early-stage — build core organizational capacity first."}
+          </p>
         </div>
       )}
 
@@ -1055,6 +1027,7 @@ export default function AssessmentResults({ data, onReset }: Props) {
           onClick={() => {
             const bridge = {
               assessment_id: data.id,
+              email: data.email,
               readiness_score: data.readiness_score,
               company_name: data.company_name,
               matched_tenders: data.matched_tenders.slice(0, 10).map((t) => ({
