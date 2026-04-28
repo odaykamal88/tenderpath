@@ -314,6 +314,44 @@ Return ONLY valid JSON, no explanation.`,
   };
 }
 
+type CompanyProfileExtras = {
+  orgType: string | null;
+  operatingCountries: string[];
+  submissionLanguage: string | null;
+};
+
+export async function inferProfileExtras(
+  crawledData: CrawledData | null,
+  description: string,
+): Promise<CompanyProfileExtras> {
+  const client = getClient();
+  const context = buildCompanyContext(crawledData, description, []);
+  const msg = await client.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 400,
+    temperature: 0.1,
+    messages: [{
+      role: "user",
+      content: `Extract company profile details from the following information.
+
+${context}
+
+Return a JSON object with exactly these fields:
+- "orgType": one of "company", "ngo", "sole-trader", "government", or null if unclear
+- "operatingCountries": array of up to 8 standard English country names where the company operates or targets
+- "submissionLanguage": the most likely proposal/bid submission language — one of "English", "French", "Arabic", "Spanish", "Russian", "Portuguese", or null if unclear
+
+Return ONLY valid JSON, no explanation.`,
+    }],
+  });
+  const text = msg.content[0]?.type === "text" ? msg.content[0].text : "{}";
+  return safeParseJSON<CompanyProfileExtras>(text, {
+    orgType: null,
+    operatingCountries: [],
+    submissionLanguage: null,
+  });
+}
+
 /**
  * Determine the recommended subscription tier based on gaps and score.
  * >=2 high-severity gaps → strategic-partnership
