@@ -266,10 +266,36 @@ export async function initializeDatabase() {
       amount_cents INTEGER,
       currency TEXT DEFAULT 'usd',
       email TEXT,
+      service_slug TEXT,
       pipeline_item_id INTEGER REFERENCES pipeline_items(id) ON DELETE SET NULL,
       tender_title TEXT,
       agency TEXT,
+      tender_url TEXT,
+      intake JSONB DEFAULT '{}'::jsonb,
       fulfillment_notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+
+  await sql`ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS service_slug TEXT`;
+  await sql`ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS tender_url TEXT`;
+  await sql`ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS intake JSONB DEFAULT '{}'::jsonb`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS weekly_digest_logs (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      assessment_id INTEGER REFERENCES assessments(id) ON DELETE SET NULL,
+      email TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      tender_count INTEGER DEFAULT 0,
+      grant_count INTEGER DEFAULT 0,
+      pipeline_added INTEGER DEFAULT 0,
+      pipeline_updated INTEGER DEFAULT 0,
+      provider TEXT,
+      error TEXT,
+      sent_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     )

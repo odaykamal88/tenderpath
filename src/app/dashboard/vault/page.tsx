@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import UpgradeGate from "../components/UpgradeGate";
 
 type DocType = "certification" | "financial" | "cv" | "past_performance" | "other";
 
@@ -147,6 +148,10 @@ export default function VaultPage() {
   }
 
   return (
+    <UpgradeGate
+      title="Unlock the document vault"
+      description="Preview the compliance library and expiry tracking. A subscription lets you store reusable bid documents and connect them to readiness gaps."
+    >
     <div>
       <h1 className="text-2xl font-semibold text-gray-900">Document Vault</h1>
       <p className="text-sm text-gray-600 mb-6">
@@ -296,5 +301,6 @@ export default function VaultPage() {
         )}
       </div>
     </div>
+    </UpgradeGate>
   );
 }

@@ -78,12 +78,22 @@ async function countGlobalGeoOpen(kws: string[]) {
 
   // Does jad's actual assessment exist in DB? look for his domain
   const jadAssess = await sql`
-    SELECT id, website_url, detected_industry, sectors, countries, created_at::text
+    SELECT id, website, sector, ai_analysis, countries, created_at::text
     FROM assessments
-    WHERE website_url ILIKE '%jadunited%'
+    WHERE website ILIKE '%jadunited%'
     ORDER BY created_at DESC LIMIT 3`;
   console.log("\n=== Jad's actual assessment record ===");
-  console.table(jadAssess);
+  console.table(jadAssess.map((row) => {
+    const ai = row.ai_analysis as { detected_industry?: string; sectors?: string[] } | null;
+    return {
+      id: row.id,
+      website: row.website,
+      detected_industry: ai?.detected_industry ?? row.sector,
+      sectors: Array.isArray(ai?.sectors) ? ai.sectors.join(", ") : "",
+      countries: Array.isArray(row.countries) ? row.countries.join(", ") : "",
+      created_at: row.created_at,
+    };
+  }));
 
   process.exit(0);
 })().catch(e => { console.error(e); process.exit(1); });

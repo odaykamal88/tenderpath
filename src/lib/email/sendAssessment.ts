@@ -46,7 +46,16 @@ export async function sendAssessmentEmail(args: SendArgs): Promise<void> {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://tenderpath.me";
 
   if (!apiKey) {
-    console.warn("RESEND_API_KEY missing — skipping email send");
+    const error = "RESEND_API_KEY missing";
+    console.warn("[tp:email:failed]", { assessmentId: args.assessmentId, email: args.email, error });
+    await sql`
+      UPDATE email_queue SET
+        status = 'failed',
+        attempts = attempts + 1,
+        provider = 'resend',
+        error = ${error}
+      WHERE assessment_id = ${args.assessmentId} AND status = 'pending'
+    `;
     return;
   }
 
@@ -69,14 +78,23 @@ export async function sendAssessmentEmail(args: SendArgs): Promise<void> {
   if (error) {
     console.error("[tp:email:failed]", { assessmentId: args.assessmentId, email: args.email, error: error.message });
     await sql`
-      UPDATE email_queue SET status = 'failed'
+      UPDATE email_queue SET
+        status = 'failed',
+        attempts = attempts + 1,
+        provider = 'resend',
+        error = ${error.message}
       WHERE assessment_id = ${args.assessmentId} AND status = 'pending'
     `;
     throw new Error(error.message);
   }
 
   await sql`
-    UPDATE email_queue SET status = 'sent', sent_at = NOW()
+    UPDATE email_queue SET
+      status = 'sent',
+      attempts = attempts + 1,
+      provider = 'resend',
+      error = NULL,
+      sent_at = NOW()
     WHERE assessment_id = ${args.assessmentId} AND status = 'pending'
   `;
   console.log("[tp:email:sent]", { assessmentId: args.assessmentId, email: args.email });

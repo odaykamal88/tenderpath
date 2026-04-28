@@ -11,6 +11,7 @@
  */
 import { type RawTender, type CrawlResult, withRetry } from "./types";
 import { fetchViaBrowser, browserAvailable } from "./_browser";
+import { normalizeSector } from "./sector-map";
 
 const BASE = process.env.UNRWA_PROCUREMENT_URL ?? "https://www.unrwa.org/procurement";
 
@@ -148,6 +149,7 @@ function mapType(notice: string, title: string): string {
 }
 
 function mapNotice(n: ParsedNotice): RawTender {
+  const sectorSlugs = normalizeSector(null, n.title, null);
   return {
     reference_id: `UNRWA-${n.id}`,
     title: n.title.slice(0, 500),
@@ -156,7 +158,7 @@ function mapNotice(n: ParsedNotice): RawTender {
     country: n.country || "Palestine",
     country_code: isoFor(n.country || "Palestine"),
     region: "Middle East",
-    sector: null,
+    sector: sectorSlugs.length ? sectorSlugs.join(", ") : null,
     deadline: n.deadline,
     estimated_value: null,
     source_url: n.url,

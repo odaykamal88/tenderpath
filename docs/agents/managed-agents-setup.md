@@ -193,6 +193,9 @@ When working on Tenderpath:
 - Design critique / UI review capability
 - Docs access
 
+### 6) TenderPath GTM Agent
+TenderPath should also maintain a GTM-focused managed agent so growth work follows the same durable role-definition pattern as source, assessment, dashboard, and ops.
+
 ## How to Use With Claude Code
 
 Use Managed Agents as the persistent role definitions. Then, in Claude Code, start tasks like:

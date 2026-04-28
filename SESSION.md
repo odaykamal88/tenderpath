@@ -738,9 +738,169 @@ Use the seeded demo@tenderpath.me workspace and oday.kamal@gmail.com superadmin 
 
 ---
 
+### Phase 3C Work-Order Fulfillment Loop — 2026-04-28
+
+- **Agent**: Codex
+- **Date**: 2026-04-28
+- **Task Completed**: Closed the paid-work fulfillment loop with user-facing work-order status pages, recent work-order surfacing in services, and optional admin-triggered customer status notifications.
+- **Files Changed**:
+  - `src/app/api/dashboard/work-orders/route.ts` — added authenticated current-user work-order listing with optional status and limit filters.
+  - `src/app/api/dashboard/work-orders/[id]/route.ts` — added authenticated current-user work-order detail lookup with pipeline context and match reasons.
+  - `src/app/dashboard/work-orders/page.tsx` — added user-facing paid work status index with filters, payment state, tender context, and status links.
+  - `src/app/dashboard/work-orders/[id]/page.tsx` — added user-facing work-order detail page with fulfillment progress, intake fields, tender context, latest notes, and payment state.
+  - `src/app/dashboard/layout.tsx` — added the Work Orders dashboard navigation item.
+  - `src/app/dashboard/services/RecentWorkOrders.tsx` — added recent work-order cards for the services page.
+  - `src/app/dashboard/services/page.tsx` — surfaced recent work above service purchase paths.
+  - `src/app/admin/work-orders/page.tsx` — added an optional “Email customer when status changes” control and sends the notify flag with admin status patches.
+  - `src/app/api/admin/work-orders/[id]/route.ts` — sends customer status notifications when an admin status patch includes `notify_customer`.
+  - `src/lib/email/sendWorkOrderNotifications.ts` — added work-order status email rendering/sending helper.
+- **Tests Run**:
+  - `npx eslint src/lib/email/sendWorkOrderNotifications.ts src/app/api/admin/work-orders/[id]/route.ts src/app/api/dashboard/work-orders/route.ts src/app/api/dashboard/work-orders/[id]/route.ts src/app/dashboard/work-orders/page.tsx src/app/dashboard/work-orders/[id]/page.tsx src/app/dashboard/services/RecentWorkOrders.tsx src/app/dashboard/services/page.tsx src/app/dashboard/layout.tsx src/app/admin/work-orders/page.tsx` — passed.
+  - `npx tsc --noEmit` — passed.
+  - `GET /api/dashboard/work-orders?limit=3` as `demo@tenderpath.me` — passed; returned seeded demo work orders.
+  - `GET /api/dashboard/work-orders/3` as `demo@tenderpath.me` — passed; returned intake and pipeline context.
+  - `PATCH /api/admin/work-orders/3` as `oday.kamal@gmail.com` with `notify_customer: false` — passed; updated status to `in_progress` and fulfillment note for QA.
+  - In-app browser QA:
+    - `/dashboard/work-orders` as `demo@tenderpath.me` — passed; shows paid work status and order #3 as `in progress`.
+    - `/dashboard/work-orders/3` as `demo@tenderpath.me` — passed; shows progress, intake, tender context, and latest fulfillment note.
+    - `/dashboard/services` as `demo@tenderpath.me` — passed; shows “Recent work” with links to work-order details.
+    - `/admin/work-orders` as `oday.kamal@gmail.com` — passed; shows status controls, intake/payment/context, and the customer notification checkbox. No console errors observed.
+- **Result**: Paid services now have a visible post-intake/post-checkout fulfillment surface for users, recent work is discoverable from Services, and admins can optionally notify customers when work-order status changes. The Stripe webhook path and existing `work_orders` table shape were preserved.
+- **Blockers**:
+  - Live Stripe checkout/webhook E2E was not run in this pass.
+  - Status email delivery code is wired, but Phase 3C QA deliberately did not send a customer status email because the admin checkbox was left off.
+- **Important Decisions**:
+  - Kept the workflow additive and used existing `work_orders`, `pipeline_items`, auth helpers, admin routes, and Resend helper patterns.
+  - Made admin email notification explicit and opt-in per status change to avoid accidental customer emails during operations.
+  - Kept user-facing work-order access scoped to the authenticated owner.
+- **Contracts or Interfaces Changed**: Additive only. New dashboard work-order API routes and an optional `notify_customer` admin PATCH field. Existing Stripe metadata/webhook, payment, service-order, dashboard, assessment, crawler, and pipeline contracts remain compatible.
+- **Docs Updated**: `SESSION.md` only.
+- **Next Recommended Task**: Phase 3D: run the real paid-work revenue-path E2E in test mode. Verify checkout creates/links `work_order_id`, Stripe webhook updates `purchase_logs` and `work_orders.payment_status`, paid user/ops emails send, and the user work-order status page reflects the paid state. Add only the smallest missing delivery-link/document attachment fields if the E2E proves they are needed.
+- **Recommended Agent**: Codex for the narrow Stripe/webhook/email QA and small additive fixes; Claude Code only if this expands into broader fulfillment CRM, schema redesign, or billing architecture changes.
+- **Paste-Ready Next Prompt**:
+
+```text
+Read SESSION.md first, then AGENTS.md, CLAUDE.md, docs/agents/dashboard-architecture.md, and the relevant Next.js App Router docs under node_modules/next/dist/docs/.
+
+Act as the Tender Dashboard + Ops Agent for Phase 3D.
+
+Run the real paid-work revenue-path E2E in test mode:
+- create or reuse a demo work order with service context,
+- start checkout with `work_order_id` metadata,
+- verify the Stripe webhook updates `purchase_logs` and `work_orders.payment_status`,
+- verify paid user and ops emails send or log clear failure state,
+- verify the customer work-order status page reflects the paid state.
+
+Preserve existing payment, webhook, work_order, and dashboard contracts. Add only the smallest delivery-link/document attachment fields if the E2E exposes a concrete gap. Do not push or deploy. Update SESSION.md when finished.
+```
+
+---
+
+### Phase 3D Payment-Path Preflight and Hardening — 2026-04-28
+
+- **Agent**: Codex
+- **Date**: 2026-04-28
+- **Task Completed**: Started Phase 3D revenue-path E2E. Confirmed local Stripe checkout cannot complete yet because local Stripe secrets are missing, then hardened the checkout/webhook/work-order path so the eventual Stripe E2E is safer and more diagnosable.
+- **Files Changed**:
+  - `src/app/api/pay/checkout/route.ts` — added a clean 503 fallback when `STRIPE_SECRET_KEY` is missing, preserving `work_order_id` metadata behavior.
+  - `src/app/api/analysis/bid-no-bid/checkout/route.ts` — added a clean 503 fallback when card checkout is not locally configured.
+  - `src/app/api/webhooks/stripe/route.ts` — made `purchase_logs` insertion idempotent by checking `stripe_session_id` before insert so Stripe retries do not duplicate purchase records.
+  - `src/lib/work-orders.ts` — made paid work-order notification idempotent by only notifying on transition into `paid`, while still updating existing work orders by `work_order_id`.
+  - `SESSION.md` — updated handoff.
+- **Tests Run**:
+  - `curl -X POST /api/pay/checkout` with `plan: bid-no-bid`, `pipeline_item_id: 6`, and `work_order_id: 3` — returned clean `503` with `"Card payments are not configured yet. Please use USDT or wire transfer."`
+  - Local work-order checkout-completion smoke using a synthetic paid Stripe session against work order `#3`, with `RESEND_API_KEY` deliberately unset in-process — passed; order `#3` moved to `payment_status: paid`, `stripe_session_id: cs_phase3d_local_qa_3`, `amount_cents: 3900`; running the same completion twice logged only one skipped paid-email notification.
+  - In-app browser QA as `demo@tenderpath.me` at `/dashboard/work-orders/3` — passed; user page shows `proposal · paid · $39.00`.
+  - `npx eslint src/app/api/webhooks/stripe/route.ts src/lib/work-orders.ts src/app/api/pay/checkout/route.ts src/app/api/analysis/bid-no-bid/checkout/route.ts` — passed.
+  - `npx tsc --noEmit` — passed.
+- **Result**: The local customer-visible paid state works and the work-order payment transition is retry-safe. Card checkout now fails cleanly when Stripe is not configured instead of exposing raw secret-name errors. The actual external Stripe checkout/webhook E2E remains blocked until local test-mode Stripe secrets are added.
+- **Blockers**:
+  - `.env.local` currently has `STRIPE_BIDNOBID_PRICE_ID` but does not have `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET`.
+  - Because those secrets are missing, no real Stripe Checkout session or signed Stripe webhook could be completed locally.
+  - Paid user/ops emails were not sent in this pass; the synthetic smoke deliberately unset `RESEND_API_KEY` to avoid sending external emails while testing retry behavior.
+- **Important Decisions**:
+  - Did not add delivery-link/document attachment fields because the current E2E finding was Stripe configuration and idempotency, not a customer delivery-data gap.
+  - Did not ask the app to submit any payment form in the browser. Once Stripe test secrets exist, the final Checkout submit step should still be treated as an explicit test-payment action.
+  - Preserved the existing Stripe webhook and `work_orders` table contracts; all changes are additive/defensive.
+- **Contracts or Interfaces Changed**: No breaking changes. `work_order_id` metadata continues to flow through checkout; checkout routes now return `503` for unconfigured card checkout; webhook behavior is idempotent for existing `stripe_session_id` purchase logs.
+- **Docs Updated**: `SESSION.md` only.
+- **Next Recommended Task**: Finish Phase 3D once local Stripe test configuration is available. Add `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` locally, run a real Stripe Checkout test payment for work order `#3` or a fresh demo work order, replay/receive the signed webhook, verify `purchase_logs`, `work_orders.payment_status`, paid user/ops email delivery, and the user work-order paid state.
+- **Recommended Agent**: Codex for the narrow Stripe test-mode E2E; Claude Code only if this grows into broader billing architecture.
+- **Paste-Ready Next Prompt**:
+
+```text
+Read SESSION.md first, then AGENTS.md, CLAUDE.md, docs/agents/dashboard-architecture.md, and the relevant Next.js App Router docs under node_modules/next/dist/docs/.
+
+Act as the Tender Dashboard + Ops Agent finishing Phase 3D.
+
+Local Stripe checkout was blocked because STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET were missing. After those test-mode values are available, run the real revenue-path E2E:
+- create or reuse a demo work order with service context,
+- start Stripe Checkout with `work_order_id` metadata,
+- before final payment submission, confirm the test payment action,
+- verify the signed webhook updates `purchase_logs` and `work_orders.payment_status`,
+- verify paid user and ops emails send or log clear failure state,
+- verify the customer work-order page reflects the paid state.
+
+Preserve existing payment, webhook, work_order, and dashboard contracts. Do not push or deploy. Update SESSION.md when finished.
+```
+
+---
+
+### Phase 3D Final Wrap — Payment Readiness Visibility — 2026-04-28
+
+- **Agent**: Codex
+- **Date**: 2026-04-28
+- **Task Completed**: Wrapped Phase 3D by making payment readiness observable and repeatable even though real Stripe checkout/webhook cannot run locally until Stripe secrets are added.
+- **Files Changed**:
+  - `src/app/api/admin/payment-health/route.ts` — added admin-only payment health JSON with Stripe/Resend config booleans, missing config, purchase-log duplicate-session detection, and recent work-order payment state.
+  - `scripts/phase3d-payment-smoke.ts` — added a read-only local smoke script that checks required payment env vars, duplicate Stripe sessions in `purchase_logs`, and recent work-order payment state.
+  - `SESSION.md` — updated final Phase 3D handoff.
+- **Tests Run**:
+  - `npx eslint src/app/api/admin/payment-health/route.ts scripts/phase3d-payment-smoke.ts src/app/api/webhooks/stripe/route.ts src/lib/work-orders.ts src/app/api/pay/checkout/route.ts src/app/api/analysis/bid-no-bid/checkout/route.ts` — passed.
+  - `npx tsc --noEmit` — passed.
+  - `npx tsx scripts/phase3d-payment-smoke.ts` — ran successfully and returned controlled `ok: false` because `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are missing; confirmed `STRIPE_BIDNOBID_PRICE_ID`, `RESEND_API_KEY`, and `RESEND_FROM_EMAIL` are present.
+  - `GET /api/admin/payment-health` with a local superadmin bearer token — passed; returned `ok: false`, missing Stripe secrets, no duplicate purchase sessions, and recent work-order payment state.
+- **Result**: Phase 3D is operationally wrapped for the current local environment. The app now cleanly exposes why card checkout/webhook is not ready, and the retry-safety/payment-state checks are repeatable. Work order `#3` remains visible as paid from the synthetic local smoke (`paid · $39.00`), but that is not a real Stripe Checkout payment.
+- **Blockers**:
+  - Real Stripe Checkout and signed webhook E2E still cannot be completed until `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are available locally.
+  - `WORK_ORDER_OPS_EMAIL` / `OPS_EMAIL` is not set locally; paid work-order emails fall back to `info@tenderpath.me`.
+  - Other Stripe product price IDs are not set locally for digest/submission/strategic plans; only bid/no-bid price is present.
+- **Important Decisions**:
+  - Kept the health surface admin-only and secret-safe: it reports booleans and missing key names, never values.
+  - Kept the smoke script read-only so agents can run it repeatedly without mutating payments or sending emails.
+  - Did not add delivery attachment fields because the current launch gap is payment configuration, not delivery-data modeling.
+- **Contracts or Interfaces Changed**: Additive only. New admin endpoint `/api/admin/payment-health` and read-only script. Existing checkout, webhook, work-order, dashboard, crawler, and assessment contracts remain compatible.
+- **Docs Updated**: `SESSION.md` only.
+- **Next Recommended Task**: Configure Stripe test-mode secrets locally and in Vercel (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, plus any missing service price IDs), set `WORK_ORDER_OPS_EMAIL` if ops mail should not default to `info@tenderpath.me`, then run the real card Checkout + signed webhook E2E once. After that, move to Phase 4 launch QA across assessment → matched dashboard → service purchase → fulfillment.
+- **Recommended Agent**: Codex for the final Stripe test-mode E2E and Phase 4 smoke QA; Claude Code only if billing architecture or schema changes are introduced.
+- **Paste-Ready Next Prompt**:
+
+```text
+Read SESSION.md first, then AGENTS.md, CLAUDE.md, docs/agents/dashboard-architecture.md, and the relevant Next.js App Router docs under node_modules/next/dist/docs/.
+
+Act as the Tender Dashboard + Ops Agent for final payment launch QA.
+
+Stripe readiness is now observable through `/api/admin/payment-health` and `npx tsx scripts/phase3d-payment-smoke.ts`. Configure local test-mode Stripe secrets first:
+- STRIPE_SECRET_KEY
+- STRIPE_WEBHOOK_SECRET
+- missing service price IDs if testing non-bid/no-bid plans
+- WORK_ORDER_OPS_EMAIL if ops mail should not default to info@tenderpath.me
+
+Then run one real Stripe test-mode Checkout + signed webhook E2E for a demo work order:
+- confirm before submitting the final test payment,
+- verify `purchase_logs`,
+- verify `work_orders.payment_status`,
+- verify paid user/ops emails,
+- verify the customer work-order page.
+
+Preserve existing payment, webhook, work_order, and dashboard contracts. Do not push or deploy. Update SESSION.md when finished.
+```
+
+---
+
 ## Next Recommended Task
 
-Phase 3C: close the paid-work fulfillment loop with user-facing work-order status, recent work-order surfacing, and admin status-change notifications.
+Configure Stripe test-mode secrets locally and in Vercel (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, plus any missing service price IDs), set `WORK_ORDER_OPS_EMAIL` if ops mail should not default to `info@tenderpath.me`, then run the real card Checkout + signed webhook E2E once. After that, move to Phase 4 launch QA across assessment → matched dashboard → service purchase → fulfillment.
 
 ---
 
@@ -764,16 +924,22 @@ Paste this into the next Claude Code or Codex session:
 ```
 Read SESSION.md first, then AGENTS.md, CLAUDE.md, docs/agents/dashboard-architecture.md, and the relevant Next.js App Router docs under node_modules/next/dist/docs/.
 
-Act as the Tender Dashboard + Ops Agent for Phase 3C.
+Act as the Tender Dashboard + Ops Agent for final payment launch QA.
 
-Close the paid-work fulfillment loop with the smallest compatible changes:
-- add a user-facing work-order status view/detail page,
-- surface recent work orders in the dashboard or services page,
-- let admin status changes optionally notify the user,
-- preserve the existing work_orders table and Stripe webhook flow,
-- keep all schema/API changes additive.
+Stripe readiness is now observable through `/api/admin/payment-health` and `npx tsx scripts/phase3d-payment-smoke.ts`. Configure local test-mode Stripe secrets first:
+- STRIPE_SECRET_KEY
+- STRIPE_WEBHOOK_SECRET
+- missing service price IDs if testing non-bid/no-bid plans
+- WORK_ORDER_OPS_EMAIL if ops mail should not default to info@tenderpath.me
 
-Use the seeded demo@tenderpath.me workspace and oday.kamal@gmail.com superadmin account for browser QA. Do not push or deploy. Update SESSION.md when finished.
+Then run one real Stripe test-mode Checkout + signed webhook E2E for a demo work order:
+- confirm before submitting the final test payment,
+- verify `purchase_logs`,
+- verify `work_orders.payment_status`,
+- verify paid user/ops emails,
+- verify the customer work-order page.
+
+Preserve existing payment, webhook, work_order, and dashboard contracts. Do not push or deploy. Update SESSION.md when finished.
 ```
 
 ---

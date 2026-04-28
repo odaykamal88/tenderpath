@@ -48,12 +48,19 @@ const SLUG_KEYWORDS: Record<SectorSlug, string[]> = {
     "health", "medical", "pharmaceutic", "hospital", "clinic", "vaccine",
     "disease", "hiv", "malaria", "tuberculosis", "maternal", "nutrition",
     "surgery", "medicine", "diagnostic", "laboratory service",
+    "diaper", "diapers", "medical supply", "healthcare supply",
   ],
   logistics: [
     "logistic", "supply chain", "warehous", "freight", "transport",
     "shipping", "distribution", "last mile", "last-mile", "fleet", "customs",
     "procurement service", "procurement and delivery", "supply and delivery",
     "delivery of goods", "delivery and installation", "installation and delivery",
+    "supply of goods", "supply of basic goods", "general goods",
+    "non-specialized goods", "non specialized goods", "non-food item",
+    "non food item", "nfi", "relief item", "hygiene kit",
+    "spare part", "replacement part", "furniture", "office supplies",
+    "school furniture", "accommodation", "accommodation service",
+    "lodging", "lodging service", "hotel venue",
     "forwarding", "haulage", "trucking", "cargo", "stockpile",
     "prepositioning", "pre-positioning", "clearing agent", "clearance service",
     "storage service", "fuel delivery",
@@ -88,6 +95,8 @@ const SLUG_KEYWORDS: Record<SectorSlug, string[]> = {
   food: [
     "food", "nutrition supply", "catering", "meal", "commodit",
     "foodstuff", "ration pack", "emergency ration", "grain",
+    "bakery", "bakeries", "bread", "ready-to-eat", "ready to eat",
+    "food basket", "food baskets", "rte basket",
   ],
   security: [
     "security service", "guard", "surveillance", "safety service",
@@ -100,7 +109,8 @@ const SLUG_KEYWORDS: Record<SectorSlug, string[]> = {
   ],
   engineering: [
     "engineering", "mechanical", "electrical install", "structural",
-    "design service", "technical design",
+    "design service", "technical design", "spare part", "production line",
+    "maintenance of production", "mechanical spare",
   ],
   environment: [
     "environment", "climate", "biodivers", "conservation", "ecosystem",

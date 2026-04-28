@@ -199,15 +199,40 @@ CREATE TABLE IF NOT EXISTS work_orders (
   amount_cents INTEGER,
   currency TEXT DEFAULT 'usd',
   email TEXT,
+  service_slug TEXT,
   pipeline_item_id INTEGER REFERENCES pipeline_items(id) ON DELETE SET NULL,
   tender_title TEXT,
   agency TEXT,
+  tender_url TEXT,
+  intake JSONB DEFAULT '{}'::jsonb,
   fulfillment_notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS work_orders_status ON work_orders (status, created_at DESC);
 CREATE INDEX IF NOT EXISTS work_orders_user_id ON work_orders (user_id);
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS service_slug TEXT;
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS tender_url TEXT;
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS intake JSONB DEFAULT '{}'::jsonb;
+
+CREATE TABLE IF NOT EXISTS weekly_digest_logs (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  assessment_id INTEGER REFERENCES assessments(id) ON DELETE SET NULL,
+  email TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  tender_count INTEGER DEFAULT 0,
+  grant_count INTEGER DEFAULT 0,
+  pipeline_added INTEGER DEFAULT 0,
+  pipeline_updated INTEGER DEFAULT 0,
+  provider TEXT,
+  error TEXT,
+  sent_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS weekly_digest_logs_user_id ON weekly_digest_logs (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS weekly_digest_logs_status ON weekly_digest_logs (status, created_at DESC);
 `;
 
 async function migrate() {

@@ -13,11 +13,15 @@ interface WorkOrder {
   currency: string | null;
   email: string | null;
   user_email: string | null;
+  service_slug: string | null;
   pipeline_item_id: number | null;
   tender_title: string | null;
   agency: string | null;
+  tender_url: string | null;
+  intake: Record<string, unknown> | null;
   tender_deadline: string | null;
   fit_score: number | null;
+  pipeline_stage: string | null;
   fulfillment_notes: string | null;
   created_at: string;
   updated_at: string;
@@ -52,6 +56,20 @@ function formatDate(value: string | null): string {
   return date.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
 }
 
+function intakePreview(intake: Record<string, unknown> | null): Array<[string, string]> {
+  if (!intake) return [];
+  return Object.entries(intake)
+    .map<[string, string]>(([key, value]) => {
+      const labelText = label(key);
+      if (Array.isArray(value)) return [labelText, value.join(", ")];
+      if (typeof value === "string") return [labelText, value];
+      if (typeof value === "boolean") return [labelText, value ? "Yes" : "No"];
+      return [labelText, value == null ? "" : String(value)];
+    })
+    .filter(([, value]) => value.trim().length > 0)
+    .slice(0, 4);
+}
+
 function StatusPill({ status }: { status: string }) {
   const cls = status === "new"
     ? "border-violet-500/30 bg-violet-500/15 text-violet-300"
@@ -75,6 +93,7 @@ export default function WorkOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notifyCustomer, setNotifyCustomer] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,7 +114,7 @@ export default function WorkOrdersPage() {
     load();
   }, [load]);
 
-  async function updateOrder(id: number, patch: { status?: string; fulfillment_notes?: string }) {
+  async function updateOrder(id: number, patch: { status?: string; fulfillment_notes?: string; notify_customer?: boolean }) {
     setSavingId(id);
     try {
       const res = await fetch(`/api/admin/work-orders/${id}`, {
@@ -119,7 +138,7 @@ export default function WorkOrdersPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Work Orders</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Paid proposal and roster work ready for fulfillment.
+            Service intakes, payment status, and fulfillment notes.
           </p>
         </div>
         <button
@@ -129,6 +148,16 @@ export default function WorkOrdersPage() {
           Refresh
         </button>
       </div>
+
+      <label className="mb-5 inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-400">
+        <input
+          type="checkbox"
+          checked={notifyCustomer}
+          onChange={(e) => setNotifyCustomer(e.target.checked)}
+          className="h-3.5 w-3.5 rounded border-white/20 bg-slate-950"
+        />
+        Email customer when status changes
+      </label>
 
       <div className="mb-5 flex flex-wrap gap-2">
         {STATUS_OPTIONS.map((option) => (
@@ -175,6 +204,9 @@ export default function WorkOrdersPage() {
                     <td className="px-5 py-4">
                       <div className="font-medium text-white capitalize">{label(order.plan)}</div>
                       <div className="mt-1 text-xs text-slate-500">#{order.id} · {money(order.amount_cents, order.currency)}</div>
+                      {order.service_slug && (
+                        <div className="mt-1 text-xs text-slate-600">Service: {label(order.service_slug)}</div>
+                      )}
                       <div className="mt-1 text-xs text-slate-600">{formatDate(order.created_at)}</div>
                     </td>
                     <td className="px-5 py-4 min-w-72">
@@ -183,8 +215,28 @@ export default function WorkOrdersPage() {
                         {order.agency ?? "No agency"} · Pipeline {order.pipeline_item_id ?? "—"}
                       </div>
                       <div className="mt-1 text-xs text-slate-600">
-                        Due {formatDate(order.tender_deadline)} · Fit {order.fit_score ?? "—"}%
+                        Due {formatDate(order.tender_deadline)} · Fit {order.fit_score ?? "—"}% · {order.pipeline_stage ?? "no stage"}
                       </div>
+                      {order.tender_url && (
+                        <a
+                          href={order.tender_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-block text-xs text-violet-300 underline hover:text-violet-200"
+                        >
+                          Open tender/doc link
+                        </a>
+                      )}
+                      {intakePreview(order.intake).length > 0 && (
+                        <div className="mt-3 space-y-1 rounded-lg border border-white/8 bg-slate-950/60 px-3 py-2">
+                          {intakePreview(order.intake).map(([key, value]) => (
+                            <div key={key} className="text-xs">
+                              <span className="font-medium text-slate-400 capitalize">{key}: </span>
+                              <span className="text-slate-300">{value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className="px-5 py-4">
                       <div className="text-slate-300">{order.email ?? order.user_email ?? "—"}</div>
@@ -195,7 +247,10 @@ export default function WorkOrdersPage() {
                       <select
                         value={order.status}
                         disabled={savingId === order.id}
-                        onChange={(e) => updateOrder(order.id, { status: e.target.value })}
+                        onChange={(e) => updateOrder(order.id, {
+                          status: e.target.value,
+                          notify_customer: notifyCustomer,
+                        })}
                         className="mt-3 block w-full rounded-lg border border-white/10 bg-slate-950 px-2 py-1.5 text-xs text-slate-300"
                       >
                         {EDITABLE_STATUSES.map((option) => (

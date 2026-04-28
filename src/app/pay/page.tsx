@@ -30,6 +30,7 @@ interface PayContext {
   tender: string | null;
   agency: string | null;
   pipelineItemId: string | null;
+  workOrderId: string | null;
 }
 
 /* ── Shared helpers ─────────────────────────────────────────────────────────*/
@@ -99,6 +100,7 @@ function CardTab({ plan, context }: { plan: string | null; context: PayContext }
           tender: context.tender,
           agency: context.agency,
           pipeline_item_id: context.pipelineItemId,
+          work_order_id: context.workOrderId,
         }),
       });
       const data = (await res.json()) as { url?: string; error?: string };
@@ -339,7 +341,7 @@ function WireTab({ plan, context }: { plan: string | null; context: PayContext }
 }
 
 function ContextCard({ context }: { context: PayContext }) {
-  if (!context.tender && !context.agency && !context.pipelineItemId) return null;
+  if (!context.tender && !context.agency && !context.pipelineItemId && !context.workOrderId) return null;
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-5">
       <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-3">
@@ -361,6 +363,9 @@ function ContextCard({ context }: { context: PayContext }) {
         {context.pipelineItemId && (
           <p className="text-xs text-gray-500">Pipeline item #{context.pipelineItemId}</p>
         )}
+        {context.workOrderId && (
+          <p className="text-xs text-gray-500">Work order #{context.workOrderId}</p>
+        )}
       </div>
     </div>
   );
@@ -375,6 +380,7 @@ function PayPage() {
     tender: searchParams.get("tender"),
     agency: searchParams.get("agency"),
     pipelineItemId: searchParams.get("pipeline_item_id"),
+    workOrderId: searchParams.get("work_order_id"),
   };
   const [selectedSlug, setSelectedSlug] = useState<string | null>(planSlug);
   const [activeTab, setActiveTab] = useState<Tab>("card");

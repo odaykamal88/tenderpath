@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 function LoginForm() {
@@ -10,11 +11,26 @@ function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
   const [step, setStep] = useState<"request" | "verify">("request");
+  const [loginMode, setLoginMode] = useState<"magic" | "password">("magic");
   const [token, setToken] = useState("");
   const [devToken, setDevToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("tp_bridge");
+      if (!raw) return;
+      const bridge = JSON.parse(raw) as { email?: unknown };
+      if (typeof bridge.email === "string" && bridge.email.includes("@")) {
+        setEmail(bridge.email);
+      }
+    } catch {
+      console.warn("[tp:bridge:login_prefill_failed]");
+    }
+  }, []);
 
   // Auto-verify when magic link token is in the URL (?token=...)
   useEffect(() => {
@@ -81,6 +97,25 @@ function LoginForm() {
     router.replace(next);
   }
 
+  async function passwordLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    const res = await fetch("/api/auth/password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const body = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) {
+      setError(body.error || "Invalid email or password");
+      return;
+    }
+    localStorage.setItem("tp_token", body.token);
+    router.replace(next);
+  }
+
   // Show spinner while auto-verifying from URL token
   if (busy && !email && search.get("token")) {
     return (
@@ -98,7 +133,7 @@ function LoginForm() {
   return (
     <div className="min-h-screen bg-navy flex flex-col items-center justify-center px-4">
       {/* Back link */}
-      <a
+      <Link
         href="/"
         className="self-start max-w-sm w-full mx-auto mb-6 text-xs text-gray-400 hover:text-gold transition-colors flex items-center gap-1"
       >
@@ -106,7 +141,7 @@ function LoginForm() {
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
         Back to TenderPath
-      </a>
+      </Link>
 
       <div className="w-full max-w-sm rounded-xl bg-navy-light border border-white/10 p-8">
         {/* Logo */}
@@ -126,15 +161,77 @@ function LoginForm() {
           <svg className="h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
-          We&apos;ll email you a secure code — no password needed.
+          Use a secure email code, or sign into a demo workspace with a password.
         </p>
+
+        <div className="mb-4 grid grid-cols-2 rounded-lg border border-white/10 bg-navy p-1">
+          <button
+            type="button"
+            onClick={() => {
+              setLoginMode("magic");
+              setStep("request");
+              setError(null);
+            }}
+            className={`rounded-md px-3 py-2 text-xs font-semibold transition-colors ${
+              loginMode === "magic"
+                ? "bg-white/10 text-white"
+                : "text-gray-500 hover:text-gray-300"
+            }`}
+          >
+            Magic link
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setLoginMode("password");
+              setStep("request");
+              setError(null);
+            }}
+            className={`rounded-md px-3 py-2 text-xs font-semibold transition-colors ${
+              loginMode === "password"
+                ? "bg-white/10 text-white"
+                : "text-gray-500 hover:text-gray-300"
+            }`}
+          >
+            Password
+          </button>
+        </div>
 
         <div className="mb-4 flex items-start gap-2 rounded-lg bg-navy border border-white/10 px-3 py-2.5">
           <svg className="w-4 h-4 text-gold flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
-          <p className="text-xs text-gray-400 leading-relaxed">No password needed. We&apos;ll email you a secure verification code.</p>
+          <p className="text-xs text-gray-400 leading-relaxed">
+            {loginMode === "magic"
+              ? "No password needed. We'll email you a secure verification code."
+              : "Password sign-in is available for prepared demo and internal accounts."}
+          </p>
         </div>
 
-        {step === "request" ? (
+        {loginMode === "password" ? (
+          <form onSubmit={passwordLogin} className="flex flex-col gap-3">
+            <input
+              type="email"
+              className="rounded-lg bg-navy border border-white/10 px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-gold focus:outline-none"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+            <input
+              type="password"
+              className="rounded-lg bg-navy border border-white/10 px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-gold focus:outline-none"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            <button
+              disabled={busy}
+              className="rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-white hover:bg-gold-dark transition-colors disabled:opacity-50"
+            >
+              {busy ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
+        ) : step === "request" ? (
           <form onSubmit={request} className="flex flex-col gap-3">
             <input
               type="email"
@@ -192,7 +289,7 @@ function LoginForm() {
         )}
 
         {error && <div className="mt-3 text-xs text-red">{error}</div>}
-        {step === "request" && (
+        {loginMode === "magic" && step === "request" && (
           <>
             <div className="mt-5 flex items-center gap-3">
               <div className="flex-1 border-t border-white/10" />

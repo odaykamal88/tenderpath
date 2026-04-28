@@ -15,7 +15,8 @@ export async function GET(request: Request) {
           wo.*,
           u.email AS user_email,
           pi.tender_deadline,
-          pi.fit_score
+          pi.fit_score,
+          pi.stage AS pipeline_stage
         FROM work_orders wo
         LEFT JOIN users u ON u.id = wo.user_id
         LEFT JOIN pipeline_items pi ON pi.id = wo.pipeline_item_id
@@ -28,7 +29,8 @@ export async function GET(request: Request) {
           wo.*,
           u.email AS user_email,
           pi.tender_deadline,
-          pi.fit_score
+          pi.fit_score,
+          pi.stage AS pipeline_stage
         FROM work_orders wo
         LEFT JOIN users u ON u.id = wo.user_id
         LEFT JOIN pipeline_items pi ON pi.id = wo.pipeline_item_id

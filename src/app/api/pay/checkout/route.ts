@@ -24,6 +24,7 @@ export async function POST(request: Request) {
     tender?: string | null;
     agency?: string | null;
     pipeline_item_id?: string | number | null;
+    work_order_id?: string | number | null;
   };
   const { plan, email } = body;
 
@@ -44,6 +45,14 @@ export async function POST(request: Request) {
     );
   }
 
+  if (!process.env.STRIPE_SECRET_KEY) {
+    console.error("[api/pay/checkout] STRIPE_SECRET_KEY is not configured");
+    return NextResponse.json(
+      { error: "Card payments are not configured yet. Please use USDT or wire transfer." },
+      { status: 503 }
+    );
+  }
+
   try {
     const stripe = getStripe();
     const origin =
@@ -54,9 +63,11 @@ export async function POST(request: Request) {
     const tender = metadataValue(body.tender);
     const agency = metadataValue(body.agency);
     const pipelineItemId = metadataValue(String(body.pipeline_item_id ?? ""));
+    const workOrderId = metadataValue(String(body.work_order_id ?? ""));
     if (tender) contextParams.set("tender", tender);
     if (agency) contextParams.set("agency", agency);
     if (pipelineItemId) contextParams.set("pipeline_item_id", pipelineItemId);
+    if (workOrderId) contextParams.set("work_order_id", workOrderId);
 
     const session = await stripe.checkout.sessions.create({
       mode: SUBSCRIPTION_PLANS.has(plan) ? "subscription" : "payment",
@@ -70,6 +81,7 @@ export async function POST(request: Request) {
         tender,
         agency,
         pipeline_item_id: pipelineItemId,
+        work_order_id: workOrderId,
       },
     });
 

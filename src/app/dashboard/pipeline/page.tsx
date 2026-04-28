@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   DragDropContext,
@@ -108,25 +107,22 @@ function isRosterAgency(agency: string | null): boolean {
   return /\b(UNDP|UNICEF|WFP|UNHCR|UNOPS|IOM|ILO|FAO|WHO|UNFPA)\b/i.test(agency);
 }
 
-function payHref(
-  plan: "proposal-draft" | "roster-fast-track",
+function serviceHref(
+  service: "bid-no-bid" | "proposal" | "lta-roster",
   item: PipelineItem,
 ): string {
   const params = new URLSearchParams({
-    plan,
     pipeline_item_id: String(item.id),
     tender: item.tender_title,
   });
   if (item.tender_agency) params.set("agency", item.tender_agency);
-  return `/pay?${params.toString()}`;
+  return `/dashboard/services/${service}?${params.toString()}`;
 }
 
 export default function PipelinePage() {
-  const router = useRouter();
   const [items, setItems] = useState<PipelineItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
-  const [analysingId, setAnalysingId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [form, setForm] = useState({
     tender_title: "",
@@ -222,41 +218,6 @@ export default function PipelinePage() {
       headers: authHeaders(),
       body: JSON.stringify({ stage: newStage }),
     });
-  }
-
-  async function handleAnalyse(item: PipelineItem) {
-    setAnalysingId(item.id);
-    try {
-      // Check if analysis already exists
-      const checkRes = await fetch(
-        `/api/analysis/bid-no-bid?pipeline_item_id=${item.id}`,
-        { headers: authHeaders() }
-      );
-      if (checkRes.ok) {
-        router.push(`/dashboard/analysis/${item.id}`);
-        return;
-      }
-
-      // No existing analysis — start Stripe checkout
-      const checkoutRes = await fetch("/api/analysis/bid-no-bid/checkout", {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({
-          pipeline_item_id: item.id,
-          tender_title: item.tender_title,
-        }),
-      });
-
-      if (!checkoutRes.ok) {
-        alert("Could not start checkout. Please try again.");
-        return;
-      }
-
-      const { url } = await checkoutRes.json();
-      if (url) window.location.href = url;
-    } finally {
-      setAnalysingId(null);
-    }
   }
 
   return (
@@ -462,26 +423,25 @@ export default function PipelinePage() {
                                     {STAGE_GUIDANCE[item.stage].button}
                                   </button>
                                 )}
-                                <button
-                                  onClick={() => handleAnalyse(item)}
-                                  disabled={analysingId === item.id}
+                                <Link
+                                  href={serviceHref("bid-no-bid", item)}
                                   title="Get win probability, criteria breakdown, and gap analysis for this tender ($39)"
-                                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
                                 >
                                   <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                   </svg>
-                                  {analysingId === item.id ? "Checking…" : "Bid Analysis"}
-                                </button>
+                                  Bid Analysis
+                                </Link>
                                 <Link
-                                  href={payHref("proposal-draft", item)}
+                                  href={serviceHref("proposal", item)}
                                   className="text-xs font-semibold text-gray-700 hover:text-gray-900 border border-gray-200 rounded px-2 py-0.5 bg-white hover:bg-gray-50 transition-colors"
                                 >
                                   Draft Proposal
                                 </Link>
                                 {isRosterAgency(item.tender_agency) && (
                                   <Link
-                                    href={payHref("roster-fast-track", item)}
+                                    href={serviceHref("lta-roster", item)}
                                     className="text-xs font-semibold text-amber-800 hover:text-amber-950 border border-amber-200 rounded px-2 py-0.5 bg-amber-50 hover:bg-amber-100 transition-colors"
                                   >
                                     Roster/LTA

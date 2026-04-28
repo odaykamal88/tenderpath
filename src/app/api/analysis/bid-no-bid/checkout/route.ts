@@ -10,9 +10,10 @@ export async function POST(request: Request) {
   const body = await request.json() as {
     pipeline_item_id?: number;
     tender_title?: string;
+    work_order_id?: number;
   };
 
-  const { pipeline_item_id, tender_title } = body;
+  const { pipeline_item_id, tender_title, work_order_id } = body;
 
   if (!pipeline_item_id) {
     return NextResponse.json({ error: "pipeline_item_id is required" }, { status: 400 });
@@ -20,7 +21,12 @@ export async function POST(request: Request) {
 
   const priceId = process.env.STRIPE_BIDNOBID_PRICE_ID;
   if (!priceId) {
-    return NextResponse.json({ error: "STRIPE_BIDNOBID_PRICE_ID is not configured" }, { status: 500 });
+    return NextResponse.json({ error: "Bid/no-bid card checkout is not configured yet." }, { status: 503 });
+  }
+
+  if (!process.env.STRIPE_SECRET_KEY) {
+    console.error("[api/analysis/bid-no-bid/checkout] STRIPE_SECRET_KEY is not configured");
+    return NextResponse.json({ error: "Bid/no-bid card checkout is not configured yet." }, { status: 503 });
   }
 
   const stripe = getStripe();
@@ -36,9 +42,13 @@ export async function POST(request: Request) {
       cancel_url: `${origin}/dashboard/pipeline`,
       metadata: {
         userId: String(user.id),
+        plan: "bid-no-bid",
+        service: "bid-no-bid",
         pipeline_item_id: String(pipeline_item_id),
         product: "bid-no-bid",
         tender_title: tender_title ?? "",
+        tender: tender_title ?? "",
+        work_order_id: work_order_id ? String(work_order_id) : "",
       },
     });
 

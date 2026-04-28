@@ -97,11 +97,17 @@ async function filterLiveLinks(tenders: RawTender[], concurrency = 10): Promise<
   const live: RawTender[] = [];
   let dropped = 0;
   let idx = 0;
+  const sourceVerifiedNoticeLink = (t: RawTender) =>
+    t.source_name === "UNGM" &&
+    /^UNGM-/.test(t.reference_id) &&
+    (t.source_url?.startsWith("https://www.ungm.org/Public/Notice/") ?? false);
+
   async function worker() {
     while (idx < tenders.length) {
       const i = idx++;
       const t = tenders[i];
       if (!t.source_url) { live.push(t); continue; }
+      if (sourceVerifiedNoticeLink(t)) { live.push(t); continue; }
       const ok = await verifyLink(t.source_url);
       if (ok) live.push(t);
       else dropped++;

@@ -101,11 +101,20 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   const userId = users[0]?.id as number;
 
-  // Log the purchase
-  await sql`
-    INSERT INTO purchase_logs (plan, stripe_session_id, stripe_customer_id, user_id, amount_cents, currency)
-    VALUES (${plan}, ${session.id}, ${customerId}, ${userId}, ${session.amount_total ?? 0}, ${session.currency ?? 'usd'})
+  // Stripe can retry webhook delivery. Keep purchase logging idempotent even
+  // though older databases may not have a unique index on stripe_session_id.
+  const existingPurchase = await sql`
+    SELECT id FROM purchase_logs
+    WHERE stripe_session_id = ${session.id}
+    LIMIT 1
   `;
+
+  if (!existingPurchase.length) {
+    await sql`
+      INSERT INTO purchase_logs (plan, stripe_session_id, stripe_customer_id, user_id, amount_cents, currency)
+      VALUES (${plan}, ${session.id}, ${customerId}, ${userId}, ${session.amount_total ?? 0}, ${session.currency ?? 'usd'})
+    `;
+  }
 
   await createWorkOrderFromCheckout(session, userId);
 

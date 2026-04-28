@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { crawlWebsite } from "@/lib/assessment/crawl";
 import {
@@ -137,30 +137,36 @@ export async function POST(request: Request) {
     const assessmentId = rows[0].id;
     console.log("[tp:assessment:complete]", { assessmentId, email: body.email, tenderCount: matchedTenders.length, grantCount: matchedGrants.length });
 
-    // Queue + send results email (fire-and-forget; failures don't block response)
+    // Queue + send results email after response; failures update email_queue for ops visibility.
     await sql`
       INSERT INTO email_queue (assessment_id, email, status)
       VALUES (${assessmentId}, ${body.email}, 'pending')
     `;
     console.log("[tp:email:queued]", { assessmentId, email: body.email });
-    console.log("[tp:email:attempt]", { assessmentId, email: body.email });
-    sendAssessmentEmail({
-      assessmentId,
-      email: body.email,
-      companyName: body.companyName,
-      readinessScore: analysis.overall_score,
-      recommendedTier: recommendedTier,
-      summary: analysis.summary,
-      topGap: analysis.gaps[0]?.gap ?? null,
-      tenderCount: matchedTenders.length,
-      grantCount: matchedGrants.length,
-      topTenders: matchedTenders.slice(0, 3).map((t) => ({
-        title: t.title,
-        agency: t.agency,
-        country: t.country,
-        match_reasons: t.match_reasons,
-      })),
-    }).catch((e) => console.error("Email send failed:", e));
+    after(async () => {
+      try {
+        console.log("[tp:email:attempt]", { assessmentId, email: body.email });
+        await sendAssessmentEmail({
+          assessmentId,
+          email: body.email!,
+          companyName: body.companyName!,
+          readinessScore: analysis.overall_score,
+          recommendedTier: recommendedTier,
+          summary: analysis.summary,
+          topGap: analysis.gaps[0]?.gap ?? null,
+          tenderCount: matchedTenders.length,
+          grantCount: matchedGrants.length,
+          topTenders: matchedTenders.slice(0, 3).map((t) => ({
+            title: t.title,
+            agency: t.agency,
+            country: t.country,
+            match_reasons: t.match_reasons,
+          })),
+        });
+      } catch (e) {
+        console.error("Email send failed:", e);
+      }
+    });
 
     return NextResponse.json({
       id: assessmentId,

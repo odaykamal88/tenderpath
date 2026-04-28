@@ -15,6 +15,7 @@
  * Per-notice detail enrichment (description + UNSPSCs) still disabled —
  * listing rows carry enough signal (title, agency, country, deadline).
  */
+import { normalizeSector } from "./sector-map";
 import { type RawTender, type CrawlResult, withRetry } from "./types";
 
 const UNGM_API = "https://www.ungm.org/Public/Notice/Search";
@@ -29,11 +30,27 @@ const PAGE_SIZE = 100;
 // the other 8 crawlers.
 const MAX_PAGES = 20;
 
+const SUPPLEMENTAL_TITLE_SEARCHES = [
+  "Light Construction Works",
+  "Adult Diapers",
+  "Accommodation of Persons",
+  "Transportation of Persons",
+  "School Furniture",
+  "Non-Food Items",
+];
+
 function workerConfigured(): boolean {
   return !!(process.env.CRAWLER_WORKER_URL && process.env.CRAWLER_WORKER_KEY);
 }
 
 interface WorkerPageResult { status: number; body: string }
+interface UngmRequest {
+  kind: "page" | "title-search";
+  label: string;
+  method: "GET" | "POST";
+  body?: string;
+  headers?: Record<string, string>;
+}
 
 /**
  * Derive /fetch-many endpoint from the configured CRAWLER_WORKER_URL. The env
@@ -52,7 +69,7 @@ function fetchManyEndpoint(): string {
  * between ~30-40s total and ~300s (one cold-start per page).
  */
 async function workerFetchMany(
-  requests: Array<{ method: "GET" | "POST"; body?: string; headers?: Record<string, string> }>,
+  requests: UngmRequest[],
   opts: { waitMs?: number } = {},
 ): Promise<WorkerPageResult[]> {
   const endpoint = fetchManyEndpoint();
@@ -164,11 +181,11 @@ function parseNoticeRows(html: string): UNGMNotice[] {
   return out;
 }
 
-function buildPagePayload(pageIndex: number): string {
+function buildSearchPayload(pageIndex: number, title = ""): string {
   return JSON.stringify({
     PageIndex: pageIndex,
     PageSize: PAGE_SIZE,
-    Title: "",
+    Title: title,
     Description: "",
     Reference: "",
     PublishedFrom: "",
@@ -188,6 +205,19 @@ function buildPagePayload(pageIndex: number): string {
     NoticeDisplayType: null,
     NoticeSearchTotalLabelId: "noticeSearchTotal",
   });
+}
+
+function buildPagePayload(pageIndex: number): string {
+  return buildSearchPayload(pageIndex);
+}
+
+function dedupeNotices(tenders: RawTender[]): RawTender[] {
+  const out = new Map<string, RawTender>();
+  for (const tender of tenders) {
+    const key = tender.reference_id || tender.source_url || `${tender.title}|${tender.agency}|${tender.deadline ?? ""}`;
+    if (!out.has(key)) out.set(key, tender);
+  }
+  return [...out.values()];
 }
 
 const PAGE_HEADERS = {
@@ -212,15 +242,17 @@ function parsePageResult(pageIndex: number, resp: WorkerPageResult): UNGMNotice[
 }
 
 function mapNotice(n: UNGMNotice): RawTender {
+  const title = n.Title ?? "Untitled";
+  const sectorSlugs = normalizeSector(null, title, null);
   return {
     reference_id: `UNGM-${n.ReferenceNo ?? n.ID ?? ""}`,
-    title: n.Title ?? "Untitled",
+    title,
     description: null,
     agency: n.AgencyName ?? "UN",
     country: n.Country ?? "Global",
     country_code: null,
     region: null,
-    sector: null,
+    sector: sectorSlugs.length ? sectorSlugs.join(", ") : null,
     deadline: n.DeadlineDate ?? null,
     // UNGM listing rows do not include contract value; the field is not part
     // of the Search API response payload.
@@ -250,11 +282,21 @@ export async function crawlUNGM(): Promise<CrawlResult> {
 
   try {
     // Build all page payloads upfront — we fire them as a single worker call.
-    const requests = Array.from({ length: MAX_PAGES }, (_, i) => ({
+    const pageRequests: UngmRequest[] = Array.from({ length: MAX_PAGES }, (_, i) => ({
+      kind: "page",
+      label: `page ${i}`,
       method: "POST" as const,
       body: buildPagePayload(i),
       headers: PAGE_HEADERS,
     }));
+    const supplementalRequests: UngmRequest[] = SUPPLEMENTAL_TITLE_SEARCHES.map((title) => ({
+      kind: "title-search",
+      label: `title search "${title}"`,
+      method: "POST" as const,
+      body: buildSearchPayload(0, title),
+      headers: PAGE_HEADERS,
+    }));
+    const requests = [...pageRequests, ...supplementalRequests];
 
     // Fast-fail detection: the common failure mode is the worker returning
     // HTML (CF edge error / challenge / Workers cold-start hiccup) in 3-4s
@@ -284,11 +326,12 @@ export async function crawlUNGM(): Promise<CrawlResult> {
       } catch (err) {
         // One bad page shouldn't drop the whole run. Log and continue — the
         // worker-level retry already covered transient failures.
-        console.error(`[ungm] page ${i} parse failed:`, err instanceof Error ? err.message : err);
+        console.error(`[ungm] ${requests[i]?.label ?? `request ${i}`} parse failed:`, err instanceof Error ? err.message : err);
         parseErrors++;
         continue;
       }
-      if (!notices.length) break; // empty page = end of active notices
+      if (!notices.length && requests[i]?.kind === "page") break; // empty page = end of active notices
+      if (!notices.length) continue;
       tenders.push(...notices.map(mapNotice));
     }
 
@@ -306,7 +349,7 @@ export async function crawlUNGM(): Promise<CrawlResult> {
       };
     }
 
-    return { platform: "UNGM", status: "success", tenders, durationMs: Date.now() - start };
+    return { platform: "UNGM", status: "success", tenders: dedupeNotices(tenders), durationMs: Date.now() - start };
   } catch (err) {
     return {
       platform: "UNGM",

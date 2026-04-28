@@ -1,0 +1,203 @@
+{
+  "name": "phase1-matching",
+  "description": "Launch-readiness benchmark tenders supplied by the user. DevelopmentAid links are discovery evidence; direct primary sources remain preferred when present.",
+  "profiles": [
+    {
+      "key": "jadunited",
+      "company": "Jad United",
+      "websiteContains": "jadunited",
+      "countries": ["Syria"],
+      "fallbackAnalysis": {
+        "detected_industry": "logistics",
+        "sectors": [
+          "Logistics & Supply Chain",
+          "Transport",
+          "Food Services",
+          "Construction",
+          "Engineering",
+          "Facility Management"
+        ],
+        "services": [
+          "general procurement",
+          "supply and delivery",
+          "transportation",
+          "warehousing",
+          "facility support",
+          "spare parts",
+          "food baskets",
+          "non-food items",
+          "light construction"
+        ],
+        "capabilities": [
+          "local supplier coordination",
+          "transport operations",
+          "goods delivery",
+          "maintenance support",
+          "procurement of supplies",
+          "framework agreement fulfilment"
+        ],
+        "certifications_detected": [],
+        "company_size_signal": "small",
+        "strengths": [],
+        "gaps": [],
+        "readiness_dimensions": {
+          "technical_capability": 60,
+          "compliance_readiness": 50,
+          "financial_stability": 50,
+          "geographic_reach": 70,
+          "experience_relevance": 60
+        },
+        "overall_score": 58,
+        "summary": "Fallback benchmark profile for a Syria-capable general supplier, logistics, facilities, and procurement operator."
+      }
+    },
+    {
+      "key": "docstream",
+      "company": "Docstream",
+      "websiteContains": "docstream",
+      "countries": ["Syria"],
+      "fallbackAnalysis": {
+        "detected_industry": "consulting",
+        "sectors": [
+          "Consulting Services",
+          "Public Sector Governance",
+          "Community Development & NGOs",
+          "Information Technology",
+          "Publishing & Communications"
+        ],
+        "services": [
+          "documentation",
+          "civil society support",
+          "knowledge management",
+          "programme support",
+          "digital workflows",
+          "content management",
+          "governance documentation"
+        ],
+        "capabilities": [
+          "document management",
+          "stakeholder coordination",
+          "workflow automation",
+          "technical documentation",
+          "programme documentation",
+          "regional project support"
+        ],
+        "certifications_detected": [],
+        "company_size_signal": "small",
+        "strengths": [],
+        "gaps": [],
+        "readiness_dimensions": {
+          "technical_capability": 65,
+          "compliance_readiness": 55,
+          "financial_stability": 50,
+          "geographic_reach": 60,
+          "experience_relevance": 60
+        },
+        "overall_score": 58,
+        "summary": "Fallback benchmark profile for a documentation, workflow, and governance-support company."
+      }
+    }
+  ],
+  "tenders": [
+    {
+      "profileKey": "jadunited",
+      "developmentAidId": "1636125",
+      "title": "Maintenance of production lines for bakeries in 7 Governorates in Syria",
+      "expectedAgency": "UNDP",
+      "expectedCountry": "Syria",
+      "expectedSectors": ["Food Systems & Livelihoods", "Mechanical Engineering", "Maintenance"],
+      "expectedCategory": "Non-consulting services",
+      "developmentAidUrl": "https://www.developmentaid.org/tenders/view/1636125/maintenance-of-production-lines-for-bakeries-in-7-governorates-in-syria"
+    },
+    {
+      "profileKey": "jadunited",
+      "developmentAidId": "1642211",
+      "title": "Simplified Request for PROPOSAL:SRFP/HCR/SYR/26/2770 Provision of Light Construction Works in roj Camp in Hasskeh Governorate, Syria",
+      "expectedAgency": "UNHCR",
+      "expectedCountry": "Syria",
+      "expectedSectors": ["Civil Engineering", "Construction"],
+      "expectedCategory": "Works",
+      "developmentAidUrl": "https://www.developmentaid.org/tenders/view/1642211/simplified-request-for-proposalsrfphcrsyr262770-provision-of-light-construction-works-in-roj-camp-in"
+    },
+    {
+      "profileKey": "jadunited",
+      "developmentAidId": "1632085",
+      "title": "Provision of Spare Parts to Deir Ali 2 CCPP and Al-Nassrieh PP",
+      "expectedAgency": "UNDP",
+      "expectedCountry": "Syria",
+      "expectedSectors": ["Energy", "Mechanical Engineering", "Spare Parts"],
+      "expectedCategory": "Goods",
+      "developmentAidUrl": "https://www.developmentaid.org/tenders/view/1632085/provision-of-spare-parts-to-deir-ali-2-ccpp-and-al-nassrieh-pp"
+    },
+    {
+      "profileKey": "jadunited",
+      "developmentAidId": "1640755",
+      "title": "RFQ-SCU-SY-2026-009- Accommodation of Persons - LTA Basis",
+      "expectedAgency": "IOM",
+      "expectedCountry": "Syria",
+      "expectedSectors": ["Non-specialized Goods / Services", "Accommodation", "Facility Services"],
+      "expectedCategory": "Non-consulting services",
+      "developmentAidUrl": "https://www.developmentaid.org/tenders/view/1640755/rfq-scu-sy-2026-009-accommodation-of-persons-lta-basis"
+    },
+    {
+      "profileKey": "jadunited",
+      "developmentAidId": "1641154",
+      "title": "RFQ-SCU-SY-2026-010 - Transportation of Persons - LTA",
+      "expectedAgency": "IOM",
+      "expectedCountry": "Syria",
+      "expectedSectors": ["Transport"],
+      "expectedCategory": "Non-consulting services",
+      "developmentAidUrl": "https://www.developmentaid.org/tenders/view/1641154/rfq-scu-sy-2026-010-transportation-of-persons-lta"
+    },
+    {
+      "profileKey": "jadunited",
+      "developmentAidId": "1643474",
+      "title": "Furniture For UNRWA Schools 2026",
+      "expectedAgency": "UNRWA",
+      "expectedCountry": "Syria",
+      "expectedSectors": ["Furniture & Office Supplies", "Education"],
+      "expectedCategory": "Goods",
+      "developmentAidUrl": "https://www.developmentaid.org/tenders/view/1643474/furniture-for-unrwa-schools-2026"
+    },
+    {
+      "profileKey": "jadunited",
+      "developmentAidId": "1643183",
+      "title": "Adult Diapers",
+      "expectedAgency": "UNRWA",
+      "expectedCountry": "Syria",
+      "expectedSectors": ["Non-specialized Goods / Services", "Healthcare Supplies"],
+      "expectedCategory": "Goods",
+      "developmentAidUrl": "https://www.developmentaid.org/tenders/view/1643183/adult-diapers"
+    },
+    {
+      "profileKey": "jadunited",
+      "developmentAidId": "1614339",
+      "title": "Ready to eat Baskets",
+      "expectedAgency": "TAS - Takaful Al Sham",
+      "expectedCountry": "Syria",
+      "expectedSectors": ["Non-specialized Goods / Services", "Food"],
+      "expectedCategory": "Goods",
+      "developmentAidUrl": "https://www.developmentaid.org/tenders/view/1614339/ready-to-eat-baskets"
+    },
+    {
+      "profileKey": "jadunited",
+      "developmentAidId": "1614337",
+      "title": "Non-Food Items",
+      "expectedAgency": "TAS - Takaful Al Sham",
+      "expectedCountry": "Syria",
+      "expectedSectors": ["Non-specialized Goods / Services", "NFI"],
+      "expectedCategory": "Goods",
+      "developmentAidUrl": "https://www.developmentaid.org/tenders/view/1614337/non-food-items"
+    },
+    {
+      "profileKey": "docstream",
+      "developmentAidId": "1643163",
+      "title": "MED Dialogue - Regional Civil Society Facility",
+      "expectedAgency": "European Commission",
+      "expectedCountry": "Syria",
+      "expectedSectors": ["Community Development & NGOs", "Public Sector Governance", "Consulting"],
+      "expectedCategory": "Consulting services",
+      "developmentAidUrl": "https://www.developmentaid.org/tenders/view/1643163/med-dialogue-regional-civil-society-facility"
+    }
+  ]
+}

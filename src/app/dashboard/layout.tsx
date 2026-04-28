@@ -73,8 +73,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const navItems = [
     { href: "/dashboard", label: "Overview" },
     { href: "/dashboard/pipeline", label: "Pipeline" },
-    { href: "/dashboard/vault", label: "Document Vault" },
+    { href: "/dashboard/bid-analysis", label: "Bid Analysis", requiresPaid: true },
+    { href: "/dashboard/applications", label: "Applications", requiresPaid: true },
+    { href: "/dashboard/services", label: "Services" },
+    { href: "/dashboard/work-orders", label: "Work Orders" },
+    { href: "/dashboard/vault", label: "Document Vault", requiresPaid: true },
   ];
+  const isPaid = state.user.is_super_admin || state.user.subscription_status === "active";
 
   return (
     <div className="min-h-screen flex bg-gray-50">
@@ -88,17 +93,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               item.href === "/dashboard"
                 ? pathname === "/dashboard"
                 : pathname?.startsWith(item.href);
+            const previewLocked = item.requiresPaid && !isPaid;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`px-3 py-2 rounded-md text-sm ${
+                className={`group flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm transition-colors ${
                   active
                     ? "bg-gray-900 text-white"
+                    : previewLocked
+                    ? "text-gray-400 opacity-65 hover:bg-amber-50 hover:text-gray-700"
                     : "text-gray-700 hover:bg-gray-100"
                 }`}
               >
-                {item.label}
+                <span>{item.label}</span>
+                {previewLocked && (
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                    active
+                      ? "bg-white/15 text-white"
+                      : "bg-amber-100 text-amber-700 group-hover:bg-amber-200"
+                  }`}>
+                    Preview
+                  </span>
+                )}
               </Link>
             );
           })}

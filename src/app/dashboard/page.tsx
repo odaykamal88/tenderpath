@@ -2,14 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 interface MatchReason {
   summary?: string[];
   matchedSectors?: string[];
   matchedCapabilities?: string[];
   matchedKeywords?: string[];
-  confidence?: number;
+  confidence?: number | "high" | "medium" | "low";
   caveats?: string[];
   geographyAlignment?: { mode?: string; tenderCountry?: string | null };
   opportunityBucket?: string | null;
@@ -27,12 +26,36 @@ const BUCKET_STYLES: Record<string, string> = {
 
 function isDeadlineSoon(deadline: string | null): boolean {
   if (!deadline) return false;
-  const days = (new Date(deadline).getTime() - Date.now()) / 86_400_000;
-  return days >= 0 && days <= 7;
+  const days = daysUntilDeadline(deadline);
+  return days != null && days >= 0 && days <= 7;
+}
+
+function daysUntilDeadline(deadline: string | null): number | null {
+  if (!deadline) return null;
+  const time = new Date(deadline).getTime();
+  if (Number.isNaN(time)) return null;
+  return Math.ceil((time - Date.now()) / 86_400_000);
+}
+
+function deadlineLabel(deadline: string | null): string {
+  const days = daysUntilDeadline(deadline);
+  if (days == null) return "No deadline";
+  const date = new Date(deadline ?? "").toLocaleDateString();
+  if (days < 0) return `Expired ${date}`;
+  if (days === 0) return `Due today`;
+  if (days === 1) return `Due tomorrow`;
+  return `${days} days left`;
+}
+
+function confidenceLabel(value: MatchReason["confidence"]): string | null {
+  if (value == null) return null;
+  if (typeof value === "number") return `${Math.round(value * 100)}% confidence`;
+  return `${value} confidence`;
 }
 
 interface BridgeData {
   assessment_id: number;
+  email?: string;
   readiness_score: number;
   company_name: string;
   matched_tenders: Array<{
@@ -75,6 +98,8 @@ interface ReadinessData {
   created_at: string;
 }
 
+type ReadinessAction = ReadinessData["action_plan"][number];
+
 function authHeaders(): HeadersInit {
   const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
   return token
@@ -82,80 +107,204 @@ function authHeaders(): HeadersInit {
     : { "content-type": "application/json" };
 }
 
-function payHref(
-  plan: "proposal-draft" | "roster-fast-track",
+function serviceHref(
+  service: "bid-no-bid" | "proposal" | "lta-roster",
   item: { id: number; tender_title: string; tender_agency: string | null },
 ): string {
   const params = new URLSearchParams({
-    plan,
     pipeline_item_id: String(item.id),
     tender: item.tender_title,
   });
   if (item.tender_agency) params.set("agency", item.tender_agency);
-  return `/pay?${params.toString()}`;
+  return `/dashboard/services/${service}?${params.toString()}`;
+}
+
+type PipelineTender = {
+  id: number;
+  tender_id: number | null;
+  tender_title: string;
+  tender_agency: string | null;
+  tender_deadline: string | null;
+  tender_value: string | null;
+  fit_score: number;
+  match_reasons?: MatchReason | null;
+};
+
+function priorityRank(item: PipelineTender): number {
+  const bucket = item.match_reasons?.opportunityBucket;
+  if (bucket === "act_now") return 0;
+  if (isDeadlineSoon(item.tender_deadline)) return 1;
+  if (bucket === "strong_fit") return 2;
+  if (item.fit_score >= 70) return 3;
+  if (bucket === "strategic") return 4;
+  if (bucket === "adjacent") return 5;
+  return 6;
+}
+
+function nextActionFor(item: PipelineTender): {
+  label: string;
+  detail: string;
+  kind: "analysis" | "proposal" | "roster";
+} {
+  if (isDeadlineSoon(item.tender_deadline)) {
+    return {
+      label: "Run bid/no-bid now",
+      detail: "Deadline pressure makes the pursuit decision the first step.",
+      kind: "analysis",
+    };
+  }
+  if (item.fit_score >= 75) {
+    return {
+      label: "Start proposal package",
+      detail: "Strong fit; move from shortlist to submission planning.",
+      kind: "proposal",
+    };
+  }
+  if (/\b(UNDP|UNICEF|WFP|UNHCR|UNOPS|IOM|ILO|FAO|WHO|UNFPA)\b/i.test(item.tender_agency ?? "")) {
+    return {
+      label: "Check roster/LTA path",
+      detail: "UN agency opportunity; verify registration and LTA readiness.",
+      kind: "roster",
+    };
+  }
+  return {
+    label: "Qualify fit",
+    detail: "Review match evidence before investing proposal time.",
+    kind: "analysis",
+  };
+}
+
+function gapKey(action: ReadinessAction): string {
+  return `${action.severity}:${action.gap}`;
+}
+
+function guidanceForGap(action: ReadinessAction): { label: string; steps: string[] } {
+  const type = action.recommended_doc_type;
+  const websiteStep = "Update your website, capability statement, or public profile so buyers can verify this claim.";
+
+  if (type === "financial") {
+    return {
+      label: "Financial proof",
+      steps: [
+        "Prepare audited statements, tax records, bank letter, or turnover evidence.",
+        "Upload the evidence to the Vault with the latest expiry date if it has one.",
+        "Make sure the same capacity is reflected in your company profile or website.",
+      ],
+    };
+  }
+
+  if (type === "past_performance") {
+    return {
+      label: "Track record proof",
+      steps: [
+        "Write 2-3 short project references with client, country, dates, scope, and value.",
+        "Add links, letters, photos, or contracts as supporting evidence where possible.",
+        websiteStep,
+      ],
+    };
+  }
+
+  if (type === "cv") {
+    return {
+      label: "Team proof",
+      steps: [
+        "Collect CVs for the staff or experts likely to appear in proposals.",
+        "Standardize them into a consistent two-page tender-ready format.",
+        "Keep the strongest CVs in the Vault for reuse across bids.",
+      ],
+    };
+  }
+
+  if (type === "certification") {
+    return {
+      label: "Compliance proof",
+      steps: [
+        "Gather registration, licenses, policies, ISO certificates, vendor forms, or equivalent proof.",
+        "Check expiry dates and upload current versions to the Vault.",
+        websiteStep,
+      ],
+    };
+  }
+
+  return {
+    label: "Readiness proof",
+    steps: [
+      "Turn the gap into a concrete proof point: document, webpage, policy, reference, or process note.",
+      "Upload any reusable evidence to the Vault.",
+      "Mark it done once the external update is complete.",
+    ],
+  };
 }
 
 export default function DashboardOverview() {
-  const router = useRouter();
   const [bridge, setBridge] = useState<BridgeData | null>(null);
   const [seeded, setSeeded] = useState(false);
-  const [analysingId, setAnalysingId] = useState<number | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [pipelineStats, setPipelineStats] = useState<{
     total: number;
     active: number;
     won: number;
     matched: number;
+    dueSoon: number;
+    strong: number;
   } | null>(null);
-  const [matchedTenders, setMatchedTenders] = useState<Array<{
-    id: number;
-    tender_id: number | null;
-    tender_title: string;
-    tender_agency: string | null;
-    tender_deadline: string | null;
-    tender_value: string | null;
-    fit_score: number;
-    match_reasons?: MatchReason | null;
-  }>>([]);
+  const [matchedTenders, setMatchedTenders] = useState<PipelineTender[]>([]);
+  const [feedbackSavingId, setFeedbackSavingId] = useState<number | null>(null);
   const [readiness, setReadiness] = useState<ReadinessData | null>(null);
+  const [completedGapKeys, setCompletedGapKeys] = useState<Set<string>>(new Set());
 
   const loadDashboard = useCallback(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
     if (!token) return;
+    setWorkflowError(null);
 
     Promise.all([
       fetch("/api/dashboard/pipeline", {
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      }).then((r) => r.ok ? r.json() : null),
+      }).then((r) => {
+        if (!r.ok) throw new Error(`Pipeline GET failed: ${r.status}`);
+        return r.json();
+      }),
       fetch("/api/dashboard/tender-feedback?status=not_relevant", {
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      }).then((r) => r.ok ? r.json() : null),
+      }).then((r) => {
+        if (!r.ok) throw new Error(`Tender feedback GET failed: ${r.status}`);
+        return r.json();
+      }),
       fetch("/api/dashboard/readiness", {
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      }).then((r) => r.ok ? r.json() : null),
+      }).then((r) => {
+        if (!r.ok) throw new Error(`Readiness GET failed: ${r.status}`);
+        return r.json();
+      }),
     ]).then(([pipelineBody, feedbackBody, readinessBody]) => {
       const dismissed = new Set<number>(
         (feedbackBody?.feedback ?? []).map((f: { tender_id: number }) => f.tender_id)
       );
 
       if (pipelineBody?.items) {
-        const items = pipelineBody.items as Array<{ id: number; stage: string; tender_title: string; tender_agency: string | null; tender_deadline: string | null; tender_value: string | null; fit_score: number; tender_id: number | null; match_reasons?: MatchReason | null }>;
+        const items = pipelineBody.items as Array<PipelineTender & { stage: string }>;
         setPipelineStats({
           total: items.length,
           matched: items.filter((i) => i.stage === "matched").length,
           active: items.filter((i) => ["evaluating", "preparing", "submitted"].includes(i.stage)).length,
           won: items.filter((i) => i.stage === "won").length,
+          dueSoon: items.filter((i) => i.stage === "matched" && isDeadlineSoon(i.tender_deadline)).length,
+          strong: items.filter((i) => i.stage === "matched" && (i.fit_score >= 70 || i.match_reasons?.opportunityBucket === "strong_fit" || i.match_reasons?.opportunityBucket === "act_now")).length,
         });
         const matched = items.filter(
           (i) => i.stage === "matched" && !(i.tender_id != null && dismissed.has(i.tender_id))
-        ).slice(0, 5);
+        ).sort((a, b) => priorityRank(a) - priorityRank(b) || b.fit_score - a.fit_score).slice(0, 6);
         setMatchedTenders(matched);
       }
 
       if (readinessBody?.assessment) {
         setReadiness(readinessBody.assessment as ReadinessData);
       }
-    }).catch(() => null);
+    }).catch((err) => {
+      console.error("[tp:dashboard:load_failed]", err);
+      setWorkflowError("We could not load your dashboard yet. Please refresh or sign in again.");
+    });
   }, []);
 
   const seedPipeline = useCallback(async (data: BridgeData) => {
@@ -185,7 +334,13 @@ export default function DashboardOverview() {
       localStorage.removeItem("tp_bridge");
       setSeeded(true);
       loadDashboard();
-    } catch {
+    } catch (err) {
+      console.error("[tp:pipeline:seed_failed]", {
+        assessmentId: data.assessment_id,
+        tenderCount: data.matched_tenders.length,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      setWorkflowError("Your assessment is saved, but we could not populate your dashboard yet. Refreshing will retry.");
       // Bridge preserved for retry on next load.
     }
   }, [loadDashboard]);
@@ -197,7 +352,9 @@ export default function DashboardOverview() {
       const data: BridgeData = JSON.parse(raw);
       setBridge(data);
       seedPipeline(data);
-    } catch {
+    } catch (err) {
+      console.error("[tp:bridge:parse_failed]", err);
+      setWorkflowError("We could not read your saved assessment handoff. Please open your emailed report or rerun the assessment.");
       localStorage.removeItem("tp_bridge");
     }
   }, [seedPipeline]);
@@ -206,37 +363,46 @@ export default function DashboardOverview() {
     loadDashboard();
   }, [loadDashboard]);
 
-  async function handleAnalyse(item: { id: number; tender_title: string }) {
-    setAnalysingId(item.id);
+  useEffect(() => {
+    if (!readiness) return;
+    try {
+      const raw = localStorage.getItem(`tp_gap_done_${readiness.id}`);
+      const values = raw ? JSON.parse(raw) : [];
+      setCompletedGapKeys(new Set(Array.isArray(values) ? values.filter((value) => typeof value === "string") : []));
+    } catch (err) {
+      console.error("[tp:dashboard:gaps_done_parse_failed]", err);
+      setCompletedGapKeys(new Set());
+    }
+  }, [readiness]);
+
+  async function handleTenderFeedback(item: PipelineTender, status: "saved" | "not_relevant") {
+    if (!item.tender_id) {
+      if (status === "not_relevant") {
+        setMatchedTenders((prev) => prev.filter((t) => t.id !== item.id));
+      }
+      return;
+    }
+    setFeedbackSavingId(item.id);
     setWorkflowError(null);
     try {
-      const checkRes = await fetch(
-        `/api/analysis/bid-no-bid?pipeline_item_id=${item.id}`,
-        { headers: authHeaders() }
-      );
-      if (checkRes.ok) {
-        router.push(`/dashboard/analysis/${item.id}`);
-        return;
-      }
-
-      const checkoutRes = await fetch("/api/analysis/bid-no-bid/checkout", {
+      const res = await fetch("/api/dashboard/tender-feedback", {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify({
-          pipeline_item_id: item.id,
-          tender_title: item.tender_title,
+          tender_id: item.tender_id,
+          status,
+          reason: status === "not_relevant" ? "Dismissed from dashboard workbench" : "Saved from dashboard workbench",
         }),
       });
-      const data = await checkoutRes.json().catch(() => ({})) as { url?: string; error?: string };
-      if (!checkoutRes.ok || !data.url) {
-        setWorkflowError(data.error ?? "Could not start bid analysis checkout.");
-        return;
+      if (!res.ok) throw new Error(`Feedback POST failed: ${res.status}`);
+      if (status === "not_relevant") {
+        setMatchedTenders((prev) => prev.filter((t) => t.id !== item.id));
       }
-      window.location.href = data.url;
-    } catch {
-      setWorkflowError("Could not start bid analysis checkout. Please try again.");
+    } catch (err) {
+      console.error("[tp:dashboard:feedback_failed]", err);
+      setWorkflowError("We could not save that tender preference. Please try again.");
     } finally {
-      setAnalysingId(null);
+      setFeedbackSavingId(null);
     }
   }
 
@@ -245,79 +411,172 @@ export default function DashboardOverview() {
     return /\b(UNDP|UNICEF|WFP|UNHCR|UNOPS|IOM|ILO|FAO|WHO|UNFPA)\b/i.test(agency);
   }
 
+  function toggleGapDone(action: ReadinessAction) {
+    if (!readiness) return;
+    const key = gapKey(action);
+    setCompletedGapKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      localStorage.setItem(`tp_gap_done_${readiness.id}`, JSON.stringify([...next]));
+      return next;
+    });
+  }
+
   const nextReadinessActions = readiness?.action_plan.slice(0, 4) ?? [];
+  const primaryTender = matchedTenders[0] ?? null;
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
-      <p className="mt-1 text-sm text-gray-600">
-        Track your tenders from match to award, and keep compliance docs ready.
-      </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Procurement workbench
+          </div>
+          <h1 className="mt-1 text-2xl font-semibold text-gray-900">
+            {readiness?.company_name ? `${readiness.company_name} dashboard` : "Dashboard"}
+          </h1>
+          <p className="mt-1 max-w-2xl text-sm text-gray-600">
+            Prioritize the tenders worth action, check why they matched, and move straight into bid/no-bid, proposal, or roster work.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/dashboard/pipeline"
+            className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700"
+          >
+            Open pipeline
+          </Link>
+          <Link
+            href="/dashboard/services/digest"
+            className="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:border-gray-400"
+          >
+            Weekly digest
+          </Link>
+        </div>
+      </div>
 
-      {/* Readiness score + high-severity blockers */}
-      {readiness && (
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="rounded-lg border border-gray-200 bg-white px-5 py-4 flex items-center gap-4">
-            <div
-              className={`text-3xl font-bold ${
-                readiness.readiness_score >= 70
-                  ? "text-green-600"
-                  : readiness.readiness_score >= 50
-                  ? "text-amber-600"
-                  : "text-red-600"
-              }`}
-            >
-              {readiness.readiness_score}%
+      <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.9fr)]">
+        <div className="rounded-lg border border-gray-200 bg-white p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Next best action
+              </div>
+              {primaryTender ? (
+                <>
+                  <h2 className="mt-2 text-lg font-semibold text-gray-900 line-clamp-2">
+                    {primaryTender.tender_title}
+                  </h2>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                    {primaryTender.tender_agency && <span>{primaryTender.tender_agency}</span>}
+                    <span className={isDeadlineSoon(primaryTender.tender_deadline) ? "font-semibold text-red-600" : ""}>
+                      {deadlineLabel(primaryTender.tender_deadline)}
+                    </span>
+                    {primaryTender.tender_value && <span>{primaryTender.tender_value}</span>}
+                    {primaryTender.fit_score > 0 && (
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 font-semibold text-gray-700">
+                        {primaryTender.fit_score}% fit
+                      </span>
+                    )}
+                    {primaryTender.match_reasons?.opportunityBucketLabel && (
+                      <span className={`rounded-full px-2 py-0.5 font-semibold ${BUCKET_STYLES[primaryTender.match_reasons.opportunityBucket ?? ""] ?? "bg-gray-100 text-gray-600"}`}>
+                        {primaryTender.match_reasons.opportunityBucketLabel}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-3 text-sm text-gray-600">
+                    {primaryTender.match_reasons?.opportunityBucketReason
+                      ?? primaryTender.match_reasons?.summary?.[0]
+                      ?? "Review this opportunity first because it currently ranks highest for fit, urgency, and actionability."}
+                  </p>
+                  <div className="mt-4 rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
+                    <div className="text-sm font-semibold text-gray-900">{nextActionFor(primaryTender).label}</div>
+                    <div className="mt-0.5 text-xs text-gray-500">{nextActionFor(primaryTender).detail}</div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h2 className="mt-2 text-lg font-semibold text-gray-900">No active matches yet</h2>
+                  <p className="mt-2 text-sm text-gray-600">
+                    Run or refresh an assessment to seed this workspace with matched tenders and readiness actions.
+                  </p>
+                </>
+              )}
             </div>
-            <div>
-              <div className="text-sm font-medium text-gray-900">Readiness Score</div>
-              <div className="text-xs text-gray-500 mt-0.5">
-                {readiness.company_name}
-                {readiness.recommended_tier && (
-                  <span className="ml-2 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
-                    {readiness.recommended_tier}
-                  </span>
+            {primaryTender && (
+              <div className="flex shrink-0 flex-wrap gap-2 lg:flex-col">
+                <Link
+                  href={serviceHref("bid-no-bid", primaryTender)}
+                  className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-50"
+                >
+                  Bid/no-bid
+                </Link>
+                <Link
+                  href={serviceHref("proposal", primaryTender)}
+                  className="rounded-md border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:border-gray-400"
+                >
+                  Proposal package
+                </Link>
+                {isRosterAgency(primaryTender.tender_agency) && (
+                  <Link
+                    href={serviceHref("lta-roster", primaryTender)}
+                    className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 hover:border-amber-300"
+                  >
+                    Roster/LTA
+                  </Link>
                 )}
               </div>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-gray-200 bg-white p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Readiness</div>
+              <div className={`mt-2 text-4xl font-bold ${
+                (readiness?.readiness_score ?? 0) >= 70
+                  ? "text-green-600"
+                  : (readiness?.readiness_score ?? 0) >= 50
+                  ? "text-amber-600"
+                  : "text-red-600"
+              }`}>
+                {readiness ? `${readiness.readiness_score}%` : "--"}
+              </div>
+            </div>
+            {readiness?.recommended_tier && (
+              <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+                {readiness.recommended_tier}
+              </span>
+            )}
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-md bg-gray-50 px-2 py-3">
+              <div className="text-lg font-semibold text-gray-900">{pipelineStats?.strong ?? "—"}</div>
+              <div className="text-[11px] text-gray-500">Strong</div>
+            </div>
+            <div className="rounded-md bg-gray-50 px-2 py-3">
+              <div className="text-lg font-semibold text-gray-900">{pipelineStats?.dueSoon ?? "—"}</div>
+              <div className="text-[11px] text-gray-500">Due soon</div>
+            </div>
+            <div className="rounded-md bg-gray-50 px-2 py-3">
+              <div className="text-lg font-semibold text-gray-900">{readiness?.gap_count ?? "—"}</div>
+              <div className="text-[11px] text-gray-500">Gaps</div>
             </div>
           </div>
-
-          {readiness.high_severity_gaps.length > 0 && (
-            <div className="md:col-span-2 rounded-lg border border-red-200 bg-red-50 px-5 py-4">
-              <div className="text-sm font-semibold text-red-800 mb-2">
-                {readiness.high_severity_gaps.length} Critical Gap{readiness.high_severity_gaps.length > 1 ? "s" : ""} to Close
+          {readiness?.high_severity_gaps?.[0] && (
+            <div className="mt-4 rounded-md border border-red-100 bg-red-50 px-3 py-2">
+              <div className="text-xs font-semibold text-red-800">
+                Critical blocker
               </div>
-              <ul className="space-y-1">
-                {readiness.high_severity_gaps.slice(0, 3).map((g, i) => (
-                  <li key={i} className="text-xs text-red-700 flex gap-2">
-                    <span className="mt-0.5 flex-shrink-0">•</span>
-                    <span><span className="font-medium">{g.gap}</span>{g.fix && ` — ${g.fix}`}</span>
-                  </li>
-                ))}
-              </ul>
-              {readiness.gap_count > 3 && (
-                <div className="mt-2 text-xs text-red-600">
-                  +{readiness.gap_count - 3} more gaps · Upload docs to the Vault to resolve them
-                </div>
-              )}
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Link
-                  href={readiness.action_plan[0]?.primary_action_href ?? "/dashboard/vault"}
-                  className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:border-red-300"
-                >
-                  {readiness.action_plan[0]?.primary_action_label ?? "Close gaps in Vault"}
-                </Link>
-                <Link
-                  href={readiness.action_plan[0]?.paid_action_href ?? "/pay?plan=roster-fast-track"}
-                  className="rounded-md bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800"
-                >
-                  {readiness.action_plan[0]?.paid_action_label ?? "Get roster help"}
-                </Link>
+              <div className="mt-1 text-xs text-red-700 line-clamp-2">
+                {readiness.high_severity_gaps[0].gap}
               </div>
             </div>
           )}
         </div>
-      )}
+      </div>
 
       {readiness && nextReadinessActions.length > 0 && (
         <div className="mt-6 rounded-lg border border-gray-200 bg-white">
@@ -334,8 +593,12 @@ export default function DashboardOverview() {
             </Link>
           </div>
           <div className="divide-y divide-gray-100">
-            {nextReadinessActions.map((action) => (
-              <div key={`${action.severity}-${action.gap}`} className="px-5 py-4">
+            {nextReadinessActions.map((action) => {
+              const guidance = guidanceForGap(action);
+              const complete = action.covered_by_vault || completedGapKeys.has(gapKey(action));
+
+              return (
+              <div key={`${action.severity}-${action.gap}`} className={`px-5 py-4 ${complete ? "bg-green-50/40" : ""}`}>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -349,22 +612,43 @@ export default function DashboardOverview() {
                         {action.severity}
                       </span>
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                        action.covered_by_vault ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"
+                        complete ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"
                       }`}>
                         {action.covered_by_vault
                           ? `${action.vault_document_count} Vault doc${action.vault_document_count === 1 ? "" : "s"}`
+                          : complete
+                          ? "Marked done"
                           : `Needs ${action.recommended_doc_type.replace("_", " ")}`}
+                      </span>
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                        {guidance.label}
                       </span>
                     </div>
                     <div className="mt-2 text-sm font-medium text-gray-900">{action.gap}</div>
                     <p className="mt-1 text-xs text-gray-500">{action.fix}</p>
-                    {action.action_steps.length > 0 && (
-                      <p className="mt-1 text-xs text-gray-400">
-                        Next: {action.action_steps[0]}
-                      </p>
-                    )}
+                    <div className="mt-3 rounded-md bg-gray-50 px-3 py-2">
+                      <div className="text-xs font-semibold text-gray-900">How to close it</div>
+                      <ul className="mt-1 space-y-1">
+                        {[...(action.action_steps.slice(0, 1)), ...guidance.steps].slice(0, 4).map((step) => (
+                          <li key={step} className="flex gap-2 text-xs leading-5 text-gray-600">
+                            <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gray-400" />
+                            <span>{step}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-2 lg:justify-end">
+                    <button
+                      onClick={() => toggleGapDone(action)}
+                      className={`rounded-md border px-3 py-1.5 text-xs font-semibold ${
+                        completedGapKeys.has(gapKey(action))
+                          ? "border-green-200 bg-green-50 text-green-700 hover:border-green-300"
+                          : "border-gray-200 text-gray-700 hover:border-gray-400"
+                      }`}
+                    >
+                      {completedGapKeys.has(gapKey(action)) ? "Marked done" : "Mark done"}
+                    </button>
                     <Link
                       href={action.primary_action_href}
                       className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-400"
@@ -380,10 +664,41 @@ export default function DashboardOverview() {
                   </div>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         </div>
       )}
+
+      <div className="mt-6 rounded-lg border border-gray-200 bg-white p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Automatic matching
+            </div>
+            <h2 className="mt-1 text-base font-semibold text-gray-900">
+              Assessment matches are added to your pipeline
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-600">
+              After an assessment, Tenderpath carries matched tenders into the dashboard automatically. The $49 digest path is the retention layer for continuing that matching loop through a weekly email shortlist.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/dashboard/pipeline"
+              className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-400"
+            >
+              Review auto-added matches
+            </Link>
+            <Link
+              href="/dashboard/services/digest"
+              className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700"
+            >
+              Set up weekly digest
+            </Link>
+          </div>
+        </div>
+      </div>
 
       {workflowError && (
         <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -391,95 +706,142 @@ export default function DashboardOverview() {
         </div>
       )}
 
-      {/* Stats bar */}
-      <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
-          { label: "Matched Tenders", value: pipelineStats?.matched ?? "—" },
-          { label: "Active Bids", value: pipelineStats?.active ?? "—" },
-          { label: "Won", value: pipelineStats?.won ?? "—" },
-          { label: "Total in Pipeline", value: pipelineStats?.total ?? "—" },
+          { label: "Matched tenders", value: pipelineStats?.matched ?? "—", note: `${pipelineStats?.strong ?? 0} strong fit` },
+          { label: "Deadline pressure", value: pipelineStats?.dueSoon ?? "—", note: "Due in 7 days" },
+          { label: "Active bids", value: pipelineStats?.active ?? "—", note: "Evaluating or later" },
+          { label: "Total pipeline", value: pipelineStats?.total ?? "—", note: `${pipelineStats?.won ?? 0} won` },
         ].map((stat) => (
           <div key={stat.label} className="rounded-lg border border-gray-200 bg-white px-4 py-3">
             <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
             <div className="text-xs text-gray-500 mt-0.5">{stat.label}</div>
+            <div className="mt-1 text-[11px] text-gray-400">{stat.note}</div>
           </div>
         ))}
       </div>
 
-      {/* Matched Tenders widget */}
       {matchedTenders.length > 0 && (
         <div className="mt-6">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-gray-900">Your Matched Tenders</h2>
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Priority tenders</h2>
+              <p className="text-xs text-gray-500">
+                Sorted by urgency, fit, and Tenderpath opportunity bucket.
+              </p>
+            </div>
             <Link href="/dashboard/pipeline" className="text-xs text-gray-500 hover:text-gray-900 underline">
-              View all in Pipeline →
+              View all in pipeline
             </Link>
           </div>
-          <div className="rounded-lg border border-gray-200 bg-white overflow-hidden divide-y divide-gray-100">
-            {matchedTenders.map((t) => (
-              <div key={t.id} className="px-4 py-3 flex flex-col gap-3 hover:bg-gray-50 transition-colors sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="text-sm font-medium text-gray-900 truncate">{t.tender_title}</div>
-                    {t.match_reasons?.opportunityBucketLabel && (
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${BUCKET_STYLES[t.match_reasons.opportunityBucket ?? ""] ?? "bg-gray-100 text-gray-600"}`}>
-                        {t.match_reasons.opportunityBucketLabel}
-                      </span>
-                    )}
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+            {matchedTenders.map((t) => {
+              const action = nextActionFor(t);
+              const confidence = confidenceLabel(t.match_reasons?.confidence);
+              return (
+                <div key={t.id} className="rounded-lg border border-gray-200 bg-white p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {t.match_reasons?.opportunityBucketLabel && (
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${BUCKET_STYLES[t.match_reasons.opportunityBucket ?? ""] ?? "bg-gray-100 text-gray-600"}`}>
+                            {t.match_reasons.opportunityBucketLabel}
+                          </span>
+                        )}
+                        {confidence && (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                            {confidence}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="mt-2 text-sm font-semibold text-gray-900 line-clamp-2">
+                        {t.tender_title}
+                      </h3>
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
+                        {t.tender_agency && <span>{t.tender_agency}</span>}
+                        <span className={isDeadlineSoon(t.tender_deadline) ? "font-semibold text-red-600" : ""}>
+                          {deadlineLabel(t.tender_deadline)}
+                        </span>
+                        {t.tender_value && <span>{t.tender_value}</span>}
+                        {t.fit_score > 0 && <span>{t.fit_score}% fit</span>}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-500 mt-0.5">
-                    {t.tender_agency && <span>{t.tender_agency}</span>}
-                    {t.tender_deadline && (
-                      <span className={`ml-2 ${isDeadlineSoon(t.tender_deadline) ? "font-semibold text-red-600" : ""}`}>
-                        {isDeadlineSoon(t.tender_deadline) ? "⚡ Due " : "· Due "}
-                        {new Date(t.tender_deadline).toLocaleDateString()}
-                      </span>
-                    )}
-                    {t.tender_value && (
-                      <span className="ml-2">· {t.tender_value}</span>
-                    )}
+
+                  <div className="mt-3 rounded-md bg-gray-50 px-3 py-2">
+                    <div className="text-xs font-semibold text-gray-900">Why this matters</div>
+                    <p className="mt-1 text-xs text-gray-600 line-clamp-3">
+                      {t.match_reasons?.summary?.[0]
+                        ?? t.match_reasons?.opportunityBucketReason
+                        ?? "Tenderpath found sector, capability, or geography evidence that makes this worth a closer look."}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {(t.match_reasons?.matchedSectors ?? []).slice(0, 3).map((sector) => (
+                        <span key={sector} className="rounded bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                          {sector}
+                        </span>
+                      ))}
+                      {(t.match_reasons?.matchedKeywords ?? []).slice(0, 3).map((keyword) => (
+                        <span key={keyword} className="rounded bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                          {keyword}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  {t.fit_score > 0 && (
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                      t.fit_score >= 70 ? "bg-green-100 text-green-800" :
-                      t.fit_score >= 50 ? "bg-amber-100 text-amber-800" :
-                      "bg-gray-100 text-gray-600"
-                    }`}>
-                      {t.fit_score}% fit
-                    </span>
-                  )}
-                  <button
-                    onClick={() => handleAnalyse(t)}
-                    disabled={analysingId === t.id}
-                    className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-50"
-                  >
-                    {analysingId === t.id ? "Checking..." : "Bid/no-bid $39"}
-                  </button>
-                  <Link
-                    href={payHref("proposal-draft", t)}
-                    className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-400"
-                  >
-                    Draft proposal
-                  </Link>
-                  {isRosterAgency(t.tender_agency) && (
-                    <Link
-                      href={payHref("roster-fast-track", t)}
-                      className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:border-amber-300"
-                    >
-                      Roster/LTA help
+
+                  <div className="mt-3 flex flex-col gap-2 border-t border-gray-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-xs font-semibold text-gray-900">{action.label}</div>
+                      <div className="text-[11px] text-gray-500">{action.detail}</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Link
+                        href={serviceHref("bid-no-bid", t)}
+                        className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-50"
+                      >
+                        Bid/no-bid
+                      </Link>
+                      <Link
+                        href={serviceHref("proposal", t)}
+                        className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-400"
+                      >
+                        Proposal
+                      </Link>
+                      {isRosterAgency(t.tender_agency) && (
+                        <Link
+                          href={serviceHref("lta-roster", t)}
+                          className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:border-amber-300"
+                        >
+                          Roster/LTA
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3">
+                    <Link href="/dashboard/pipeline" className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                      Track in pipeline
                     </Link>
-                  )}
-                  <Link
-                    href="/dashboard/pipeline"
-                    className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
-                  >
-                    Track
-                  </Link>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => handleTenderFeedback(t, "saved")}
+                        disabled={feedbackSavingId === t.id}
+                        className="text-xs font-medium text-gray-500 hover:text-gray-900 disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => handleTenderFeedback(t, "not_relevant")}
+                        disabled={feedbackSavingId === t.id}
+                        className="text-xs font-medium text-gray-400 hover:text-red-600 disabled:opacity-50"
+                      >
+                        Not relevant
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -502,75 +864,60 @@ export default function DashboardOverview() {
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Link
-          href="/dashboard/pipeline"
-          className="block rounded-lg border border-gray-200 bg-white p-6 hover:border-gray-900 transition group"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-sm uppercase tracking-wide text-gray-500">Bid/No-Bid</div>
-            <svg className="h-4 w-4 text-gray-400 group-hover:text-gray-900 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </div>
-          <div className="text-lg font-semibold text-gray-900">Analyze a tender</div>
-          <div className="mt-1 text-sm text-gray-500">
-            Pick a live tender from your pipeline and get win probability, risks, required documents, and a bid/no-bid recommendation.
-          </div>
-        </Link>
-
-        <Link
-          href="/pay?plan=proposal-draft"
-          className="block rounded-lg border border-gray-200 bg-white p-6 hover:border-gray-900 transition group"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-sm uppercase tracking-wide text-gray-500">Proposal Draft</div>
-            <svg className="h-4 w-4 text-gray-400 group-hover:text-gray-900 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </div>
-          <div className="text-lg font-semibold text-gray-900">Build a submission package</div>
-          <div className="mt-1 text-sm text-gray-500">
-            Move from decision to draft: technical narrative, compliance checklist, and financial template.
-          </div>
-        </Link>
-
-        <Link
-          href="/dashboard/pipeline"
-          className="block rounded-lg border border-gray-200 bg-white p-6 hover:border-gray-900 transition group"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-sm uppercase tracking-wide text-gray-500">Pipeline</div>
-            <svg className="h-4 w-4 text-gray-400 group-hover:text-gray-900 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </div>
-          <div className="text-lg font-semibold text-gray-900">Tender Kanban Board</div>
-          <div className="mt-1 text-sm text-gray-500">
-            Drag tenders through 6 stages: Matched → Evaluating → Preparing → Submitted → Won / Lost
-          </div>
-          {pipelineStats && (
-            <div className="mt-3 text-xs text-gray-400">
-              {pipelineStats.total} tender{pipelineStats.total !== 1 ? "s" : ""} in pipeline
-            </div>
-          )}
-        </Link>
-
-        <Link
-          href="/dashboard/vault"
-          className="block rounded-lg border border-gray-200 bg-white p-6 hover:border-gray-900 transition group"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-sm uppercase tracking-wide text-gray-500">Vault</div>
-            <svg className="h-4 w-4 text-gray-400 group-hover:text-gray-900 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </div>
-          <div className="text-lg font-semibold text-gray-900">Document Vault</div>
-          <div className="mt-1 text-sm text-gray-500">
-            Store certifications, financials, CVs, and past performance docs — with automatic expiry alerts.
-          </div>
-        </Link>
+      <div className="mt-6">
+        <div className="mb-3">
+          <h2 className="text-base font-semibold text-gray-900">Service paths</h2>
+          <p className="text-xs text-gray-500">
+            Choose the product that matches the stage of the opportunity.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {[
+            {
+              label: "Bid/no-bid",
+              title: "Decide before writing",
+              body: "Fit reasoning, blockers, required documents, and a pursuit recommendation.",
+              href: "/dashboard/services/bid-no-bid",
+              price: "$39",
+            },
+            {
+              label: "Digest",
+              title: "Keep matches flowing",
+              body: "Weekly shortlist of tenders and grants scored against the company profile.",
+              href: "/dashboard/services/digest",
+              price: "$49/mo",
+            },
+            {
+              label: "Apply",
+              title: "Build the proposal pack",
+              body: "Technical narrative, compliance checklist, and financial template for a live tender.",
+              href: "/dashboard/services/proposal",
+              price: "$299",
+            },
+            {
+              label: "LTA / roster",
+              title: "Prepare vendor registration",
+              body: "Agency-specific documents, capability statement, and submission support.",
+              href: "/dashboard/services/lta-roster",
+              price: "$749",
+            },
+          ].map((service) => (
+            <Link
+              key={service.label}
+              href={service.href}
+              className="block rounded-lg border border-gray-200 bg-white p-4 transition hover:border-gray-900"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{service.label}</div>
+                <div className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-700">
+                  {service.price}
+                </div>
+              </div>
+              <div className="mt-3 text-sm font-semibold text-gray-900">{service.title}</div>
+              <p className="mt-1 text-xs leading-5 text-gray-500">{service.body}</p>
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   );

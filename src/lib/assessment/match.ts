@@ -176,7 +176,7 @@ const OPPORTUNITY_BUCKET_META: Record<OpportunityBucket, { label: string; priori
   watchlist: { label: "Watchlist", priority: 5 },
 };
 
-const HARD_LOGISTICS_RE = /\b(logistics?|supply chain|warehous(?:e|ing)|freight|transport(?:ation)? services?|shipping|distribution services?|last[- ]mile|fleet|customs|cargo|stockpil(?:e|ing)|preposition(?:ing)?|pre-position(?:ing)?|clearing agent|clearance service|storage service|cold chain|cold storage|distribution cent(?:er|re)|3pl|third-party logistic|stevedoring|port handling|cargo handling|cross-dock|material handling|packing service|courier service|parcel deliver(?:y)?|inventory storage|records storage|archive storage|document storage|storage facilit(?:y|ies)|warehousing services|storage space|temporary storage|container depot|bulk storage|secure storage|yard management|fulfillment cent(?:er|re))\b/i;
+const HARD_LOGISTICS_RE = /\b(logistics?|supply chain|warehous(?:e|ing)|freight|transport(?:ation)?(?: services?| of)?|shipping|distribution services?|last[- ]mile|fleet|customs|cargo|supply and delivery|procurement and delivery|procurement services?|delivery of goods|supply of goods|supply of basic goods|general goods|non[- ]specialized goods|non[- ]food items?|nfi|relief items?|hygiene kits?|spare parts?|replacement parts?|furniture|office supplies|school furniture|accommodation|lodging|hotel venue|stockpil(?:e|ing)|preposition(?:ing)?|pre-position(?:ing)?|clearing agent|clearance service|storage service|cold chain|cold storage|distribution cent(?:er|re)|3pl|third-party logistic|stevedoring|port handling|cargo handling|cross-dock|material handling|packing service|courier service|parcel deliver(?:y)?|inventory storage|records storage|archive storage|document storage|storage facilit(?:y|ies)|warehousing services|storage space|temporary storage|container depot|bulk storage|secure storage|yard management|fulfillment cent(?:er|re))\b/i;
 
 function refineTenderSlugs(slugs: Set<SectorSlug>, evidenceText: string): Set<SectorSlug> {
   const refined = new Set(slugs);
@@ -511,13 +511,22 @@ export async function matchTenders(
       "compliance software", "contract management", "procurement software", "workflow automation",
     ],
     education: ["education", "training", "curriculum", "learning", "teacher", "school"],
-    healthcare: ["health", "medical", "hospital", "clinic", "pharmaceutical", "vaccine"],
+    healthcare: [
+      "health", "medical", "hospital", "clinic", "pharmaceutical", "vaccine",
+      "diaper", "diapers", "medical supply", "healthcare supply",
+    ],
     logistics: [
       "logistics", "transport", "freight", "shipping", "warehouse", "warehousing",
       "supply chain", "distribution", "fleet", "customs", "cargo", "storage",
       "forwarding", "forwarder", "haulage", "trucking", "delivery of",
       "supply and delivery", "procurement and delivery",
       "procurement services", "last mile", "last-mile", "stockpile",
+      "supply of goods", "supply of basic goods", "general goods",
+      "non-specialized goods", "non specialized goods", "non-food item",
+      "non food item", "nfi", "relief item", "hygiene kit",
+      "spare part", "replacement part", "furniture", "office supplies",
+      "school furniture", "accommodation", "accommodation service",
+      "lodging", "lodging service", "hotel venue",
       "prepositioning", "pre-positioning", "clearing", "clearance",
       "loading", "unloading", "import", "export", "dispatch",
       "installation and delivery",
@@ -538,7 +547,12 @@ export async function matchTenders(
     ],
     construction: ["construction", "civil works", "infrastructure", "building", "rehabilitation", "refurbishment"],
     consulting: ["consulting", "consultancy", "advisory", "technical assistance", "feasibility", "evaluation service", "mid-term evaluation", "final evaluation", "external evaluation", "impact evaluation"],
-    food: ["food", "nutrition", "catering", "meal", "agricultural produce", "ration", "foodstuff", "kitchen", "cafeteria"],
+    food: [
+      "food", "nutrition", "catering", "meal", "agricultural produce",
+      "ration", "foodstuff", "kitchen", "cafeteria", "bakery", "bakeries",
+      "bread", "ready-to-eat", "ready to eat", "food basket", "food baskets",
+      "rte basket",
+    ],
     security: ["security", "guarding", "surveillance", "protection", "guard service", "safety service", "access control", "fire safety"],
     language_services: [
       "translation", "interpretation", "interpreter", "translator", "linguistic", "language service",
@@ -546,7 +560,11 @@ export async function matchTenders(
       "legal translation", "technical translation", "localization", "subtitling", "voice-over",
       "dubbing", "multilingual", "language support",
     ],
-    engineering: ["engineering", "mechanical", "electrical engineering", "civil engineering"],
+    engineering: [
+      "engineering", "mechanical", "electrical engineering", "civil engineering",
+      "spare part", "production line", "maintenance of production",
+      "mechanical spare",
+    ],
     environment: ["environment", "climate", "biodiversity", "pollution", "waste management", "cleaning service", "janitorial", "sanitation service", "recycling"],
     agriculture: ["agriculture", "agricultural", "farming", "livestock", "crop", "irrigation"],
     water_sanitation: ["water", "sanitation", "wash", "hygiene", "sewage", "latrine"],
@@ -587,6 +605,21 @@ export async function matchTenders(
       `;
       for (const r of rows) byId.set(r.id as number, r as Row);
     }
+  }
+
+  if (!acceptsGlobal && countryArr.length) {
+    const strictCountryRows = await sql`
+      SELECT id, title, description, agency, deadline, country, sector,
+             reference_id, requirements, experience_level, opportunity_type,
+             source_url, submission_language, estimated_value
+      FROM tenders
+      WHERE status = 'open'
+        AND deadline >= CURRENT_DATE
+        AND LOWER(country) = ANY(${countryArr}::text[])
+      ORDER BY deadline ASC
+      LIMIT 400
+    `;
+    for (const r of strictCountryRows) if (!byId.has(r.id as number)) byId.set(r.id as number, r as Row);
   }
 
   // Baseline pool only when the per-slug pass yielded thin results — avoids
@@ -835,7 +868,7 @@ export async function matchTenders(
     .sort((a, b) => b.score - a.score);
 
   const out: MatchedTender[] = [];
-  for (const s of strictPool.slice(0, 15)) out.push(stripMeta(s));
+  for (const s of strictPool.slice(0, 25)) out.push(stripMeta(s));
 
   // Regional: lightly discount so country-specific still ranks higher.
   const regionalDiscount = autoGeoOpen ? 0.85 : 0.75;

@@ -5,12 +5,15 @@ import { jwtVerify } from "jose";
 const PUBLIC_PATHS = new Set([
   "/api/auth/signup",
   "/api/auth/login",
+  "/api/auth/password",
   "/api/auth/verify",
   "/api/health",
   "/api/webhooks/stripe",
   "/api/cron/sync-tenders",
   "/api/cron/crawl",
+  "/api/cron/weekly-digest",
   "/api/assessment/public",
+  "/api/assessment/preview",
   "/api/pay/checkout",
 ]);
 
