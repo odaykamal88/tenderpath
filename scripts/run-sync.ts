@@ -1,5 +1,5 @@
 /**
- * One-off runner: crawl tenders + grants, upsert to DB, report counts.
+ * One-off runner: crawl tenders, upsert to DB, report counts.
  * Run: node_modules/.bin/tsx scripts/run-sync.ts
  */
 import fs from "node:fs";
@@ -14,7 +14,6 @@ try {
 } catch {}
 
 import { syncAllTenders } from "../src/lib/crawlers/sync";
-import { syncAllGrants } from "../src/lib/crawlers/grants-sync";
 
 async function main() {
   console.log("=== Running tender sync ===");
@@ -29,19 +28,6 @@ async function main() {
   for (const r of tenders.results) {
     const tag = r.status === "success" ? "OK" : "FAIL";
     console.log(`    [${tag}] ${r.platform}: +${r.added} ~${r.updated} broken:${r.brokenLinks} ${r.durationMs}ms ${r.error ?? ""}`);
-  }
-
-  console.log("\n=== Running grants sync ===");
-  const g0 = Date.now();
-  const grants = await syncAllGrants();
-  console.log(`Grants done in ${Date.now() - g0}ms`);
-  console.log(`  added:   ${grants.totalAdded}`);
-  console.log(`  updated: ${grants.totalUpdated}`);
-  console.log(`  expired: ${grants.totalExpired}`);
-  console.log(`  broken:  ${grants.totalBroken}`);
-  for (const r of grants.platforms) {
-    const tag = r.status === "success" ? "OK" : "FAIL";
-    console.log(`    [${tag}] ${r.platform}: +${r.added} ~${r.updated} broken:${r.broken} ${r.durationMs}ms ${r.error ?? ""}`);
   }
 }
 

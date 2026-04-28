@@ -1,7 +1,7 @@
 /**
  * One-shot cleanup: existing grants rows came from fake seed data
  * with fabricated source URLs that 404. Purge anything without a
- * reference_id (= not sourced from a real crawler like Grants.gov).
+ * reference_id.
  */
 import { neon } from "@neondatabase/serverless";
 import { config } from "dotenv";

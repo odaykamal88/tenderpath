@@ -15,7 +15,7 @@ try {
   for (const line of env.split("\n")) {
     const i = line.indexOf("=");
     if (i > 0 && !line.trim().startsWith("#")) {
-      process.env[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+      process.env[line.slice(0, i).trim()] = line.slice(i + 1).trim().replace(/^(['"])(.*)\1$/, "$2");
     }
   }
 } catch {}
@@ -29,7 +29,8 @@ const REQUIRED_ENV = [
 ];
 
 function isSet(key: string): boolean {
-  return Boolean(process.env[key]?.trim());
+  const value = process.env[key]?.trim();
+  return Boolean(value && value !== "\"\"" && value !== "''");
 }
 
 async function main() {

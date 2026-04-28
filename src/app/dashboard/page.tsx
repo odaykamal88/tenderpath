@@ -47,12 +47,6 @@ function deadlineLabel(deadline: string | null): string {
   return `${days} days left`;
 }
 
-function confidenceLabel(value: MatchReason["confidence"]): string | null {
-  if (value == null) return null;
-  if (typeof value === "number") return `${Math.round(value * 100)}% confidence`;
-  return `${value} confidence`;
-}
-
 interface BridgeData {
   assessment_id: number;
   email?: string;
@@ -178,62 +172,35 @@ function gapKey(action: ReadinessAction): string {
   return `${action.severity}:${action.gap}`;
 }
 
-function guidanceForGap(action: ReadinessAction): { label: string; steps: string[] } {
-  const type = action.recommended_doc_type;
-  const websiteStep = "Update your website, capability statement, or public profile so buyers can verify this claim.";
+function ReadinessRing({ score }: { score: number }) {
+  const r = 40;
+  const circumference = 2 * Math.PI * r;
+  const offset = circumference * (1 - score / 100);
+  const color = score >= 70 ? "#16a34a" : score >= 50 ? "#d97706" : "#dc2626";
+  const label = score >= 70 ? "Good foundation" : score >= 50 ? "Needs attention" : "Critical gaps";
 
-  if (type === "financial") {
-    return {
-      label: "Financial proof",
-      steps: [
-        "Prepare audited statements, tax records, bank letter, or turnover evidence.",
-        "Upload the evidence to the Vault with the latest expiry date if it has one.",
-        "Make sure the same capacity is reflected in your company profile or website.",
-      ],
-    };
-  }
-
-  if (type === "past_performance") {
-    return {
-      label: "Track record proof",
-      steps: [
-        "Write 2-3 short project references with client, country, dates, scope, and value.",
-        "Add links, letters, photos, or contracts as supporting evidence where possible.",
-        websiteStep,
-      ],
-    };
-  }
-
-  if (type === "cv") {
-    return {
-      label: "Team proof",
-      steps: [
-        "Collect CVs for the staff or experts likely to appear in proposals.",
-        "Standardize them into a consistent two-page tender-ready format.",
-        "Keep the strongest CVs in the Vault for reuse across bids.",
-      ],
-    };
-  }
-
-  if (type === "certification") {
-    return {
-      label: "Compliance proof",
-      steps: [
-        "Gather registration, licenses, policies, ISO certificates, vendor forms, or equivalent proof.",
-        "Check expiry dates and upload current versions to the Vault.",
-        websiteStep,
-      ],
-    };
-  }
-
-  return {
-    label: "Readiness proof",
-    steps: [
-      "Turn the gap into a concrete proof point: document, webpage, policy, reference, or process note.",
-      "Upload any reusable evidence to the Vault.",
-      "Mark it done once the external update is complete.",
-    ],
-  };
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <svg width="96" height="96" viewBox="0 0 96 96">
+        <circle cx="48" cy="48" r={r} fill="none" stroke="#f3f4f6" strokeWidth="8" />
+        <circle
+          cx="48"
+          cy="48"
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth="8"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          transform="rotate(-90 48 48)"
+        />
+        <text x="48" y="45" textAnchor="middle" fontSize="20" fontWeight="700" fill={color}>{score}</text>
+        <text x="48" y="59" textAnchor="middle" fontSize="10" fill="#9ca3af">%</text>
+      </svg>
+      <div className="text-xs font-medium text-gray-600">{label}</div>
+    </div>
+  );
 }
 
 export default function DashboardOverview() {
@@ -252,6 +219,7 @@ export default function DashboardOverview() {
   const [feedbackSavingId, setFeedbackSavingId] = useState<number | null>(null);
   const [readiness, setReadiness] = useState<ReadinessData | null>(null);
   const [completedGapKeys, setCompletedGapKeys] = useState<Set<string>>(new Set());
+  const [expandedTenderId, setExpandedTenderId] = useState<number | null>(null);
 
   const loadDashboard = useCallback(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
@@ -341,7 +309,6 @@ export default function DashboardOverview() {
         error: err instanceof Error ? err.message : String(err),
       });
       setWorkflowError("Your assessment is saved, but we could not populate your dashboard yet. Refreshing will retry.");
-      // Bridge preserved for retry on next load.
     }
   }, [loadDashboard]);
 
@@ -423,21 +390,21 @@ export default function DashboardOverview() {
     });
   }
 
-  const nextReadinessActions = readiness?.action_plan.slice(0, 4) ?? [];
   const primaryTender = matchedTenders[0] ?? null;
 
   return (
     <div>
+      {/* Header */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
             Procurement workbench
           </div>
           <h1 className="mt-1 text-2xl font-semibold text-gray-900">
-            {readiness?.company_name ? `${readiness.company_name} dashboard` : "Dashboard"}
+            {readiness?.company_name ? readiness.company_name : "Dashboard"}
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-600">
-            Prioritize the tenders worth action, check why they matched, and move straight into bid/no-bid, proposal, or roster work.
+            Your matched tenders, readiness status, and next actions in one place.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -456,257 +423,35 @@ export default function DashboardOverview() {
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.9fr)]">
-        <div className="rounded-lg border border-gray-200 bg-white p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Next best action
-              </div>
-              {primaryTender ? (
-                <>
-                  <h2 className="mt-2 text-lg font-semibold text-gray-900 line-clamp-2">
-                    {primaryTender.tender_title}
-                  </h2>
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                    {primaryTender.tender_agency && <span>{primaryTender.tender_agency}</span>}
-                    <span className={isDeadlineSoon(primaryTender.tender_deadline) ? "font-semibold text-red-600" : ""}>
-                      {deadlineLabel(primaryTender.tender_deadline)}
-                    </span>
-                    {primaryTender.tender_value && <span>{primaryTender.tender_value}</span>}
-                    {primaryTender.fit_score > 0 && (
-                      <span className="rounded-full bg-gray-100 px-2 py-0.5 font-semibold text-gray-700">
-                        {primaryTender.fit_score}% fit
-                      </span>
-                    )}
-                    {primaryTender.match_reasons?.opportunityBucketLabel && (
-                      <span className={`rounded-full px-2 py-0.5 font-semibold ${BUCKET_STYLES[primaryTender.match_reasons.opportunityBucket ?? ""] ?? "bg-gray-100 text-gray-600"}`}>
-                        {primaryTender.match_reasons.opportunityBucketLabel}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-3 text-sm text-gray-600">
-                    {primaryTender.match_reasons?.opportunityBucketReason
-                      ?? primaryTender.match_reasons?.summary?.[0]
-                      ?? "Review this opportunity first because it currently ranks highest for fit, urgency, and actionability."}
-                  </p>
-                  <div className="mt-4 rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
-                    <div className="text-sm font-semibold text-gray-900">{nextActionFor(primaryTender).label}</div>
-                    <div className="mt-0.5 text-xs text-gray-500">{nextActionFor(primaryTender).detail}</div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <h2 className="mt-2 text-lg font-semibold text-gray-900">No active matches yet</h2>
-                  <p className="mt-2 text-sm text-gray-600">
-                    Run or refresh an assessment to seed this workspace with matched tenders and readiness actions.
-                  </p>
-                </>
-              )}
+      {/* Welcome banner — shown after fresh assessment seed */}
+      {(bridge || seeded) && (
+        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-5 py-3 flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold text-green-800">
+              Welcome{bridge?.company_name ? `, ${bridge.company_name}` : ""}!
             </div>
-            {primaryTender && (
-              <div className="flex shrink-0 flex-wrap gap-2 lg:flex-col">
-                <Link
-                  href={serviceHref("bid-no-bid", primaryTender)}
-                  className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-50"
-                >
-                  Bid/no-bid
-                </Link>
-                <Link
-                  href={serviceHref("proposal", primaryTender)}
-                  className="rounded-md border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:border-gray-400"
-                >
-                  Proposal package
-                </Link>
-                {isRosterAgency(primaryTender.tender_agency) && (
-                  <Link
-                    href={serviceHref("lta-roster", primaryTender)}
-                    className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 hover:border-amber-300"
-                  >
-                    Roster/LTA
-                  </Link>
-                )}
-              </div>
-            )}
+            <p className="text-sm text-green-700 mt-0.5">
+              {seeded
+                ? "Your matched tenders have been added to your pipeline."
+                : "Seeding your pipeline with matched tenders…"}
+              {bridge?.gaps && bridge.gaps.length > 0 && " Upload documents to close your top compliance gaps."}
+            </p>
           </div>
-        </div>
-
-        <div className="rounded-lg border border-gray-200 bg-white p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Readiness</div>
-              <div className={`mt-2 text-4xl font-bold ${
-                (readiness?.readiness_score ?? 0) >= 70
-                  ? "text-green-600"
-                  : (readiness?.readiness_score ?? 0) >= 50
-                  ? "text-amber-600"
-                  : "text-red-600"
-              }`}>
-                {readiness ? `${readiness.readiness_score}%` : "--"}
-              </div>
-            </div>
-            {readiness?.recommended_tier && (
-              <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700">
-                {readiness.recommended_tier}
-              </span>
-            )}
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-md bg-gray-50 px-2 py-3">
-              <div className="text-lg font-semibold text-gray-900">{pipelineStats?.strong ?? "—"}</div>
-              <div className="text-[11px] text-gray-500">Strong</div>
-            </div>
-            <div className="rounded-md bg-gray-50 px-2 py-3">
-              <div className="text-lg font-semibold text-gray-900">{pipelineStats?.dueSoon ?? "—"}</div>
-              <div className="text-[11px] text-gray-500">Due soon</div>
-            </div>
-            <div className="rounded-md bg-gray-50 px-2 py-3">
-              <div className="text-lg font-semibold text-gray-900">{readiness?.gap_count ?? "—"}</div>
-              <div className="text-[11px] text-gray-500">Gaps</div>
-            </div>
-          </div>
-          {readiness?.high_severity_gaps?.[0] && (
-            <div className="mt-4 rounded-md border border-red-100 bg-red-50 px-3 py-2">
-              <div className="text-xs font-semibold text-red-800">
-                Critical blocker
-              </div>
-              <div className="mt-1 text-xs text-red-700 line-clamp-2">
-                {readiness.high_severity_gaps[0].gap}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {readiness && nextReadinessActions.length > 0 && (
-        <div className="mt-6 rounded-lg border border-gray-200 bg-white">
-          <div className="border-b border-gray-100 px-5 py-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">Readiness Action Plan</h2>
-              <p className="text-xs text-gray-500">
-                {readiness.vault_coverage.covered_gaps}/{readiness.vault_coverage.total_gaps} gap
-                {readiness.vault_coverage.total_gaps === 1 ? "" : "s"} have supporting Vault evidence.
-              </p>
-            </div>
-            <Link href="/dashboard/vault" className="text-xs font-semibold text-gray-700 hover:text-gray-900 underline">
-              Open Vault
-            </Link>
-          </div>
-          <div className="divide-y divide-gray-100">
-            {nextReadinessActions.map((action) => {
-              const guidance = guidanceForGap(action);
-              const complete = action.covered_by_vault || completedGapKeys.has(gapKey(action));
-
-              return (
-              <div key={`${action.severity}-${action.gap}`} className={`px-5 py-4 ${complete ? "bg-green-50/40" : ""}`}>
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${
-                        action.severity === "high"
-                          ? "bg-red-100 text-red-700"
-                          : action.severity === "medium"
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-gray-100 text-gray-600"
-                      }`}>
-                        {action.severity}
-                      </span>
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                        complete ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"
-                      }`}>
-                        {action.covered_by_vault
-                          ? `${action.vault_document_count} Vault doc${action.vault_document_count === 1 ? "" : "s"}`
-                          : complete
-                          ? "Marked done"
-                          : `Needs ${action.recommended_doc_type.replace("_", " ")}`}
-                      </span>
-                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
-                        {guidance.label}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-sm font-medium text-gray-900">{action.gap}</div>
-                    <p className="mt-1 text-xs text-gray-500">{action.fix}</p>
-                    <div className="mt-3 rounded-md bg-gray-50 px-3 py-2">
-                      <div className="text-xs font-semibold text-gray-900">How to close it</div>
-                      <ul className="mt-1 space-y-1">
-                        {[...(action.action_steps.slice(0, 1)), ...guidance.steps].slice(0, 4).map((step) => (
-                          <li key={step} className="flex gap-2 text-xs leading-5 text-gray-600">
-                            <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gray-400" />
-                            <span>{step}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2 lg:justify-end">
-                    <button
-                      onClick={() => toggleGapDone(action)}
-                      className={`rounded-md border px-3 py-1.5 text-xs font-semibold ${
-                        completedGapKeys.has(gapKey(action))
-                          ? "border-green-200 bg-green-50 text-green-700 hover:border-green-300"
-                          : "border-gray-200 text-gray-700 hover:border-gray-400"
-                      }`}
-                    >
-                      {completedGapKeys.has(gapKey(action)) ? "Marked done" : "Mark done"}
-                    </button>
-                    <Link
-                      href={action.primary_action_href}
-                      className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-400"
-                    >
-                      {action.primary_action_label}
-                    </Link>
-                    <Link
-                      href={action.paid_action_href}
-                      className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700"
-                    >
-                      {action.paid_action_label}
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            );
-            })}
-          </div>
+          <Link href="/dashboard/pipeline" className="shrink-0 text-xs font-semibold text-green-800 underline whitespace-nowrap">
+            View pipeline
+          </Link>
         </div>
       )}
 
-      <div className="mt-6 rounded-lg border border-gray-200 bg-white p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Automatic matching
-            </div>
-            <h2 className="mt-1 text-base font-semibold text-gray-900">
-              Assessment matches are added to your pipeline
-            </h2>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-600">
-              After an assessment, Tenderpath carries matched tenders into the dashboard automatically. The $49 digest path is the retention layer for continuing that matching loop through a weekly email shortlist.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/dashboard/pipeline"
-              className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-400"
-            >
-              Review auto-added matches
-            </Link>
-            <Link
-              href="/dashboard/services/digest"
-              className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700"
-            >
-              Set up weekly digest
-            </Link>
-          </div>
-        </div>
-      </div>
-
+      {/* Error */}
       {workflowError && (
-        <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {workflowError}
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+      {/* Stats row */}
+      <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
           { label: "Matched tenders", value: pipelineStats?.matched ?? "—", note: `${pipelineStats?.strong ?? 0} strong fit` },
           { label: "Deadline pressure", value: pipelineStats?.dueSoon ?? "—", note: "Due in 7 days" },
@@ -721,124 +466,273 @@ export default function DashboardOverview() {
         ))}
       </div>
 
+      {/* Readiness + Top priority — 2 cols */}
+      <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
+        {/* Readiness card */}
+        <div className="rounded-lg border border-gray-200 bg-white p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Readiness</div>
+              {readiness?.recommended_tier && (
+                <span className="mt-1 inline-block rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
+                  {readiness.recommended_tier}
+                </span>
+              )}
+              {readiness && readiness.action_plan.length > 0 && (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-semibold text-gray-700">Top gaps</div>
+                    <Link href="/dashboard/vault" className="text-xs text-gray-500 hover:text-gray-900 underline">
+                      Open vault
+                    </Link>
+                  </div>
+                  <ul className="space-y-2">
+                    {readiness.action_plan.slice(0, 3).map((action) => {
+                      const key = gapKey(action);
+                      const complete = action.covered_by_vault || completedGapKeys.has(key);
+                      return (
+                        <li key={key} className="flex items-center gap-2.5">
+                          <span className={`h-2 w-2 shrink-0 rounded-full ${
+                            action.severity === "high"
+                              ? "bg-red-500"
+                              : action.severity === "medium"
+                              ? "bg-amber-400"
+                              : "bg-gray-300"
+                          }`} />
+                          <span className={`flex-1 text-xs leading-5 ${complete ? "line-through text-gray-400" : "text-gray-700"}`}>
+                            {action.gap}
+                          </span>
+                          <button
+                            onClick={() => toggleGapDone(action)}
+                            className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                              complete
+                                ? "text-green-700 bg-green-100"
+                                : "text-gray-500 bg-gray-100 hover:bg-gray-200"
+                            }`}
+                          >
+                            {complete ? "Done" : "Mark done"}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {readiness.action_plan.length > 3 && (
+                    <Link href="/dashboard/vault" className="mt-2 block text-xs text-gray-500 hover:text-gray-900 underline">
+                      +{readiness.action_plan.length - 3} more gaps →
+                    </Link>
+                  )}
+                </div>
+              )}
+              {!readiness && (
+                <p className="mt-3 text-sm text-gray-500">
+                  Run an assessment to see your readiness score and compliance gaps.{" "}
+                  <Link href="/assessment" className="text-gray-700 underline">Start assessment</Link>
+                </p>
+              )}
+            </div>
+            {readiness ? (
+              <ReadinessRing score={readiness.readiness_score} />
+            ) : (
+              <div className="h-24 w-24 rounded-full border-8 border-gray-100 flex items-center justify-center">
+                <span className="text-xs text-gray-400">—</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Top priority tender */}
+        <div className="rounded-lg border border-gray-200 bg-white p-5">
+          <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Top priority</div>
+          {primaryTender ? (
+            <>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {primaryTender.match_reasons?.opportunityBucketLabel && (
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${BUCKET_STYLES[primaryTender.match_reasons.opportunityBucket ?? ""] ?? "bg-gray-100 text-gray-600"}`}>
+                    {primaryTender.match_reasons.opportunityBucketLabel}
+                  </span>
+                )}
+                {primaryTender.fit_score > 0 && (
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-700">
+                    {primaryTender.fit_score}% fit
+                  </span>
+                )}
+              </div>
+              <h2 className="mt-2 text-sm font-semibold text-gray-900 line-clamp-2">
+                {primaryTender.tender_title}
+              </h2>
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
+                {primaryTender.tender_agency && <span>{primaryTender.tender_agency}</span>}
+                <span className={isDeadlineSoon(primaryTender.tender_deadline) ? "font-semibold text-red-600" : ""}>
+                  {deadlineLabel(primaryTender.tender_deadline)}
+                </span>
+                {primaryTender.tender_value && <span>{primaryTender.tender_value}</span>}
+              </div>
+              <p className="mt-2 text-xs leading-5 text-gray-600 line-clamp-2">
+                {primaryTender.match_reasons?.opportunityBucketReason
+                  ?? primaryTender.match_reasons?.summary?.[0]
+                  ?? "Review this opportunity first — it ranks highest for fit, urgency, and actionability."}
+              </p>
+              <div className="mt-3 rounded-md bg-gray-50 px-3 py-2">
+                <div className="text-xs font-semibold text-gray-900">{nextActionFor(primaryTender).label}</div>
+                <div className="mt-0.5 text-[11px] text-gray-500">{nextActionFor(primaryTender).detail}</div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link
+                  href={serviceHref("bid-no-bid", primaryTender)}
+                  className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700"
+                >
+                  Bid/no-bid
+                </Link>
+                <Link
+                  href={serviceHref("proposal", primaryTender)}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-400"
+                >
+                  Proposal package
+                </Link>
+                {isRosterAgency(primaryTender.tender_agency) && (
+                  <Link
+                    href={serviceHref("lta-roster", primaryTender)}
+                    className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:border-amber-300"
+                  >
+                    Roster/LTA
+                  </Link>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="mt-4">
+              <p className="text-sm text-gray-500">No matched tenders yet.</p>
+              <Link
+                href="/assessment"
+                className="mt-3 inline-block rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700"
+              >
+                Run an assessment
+              </Link>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Compact expandable tender feed */}
       {matchedTenders.length > 0 && (
-        <div className="mt-6">
+        <div className="mt-5">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-base font-semibold text-gray-900">Priority tenders</h2>
-              <p className="text-xs text-gray-500">
-                Sorted by urgency, fit, and Tenderpath opportunity bucket.
-              </p>
+              <h2 className="text-base font-semibold text-gray-900">Matched tenders</h2>
+              <p className="text-xs text-gray-500">Click a row to see match detail and actions.</p>
             </div>
             <Link href="/dashboard/pipeline" className="text-xs text-gray-500 hover:text-gray-900 underline">
               View all in pipeline
             </Link>
           </div>
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
             {matchedTenders.map((t) => {
+              const isExpanded = expandedTenderId === t.id;
               const action = nextActionFor(t);
-              const confidence = confidenceLabel(t.match_reasons?.confidence);
               return (
-                <div key={t.id} className="rounded-lg border border-gray-200 bg-white p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {t.match_reasons?.opportunityBucketLabel && (
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${BUCKET_STYLES[t.match_reasons.opportunityBucket ?? ""] ?? "bg-gray-100 text-gray-600"}`}>
-                            {t.match_reasons.opportunityBucketLabel}
-                          </span>
+                <div key={t.id}>
+                  <button
+                    className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors"
+                    onClick={() => setExpandedTenderId(isExpanded ? null : t.id)}
+                  >
+                    {t.fit_score > 0 && (
+                      <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-700 min-w-[40px] text-center">
+                        {t.fit_score}%
+                      </span>
+                    )}
+                    {t.match_reasons?.opportunityBucketLabel && (
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold hidden sm:inline ${BUCKET_STYLES[t.match_reasons.opportunityBucket ?? ""] ?? "bg-gray-100 text-gray-600"}`}>
+                        {t.match_reasons.opportunityBucketLabel}
+                      </span>
+                    )}
+                    <span className="flex-1 text-sm font-medium text-gray-900 truncate min-w-0">
+                      {t.tender_title}
+                    </span>
+                    {t.tender_agency && (
+                      <span className="shrink-0 text-xs text-gray-400 hidden md:block truncate max-w-[160px]">
+                        {t.tender_agency}
+                      </span>
+                    )}
+                    <span className={`shrink-0 text-xs ${isDeadlineSoon(t.tender_deadline) ? "font-semibold text-red-600" : "text-gray-400"}`}>
+                      {deadlineLabel(t.tender_deadline)}
+                    </span>
+                    <svg
+                      className={`shrink-0 h-4 w-4 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="px-4 pb-4 bg-gray-50 border-t border-gray-100">
+                      <div className="pt-3 space-y-2">
+                        <div className="text-xs font-semibold text-gray-700">Why this matched</div>
+                        <p className="text-xs leading-5 text-gray-600">
+                          {t.match_reasons?.summary?.[0]
+                            ?? t.match_reasons?.opportunityBucketReason
+                            ?? "Tenderpath found sector, capability, or geography evidence that makes this worth a closer look."}
+                        </p>
+                        {((t.match_reasons?.matchedSectors ?? []).length > 0 || (t.match_reasons?.matchedKeywords ?? []).length > 0) && (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {(t.match_reasons?.matchedSectors ?? []).slice(0, 3).map((s) => (
+                              <span key={s} className="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-600">{s}</span>
+                            ))}
+                            {(t.match_reasons?.matchedKeywords ?? []).slice(0, 3).map((k) => (
+                              <span key={k} className="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-600">{k}</span>
+                            ))}
+                          </div>
                         )}
-                        {confidence && (
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-                            {confidence}
-                          </span>
+                        {(t.match_reasons?.caveats ?? []).length > 0 && (
+                          <p className="text-[11px] text-amber-700">{t.match_reasons!.caveats![0]}</p>
                         )}
+                        <div className="pt-1">
+                          <div className="text-xs font-semibold text-gray-900">{action.label}</div>
+                          <div className="mt-0.5 text-[11px] text-gray-500">{action.detail}</div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <Link
+                            href={serviceHref("bid-no-bid", t)}
+                            className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700"
+                          >
+                            Bid/no-bid
+                          </Link>
+                          <Link
+                            href={serviceHref("proposal", t)}
+                            className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-400"
+                          >
+                            Proposal
+                          </Link>
+                          {isRosterAgency(t.tender_agency) && (
+                            <Link
+                              href={serviceHref("lta-roster", t)}
+                              className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:border-amber-300"
+                            >
+                              Roster/LTA
+                            </Link>
+                          )}
+                          <div className="flex-1" />
+                          <button
+                            onClick={() => handleTenderFeedback(t, "saved")}
+                            disabled={feedbackSavingId === t.id}
+                            className="text-xs text-gray-500 hover:text-gray-900 disabled:opacity-50"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => handleTenderFeedback(t, "not_relevant")}
+                            disabled={feedbackSavingId === t.id}
+                            className="text-xs text-gray-400 hover:text-red-600 disabled:opacity-50"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
                       </div>
-                      <h3 className="mt-2 text-sm font-semibold text-gray-900 line-clamp-2">
-                        {t.tender_title}
-                      </h3>
-                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
-                        {t.tender_agency && <span>{t.tender_agency}</span>}
-                        <span className={isDeadlineSoon(t.tender_deadline) ? "font-semibold text-red-600" : ""}>
-                          {deadlineLabel(t.tender_deadline)}
-                        </span>
-                        {t.tender_value && <span>{t.tender_value}</span>}
-                        {t.fit_score > 0 && <span>{t.fit_score}% fit</span>}
-                      </div>
                     </div>
-                  </div>
-
-                  <div className="mt-3 rounded-md bg-gray-50 px-3 py-2">
-                    <div className="text-xs font-semibold text-gray-900">Why this matters</div>
-                    <p className="mt-1 text-xs text-gray-600 line-clamp-3">
-                      {t.match_reasons?.summary?.[0]
-                        ?? t.match_reasons?.opportunityBucketReason
-                        ?? "Tenderpath found sector, capability, or geography evidence that makes this worth a closer look."}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {(t.match_reasons?.matchedSectors ?? []).slice(0, 3).map((sector) => (
-                        <span key={sector} className="rounded bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
-                          {sector}
-                        </span>
-                      ))}
-                      {(t.match_reasons?.matchedKeywords ?? []).slice(0, 3).map((keyword) => (
-                        <span key={keyword} className="rounded bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
-                          {keyword}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex flex-col gap-2 border-t border-gray-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <div className="text-xs font-semibold text-gray-900">{action.label}</div>
-                      <div className="text-[11px] text-gray-500">{action.detail}</div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Link
-                        href={serviceHref("bid-no-bid", t)}
-                        className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-50"
-                      >
-                        Bid/no-bid
-                      </Link>
-                      <Link
-                        href={serviceHref("proposal", t)}
-                        className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-400"
-                      >
-                        Proposal
-                      </Link>
-                      {isRosterAgency(t.tender_agency) && (
-                        <Link
-                          href={serviceHref("lta-roster", t)}
-                          className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:border-amber-300"
-                        >
-                          Roster/LTA
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3">
-                    <Link href="/dashboard/pipeline" className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
-                      Track in pipeline
-                    </Link>
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => handleTenderFeedback(t, "saved")}
-                        disabled={feedbackSavingId === t.id}
-                        className="text-xs font-medium text-gray-500 hover:text-gray-900 disabled:opacity-50"
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={() => handleTenderFeedback(t, "not_relevant")}
-                        disabled={feedbackSavingId === t.id}
-                        className="text-xs font-medium text-gray-400 hover:text-red-600 disabled:opacity-50"
-                      >
-                        Not relevant
-                      </button>
-                    </div>
-                  </div>
+                  )}
                 </div>
               );
             })}
@@ -846,30 +740,27 @@ export default function DashboardOverview() {
         </div>
       )}
 
-      {(bridge || seeded) && (
-        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-5 py-4">
-          <div className="text-sm font-semibold text-green-800">
-            Welcome{bridge?.company_name ? `, ${bridge.company_name}` : ""}!
-          </div>
-          <p className="text-sm text-green-700 mt-0.5">
-            {seeded
-              ? "Your matched tenders have been added to your pipeline. Head over to the Kanban board to start tracking."
-              : "Seeding your pipeline with matched tenders…"}
+      {/* Empty state — no tenders */}
+      {matchedTenders.length === 0 && (pipelineStats === null || pipelineStats.total === 0) && (
+        <div className="mt-5 rounded-lg border border-dashed border-gray-300 bg-white px-6 py-10 text-center">
+          <div className="text-sm font-semibold text-gray-700">No matched tenders yet</div>
+          <p className="mt-1 text-sm text-gray-500">
+            Run an assessment to find tenders and grants that match your company profile.
           </p>
-          {bridge && bridge.gaps.length > 0 && (
-            <p className="text-xs text-green-600 mt-2">
-              Tip: Upload documents to the Vault to close your top compliance gaps.
-            </p>
-          )}
+          <Link
+            href="/assessment"
+            className="mt-4 inline-block rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700"
+          >
+            Start assessment
+          </Link>
         </div>
       )}
 
+      {/* Service paths */}
       <div className="mt-6">
         <div className="mb-3">
           <h2 className="text-base font-semibold text-gray-900">Service paths</h2>
-          <p className="text-xs text-gray-500">
-            Choose the product that matches the stage of the opportunity.
-          </p>
+          <p className="text-xs text-gray-500">Choose the product that matches your stage.</p>
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           {[

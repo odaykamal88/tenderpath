@@ -222,9 +222,8 @@ async function seed() {
   }
   console.log(`  ✓ ${tenders.length} tenders seeded`);
 
-  // Grants are sourced live from Grants.gov via crawlGrantsGov — see
-  // src/lib/crawlers/grants-sync.ts. No seed grants (the prior fake set
-  // had fabricated URLs that 404'd).
+  // No seed grants. Historical grants rows may remain in existing databases,
+  // but grants.gov is no longer part of the active ingestion stack.
 
   // Verify
   const tc = await sql`SELECT count(*) as count FROM tenders`;

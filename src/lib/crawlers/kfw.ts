@@ -18,18 +18,37 @@ const HEADERS = {
   Accept: "text/html",
 };
 
-function parseListingLinks(html: string): Array<{ path: string; title: string }> {
-  // Links: href="/en/trade/{country}/tenders/{slug}--{id}"
-  const re = /href="(\/en\/(?:trade|gtai)\/[^"]*(?:tender|ausschreibung)[^"]*)"[^>]*>\s*<[^>]+>([^<]*)/gi;
+function parseListingLinks(html: string): Array<{ path: string; title: string; deadline: string | null; country: string | null; category: string | null; description: string | null }> {
+  const itemRe = /<li[^>]*class="[^"]*\bresult-item\b[^"]*"[^>]*>([\s\S]*?)<\/li>/gi;
   const seen = new Set<string>();
-  const out: Array<{ path: string; title: string }> = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
-    const path = m[1].split("?")[0];
-    const title = m[2].trim();
+  const out: Array<{ path: string; title: string; deadline: string | null; country: string | null; category: string | null; description: string | null }> = [];
+  let item: RegExpExecArray | null;
+  while ((item = itemRe.exec(html)) !== null) {
+    const block = item[1];
+    if (!/Tender Notice/i.test(block) || !/KfW Entwicklungsbank|KfW Development Bank/i.test(block)) continue;
+    const link = block.match(/href="(\/en\/trade\/[^"]*\/tenders\/[^"]+)"/i);
+    const title = block.match(/<h3[^>]*>([\s\S]*?)<\/h3>/i)?.[1]
+      ?.replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!link || !title) continue;
+    const path = link[1].split("?")[0];
+    const pathCountry = path.match(/^\/en\/trade\/([^/]+)\//)?.[1]?.replace(/-/g, " ");
+    const overline = [...block.matchAll(/<span[^>]*class="[^"]*overline__text[^"]*"[^>]*>([\s\S]*?)<\/span>/gi)]
+      .map((m) => stripTags(m[1]))
+      .filter(Boolean);
+    const deadlineRaw = stripTags(block.match(/Deadline:\s*<\/p>\s*<p>|Deadline:\s*([\s\S]*?)<\/p>/i)?.[1] ?? "");
+    const excerpt = stripTags(block.match(/<p[^>]*class="[^"]*excerpt[^"]*"[^>]*>([\s\S]*?)<\/p>/i)?.[1] ?? "");
     if (!seen.has(path) && title) {
       seen.add(path);
-      out.push({ path, title });
+      out.push({
+        path,
+        title,
+        deadline: deadlineRaw ? parseDeadline(deadlineRaw) : null,
+        country: pathCountry ? pathCountry.charAt(0).toUpperCase() + pathCountry.slice(1) : overline.find((text) => !/tender notice|contract award|event|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{4}|for german companies/i.test(text)) ?? null,
+        category: overline.at(-1) ?? null,
+        description: excerpt || null,
+      });
     }
   }
   return out;
@@ -41,6 +60,17 @@ function parseDeadline(html: string): string | null {
   if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
   const iso = html.match(/(\d{4})-(\d{2})-(\d{2})/);
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const months: Record<string, string> = {
+    jan: "01", january: "01", feb: "02", february: "02", mar: "03", march: "03",
+    apr: "04", april: "04", may: "05", jun: "06", june: "06", jul: "07", july: "07",
+    aug: "08", august: "08", sep: "09", september: "09", oct: "10", october: "10",
+    nov: "11", november: "11", dec: "12", december: "12",
+  };
+  const worded = html.match(/([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/);
+  if (worded) {
+    const mm = months[worded[1].toLowerCase()];
+    if (mm) return `${worded[3]}-${mm}-${worded[2].padStart(2, "0")}`;
+  }
   return null;
 }
 
@@ -54,7 +84,11 @@ async function fetchListingPage(page: number): Promise<string> {
     : `${LISTING_URL}?page=${page}`;
   const resp = await fetchWithTimeout(url, { headers: HEADERS }, 25000);
   if (!resp.ok) throw new Error(`KfW/GTAI listing page ${page} HTTP ${resp.status}`);
-  return resp.text();
+  const html = await resp.text();
+  if (/ss_captcha\.png|class="h-captcha"|Captcha Page/i.test(html)) {
+    throw new Error("KfW/GTAI listing is blocked by PerfDrive captcha");
+  }
+  return html;
 }
 
 async function fetchDetail(path: string): Promise<{ deadline: string | null; description: string | null; country: string | null; reference: string | null }> {
@@ -81,7 +115,7 @@ async function fetchDetail(path: string): Promise<{ deadline: string | null; des
 export async function crawlKfW(): Promise<CrawlResult> {
   const start = Date.now();
   try {
-    const allLinks: Array<{ path: string; title: string }> = [];
+    const allLinks: Array<{ path: string; title: string; deadline: string | null; country: string | null; category: string | null; description: string | null }> = [];
 
     for (let page = 0; page < MAX_PAGES; page++) {
       let html: string;
@@ -105,7 +139,7 @@ export async function crawlKfW(): Promise<CrawlResult> {
     }
 
     const tenders: RawTender[] = [];
-    for (const { path, title } of allLinks) {
+    for (const { path, title, deadline, country, category, description } of allLinks) {
       let detail = { deadline: null as string | null, description: null as string | null, country: null as string | null, reference: null as string | null };
       try {
         detail = await withRetry(() => fetchDetail(path));
@@ -115,18 +149,19 @@ export async function crawlKfW(): Promise<CrawlResult> {
 
       const idPart = path.split("--").pop() ?? path.split("/").pop() ?? path;
       const refId = detail.reference ? `KFW-${detail.reference.replace(/\s+/g, "-")}` : `KFW-${idPart}`;
-      const sectors = normalizeSector(null, title, detail.description);
+      const mergedDescription = detail.description ?? description;
+      const sectors = normalizeSector(category, title, mergedDescription);
 
       tenders.push({
         reference_id: refId,
         title,
-        description: detail.description,
+        description: mergedDescription,
         agency: "KfW",
-        country: detail.country ?? "Global",
+        country: detail.country && !/for german companies/i.test(detail.country) ? detail.country : country ?? "Global",
         country_code: null,
         region: null,
         sector: sectors[0] ?? null,
-        deadline: detail.deadline,
+        deadline: detail.deadline ?? deadline,
         estimated_value: null,
         source_url: `${BASE_URL}${path}`,
         opportunity_type: "RFP",

@@ -66,6 +66,8 @@ const EXPECTED_PLATFORMS: ExpectedPlatform[] = [
   { platform: "SAM.gov", role: "primary", staleAfterHours: 36 },
   { platform: "UNDP Atlas", role: "primary", staleAfterHours: 36 },
   { platform: "ADB", role: "primary", staleAfterHours: 48 },
+  { platform: "AfDB", role: "primary", staleAfterHours: 72 },
+  { platform: "IDB", role: "primary", staleAfterHours: 48 },
   { platform: "EBRD", role: "primary", staleAfterHours: 48 },
   { platform: "UNRWA", role: "primary", staleAfterHours: 48 },
   { platform: "ReliefWeb", role: "supplement", staleAfterHours: 48 },
@@ -75,6 +77,7 @@ const EXPECTED_PLATFORMS: ExpectedPlatform[] = [
   { platform: "GIZ", role: "primary", staleAfterHours: 72 },
   { platform: "AFD", role: "primary", staleAfterHours: 72 },
   { platform: "ADA", role: "primary", staleAfterHours: 72 },
+  { platform: "JICA", role: "primary", staleAfterHours: 72 },
   { platform: "UNDP", role: "primary", staleAfterHours: 72 },
 ];
 

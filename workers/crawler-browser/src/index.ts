@@ -28,7 +28,7 @@ export interface Env {
   CRAWLER_KEY: string;        // wrangler secret
 }
 
-const WORKER_VERSION = "crawler-browser@0.1.0";
+const WORKER_VERSION = "crawler-browser@0.1.1";
 
 const USER_AGENTS = [
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -201,6 +201,47 @@ async function handleFetchMany(req: Request, env: Env): Promise<Response> {
 async function setupPage(page: PuppeteerPage): Promise<void> {
   const ua = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
   await page.setUserAgent(ua);
+  await page.setViewport({ width: 1365, height: 768, deviceScaleFactor: 1 });
+  await page.setExtraHTTPHeaders({
+    "Accept-Language": "en-US,en;q=0.9",
+    "Upgrade-Insecure-Requests": "1",
+  });
+  await page.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+    Object.defineProperty(navigator, "languages", { get: () => ["en-US", "en"] });
+    Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3, 4, 5] });
+  }).catch(() => {});
+}
+
+function looksLikeChallenge(text: string): boolean {
+  return /Just a moment|Attention Required|Access denied|Checking your browser|cf-challenge|challenge-platform|Enable JavaScript and cookies|cf-browser-verification|Cloudflare Ray ID|Error 1020/i
+    .test(text);
+}
+
+async function pageLooksLikeChallenge(page: PuppeteerPage): Promise<boolean> {
+  const content = await page.evaluate(() => {
+    const doc = (globalThis as unknown as { document?: any }).document;
+    const title = doc?.title ?? "";
+    const body = doc?.body?.innerText?.slice(0, 1000) ?? "";
+    const html = doc?.documentElement?.innerHTML?.slice(0, 2000) ?? "";
+    return `${title}\n${body}\n${html}`;
+  }).catch(() => "");
+  return looksLikeChallenge(content);
+}
+
+async function waitThroughChallenge(page: PuppeteerPage, maxWaitMs = 30000): Promise<void> {
+  const deadline = Date.now() + maxWaitMs;
+  let sawChallenge = false;
+
+  while (Date.now() < deadline) {
+    const challenged = await pageLooksLikeChallenge(page);
+    if (!challenged) {
+      if (sawChallenge) await new Promise((r) => setTimeout(r, 1000));
+      return;
+    }
+    sawChallenge = true;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
 }
 
 /**
@@ -222,6 +263,7 @@ async function warmupAndClearCF(page: PuppeteerPage, warmupUrl: string, waitMs: 
     // Fall back to domcontentloaded so we still have a page to work with.
     await page.goto(warmupUrl, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
   }
+  await waitThroughChallenge(page, 30000);
 
   // Poll for cf_clearance. If the site isn't behind CF, the cookie never
   // appears — cap the poll at 8s so we don't waste the budget.
@@ -250,7 +292,8 @@ async function navigateAndCapture(page: PuppeteerPage, r: FetchRequest): Promise
   const resp = await page.goto(r.url, { waitUntil: "networkidle2", timeout: 45000 }).catch((e) => {
     throw new Error(`navigate failed: ${e instanceof Error ? e.message : String(e)}`);
   });
-  const status = resp?.status() ?? 0;
+  let status = resp?.status() ?? 0;
+  await waitThroughChallenge(page, 30000);
 
   if (r.waitForSelector) {
     await page.waitForSelector(r.waitForSelector, { timeout: 20000 }).catch(() => {
@@ -263,6 +306,7 @@ async function navigateAndCapture(page: PuppeteerPage, r: FetchRequest): Promise
   }
 
   const body = await page.content();
+  if (status >= 400 && !looksLikeChallenge(body)) status = 200;
   return { status, body, finalUrl: page.url() };
 }
 

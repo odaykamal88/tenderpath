@@ -17,11 +17,13 @@ import { crawlDevelopmentAidNPO } from "./developmentaid-npo";
 import { crawlADB } from "./adb";
 import { crawlEBRD } from "./ebrd";
 import { crawlUNRWA } from "./unrwa";
+import { crawlAfDB } from "./afdb";
+import { crawlIDB } from "./idb";
 import { crawlNRC } from "./nrc";
 import { crawlKfW } from "./kfw";
 import { crawlAFD } from "./afd";
 import { crawlADA } from "./ada";
-// crawlJICA — disabled: English listing returns 404; real listing is Japanese-only with PDF-only detail pages
+import { crawlJICA } from "./jica";
 // crawlUNOPS — disabled: UNOPS posts to UNGM by mandate; already captured by crawlUNGM()
 
 export interface PlatformSyncResult {
@@ -56,6 +58,8 @@ const SOURCE_PRIORITY: Record<string, number> = {
   // "UK Find a Tender": 80,  — disabled Sprint 4
   "UNDP Atlas": 75,
   ADB: 75,
+  AfDB: 75,
+  IDB: 75,
   EBRD: 75,
   UNRWA: 72,
   ReliefWeb: 70,
@@ -230,15 +234,17 @@ export async function syncAllTenders(): Promise<SyncSummary> {
     crawlUNDP(),
     crawlUNDPAtlas(),
     crawlADB(),
+    crawlAfDB(),
+    crawlIDB(),
     crawlEBRD(),
     crawlUNRWA(),
     crawlDevelopmentAidNPO(),
     crawlNRC(),
     crawlKfW(),
     crawlAFD(),
+    crawlJICA(),
     crawlADA(),
     // crawlWFP(),    — disabled, posts to UNGM
-    // crawlJICA()   — disabled: English page 404, real listing Japanese-only with PDF details
     // crawlUNOPS()  — disabled: already covered by UNGM (UNOPS posts to UNGM by mandate)
   ]);
 

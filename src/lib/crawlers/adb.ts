@@ -12,6 +12,7 @@
  */
 import { type RawTender, type CrawlResult, withRetry } from "./types";
 import { fetchViaBrowser, browserAvailable } from "./_browser";
+import { normalizeSector } from "./sector-map";
 
 const BASE = process.env.ADB_TENDERS_URL ?? "https://www.adb.org/projects/tenders";
 const MAX_PAGES = 3;
@@ -40,7 +41,7 @@ async function fetchPage(page: number): Promise<string> {
     waitForSelector: "a[href*='/projects/tenders/']",
     waitAfterNav: 500,
     waitMs: 2000,
-    timeoutMs: 120000,
+    timeoutMs: 90000,
   });
   if (!resp.ok) throw new Error(`ADB page ${page} ${resp.status}: ${resp.body.slice(0, 200)}`);
   return resp.body;
@@ -135,20 +136,27 @@ function mapType(notice: string): string {
 }
 
 function mapRow(r: ParsedRow): RawTender {
+  const description = [
+    "Asian Development Bank procurement notice.",
+    r.noticeType ? `Notice type: ${r.noticeType}.` : null,
+    r.country ? `Geography: ${r.country}.` : null,
+  ].filter(Boolean).join(" ");
+  const sectors = normalizeSector(null, r.title, description);
+
   return {
     reference_id: `ADB-${r.id}`,
     title: r.title.slice(0, 500),
-    description: null,
+    description,
     agency: "Asian Development Bank",
     country: r.country || "Asia-Pacific",
     country_code: null,
     region: "Asia-Pacific",
-    sector: null,
+    sector: sectors[0] ?? null,
     deadline: r.deadline,
     estimated_value: null,
     source_url: `https://www.adb.org${r.slug.startsWith("/") ? "" : "/"}${r.slug}`,
     opportunity_type: mapType(r.noticeType),
-    eligibility_summary: null,
+    eligibility_summary: "Follow the ADB notice and borrower procurement instructions.",
     experience_level: null,
     submission_language: "English",
     source_tier: 1,
@@ -169,7 +177,7 @@ export async function crawlADB(): Promise<CrawlResult> {
     const seen = new Set<string>();
     for (let page = 0; page < MAX_PAGES; page++) {
       if (page > 0) await sleep(PAGE_DELAY_MS);
-      const html = await withRetry(() => fetchPage(page));
+      const html = await withRetry(() => fetchPage(page), 1);
       const rows = parseRows(html);
       if (!rows.length) break;
       let added = 0;

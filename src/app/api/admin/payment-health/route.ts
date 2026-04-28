@@ -12,7 +12,8 @@ type PaymentConfig = {
 };
 
 function configured(key: string): boolean {
-  return Boolean(process.env[key]?.trim());
+  const value = process.env[key]?.trim();
+  return Boolean(value && value !== "\"\"" && value !== "''");
 }
 
 function paymentConfig(): PaymentConfig {

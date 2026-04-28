@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { syncAllTenders } from "@/lib/tender-sync";
-import { syncAllGrants } from "@/lib/crawlers/grants-sync";
 import { sql } from "@/lib/db";
 
 async function getSourceQualitySummary() {
@@ -56,7 +55,7 @@ async function getSourceQualitySummary() {
 }
 
 async function runSync() {
-  const [tenders, grants] = await Promise.all([syncAllTenders(), syncAllGrants()]);
+  const tenders = await syncAllTenders();
   const sourceQuality = await getSourceQualitySummary();
   const degradedSources = sourceQuality.filter((source) => source.status === "degraded");
 
@@ -76,13 +75,6 @@ async function runSync() {
         durationMs: r.durationMs,
         error: r.error,
       })),
-    },
-    grants: {
-      totalAdded: grants.totalAdded,
-      totalUpdated: grants.totalUpdated,
-      totalExpired: grants.totalExpired,
-      totalBroken: grants.totalBroken,
-      platforms: grants.platforms,
     },
     quality: {
       degradedSourceCount: degradedSources.length,

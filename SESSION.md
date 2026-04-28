@@ -1041,9 +1041,115 @@ Preserve existing payment, webhook, work_order, and dashboard contracts. Do not 
 
 ---
 
+### Phase 4C Payment QA Partial — 2026-04-28
+
+- **Agent**: Codex
+- **Date**: 2026-04-28
+- **Task Completed**: Began Phase 4C payment and fulfillment E2E. Verified local/Vercel env availability, restarted local dev server, created a fresh demo work order through the real service-order API, verified customer/admin work-order APIs and customer work-order UI, and tightened payment readiness checks so empty quoted env values cannot be treated as configured.
+- **Files Changed**:
+  - `scripts/phase3d-payment-smoke.ts` — strips simple surrounding quotes when loading `.env.local` and treats empty quoted values as missing.
+  - `scripts/phase4-launch-qa.ts` — same env parsing/readiness hardening for Phase 4 launch QA.
+  - `src/app/api/admin/payment-health/route.ts` — treats empty quoted values as missing in admin payment health.
+  - `SESSION.md` — updated handoff.
+- **Runtime / Data Actions**:
+  - Pulled Vercel development env to `/tmp/tenderpath-vercel-env.local` for inspection only. Development env lacked Stripe/Resend payment vars.
+  - Pulled Vercel production env to `/tmp/tenderpath-vercel-prod-env.local` for inspection only. Variable names exist there, but sensitive values pulled locally as empty quoted placeholders and cannot be used for local checkout.
+  - Briefly appended missing production keys into `.env.local`, confirmed they were empty quoted placeholders, then restored `.env.local` from `.env.local.phase4c.bak`.
+  - Restarted local Next dev server on `http://localhost:3000`.
+  - Created demo work order `#4` through `/api/service-orders` for `demo@tenderpath.me`: `proposal-draft`, `service_slug=proposal`, `payment_status=pending`, no Stripe session. Checkout creation failed because Stripe secrets are still unavailable locally.
+- **Tests / Checks Run**:
+  - `DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS='-r dotenv/config' npx tsx scripts/phase3d-payment-smoke.ts` — expected failure because `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are missing; purchase log duplicate check clean.
+  - `DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS='-r dotenv/config' npx tsx scripts/phase4-launch-qa.ts` — expected payment blocker remains:
+    - profiles: `12`
+    - classificationsOk: `12`
+    - matchCountsOk: `12`
+    - actionableOk: `12`
+    - ctasOk: `12`
+    - paymentReady: `false`
+    - opsReady: `true`
+    - blockers: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
+  - Customer API checks:
+    - `/api/dashboard/work-orders?limit=10` returned demo work orders `#1-#4`.
+    - `/api/dashboard/work-orders/3` returned paid/in-progress state.
+    - `/api/dashboard/work-orders/4` returned pending/new state.
+  - Admin API checks:
+    - `/api/admin/work-orders?status=all` returned work orders `#1-#4`.
+    - `/api/admin/payment-health` returned 200 and correctly reported missing Stripe secret/webhook.
+  - Browser QA:
+    - Logged in as `demo@tenderpath.me`.
+    - Verified `/dashboard/work-orders` visually shows pending QA work order `#4` and paid work orders `#1`/`#3`.
+  - `npx eslint scripts/phase3d-payment-smoke.ts scripts/phase4-launch-qa.ts src/app/api/admin/payment-health/route.ts` — passed.
+  - `npx tsc --noEmit` — passed.
+- **Result**: Fulfillment surfaces are working for existing paid/pending work orders, and payment readiness checks are now more trustworthy. The real Stripe Checkout + signed webhook E2E could not be completed because actual local `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` values are still unavailable.
+- **Blockers**:
+  - Need actual Stripe test-mode `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` values, not Vercel-pulled empty sensitive placeholders.
+  - Need service price IDs locally for non-bid/no-bid checkout if testing proposal/digest/LTA paths (`STRIPE_PRICE_SUBMISSION_PACKAGE`, `STRIPE_PRICE_TENDER_INTELLIGENCE`, `STRIPE_PRICE_STRATEGIC_PARTNERSHIP`). Bid/no-bid price is already present locally.
+- **Important Decisions**:
+  - Did not fabricate/mock Stripe success. The E2E remains blocked until real test secrets are available.
+  - Left demo pending work order `#4` in the database as a visible payment-blocked QA artifact; do not delete without explicit approval.
+  - Preserved `.env.local` by restoring the pre-change backup after discovering Vercel sensitive values pulled as empty placeholders.
+- **Contracts or Interfaces Changed**: None. Only readiness parsing/health checks changed.
+- **Docs Updated**: `SESSION.md` only.
+- **Next Recommended Task**: Provide actual Stripe test-mode values for `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` locally, plus any missing service price IDs for the chosen product path. Then rerun Phase 4C from pending work order `#4` or create a fresh work order: start checkout, confirm before submitting the test payment, send/replay the signed webhook, verify `purchase_logs`, `work_orders.payment_status = paid`, paid user/ops emails, customer work-order page, admin fulfillment view, and rerun `npx tsx scripts/phase4-launch-qa.ts`.
+- **Recommended Agent**: Codex.
+- **Paste-Ready Next Prompt**:
+
+```text
+Read SESSION.md first, then AGENTS.md, CLAUDE.md, docs/agents/dashboard-architecture.md, and the relevant Next.js App Router docs under node_modules/next/dist/docs/.
+
+Continue Phase 4C payment and fulfillment QA.
+
+Actual Stripe test-mode secrets are now required locally:
+- STRIPE_SECRET_KEY
+- STRIPE_WEBHOOK_SECRET
+- service price IDs for the chosen checkout path if not using bid/no-bid
+
+Use pending demo work order #4 if useful, or create a fresh demo work order. Run a real Stripe Checkout test payment and signed webhook E2E:
+- confirm before submitting the final test payment,
+- verify `purchase_logs`,
+- verify `work_orders.payment_status = paid`,
+- verify paid user and ops emails,
+- verify the customer work-order page,
+- verify the admin fulfillment view,
+- rerun `npx tsx scripts/phase4-launch-qa.ts` and confirm `paymentReady` is true.
+
+Preserve existing payment, webhook, work_order, and dashboard contracts. Do not push or deploy unless explicitly asked. Update SESSION.md when finished.
+```
+
+---
+
+### Phase 4C Dashboard UX Pass — 2026-04-28
+
+- **Agent**: Claude Code
+- **Date**: 2026-04-28
+- **Task Completed**: Full UX/UI audit and improvement pass on the Tenderpath dashboard overview. Goal: make it feel like a focused procurement cockpit — calm, intuitive, one primary action per view, no competing CTAs.
+- **Files Changed**:
+  - `src/app/dashboard/layout.tsx` — sidebar narrowed to `w-56`; added `NavIcon` SVG component rendering Heroicons 2.0 outline paths inline; added `NAV_ICONS` record mapping all 7 routes to their icon path strings; "Preview" lock badges renamed to "Pro"; sign-out button got icon treatment.
+  - `src/app/dashboard/page.tsx` — complete JSX restructure while preserving all data/hook logic. Key changes:
+    1. **`ReadinessRing`** SVG component added: circular gauge (`r=40`, circumference 251.33) with color-coded ring (green ≥70, amber ≥50, red <50) and plain-English status label ("Good foundation / Needs attention / Critical gaps").
+    2. **Section order**: header → welcome/seed banner (top) → error → stats row → 2-col grid (readiness ring + top priority tender) → compact expandable tender feed → empty state → service paths.
+    3. **Stats row moved to top** so users immediately orient: matched count, deadline pressure, active bids, total pipeline.
+    4. **Welcome banner moved to top** to greet fresh-assessment users on first load.
+    5. **"Automatic matching" explanation box removed** — internal product text not useful in an active session.
+    6. **Readiness section**: replaced raw score number with ring component; condensed action plan to compact 3-item checklist with severity dot + gap text + "Mark done" toggle; "View all gaps →" link for overflow.
+    7. **Tender feed**: converted always-expanded cards with 3 CTAs each to collapsed single-row list items (fit%, bucket badge, title, agency, deadline, chevron); click to expand (why matched, sector/keyword chips, caveats, next action, action buttons). Controlled by `expandedTenderId: number | null` state.
+    8. **Empty state added**: dashed-border card with CTA to `/assessment` when pipeline is empty.
+- **Tests Run**:
+  - `npx tsc --noEmit` — passed (clean, no errors).
+- **Result**: Dashboard now answers "what matters first, why it matched, and what to do next" without overwhelming the user with redundant panels or always-visible CTAs. Cognitive load reduced by collapsing tender detail behind click-to-expand, moving the ring indicator to a primary visual position, and removing non-actionable marketing copy from the active-session view.
+- **Blockers**: None.
+- **Important Decisions**:
+  - Removed `guidanceForGap`, `confidenceLabel`, and `nextReadinessActions` variables — replaced by inline expressions and new component structure.
+  - Kept all data/hook logic (useCallback, useEffect, seedPipeline, loadDashboard, handleTenderFeedback) unchanged; only the JSX return was restructured.
+  - Empty state only appears when `matchedTenders.length === 0 && pipeline.length === 0` — users with pipeline items but no new matches still see their pipeline stats.
+- **Contracts or Interfaces Changed**: None. All existing API calls, state shapes, and TypeScript interfaces are unchanged.
+- **Docs Updated**: `SESSION.md` only.
+
+---
+
 ## Next Recommended Task
 
-Phase 4C payment and fulfillment E2E: configure Stripe test secrets locally and in Vercel (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and any missing service price IDs), then run a real test-mode Checkout + signed webhook flow for a demo work order. Confirm purchase log, paid work order, user/ops emails, customer work-order page, admin fulfillment view, and rerun `npx tsx scripts/phase4-launch-qa.ts` until `paymentReady` is true.
+Provide actual Stripe test-mode `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` values locally, plus any missing service price IDs for the chosen checkout path. Then rerun Phase 4C from pending work order `#4` or a fresh demo work order and complete the real Stripe Checkout + signed webhook E2E.
 
 ---
 
@@ -1067,22 +1173,21 @@ Paste this into the next Claude Code or Codex session:
 ```
 Read SESSION.md first, then AGENTS.md, CLAUDE.md, docs/agents/dashboard-architecture.md, and the relevant Next.js App Router docs under node_modules/next/dist/docs/.
 
-Act as the Tender Dashboard + Ops Agent for Phase 4C payment and fulfillment QA.
+Continue Phase 4C payment and fulfillment QA.
 
-Configure or verify local test-mode payment env first:
+Actual Stripe test-mode secrets are now required locally:
 - STRIPE_SECRET_KEY
 - STRIPE_WEBHOOK_SECRET
-- any missing service price IDs needed for the services being tested
-- WORK_ORDER_OPS_EMAIL if ops mail should not default to info@tenderpath.me
+- service price IDs for the chosen checkout path if not using bid/no-bid
 
-Then run one real Stripe test-mode Checkout + signed webhook E2E for a demo work order:
+Use pending demo work order #4 if useful, or create a fresh demo work order. Run a real Stripe Checkout test payment and signed webhook E2E:
 - confirm before submitting the final test payment,
 - verify `purchase_logs`,
 - verify `work_orders.payment_status = paid`,
 - verify paid user and ops emails,
 - verify the customer work-order page,
 - verify the admin fulfillment view,
-- rerun `npx tsx scripts/phase4-launch-qa.ts` and confirm the only remaining blockers are resolved or explicitly documented.
+- rerun `npx tsx scripts/phase4-launch-qa.ts` and confirm `paymentReady` is true.
 
 Preserve existing payment, webhook, work_order, and dashboard contracts. Do not push or deploy unless explicitly asked. Update SESSION.md when finished.
 ```

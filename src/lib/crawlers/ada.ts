@@ -37,6 +37,16 @@ function parseAdaDate(raw: string): string | null {
   return null;
 }
 
+function cleanText(raw: string): string {
+  return raw
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 interface AdaItem {
   title: string;
   url: string;
@@ -47,15 +57,15 @@ interface AdaItem {
 
 function parseListing(html: string): AdaItem[] {
   const items: AdaItem[] = [];
-  // TYPO3 detail links match the /calls-auftraege/calls-detail/ prefix
-  const blockRe = /<(?:li|article)[^>]*>([\s\S]*?)<\/(?:li|article)>/gi;
+  // TYPO3 detail cards use this article class inside the calls listing.
+  const blockRe = /<div[^>]*class="[^"]*\barticle\b[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi;
   let bm: RegExpExecArray | null;
   while ((bm = blockRe.exec(html)) !== null) {
     const block = bm[1];
+    if (!/calls-list-date|calls-detail/i.test(block)) continue;
     const linkM =
       block.match(/href="([^"]*calls-detail[^"]*)"/i) ??
-      block.match(/href="([^"]*\/ada\/calls\/[^"]*)"/i) ??
-      block.match(/href="(\/[^"]+)"/i);
+      block.match(/href="([^"]*\/ada\/calls\/[^"]*)"/i);
     if (!linkM) continue;
     const path = linkM[1].startsWith("http") ? linkM[1] : `${BASE_URL}${linkM[1]}`;
     const titleM = block.match(/<(?:h\d|strong|a)[^>]*>([\s\S]*?)<\/(?:h\d|strong|a)>/i);
@@ -65,11 +75,36 @@ function parseListing(html: string): AdaItem[] {
     const deadlineM = block.match(/(?:[Dd]eadline|[Ss]ubmission\s+[Dd]ate|[Ee]insendeschluss)[^<]*(?:<[^>]+>)?([^<]+)/);
     const deadline = deadlineM ? parseAdaDate(deadlineM[1]) : null;
 
-    const desc = block.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 400) || null;
+    const desc = cleanText(block).slice(0, 400) || null;
 
     items.push({ title, url: path, deadline, description: desc, country: null });
   }
   return items;
+}
+
+async function enrichDetail(item: AdaItem): Promise<AdaItem> {
+  const resp = await fetchWithTimeout(item.url, { headers: HEADERS }, 20000);
+  if (!resp.ok) return item;
+  const html = await resp.text();
+  const main =
+    html.match(/<div[^>]*class="[^"]*(?:calls|news-single|content|main)[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/i)?.[1] ??
+    html.match(/<main[^>]*>([\s\S]*?)<\/main>/i)?.[1] ??
+    "";
+  const detailText = cleanText(main);
+  const deadlineRaw =
+    detailText.match(/deadline(?: for submission of applications)? is\s+(.{6,40}?)(?:\.|$)/i)?.[1] ??
+    detailText.match(/Deadline:\s*(.{6,40}?)(?:\.|$)/i)?.[1] ??
+    null;
+  const country =
+    detailText.match(/\bPlace\s+([^.,;]{3,80})/i)?.[1]?.trim() ??
+    item.country;
+
+  return {
+    ...item,
+    deadline: item.deadline ?? (deadlineRaw ? parseAdaDate(deadlineRaw) : null),
+    description: detailText.slice(0, 700) || item.description,
+    country,
+  };
 }
 
 export async function crawlADA(): Promise<CrawlResult> {
@@ -90,7 +125,17 @@ export async function crawlADA(): Promise<CrawlResult> {
       };
     }
 
-    const tenders: RawTender[] = items.map((item, i) => {
+    const enriched: AdaItem[] = [];
+    for (const item of items) {
+      try {
+        enriched.push(await withRetry(() => enrichDetail(item), 2));
+      } catch (err) {
+        console.error(`[ada] detail ${item.url} failed:`, err instanceof Error ? err.message : err);
+        enriched.push(item);
+      }
+    }
+
+    const tenders: RawTender[] = enriched.map((item, i) => {
       const slug = item.url.split("/").filter(Boolean).pop() ?? `ada-${i}`;
       const sectors = normalizeSector(null, item.title, item.description);
       return {

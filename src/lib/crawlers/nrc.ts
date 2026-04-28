@@ -15,16 +15,16 @@ const HEADERS = {
   Accept: "text/html",
 };
 
-function extractLinks(html: string): string[] {
-  const re = /href="(\/tender\/[^"]+)"/g;
+function extractLinks(html: string): Array<{ path: string; title: string | null }> {
+  const re = /<a[^>]+href="(\/tender\/[^"]+)"[^>]*>[\s\S]*?<h2[^>]*>([\s\S]*?)<\/h2>/g;
   const seen = new Set<string>();
-  const links: string[] = [];
+  const links: Array<{ path: string; title: string | null }> = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) {
     const path = m[1];
     if (!seen.has(path)) {
       seen.add(path);
-      links.push(path);
+      links.push({ path, title: extractText(m[2], /^([\s\S]*)$/) });
     }
   }
   return links;
@@ -37,6 +37,7 @@ function extractText(html: string, re: RegExp): string | null {
     .replace(/&amp;/g, "&")
     .replace(/&nbsp;/g, " ")
     .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
     .replace(/\s+/g, " ")
     .trim() ?? null;
 }
@@ -88,7 +89,7 @@ async function fetchDetail(path: string): Promise<TenderDetail> {
     : null;
 
   const countryM = html.match(/[Cc]ountry[^<]*<[^>]+>([^<]+)/);
-  const country = countryM?.[1]?.trim() ?? null;
+  const country = countryM?.[1]?.replace(/&nbsp;/g, " ").trim() || null;
 
   return { title, deadline, description, country };
 }
@@ -112,13 +113,17 @@ export async function crawlNRC(): Promise<CrawlResult> {
     }
 
     const tenders: RawTender[] = [];
-    for (const path of paths) {
-      let detail: TenderDetail;
+    for (const { path, title: listingTitle } of paths) {
+      let detail: TenderDetail = {
+        title: listingTitle,
+        deadline: null,
+        description: listingTitle ? `NRC tender announcement: ${listingTitle}` : null,
+        country: null,
+      };
       try {
         detail = await withRetry(() => fetchDetail(path));
       } catch (err) {
         console.error(`[nrc] detail ${path} failed:`, err instanceof Error ? err.message : err);
-        continue;
       }
       const slug = path.split("/").filter(Boolean).pop() ?? path;
       const title = detail.title ?? slug;
