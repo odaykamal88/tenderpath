@@ -61,6 +61,7 @@ type UngmFamilyHealth = {
 
 const EXPECTED_PLATFORMS: ExpectedPlatform[] = [
   { platform: "UNGM", role: "primary", staleAfterHours: 26, minOpenTenders: 20 },
+  { platform: "IOM", role: "primary", staleAfterHours: 48 },
   { platform: "World Bank", role: "primary", staleAfterHours: 36, minOpenTenders: 5 },
   { platform: "TED EU", role: "primary", staleAfterHours: 36, minOpenTenders: 5 },
   { platform: "SAM.gov", role: "primary", staleAfterHours: 36 },

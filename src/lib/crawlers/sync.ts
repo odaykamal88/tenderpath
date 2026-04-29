@@ -1,6 +1,7 @@
 import { sql } from "../db";
 import { type CrawlResult, type RawTender, dedupKey, verifyLink } from "./types";
 import { crawlUNGM } from "./ungm";
+import { crawlIOM } from "./iom";
 import { crawlUNDP } from "./undp";
 import { crawlUNDPAtlas } from "./undp-atlas";
 // UN agencies consolidated into ungm.ts via residential proxy
@@ -52,6 +53,7 @@ export interface SyncSummary {
  */
 const SOURCE_PRIORITY: Record<string, number> = {
   UNGM: 100,
+  IOM: 102,
   "World Bank": 95,
   "TED EU": 90,
   "SAM.gov": 85,
@@ -225,6 +227,7 @@ export async function syncAllTenders(): Promise<SyncSummary> {
   // covers UNICEF, WFP, WHO, UNHCR, IOM, UNDP, and 50+ other UN bodies.
   const crawls = await Promise.allSettled([
     crawlUNGM(),
+    crawlIOM(),
     crawlReliefWeb(),
     crawlTED(),
     // crawlUKFTS() — disabled: local UK councils out of ICP scope
