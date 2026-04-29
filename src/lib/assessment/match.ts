@@ -1,6 +1,6 @@
 import { sql } from "@/lib/db";
 import type { MatchedTender, MatchedGrant, AIAnalysis, MatchReason, GeographyMode, OpportunityBucket } from "@/lib/types";
-import { normalizeSector, userSectorSlugs, type SectorSlug } from "@/lib/crawlers/sector-map";
+import { SECTOR_SLUGS, normalizeSector, userSectorSlugs, type SectorSlug } from "@/lib/crawlers/sector-map";
 import { computeAdjacentSlugs } from "./sector-adjacency";
 import { shouldSuppressSource } from "./source-rules";
 import { enrichTopMatches } from "./enrich";
@@ -407,6 +407,23 @@ type FeedbackProfile = {
 
 type SourceProvenance = "primary" | "aggregator" | "unknown";
 
+const SECTOR_LABELS: Record<SectorSlug, string> = {
+  it: "Information Technology",
+  education: "Education & Training",
+  healthcare: "Healthcare",
+  logistics: "Logistics & Supply Chain",
+  construction: "Construction & Infrastructure",
+  consulting: "Consulting Services",
+  food: "Food & Nutrition",
+  security: "Security & Safety",
+  language_services: "Language Services",
+  engineering: "Engineering",
+  environment: "Environment & Climate",
+  agriculture: "Agriculture",
+  water_sanitation: "Water & Sanitation",
+  energy: "Energy",
+};
+
 function sourceProvenance(sourceName: string | null | undefined, sourceUrl: string | null | undefined): SourceProvenance {
   const source = (sourceName ?? "").toLowerCase();
   const url = (sourceUrl ?? "").toLowerCase();
@@ -418,6 +435,12 @@ function sourceProvenance(sourceName: string | null | undefined, sourceUrl: stri
 function readableSector(raw: string | null | undefined): string | null {
   if (!raw?.trim()) return null;
   const trimmed = raw.trim();
+  const directSlug = slugFromReadableSector(trimmed);
+  if (directSlug) return SECTOR_LABELS[directSlug];
+
+  const embeddedDescriptions = sectorDescriptionsFromEscapedJson(trimmed);
+  if (embeddedDescriptions.length) return embeddedDescriptions.join(", ");
+
   if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) return trimmed;
   try {
     const parsed = JSON.parse(trimmed) as unknown;
@@ -443,20 +466,82 @@ function readableSector(raw: string | null | undefined): string | null {
   }
 }
 
+function slugFromReadableSector(value: string): SectorSlug | null {
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return (SECTOR_SLUGS as string[]).includes(normalized) ? normalized as SectorSlug : null;
+}
+
+function sectorDescriptionsFromEscapedJson(raw: string): string[] {
+  const out = new Set<string>();
+  const patterns = [
+    /sector_description\\?":\\?"([^"\\]+(?:\\.[^"\\]*)*)/g,
+    /sector_description=([^,}]+)/g,
+  ];
+  for (const pattern of patterns) {
+    for (const match of raw.matchAll(pattern)) {
+      const label = match[1]
+        ?.replace(/\\"/g, "\"")
+        .replace(/\\\\/g, "\\")
+        .replace(/["{}]+$/g, "")
+        .trim();
+      if (label) out.add(label);
+    }
+  }
+  return [...out];
+}
+
 function procurementCategory(args: {
   title: string;
   sector: string | null;
   opportunityType: string | null;
 }): string {
   const text = `${args.title} ${args.sector ?? ""} ${args.opportunityType ?? ""}`.toLowerCase();
-  if (/\bgrant|call for proposals|cfp\b/.test(text)) return "Grant";
+  if (/\bgrant|call for proposals|cfp\b|funding opportunity/.test(text)) return "Grant";
   if (/\broster|long[- ]term agreement|\blta\b|framework agreement|framework contract/.test(text)) return "Roster/LTA";
   if (/\beoi\b|expression of interest|request for expressions/.test(text)) return "EOI";
-  if (/works|civil works|construction|rehabilitation|retrofitting|installation works|repair works/.test(text)) return "Works";
-  if (/consult|advisory|evaluation|feasibility|technical assistance|study|trainer|training program|research/.test(text)) return "Consulting services";
-  if (/goods|supply|procurement of|purchase|equipment|vehicle|poultry|meat|food|pump|pipe|kit|furniture|materials/.test(text)) return "Goods";
-  if (/services|maintenance|rental|accommodation|travel|event|logistics|transport|internet|connectivity/.test(text)) return "Non-consulting services";
+  if (/\bworks\b|civil works|construction|rehabilitation|retrofitting|installation works|repair works|water network|sewage network|solar pv installation|renovation/.test(text)) return "Works";
+  if (/consult|advisory|evaluation|feasibility|technical assistance|study|trainer|training program|research|assessment|strategy|expert support|capacity building/.test(text)) return "Consulting services";
+  if (/goods|supply|procurement of|purchase|equipment|vehicle|poultry|meat|food|pump|pipe|kit|furniture|materials|generator|laptop|tablet|medical supplies|agricultural inputs/.test(text)) return "Goods";
+  if (/services|maintenance|rental|accommodation|travel|event|logistics|transport|internet|connectivity|communication campaign|media production|translation|interpretation|warehouse|storage/.test(text)) return "Non-consulting services";
   return args.opportunityType?.trim() || "Procurement notice";
+}
+
+function sectorLabelFromSlugs(slugs: Set<SectorSlug>, rawSector: string | null | undefined): string | null {
+  const readable = readableSector(rawSector);
+  if (readable && !/^\d[\d\s,.\-]*$/.test(readable.trim())) return readable;
+  const labels = [...slugs].map((slug) => SECTOR_LABELS[slug]).filter(Boolean);
+  return labels.length ? labels.join(", ") : readable;
+}
+
+function buildProcurementMetadata(args: {
+  title: string;
+  rawSector: string | null;
+  opportunityType: string | null;
+  sourceName: string | null;
+  sourceUrl: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  estimatedValue: string | number | null;
+  slugs: Set<SectorSlug>;
+}) {
+  const sectorLabel = sectorLabelFromSlugs(args.slugs, args.rawSector);
+  const category = procurementCategory({
+    title: args.title,
+    sector: sectorLabel ?? args.rawSector,
+    opportunityType: args.opportunityType,
+  });
+
+  return {
+    category,
+    opportunityType: args.opportunityType,
+    sourceName: args.sourceName,
+    sourceUrl: args.sourceUrl || null,
+    sourceProvenance: sourceProvenance(args.sourceName, args.sourceUrl),
+    postedDate: args.createdAt,
+    updatedDate: args.updatedAt,
+    sectorLabel,
+    estimatedValue: args.estimatedValue,
+  };
 }
 
 async function loadFeedbackProfile(email: string | null | undefined): Promise<FeedbackProfile> {
@@ -768,15 +853,8 @@ export async function matchTenders(
     if (shouldSuppressSource(tSourceUrl, countrySet)) continue;
 
     const tSector = (t.sector as string ?? "");
-    const tSectorLabel = readableSector(tSector);
     const tOpportunityType = (t.opportunity_type as string | null) ?? null;
     const tSourceName = (t.source_name as string | null) ?? null;
-    const tProvenance = sourceProvenance(tSourceName, tSourceUrl);
-    const tProcurementCategory = procurementCategory({
-      title: rawTitle,
-      sector: tSectorLabel ?? tSector,
-      opportunityType: tOpportunityType,
-    });
     const tCountry = (t.country as string ?? "").toLowerCase();
     const tTitle = rawTitle;
     const tAgency = (t.agency as string ?? "");
@@ -799,6 +877,17 @@ export async function matchTenders(
       new Set<SectorSlug>(normalizeSector(tSector, tTitle, `${reqs.join(" ")} ${tDescription}`.trim())),
       evidenceText,
     );
+    const procurement = buildProcurementMetadata({
+      title: tTitle,
+      rawSector: tSector,
+      opportunityType: tOpportunityType,
+      sourceName: tSourceName,
+      sourceUrl: tSourceUrl,
+      createdAt: (t.created_at as string | null) ?? null,
+      updatedAt: (t.updated_at as string | null) ?? null,
+      estimatedValue: (t.estimated_value as string | number | null) ?? null,
+      slugs: tSlugs,
+    });
     let sectorScore = 0;
     for (const s of effectiveUserSlugs) if (tSlugs.has(s)) sectorScore += 40;
     sectorScore = Math.min(60, sectorScore);
@@ -909,17 +998,7 @@ export async function matchTenders(
       matchedSectors: srSectorNames.length ? srSectorNames : undefined,
       matchedCapabilities: srCaps.length ? srCaps : undefined,
       matchedKeywords: srKws.length ? srKws : undefined,
-      procurement: {
-        category: tProcurementCategory,
-        opportunityType: tOpportunityType,
-        sourceName: tSourceName,
-        sourceUrl: tSourceUrl || null,
-        sourceProvenance: tProvenance,
-        postedDate: (t.created_at as string | null) ?? null,
-        updatedDate: (t.updated_at as string | null) ?? null,
-        sectorLabel: tSectorLabel,
-        estimatedValue: (t.estimated_value as string | number | null) ?? null,
-      },
+      procurement,
       geographyAlignment: { userCountries: countries, tenderCountry: t.country as string | null, mode: geoMode },
       scoreBreakdown: {
         sector: sectorScore,
@@ -951,8 +1030,8 @@ export async function matchTenders(
       source_name: tSourceName,
       source_url: (t.source_url as string | null) ?? null,
       opportunity_type: tOpportunityType,
-      procurement_category: tProcurementCategory,
-      source_provenance: tProvenance,
+      procurement_category: procurement.category,
+      source_provenance: procurement.sourceProvenance,
       posted_date: (t.created_at as string | null) ?? null,
       updated_at: (t.updated_at as string | null) ?? null,
       estimated_value: (t.estimated_value as string | number | null) ?? null,
@@ -1053,15 +1132,8 @@ export async function matchTenders(
       if (shouldSuppressSource(adjSourceUrl, countrySet)) continue;
 
       const tSector = (t.sector as string ?? "");
-      const tSectorLabel = readableSector(tSector);
       const tOpportunityType = (t.opportunity_type as string | null) ?? null;
       const tSourceName = (t.source_name as string | null) ?? null;
-      const tProvenance = sourceProvenance(tSourceName, adjSourceUrl);
-      const tProcurementCategory = procurementCategory({
-        title: rawTitle,
-        sector: tSectorLabel ?? tSector,
-        opportunityType: tOpportunityType,
-      });
       const tCountry = (t.country as string ?? "").toLowerCase();
       const tTitle = rawTitle;
       const tAgency = (t.agency as string ?? "");
@@ -1078,6 +1150,17 @@ export async function matchTenders(
         new Set<SectorSlug>(normalizeSector(tSector, tTitle, `${reqs.join(" ")} ${tDescription}`.trim())),
         adjEvidenceText,
       );
+      const procurement = buildProcurementMetadata({
+        title: tTitle,
+        rawSector: tSector,
+        opportunityType: tOpportunityType,
+        sourceName: tSourceName,
+        sourceUrl: adjSourceUrl,
+        createdAt: (t.created_at as string | null) ?? null,
+        updatedAt: (t.updated_at as string | null) ?? null,
+        estimatedValue: (t.estimated_value as string | number | null) ?? null,
+        slugs: tSlugs,
+      });
       let sectorScore = 0;
       for (const s of adjacentSlugs) if (tSlugs.has(s)) sectorScore += 40;
       sectorScore = Math.min(60, sectorScore);
@@ -1163,17 +1246,7 @@ export async function matchTenders(
         matchedSectors: adjSectorNames.length ? adjSectorNames : undefined,
         matchedCapabilities: adjCaps.length ? adjCaps : undefined,
         matchedKeywords: adjKws.length ? adjKws : undefined,
-        procurement: {
-          category: tProcurementCategory,
-          opportunityType: tOpportunityType,
-          sourceName: tSourceName,
-          sourceUrl: adjSourceUrl || null,
-          sourceProvenance: tProvenance,
-          postedDate: (t.created_at as string | null) ?? null,
-          updatedDate: (t.updated_at as string | null) ?? null,
-          sectorLabel: tSectorLabel,
-          estimatedValue: (t.estimated_value as string | number | null) ?? null,
-        },
+        procurement,
         geographyAlignment: { userCountries: countries, tenderCountry: t.country as string | null, mode: adjGeoMode },
         scoreBreakdown: {
           sector: sectorScore,
@@ -1206,8 +1279,8 @@ export async function matchTenders(
         source_name: tSourceName,
         source_url: (t.source_url as string | null) ?? null,
         opportunity_type: tOpportunityType,
-        procurement_category: tProcurementCategory,
-        source_provenance: tProvenance,
+        procurement_category: procurement.category,
+        source_provenance: procurement.sourceProvenance,
         posted_date: (t.created_at as string | null) ?? null,
         updated_at: (t.updated_at as string | null) ?? null,
         estimated_value: (t.estimated_value as string | number | null) ?? null,
