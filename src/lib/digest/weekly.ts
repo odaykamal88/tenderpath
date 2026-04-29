@@ -1,6 +1,7 @@
 import { sql } from "@/lib/db";
 import { matchGrants, matchTenders } from "@/lib/assessment/match";
 import { sendWeeklyDigestEmail } from "@/lib/email/sendWeeklyDigest";
+import { notifyAdmin } from "@/lib/email/notifyAdmin";
 import type { AIAnalysis, MatchedTender, MatchReason } from "@/lib/types";
 
 interface DigestSubscriber {
@@ -315,6 +316,10 @@ export async function runWeeklyDigest(options: {
         assessmentId: assessment.id,
         error: message,
       });
+      notifyAdmin(
+        `Weekly digest failed — ${subscriber.email}`,
+        `User ID: ${subscriber.id}\nEmail: ${subscriber.email}\nAssessment ID: ${assessment.id}\nError: ${message}`
+      ).catch(() => {});
       results.push({
         userId: subscriber.id,
         email: subscriber.email,

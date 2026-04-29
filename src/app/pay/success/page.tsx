@@ -60,8 +60,14 @@ function SuccessContent() {
 
           <div className="mt-6 flex flex-col gap-2 sm:flex-row">
             <Link
-              href="/dashboard/pipeline"
+              href="/dashboard/work-orders"
               className="rounded-xl bg-gray-900 px-5 py-3 text-center text-sm font-semibold text-white hover:bg-gray-700"
+            >
+              View work orders
+            </Link>
+            <Link
+              href="/dashboard/pipeline"
+              className="rounded-xl border border-gray-200 px-5 py-3 text-center text-sm font-semibold text-gray-700 hover:border-gray-400"
             >
               Back to pipeline
             </Link>

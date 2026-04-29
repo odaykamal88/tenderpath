@@ -21,7 +21,7 @@ const CONFIG = {
     iban:        process.env.NEXT_PUBLIC_WIRE_EG_IBAN         || "EG020010001800000100041263622",
     swift:       process.env.NEXT_PUBLIC_WIRE_EG_SWIFT        || "",
   },
-  supportEmail: "payments@tenderpath.co",
+  supportEmail: "info@tenderpath.me",
 };
 
 type Tab = "card" | "usdt" | "whish" | "wire";

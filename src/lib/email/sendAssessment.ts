@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { sql } from "@/lib/db";
 import type { TierSlug } from "@/lib/types";
+import { notifyAdmin } from "@/lib/email/notifyAdmin";
 
 interface TopTender {
   title: string;
@@ -67,25 +68,35 @@ export async function sendAssessmentEmail(args: SendArgs): Promise<void> {
   const text = renderText({ ...args, tier, resultsUrl, ctaUrl });
 
   const resend = new Resend(apiKey);
-  const { error } = await resend.emails.send({
-    from: fromEmail,
-    to: args.email,
-    subject: `Your TenderPath Readiness Score: ${args.readinessScore}/100`,
-    html,
-    text,
-  });
+  let sendError: string | null = null;
+  try {
+    const { error } = await resend.emails.send({
+      from: fromEmail,
+      to: args.email,
+      subject: `Your TenderPath Readiness Score: ${args.readinessScore}/100`,
+      html,
+      text,
+    });
+    if (error) sendError = error.message;
+  } catch (err) {
+    sendError = err instanceof Error ? err.message : "Unknown send error";
+  }
 
-  if (error) {
-    console.error("[tp:email:failed]", { assessmentId: args.assessmentId, email: args.email, error: error.message });
+  if (sendError) {
+    console.error("[tp:email:failed]", { assessmentId: args.assessmentId, email: args.email, error: sendError });
+    notifyAdmin(
+      `Assessment email failed — ${args.email}`,
+      `Assessment ID: ${args.assessmentId}\nRecipient: ${args.email}\nError: ${sendError}\nThe email_queue row has been marked failed.`
+    ).catch(() => {});
     await sql`
       UPDATE email_queue SET
         status = 'failed',
         attempts = attempts + 1,
         provider = 'resend',
-        error = ${error.message}
+        error = ${sendError}
       WHERE assessment_id = ${args.assessmentId} AND status = 'pending'
-    `;
-    throw new Error(error.message);
+    `.catch(() => {});
+    throw new Error(sendError);
   }
 
   await sql`
@@ -96,7 +107,7 @@ export async function sendAssessmentEmail(args: SendArgs): Promise<void> {
       error = NULL,
       sent_at = NOW()
     WHERE assessment_id = ${args.assessmentId} AND status = 'pending'
-  `;
+  `.catch(() => {});
   console.log("[tp:email:sent]", { assessmentId: args.assessmentId, email: args.email });
 }
 

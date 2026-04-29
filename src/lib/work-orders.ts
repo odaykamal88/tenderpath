@@ -26,7 +26,16 @@ export async function createWorkOrderFromCheckout(
   const plan = cleanMeta(session.metadata?.plan) ?? (
     cleanMeta(session.metadata?.product) === "bid-no-bid" ? "bid-no-bid" : null
   );
-  if (!isWorkOrderPlan(plan)) return;
+  if (!isWorkOrderPlan(plan)) {
+    console.warn("[tp:work_order:unknown_plan]", {
+      sessionId: session.id,
+      plan,
+      service: session.metadata?.service,
+      product: session.metadata?.product,
+      amountTotal: session.amount_total,
+    });
+    return;
+  }
 
   const pipelineItemIdRaw = cleanMeta(session.metadata?.pipeline_item_id);
   const pipelineItemId = pipelineItemIdRaw && /^\d+$/.test(pipelineItemIdRaw)

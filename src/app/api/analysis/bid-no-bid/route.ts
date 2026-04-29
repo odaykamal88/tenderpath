@@ -4,6 +4,9 @@ import { sql } from "@/lib/db";
 import { getStripe } from "@/lib/stripe";
 import Anthropic from "@anthropic-ai/sdk";
 
+export const runtime = "nodejs";
+export const maxDuration = 300;
+
 let _anthropic: Anthropic | null = null;
 function getClient(): Anthropic {
   if (!_anthropic) {

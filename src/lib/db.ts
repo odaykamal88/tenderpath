@@ -297,6 +297,23 @@ export async function initializeDatabase() {
   await sql`ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS intake JSONB DEFAULT '{}'::jsonb`;
 
   await sql`
+    CREATE TABLE IF NOT EXISTS proposal_packages (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      work_order_id INTEGER REFERENCES work_orders(id) ON DELETE SET NULL,
+      pipeline_item_id INTEGER REFERENCES pipeline_items(id) ON DELETE SET NULL,
+      plan VARCHAR(50) NOT NULL,
+      tender_title TEXT,
+      agency TEXT,
+      tender_url TEXT,
+      intake JSONB DEFAULT '{}'::jsonb,
+      stripe_session_id VARCHAR(200),
+      output JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+
+  await sql`
     CREATE TABLE IF NOT EXISTS weekly_digest_logs (
       id SERIAL PRIMARY KEY,
       user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,

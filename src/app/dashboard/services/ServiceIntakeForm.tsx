@@ -118,6 +118,28 @@ export default function ServiceIntakeForm({
         return;
       }
 
+      if (service === "proposal" || service === "lta-roster") {
+        const proposalPlan = service === "proposal" ? "proposal-draft" : "roster-fast-track";
+        const checkoutRes = await fetch("/api/proposals/checkout", {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({
+            plan: proposalPlan,
+            work_order_id: data.workOrder.id,
+            pipeline_item_id: pipelineItemId ? Number(pipelineItemId) : undefined,
+            tender_title: tenderTitle,
+            agency,
+          }),
+        });
+        const checkout = (await checkoutRes.json().catch(() => ({}))) as { url?: string; error?: string };
+        if (!checkoutRes.ok || !checkout.url) {
+          setError(checkout.error ?? "Intake saved, but checkout could not start.");
+          return;
+        }
+        window.location.href = checkout.url;
+        return;
+      }
+
       router.push(payHref(plan, {
         tenderTitle,
         agency,

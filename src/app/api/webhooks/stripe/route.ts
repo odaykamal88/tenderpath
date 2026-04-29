@@ -3,6 +3,7 @@ import { getStripe, tierFromPriceId } from "@/lib/stripe";
 import { sql } from "@/lib/db";
 import type Stripe from "stripe";
 import { createWorkOrderFromCheckout } from "@/lib/work-orders";
+import { notifyAdmin } from "@/lib/email/notifyAdmin";
 
 /**
  * FIX #1: Proper Stripe webhook with constructEvent verification.
@@ -69,7 +70,19 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const subscriptionId = typeof session.subscription === "string" ? session.subscription : null;
   const isSubscriptionCheckout = session.mode === "subscription" && Boolean(subscriptionId);
 
-  if (!email) return;
+  if (!email) {
+    console.error("[tp:webhook:missing_email]", {
+      sessionId: session.id,
+      mode: session.mode,
+      plan: session.metadata?.plan,
+      amountTotal: session.amount_total,
+    });
+    notifyAdmin(
+      "Payment received — no email on session",
+      `Stripe session ${session.id} completed with no customer email.\nPlan: ${session.metadata?.plan ?? "unknown"}\nAmount: ${session.amount_total ?? 0} ${session.currency ?? ""}\nNo work order was created. Investigate in Stripe dashboard.`
+    ).catch(() => {});
+    return;
+  }
 
   // Resolve tier from line items
   const stripe = getStripe();

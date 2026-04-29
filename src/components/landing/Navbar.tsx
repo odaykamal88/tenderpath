@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const navLinks = [
   { label: "The Challenge", href: "#challenge" },
@@ -11,6 +11,12 @@ const navLinks = [
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isAuthed, setIsAuthed] = useState(false);
+
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+    setIsAuthed(Boolean(token));
+  }, []);
 
   return (
     <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100">
@@ -34,12 +40,29 @@ export default function Navbar() {
                 {link.label}
               </a>
             ))}
-            <a
-              href="/assessment"
-              className="rounded-md bg-gold px-5 py-2 text-sm font-medium text-white hover:bg-gold-dark transition-colors"
-            >
-              Free Assessment
-            </a>
+            {isAuthed ? (
+              <a
+                href="/dashboard"
+                className="rounded-md bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-700 transition-colors"
+              >
+                Dashboard →
+              </a>
+            ) : (
+              <>
+                <a
+                  href="/login"
+                  className="text-sm text-gray-600 hover:text-navy transition-colors"
+                >
+                  Log in
+                </a>
+                <a
+                  href="/assessment"
+                  className="rounded-md bg-gold px-5 py-2 text-sm font-medium text-white hover:bg-gold-dark transition-colors"
+                >
+                  Free Assessment
+                </a>
+              </>
+            )}
           </div>
 
           {/* Mobile toggle */}
@@ -85,12 +108,30 @@ export default function Navbar() {
                 {link.label}
               </a>
             ))}
-            <a
-              href="/assessment"
-              className="block rounded-md bg-gold px-5 py-2 text-sm font-medium text-white text-center hover:bg-gold-dark"
-            >
-              Free Assessment
-            </a>
+            {isAuthed ? (
+              <a
+                href="/dashboard"
+                className="block rounded-md bg-gray-900 px-5 py-2 text-sm font-medium text-white text-center hover:bg-gray-700"
+              >
+                Dashboard →
+              </a>
+            ) : (
+              <>
+                <a
+                  href="/login"
+                  className="block text-sm text-gray-600 hover:text-navy"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  Log in
+                </a>
+                <a
+                  href="/assessment"
+                  className="block rounded-md bg-gold px-5 py-2 text-sm font-medium text-white text-center hover:bg-gold-dark"
+                >
+                  Free Assessment
+                </a>
+              </>
+            )}
           </div>
         )}
       </div>

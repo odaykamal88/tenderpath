@@ -299,45 +299,42 @@ function TenderCard({ t, gaps, feedbackStatus, onFeedback }: TenderCardProps) {
     <div className={`rounded-xl bg-navy-light border ${t.is_adjacent ? "border-blue-500/25" : "border-white/10"} overflow-hidden`}>
 
       {/* ── Collapsed — always visible ── */}
-      <button onClick={handleToggle} className="w-full text-left p-4 flex flex-col gap-2">
+      <button onClick={handleToggle} className="w-full text-left p-4 flex flex-col gap-1.5">
 
-        {/* Row 1: fit badge + bucket label + amount */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex flex-wrap gap-1">
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>{badge.label}</span>
-            {t.opportunity_bucket_label && (
-              <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${opportunityBucketCls}`}>
-                {t.opportunity_bucket_label}
-              </span>
-            )}
-            {feedbackStatus === "saved" && (
-              <span className="rounded bg-teal-500/20 text-teal-300 border border-teal-500/30 px-2 py-0.5 text-[10px] font-medium">✓ Saved</span>
-            )}
-            {procurementCategory && (
-              <span className="rounded bg-white/5 text-gray-300 border border-white/10 px-2 py-0.5 text-[10px] font-medium">{procurementCategory}</span>
-            )}
-            <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${provenance === "primary" ? "bg-green/10 text-green border border-green/20" : "bg-amber-500/10 text-amber-300 border border-amber-500/20"}`}>
-              {provenance === "primary" ? "Primary source" : provenance === "aggregator" ? "Aggregator" : "Source pending"}
-            </span>
+        {/* Row 1: amount (small, top-right) */}
+        {amount && (
+          <div className="flex justify-end">
+            <span className="text-[10px] text-gray-400 font-medium">{amount}</span>
           </div>
-          {amount && <span className="text-xs font-semibold text-gray-200 flex-shrink-0">{amount}</span>}
-        </div>
+        )}
 
-        {/* Row 2: title */}
-        <h4 className="text-sm font-bold leading-snug line-clamp-2">{t.title}</h4>
+        {/* Row 2: topic/title — largest and most prominent */}
+        <h4 className="text-sm font-bold leading-snug line-clamp-2 pr-1">{t.title}</h4>
 
-        {/* Row 3: 1-line summary */}
+        {/* Row 3: 1-line summary as topic context */}
         {summarySentence && (
           <p className="text-[11px] text-gray-400 line-clamp-1">{summarySentence}</p>
         )}
 
-        {/* Row 4: agency · country · deadline */}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-gray-400">
-          {t.agency && <span className="truncate max-w-[12rem]">{t.agency}</span>}
-          {sourceName && sourceName !== t.agency && <span className="truncate max-w-[10rem]">{sourceName}</span>}
+        {/* Row 4: country + fit label + bucket */}
+        <div className="flex flex-wrap items-center gap-1 mt-0.5">
           {t.country && (
             <span className="rounded bg-gold/20 px-1.5 py-0.5 text-[10px] font-medium text-gold uppercase">{t.country}</span>
           )}
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>{badge.label}</span>
+          {t.opportunity_bucket_label && (
+            <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${opportunityBucketCls}`}>
+              {t.opportunity_bucket_label}
+            </span>
+          )}
+          {feedbackStatus === "saved" && (
+            <span className="rounded bg-teal-500/20 text-teal-300 border border-teal-500/30 px-2 py-0.5 text-[10px] font-medium">✓ Saved</span>
+          )}
+        </div>
+
+        {/* Row 5: agency · deadline */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-gray-400">
+          {t.agency && <span className="truncate max-w-[12rem]">{t.agency}</span>}
           {t.deadline && (
             <span className={`flex items-center gap-1 ${soon ? "text-red font-medium" : ""}`}>
               <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -488,9 +485,10 @@ function TenderCard({ t, gaps, feedbackStatus, onFeedback }: TenderCardProps) {
   );
 }
 
-/* ── GrantCard (matches TenderCard style, teal accent) ── */
+/* ── GrantCard (collapsible, matches TenderCard hierarchy) ── */
 
 function GrantCard({ g }: { g: MatchedGrant }) {
+  const [expanded, setExpanded] = useState(false);
   const badge = matchBadge(g.score);
   const soon = isDeadlineSoon(g.deadline);
   const amount = g.value_range ? g.value_range : null;
@@ -502,10 +500,30 @@ function GrantCard({ g }: { g: MatchedGrant }) {
     : "bg-gray-600/20 text-gray-300 border border-gray-600/30";
 
   return (
-    <div className="rounded-xl bg-navy-light border border-white/10 p-4 flex flex-col gap-3 h-full">
-      {/* Score + badges row */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex flex-wrap gap-1">
+    <div className="rounded-xl bg-navy-light border border-teal-500/20 overflow-hidden">
+      {/* ── Collapsed — always visible ── */}
+      <button onClick={() => setExpanded((v) => !v)} className="w-full text-left p-4 flex flex-col gap-1.5">
+
+        {/* Row 1: amount (small, top-right) */}
+        {amount && (
+          <div className="flex justify-end">
+            <span className="text-[10px] text-teal-400 font-medium">{amount}</span>
+          </div>
+        )}
+
+        {/* Row 2: title — largest and most prominent */}
+        <h4 className="text-sm font-bold leading-snug line-clamp-2 pr-1">{g.title}</h4>
+
+        {/* Row 3: 1-line description */}
+        {g.description && (
+          <p className="text-[11px] text-gray-400 line-clamp-1">{g.description}</p>
+        )}
+
+        {/* Row 4: location + fit label + bucket + eligibility */}
+        <div className="flex flex-wrap items-center gap-1 mt-0.5">
+          {location && (
+            <span className="rounded bg-teal-500/20 px-1.5 py-0.5 text-[10px] font-medium text-teal-300 uppercase">{location}</span>
+          )}
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>{badge.label}</span>
           <span className="rounded bg-teal-500/20 border border-teal-500/40 px-2 py-0.5 text-[10px] font-semibold text-teal-300 uppercase">Grant</span>
           {g.opportunity_bucket_label && (
@@ -517,62 +535,57 @@ function GrantCard({ g }: { g: MatchedGrant }) {
             <span className="rounded bg-orange-500/15 border border-orange-500/40 px-2 py-0.5 text-[10px] font-medium text-orange-400">⚠ Check eligibility</span>
           )}
         </div>
-        <div className="w-10 h-10 rounded-full bg-teal-500/15 flex items-center justify-center flex-shrink-0">
-          <span className="text-xs font-bold leading-none text-teal-400">{g.score}%</span>
+
+        {/* Row 5: agency · deadline */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-gray-400">
+          <span className="truncate max-w-full">{g.agency}</span>
+          {g.deadline && (
+            <span className={`flex items-center gap-1 ${soon ? "text-red font-medium" : ""}`}>
+              <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              {formatDate(g.deadline)}{soon && " — soon"}
+            </span>
+          )}
         </div>
-      </div>
 
-      {/* Chips: location + sector */}
-      <div className="flex flex-wrap gap-1">
-        {location && (
-          <span className="rounded bg-teal-500/15 px-2 py-0.5 text-[10px] font-medium text-teal-300 uppercase">{location}</span>
-        )}
-        {parseSectorDisplay(g.sector) && (
-          <span className="rounded bg-white/5 border border-white/10 px-2 py-0.5 text-[10px] text-gray-300">{parseSectorDisplay(g.sector)}</span>
-        )}
-      </div>
+        {/* Expand indicator */}
+        <div className="flex items-center justify-between pt-0.5">
+          <span className="text-[10px] text-gray-500">{expanded ? "Hide details" : "View details"}</span>
+          <svg className={`w-3 h-3 text-gray-500 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </button>
 
-      {/* Title */}
-      <h4 className="text-sm font-bold leading-snug">{g.title}</h4>
-
-      {/* Meta */}
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400">
-        <span className="truncate max-w-full">{g.agency}</span>
-        {g.deadline && (
-          <span className={`flex items-center gap-1 ${soon ? "text-red font-medium" : ""}`}>
-            <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            {formatDate(g.deadline)}{soon && " — soon"}
-          </span>
-        )}
-        {amount && (
-          <span className="text-teal-300 font-medium">{amount}</span>
-        )}
-      </div>
-
-      {/* Description */}
-      {g.description && (
-        <p className="text-[11px] text-gray-300 line-clamp-2">{g.description}</p>
-      )}
-      {g.opportunity_bucket_reason && (
-        <div className="rounded-lg bg-white/3 border border-white/8 p-3">
-          <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500">Bucket Logic</span>
-          <p className="mt-1 text-[11px] leading-relaxed text-gray-400">{g.opportunity_bucket_reason}</p>
+      {/* ── Expanded panel ── */}
+      {expanded && (
+        <div className="border-t border-white/8 p-4 space-y-3 text-[11px]">
+          {parseSectorDisplay(g.sector) && (
+            <div>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500">Sector</span>
+              <p className="mt-1 text-gray-300">{parseSectorDisplay(g.sector)}</p>
+            </div>
+          )}
+          {g.opportunity_bucket_reason && (
+            <div>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500">Why this matches</span>
+              <p className="mt-1 text-gray-400">{g.opportunity_bucket_reason}</p>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
+            {g.source_url ? (
+              <a href={g.source_url} target="_blank" rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 rounded bg-teal-500/20 border border-teal-500/40 px-3 py-1.5 text-xs font-semibold text-teal-300 hover:bg-teal-500/30 transition-colors">
+                Apply / Learn More →
+              </a>
+            ) : (
+              <span className="text-xs text-gray-500 italic">Contact {g.agency} directly for application details</span>
+            )}
+          </div>
         </div>
       )}
-
-      {/* Action — pushed to bottom */}
-      <div className="mt-auto pt-1">
-        {g.source_url ? (
-          <a href={g.source_url} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded bg-teal-500/20 border border-teal-500/40 px-3 py-1.5 text-xs font-semibold text-teal-300 hover:bg-teal-500/30 transition-colors">
-            Apply / Learn More →
-          </a>
-        ) : (
-          <span className="text-xs text-gray-500 italic">Contact {g.agency} directly for application details</span>
-        )}
-      </div>
     </div>
   );
 }
@@ -594,7 +607,7 @@ function BidNoBidCTA({ count }: { count: number }) {
           <p className="text-sm text-gray-300 mb-4">
             Our Bid/No-Bid Analyst reviews a specific tender against your profile and returns a win probability score, scoring criteria breakdown, and a clear go/no-go recommendation — so you only invest effort where it counts.
           </p>
-          <a href="/assessment?plan=bid-no-bid"
+          <a href="/dashboard/services/bid-no-bid"
             className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors">
             Analyze a tender — $39 →
           </a>
@@ -696,6 +709,7 @@ export default function AssessmentResults({ data, onReset }: Props) {
   const [expandedGaps, setExpandedGaps] = useState<Set<number>>(new Set());
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<Record<number, FeedbackStatus>>(() => readStoredFeedback(data.id));
+  const [selectedTier, setSelectedTier] = useState<TierSlug>(data.recommended_tier);
 
   useEffect(() => {
     const handle = window.setTimeout(() => setFeedback(readStoredFeedback(data.id)), 0);
@@ -959,29 +973,42 @@ export default function AssessmentResults({ data, onReset }: Props) {
         {(["tender-intelligence", "submission-package", "strategic-partnership"] as TierSlug[]).map((slug, i) => {
           const tier = TIER_INFO[slug];
           const isRec = slug === data.recommended_tier;
+          const isSelected = slug === selectedTier;
           return (
             <div
               key={slug}
-              className={`rounded-xl border-2 p-5 bg-navy-light relative flex flex-col transition-colors ${isRec ? "border-gold" : "border-white/10 hover:border-white/20"}`}
+              onClick={() => setSelectedTier(slug)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelectedTier(slug); }}
+              className={`rounded-xl border-2 p-5 bg-navy-light relative flex flex-col transition-all cursor-pointer ${
+                isSelected
+                  ? "border-gold ring-2 ring-gold/30"
+                  : "border-white/10 hover:border-white/30"
+              }`}
               style={{ animation: "fadeInUp 0.5s ease-out both", animationDelay: `${i * 0.1}s` }}
             >
               {isRec && (
                 <span className="absolute -top-3 right-4 rounded-full bg-gold px-3 py-0.5 text-[10px] font-bold text-white uppercase">Best Fit</span>
               )}
+              {isSelected && !isRec && (
+                <span className="absolute -top-3 right-4 rounded-full bg-white/20 px-3 py-0.5 text-[10px] font-bold text-white uppercase">Selected</span>
+              )}
               <h3 className="text-base font-bold mb-1">{tier.name}</h3>
               <div className="mt-2 mb-3">
-                <span className={`text-2xl font-bold ${isRec ? "text-gold" : "text-white"}`}>{tier.price}</span>
+                <span className={`text-2xl font-bold ${isSelected ? "text-gold" : "text-white"}`}>{tier.price}</span>
                 <span className="text-xs text-gray-500">{tier.billingPeriod}</span>
               </div>
               <p className="text-xs text-gray-400 mb-4 leading-relaxed flex-1">{tier.tagline}</p>
               <button
-                onClick={() => { window.location.href = `/login?plan=${slug}`; }}
-                className={`w-full rounded-lg py-2.5 text-xs font-semibold text-center transition-colors mb-2 ${isRec ? "bg-gold text-white hover:bg-gold-dark" : "border border-white/20 text-white hover:bg-white/5"}`}
+                onClick={(e) => { e.stopPropagation(); window.location.href = `/login?plan=${slug}`; }}
+                className={`w-full rounded-lg py-2.5 text-xs font-semibold text-center transition-colors mb-2 ${isSelected ? "bg-gold text-white hover:bg-gold-dark" : "border border-white/20 text-white hover:bg-white/5"}`}
               >
                 {tier.cta} →
               </button>
               <a
                 href={`/pay?plan=${slug}`}
+                onClick={(e) => e.stopPropagation()}
                 className="w-full rounded-lg py-1.5 text-[11px] font-medium text-center text-gray-500 hover:text-gray-300 border border-white/10 hover:border-white/20 transition-colors"
               >
                 Pay with USDT / Wire / Whish
@@ -1037,7 +1064,8 @@ export default function AssessmentResults({ data, onReset }: Props) {
               gaps: data.gaps.filter((g) => g.severity === "high").slice(0, 5),
             };
             localStorage.setItem("tp_bridge", JSON.stringify(bridge));
-            window.location.href = "/login?next=/dashboard";
+            const alreadyLoggedIn = !!localStorage.getItem("tp_token");
+            window.location.href = alreadyLoggedIn ? "/dashboard" : "/login?next=/dashboard";
           }}
           className="inline-flex items-center gap-2 rounded-lg bg-gold px-6 py-3 text-sm font-semibold text-white hover:bg-gold-dark transition-colors"
         >

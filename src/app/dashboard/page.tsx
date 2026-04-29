@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 interface MatchReason {
@@ -249,6 +249,7 @@ function ReadinessRing({ score }: { score: number }) {
 export default function DashboardOverview() {
   const [bridge, setBridge] = useState<BridgeData | null>(null);
   const [seeded, setSeeded] = useState(false);
+  const autoSeedAttempted = useRef(false);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [pipelineStats, setPipelineStats] = useState<{
     total: number;
@@ -263,6 +264,7 @@ export default function DashboardOverview() {
   const [readiness, setReadiness] = useState<ReadinessData | null>(null);
   const [completedGapKeys, setCompletedGapKeys] = useState<Set<string>>(new Set());
   const [expandedTenderId, setExpandedTenderId] = useState<number | null>(null);
+  const [expandedGapKey, setExpandedGapKey] = useState<string | null>(null);
 
   const loadDashboard = useCallback(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
@@ -319,38 +321,44 @@ export default function DashboardOverview() {
   }, []);
 
   const seedPipeline = useCallback(async (data: BridgeData) => {
-    try {
-      await Promise.all(
-        data.matched_tenders.map((t) =>
-          fetch("/api/dashboard/pipeline", {
-            method: "POST",
-            headers: authHeaders(),
-            body: JSON.stringify({
-              tender_id: t.id ?? null,
-              assessment_id: data.assessment_id,
-              tender_title: t.title,
-              tender_agency: t.agency,
-              tender_deadline: t.deadline ?? undefined,
-              tender_value: t.estimated_value ?? undefined,
-              fit_score: t.fit_score ?? data.readiness_score,
-              stage: "matched",
-              match_reasons: t.structured_reasons ?? null,
-            }),
-          }).then((res) => {
-            if (!res.ok) throw new Error(`Pipeline POST failed: ${res.status}`);
-            return res;
-          })
-        )
-      );
+    const results = await Promise.allSettled(
+      data.matched_tenders.map((t) =>
+        fetch("/api/dashboard/pipeline", {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({
+            tender_id: t.id ?? null,
+            assessment_id: data.assessment_id,
+            tender_title: t.title,
+            tender_agency: t.agency,
+            tender_deadline: t.deadline ?? undefined,
+            tender_value: t.estimated_value ?? undefined,
+            fit_score: t.fit_score ?? data.readiness_score,
+            stage: "matched",
+            match_reasons: t.structured_reasons ?? null,
+          }),
+        }).then((res) => {
+          if (!res.ok) throw new Error(`Pipeline POST failed: ${res.status}`);
+          return res;
+        })
+      )
+    );
+    const succeeded = results.filter((r) => r.status === "fulfilled").length;
+    const failed = results.length - succeeded;
+    if (failed > 0) {
+      console.warn("[tp:pipeline:partial_seed]", {
+        assessmentId: data.assessment_id,
+        total: results.length,
+        succeeded,
+        failed,
+      });
+    }
+    if (succeeded > 0) {
       localStorage.removeItem("tp_bridge");
       setSeeded(true);
       loadDashboard();
-    } catch (err) {
-      console.error("[tp:pipeline:seed_failed]", {
-        assessmentId: data.assessment_id,
-        tenderCount: data.matched_tenders.length,
-        error: err instanceof Error ? err.message : String(err),
-      });
+    } else {
+      console.error("[tp:pipeline:seed_failed]", { assessmentId: data.assessment_id, tenderCount: data.matched_tenders.length });
       setWorkflowError("Your assessment is saved, but we could not populate your dashboard yet. Refreshing will retry.");
     }
   }, [loadDashboard]);
@@ -372,6 +380,22 @@ export default function DashboardOverview() {
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
+
+  useEffect(() => {
+    if (!pipelineStats || pipelineStats.total > 0 || seeded || autoSeedAttempted.current) return;
+    autoSeedAttempted.current = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/assessment/latest-matches", { headers: authHeaders() });
+        if (!res.ok) return;
+        const data = await res.json() as BridgeData | null;
+        if (!data?.matched_tenders?.length) return;
+        await seedPipeline(data);
+      } catch {
+        // non-critical — dashboard just stays empty
+      }
+    })();
+  }, [pipelineStats, seeded, seedPipeline]);
 
   useEffect(() => {
     if (!readiness) return;
@@ -523,47 +547,76 @@ export default function DashboardOverview() {
               )}
               {readiness && readiness.action_plan.length > 0 && (
                 <div className="mt-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-xs font-semibold text-gray-700">Top gaps</div>
-                    <Link href="/dashboard/vault" className="text-xs text-gray-500 hover:text-gray-900 underline">
-                      Open vault
-                    </Link>
+                  <div className="mb-2">
+                    <div className="text-xs font-semibold text-gray-700">Readiness gaps</div>
                   </div>
-                  <ul className="space-y-2">
-                    {readiness.action_plan.slice(0, 3).map((action) => {
+                  <ul className="space-y-1.5">
+                    {readiness.action_plan.map((action) => {
                       const key = gapKey(action);
                       const complete = action.covered_by_vault || completedGapKeys.has(key);
+                      const isOpen = expandedGapKey === key;
                       return (
-                        <li key={key} className="flex items-center gap-2.5">
-                          <span className={`h-2 w-2 shrink-0 rounded-full ${
-                            action.severity === "high"
-                              ? "bg-red-500"
-                              : action.severity === "medium"
-                              ? "bg-amber-400"
-                              : "bg-gray-300"
-                          }`} />
-                          <span className={`flex-1 text-xs leading-5 ${complete ? "line-through text-gray-400" : "text-gray-700"}`}>
-                            {action.gap}
-                          </span>
+                        <li key={key} className={`rounded-md border text-xs ${
+                          action.severity === "high"
+                            ? "border-red-100 bg-red-50/50"
+                            : action.severity === "medium"
+                            ? "border-amber-100 bg-amber-50/50"
+                            : "border-gray-100 bg-gray-50/50"
+                        }`}>
                           <button
-                            onClick={() => toggleGapDone(action)}
-                            className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                              complete
-                                ? "text-green-700 bg-green-100"
-                                : "text-gray-500 bg-gray-100 hover:bg-gray-200"
-                            }`}
+                            onClick={() => setExpandedGapKey(isOpen ? null : key)}
+                            className="w-full flex items-center gap-2 px-2.5 py-2 text-left"
                           >
-                            {complete ? "Done" : "Mark done"}
+                            <span className={`h-2 w-2 shrink-0 rounded-full ${
+                              action.severity === "high"
+                                ? "bg-red-500"
+                                : action.severity === "medium"
+                                ? "bg-amber-400"
+                                : "bg-gray-300"
+                            }`} />
+                            <span className={`flex-1 leading-5 ${complete ? "line-through text-gray-400" : "text-gray-700"}`}>
+                              {action.gap}
+                            </span>
+                            <svg className={`h-3 w-3 shrink-0 text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
                           </button>
+                          {isOpen && (
+                            <div className="px-2.5 pb-3 space-y-2 border-t border-gray-100">
+                              <p className="mt-2 text-gray-600 leading-relaxed">{action.fix}</p>
+                              {action.action_steps.length > 0 && (
+                                <ol className="list-decimal list-inside space-y-0.5 text-gray-500">
+                                  {action.action_steps.map((step, i) => (
+                                    <li key={i}>{step}</li>
+                                  ))}
+                                </ol>
+                              )}
+                              <div className="flex flex-wrap items-center gap-2 pt-1">
+                                {action.primary_action_href && (
+                                  <Link
+                                    href={action.primary_action_href}
+                                    className="rounded bg-gray-900 px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-gray-700"
+                                  >
+                                    {action.primary_action_label || "Take action →"}
+                                  </Link>
+                                )}
+                                <button
+                                  onClick={() => toggleGapDone(action)}
+                                  className={`rounded px-2.5 py-1 text-[10px] font-semibold ${
+                                    complete
+                                      ? "text-green-700 bg-green-100"
+                                      : "text-gray-500 bg-gray-100 hover:bg-gray-200"
+                                  }`}
+                                >
+                                  {complete ? "✓ Marked done" : "Mark as done"}
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </li>
                       );
                     })}
                   </ul>
-                  {readiness.action_plan.length > 3 && (
-                    <Link href="/dashboard/vault" className="mt-2 block text-xs text-gray-500 hover:text-gray-900 underline">
-                      +{readiness.action_plan.length - 3} more gaps →
-                    </Link>
-                  )}
                 </div>
               )}
               {!readiness && (

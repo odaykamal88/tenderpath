@@ -119,13 +119,19 @@ export async function sendWeeklyDigestEmail(args: SendWeeklyDigestArgs): Promise
 
   const resend = new Resend(apiKey);
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? "TenderPath <no-reply@tenderpath.me>";
-  const { error } = await resend.emails.send({
-    from: fromEmail,
-    to: args.email,
-    subject: `Your weekly Tenderpath matches: ${args.tenders.length} tenders, ${args.grants.length} grants`,
-    html: renderHtml(args),
-    text: renderText(args),
-  });
+  let sendError: string | null = null;
+  try {
+    const { error } = await resend.emails.send({
+      from: fromEmail,
+      to: args.email,
+      subject: `Your weekly Tenderpath matches: ${args.tenders.length} tenders, ${args.grants.length} grants`,
+      html: renderHtml(args),
+      text: renderText(args),
+    });
+    if (error) sendError = error.message;
+  } catch (err) {
+    sendError = err instanceof Error ? err.message : "Unknown send error";
+  }
 
-  if (error) throw new Error(error.message);
+  if (sendError) throw new Error(sendError);
 }

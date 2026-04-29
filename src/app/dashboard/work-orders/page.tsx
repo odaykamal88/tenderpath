@@ -147,14 +147,15 @@ export default function WorkOrdersPage() {
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
-            {orders.map((order) => (
-              <Link
-                key={order.id}
-                href={`/dashboard/work-orders/${order.id}`}
-                className="block px-5 py-4 transition hover:bg-gray-50"
-              >
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0">
+            {orders.map((order) => {
+              const isProposalService =
+                order.service_slug === "proposal-draft" || order.service_slug === "roster-fast-track";
+              return (
+                <div key={order.id} className="flex gap-3 px-5 py-4 transition hover:bg-gray-50">
+                  <Link
+                    href={`/dashboard/work-orders/${order.id}`}
+                    className="min-w-0 flex-1"
+                  >
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusPill status={order.status} />
                       <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold capitalize text-gray-700">
@@ -176,11 +177,26 @@ export default function WorkOrdersPage() {
                         {order.fulfillment_notes}
                       </p>
                     )}
+                  </Link>
+                  <div className="flex shrink-0 flex-col items-end gap-1.5 pt-0.5">
+                    {isProposalService && (
+                      <Link
+                        href={`/dashboard/proposals/${order.id}`}
+                        className="text-xs font-semibold text-green-700 hover:text-green-900 whitespace-nowrap"
+                      >
+                        View Package →
+                      </Link>
+                    )}
+                    <Link
+                      href={`/dashboard/work-orders/${order.id}`}
+                      className="text-xs font-semibold text-gray-500 hover:text-gray-900 whitespace-nowrap"
+                    >
+                      View status
+                    </Link>
                   </div>
-                  <div className="text-xs font-semibold text-gray-500">View status</div>
                 </div>
-              </Link>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

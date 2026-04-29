@@ -1,5 +1,8 @@
 import { after, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+
+export const runtime = "nodejs";
+export const maxDuration = 300;
 import { crawlWebsite } from "@/lib/assessment/crawl";
 import {
   classifyIndustry,

@@ -1,9 +1,12 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import RecentWorkOrders from "./RecentWorkOrders";
 
 const SERVICES = [
   {
-    href: "/dashboard/services/bid-no-bid",
+    path: "/dashboard/services/bid-no-bid",
     label: "Bid/no-bid",
     price: "$39",
     title: "Decide whether a tender is worth pursuing",
@@ -11,7 +14,7 @@ const SERVICES = [
     bestFor: "Shortlisted tenders where proposal effort is expensive or the deadline is tight.",
   },
   {
-    href: "/dashboard/services/digest",
+    path: "/dashboard/services/digest",
     label: "Weekly digest",
     price: "$49/mo",
     title: "Keep relevant opportunities flowing",
@@ -19,7 +22,7 @@ const SERVICES = [
     bestFor: "Teams that want Tenderpath to keep sourcing while they focus on bids.",
   },
   {
-    href: "/dashboard/services/proposal",
+    path: "/dashboard/services/proposal",
     label: "Proposal package",
     price: "$299",
     title: "Turn a live tender into a submission pack",
@@ -27,7 +30,7 @@ const SERVICES = [
     bestFor: "Strong-fit tenders where the team needs speed and structure before submission.",
   },
   {
-    href: "/dashboard/services/lta-roster",
+    path: "/dashboard/services/lta-roster",
     label: "LTA / roster",
     price: "$749",
     title: "Prepare vendor registration and LTA readiness",
@@ -36,7 +39,40 @@ const SERVICES = [
   },
 ];
 
+interface TopItem {
+  id: number;
+  tender_title: string;
+  tender_agency: string | null;
+}
+
+function authHeaders(): HeadersInit {
+  const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+  return token ? { authorization: `Bearer ${token}` } : {};
+}
+
 export default function ServicesPage() {
+  const [topItem, setTopItem] = useState<TopItem | null>(null);
+
+  useEffect(() => {
+    fetch("/api/dashboard/pipeline?stage=matched", { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { items?: TopItem[] } | null) => {
+        const first = data?.items?.[0] ?? null;
+        if (first) setTopItem(first);
+      })
+      .catch(() => {});
+  }, []);
+
+  function serviceHref(path: string): string {
+    if (!topItem) return path;
+    const params = new URLSearchParams({
+      pipeline_item_id: String(topItem.id),
+      tender: topItem.tender_title,
+      ...(topItem.tender_agency ? { agency: topItem.tender_agency } : {}),
+    });
+    return `${path}?${params.toString()}`;
+  }
+
   return (
     <div>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -59,13 +95,21 @@ export default function ServicesPage() {
         </Link>
       </div>
 
+      {topItem && (
+        <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-2.5 text-sm text-blue-800">
+          <span className="font-semibold">Using pipeline context: </span>
+          {topItem.tender_title}
+          {topItem.tender_agency ? ` — ${topItem.tender_agency}` : ""}
+        </div>
+      )}
+
       <RecentWorkOrders />
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         {SERVICES.map((service) => (
           <Link
-            key={service.href}
-            href={service.href}
+            key={service.path}
+            href={serviceHref(service.path)}
             className="rounded-lg border border-gray-200 bg-white p-5 transition hover:border-gray-900"
           >
             <div className="flex items-start justify-between gap-4">

@@ -155,7 +155,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Bottom utility links */}
         <div className="mt-6 pt-4 border-t border-gray-100 flex flex-col gap-0.5">
           <a
-            href="mailto:hello@tenderpath.co?subject=Support Request"
+            href="mailto:info@tenderpath.me?subject=Support Request"
             className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
           >
             <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>

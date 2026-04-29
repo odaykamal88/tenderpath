@@ -15,26 +15,56 @@ interface UpgradeGateProps {
   description: string;
 }
 
+type AccessState = "loading" | "open" | "trial" | "locked";
+
 export default function UpgradeGate({ children, title, description }: UpgradeGateProps) {
-  const [paid, setPaid] = useState(true);
+  const [access, setAccess] = useState<AccessState>("loading");
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-    if (!token) return;
+    if (!token) { setAccess("locked"); return; }
 
-    fetch("/api/auth/me", {
-      headers: { authorization: `Bearer ${token}` },
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((user: Me | null) => {
-        setPaid(Boolean(user?.is_super_admin || user?.subscription_status === "active"));
-      })
-      .catch((err) => {
-        console.error("[tp:upgrade_gate:access_check_failed]", err);
-      });
+    Promise.all([
+      fetch("/api/auth/me", { headers: { authorization: `Bearer ${token}` } })
+        .then((res) => (res.ok ? res.json() as Promise<Me> : null))
+        .catch(() => null),
+      fetch("/api/dashboard/pipeline", { headers: { authorization: `Bearer ${token}` } })
+        .then((res) => (res.ok ? res.json() : null))
+        .catch(() => null),
+    ]).then(([user, pipelineBody]) => {
+      if (!user) { setAccess("locked"); return; }
+      if (user.is_super_admin || user.subscription_status === "active") {
+        setAccess("open");
+        return;
+      }
+      const isTrialing = Boolean(pipelineBody?.access?.isTrialing);
+      setAccess(isTrialing ? "trial" : "locked");
+    }).catch((err) => {
+      console.error("[tp:upgrade_gate:access_check_failed]", err);
+      setAccess("locked");
+    });
   }, []);
 
-  if (paid) return <>{children}</>;
+  if (access === "loading" || access === "open" || access === "trial") {
+    return (
+      <>
+        {access === "trial" && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm flex items-center justify-between gap-4">
+            <span className="text-amber-900">
+              You&apos;re on a free trial. Subscribe to keep full access after your trial ends.
+            </span>
+            <Link
+              href="/pay?plan=grants-tenders-matching"
+              className="shrink-0 text-sm font-semibold text-amber-700 underline whitespace-nowrap hover:text-amber-900"
+            >
+              Subscribe — $49/mo
+            </Link>
+          </div>
+        )}
+        {children}
+      </>
+    );
+  }
 
   return (
     <div className="relative">
