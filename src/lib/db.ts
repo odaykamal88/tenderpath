@@ -161,6 +161,9 @@ export async function initializeDatabase() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+  await sql`ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS attempts INTEGER DEFAULT 0`;
+  await sql`ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS provider VARCHAR(50)`;
+  await sql`ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS error TEXT`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS crawl_logs (
