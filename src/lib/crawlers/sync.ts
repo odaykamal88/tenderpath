@@ -75,6 +75,15 @@ const SOURCE_PRIORITY: Record<string, number> = {
   "DevelopmentAid NPO": 40,
 };
 
+function normalizeCountryName(country: string): string {
+  const trimmed = country.trim();
+  const key = trimmed.toLowerCase();
+  if (["turkiye", "türkiye"].includes(key)) return "Turkey";
+  if (key === "syrian arab republic") return "Syria";
+  if (["usa", "u.s.a.", "united states of america"].includes(key)) return "United States";
+  return trimmed;
+}
+
 function dedupeTenders(tenders: RawTender[]): { kept: RawTender[]; deduped: number } {
   const byKey = new Map<string, RawTender>();
   let deduped = 0;
@@ -129,6 +138,7 @@ export async function upsertTenders(tenders: RawTender[]): Promise<{ added: numb
 
   for (const t of tenders) {
     if (!t.reference_id || !t.title) continue;
+    const country = normalizeCountryName(t.country);
 
     const result = await sql`
       INSERT INTO tenders (
@@ -138,7 +148,7 @@ export async function upsertTenders(tenders: RawTender[]): Promise<{ added: numb
         experience_level, submission_language, updated_at
       ) VALUES (
         ${t.reference_id}, ${t.title}, ${t.description}, ${t.agency},
-        ${t.country}, ${t.country_code}, ${t.region}, ${t.sector},
+        ${country}, ${t.country_code}, ${t.region}, ${t.sector},
         ${t.deadline}, ${t.estimated_value}, ${t.source_url}, 'open',
         ${t.source_tier}, ${t.source_name}, ${t.opportunity_type},
         ${t.eligibility_summary}, ${t.experience_level ?? 'any'},

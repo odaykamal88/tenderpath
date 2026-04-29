@@ -103,6 +103,9 @@ export async function POST(request: Request) {
       pi.id, pi.tender_id, pi.tender_title, pi.tender_agency,
       pi.tender_deadline, pi.tender_value,
       t.description AS t_description,
+      t.source_name,
+      t.opportunity_type,
+      t.sector,
       t.eligibility_summary,
       t.requirements,
       t.source_url AS t_source_url
@@ -120,6 +123,9 @@ export async function POST(request: Request) {
   const tenderText = [
     `Title: ${item.tender_title}`,
     item.tender_agency ? `Agency: ${item.tender_agency}` : null,
+    item.source_name ? `Source: ${item.source_name}` : null,
+    item.opportunity_type ? `Opportunity Type: ${item.opportunity_type}` : null,
+    item.sector ? `Sector/Category: ${item.sector}` : null,
     item.tender_value ? `Estimated Value: ${item.tender_value}` : null,
     item.tender_deadline ? `Deadline: ${item.tender_deadline}` : null,
     item.t_description ? `\nDescription:\n${item.t_description}` : null,

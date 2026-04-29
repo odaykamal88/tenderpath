@@ -8,6 +8,17 @@ interface MatchReason {
   matchedSectors?: string[];
   matchedCapabilities?: string[];
   matchedKeywords?: string[];
+  procurement?: {
+    category?: string | null;
+    opportunityType?: string | null;
+    sourceName?: string | null;
+    sourceUrl?: string | null;
+    sourceProvenance?: "primary" | "aggregator" | "unknown";
+    postedDate?: string | null;
+    updatedDate?: string | null;
+    sectorLabel?: string | null;
+    estimatedValue?: string | number | null;
+  };
   confidence?: number | "high" | "medium" | "low";
   caveats?: string[];
   geographyAlignment?: { mode?: string; tenderCountry?: string | null };
@@ -45,6 +56,31 @@ function deadlineLabel(deadline: string | null): string {
   if (days === 0) return `Due today`;
   if (days === 1) return `Due tomorrow`;
   return `${days} days left`;
+}
+
+function procurementLabel(item: PipelineTender): string | null {
+  return item.match_reasons?.procurement?.category
+    ?? item.match_reasons?.procurement?.opportunityType
+    ?? item.opportunity_type
+    ?? null;
+}
+
+function sourceLabel(item: PipelineTender): string | null {
+  return item.match_reasons?.procurement?.sourceName ?? item.source_name ?? null;
+}
+
+function provenanceLabel(item: PipelineTender): string {
+  const provenance = item.match_reasons?.procurement?.sourceProvenance;
+  if (provenance === "aggregator") return "Aggregator";
+  if (provenance === "primary" || item.source_url) return "Primary source";
+  return "Source pending";
+}
+
+function dateLabel(date: string | null | undefined): string | null {
+  if (!date) return null;
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toLocaleDateString();
 }
 
 interface BridgeData {
@@ -122,6 +158,13 @@ type PipelineTender = {
   tender_value: string | null;
   fit_score: number;
   match_reasons?: MatchReason | null;
+  source_name?: string | null;
+  source_url?: string | null;
+  opportunity_type?: string | null;
+  tender_sector?: string | null;
+  tender_created_at?: string | null;
+  tender_updated_at?: string | null;
+  has_broken_link?: boolean | null;
 };
 
 function priorityRank(item: PipelineTender): number {
@@ -561,11 +604,13 @@ export default function DashboardOverview() {
                 {primaryTender.tender_title}
               </h2>
               <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
+                {procurementLabel(primaryTender) && <span>{procurementLabel(primaryTender)}</span>}
                 {primaryTender.tender_agency && <span>{primaryTender.tender_agency}</span>}
                 <span className={isDeadlineSoon(primaryTender.tender_deadline) ? "font-semibold text-red-600" : ""}>
                   {deadlineLabel(primaryTender.tender_deadline)}
                 </span>
                 {primaryTender.tender_value && <span>{primaryTender.tender_value}</span>}
+                <span>{provenanceLabel(primaryTender)}</span>
               </div>
               <p className="mt-2 text-xs leading-5 text-gray-600 line-clamp-2">
                 {primaryTender.match_reasons?.opportunityBucketReason
@@ -632,7 +677,7 @@ export default function DashboardOverview() {
               return (
                 <div key={t.id}>
                   <button
-                    className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors"
+                    className="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-gray-50 transition-colors"
                     onClick={() => setExpandedTenderId(isExpanded ? null : t.id)}
                   >
                     {t.fit_score > 0 && (
@@ -645,8 +690,25 @@ export default function DashboardOverview() {
                         {t.match_reasons.opportunityBucketLabel}
                       </span>
                     )}
-                    <span className="flex-1 text-sm font-medium text-gray-900 truncate min-w-0">
-                      {t.tender_title}
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm font-medium text-gray-900 truncate">
+                        {t.tender_title}
+                      </span>
+                      <span className="mt-1 hidden sm:flex flex-wrap items-center gap-1.5">
+                        {procurementLabel(t) && (
+                          <span className="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            {procurementLabel(t)}
+                          </span>
+                        )}
+                        {sourceLabel(t) && (
+                          <span className="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+                            {sourceLabel(t)}
+                          </span>
+                        )}
+                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${provenanceLabel(t) === "Primary source" ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
+                          {provenanceLabel(t)}
+                        </span>
+                      </span>
                     </span>
                     {t.tender_agency && (
                       <span className="shrink-0 text-xs text-gray-400 hidden md:block truncate max-w-[160px]">
@@ -689,6 +751,24 @@ export default function DashboardOverview() {
                         {(t.match_reasons?.caveats ?? []).length > 0 && (
                           <p className="text-[11px] text-amber-700">{t.match_reasons!.caveats![0]}</p>
                         )}
+                        <div className="grid gap-2 rounded-md border border-gray-200 bg-white p-3 text-[11px] text-gray-600 sm:grid-cols-2 lg:grid-cols-4">
+                          <div>
+                            <div className="font-semibold text-gray-900">Type</div>
+                            <div>{procurementLabel(t) ?? "Procurement notice"}</div>
+                          </div>
+                          <div>
+                            <div className="font-semibold text-gray-900">Source</div>
+                            <div>{sourceLabel(t) ?? "Not listed"} · {provenanceLabel(t)}</div>
+                          </div>
+                          <div>
+                            <div className="font-semibold text-gray-900">Value</div>
+                            <div>{t.tender_value ?? t.match_reasons?.procurement?.estimatedValue ?? "Not listed"}</div>
+                          </div>
+                          <div>
+                            <div className="font-semibold text-gray-900">Updated</div>
+                            <div>{dateLabel(t.match_reasons?.procurement?.updatedDate ?? t.tender_updated_at) ?? "Not listed"}</div>
+                          </div>
+                        </div>
                         <div className="pt-1">
                           <div className="text-xs font-semibold text-gray-900">{action.label}</div>
                           <div className="mt-0.5 text-[11px] text-gray-500">{action.detail}</div>

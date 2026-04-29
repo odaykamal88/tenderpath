@@ -405,6 +405,60 @@ type FeedbackProfile = {
   positiveSectorSlugs: Set<SectorSlug>;
 };
 
+type SourceProvenance = "primary" | "aggregator" | "unknown";
+
+function sourceProvenance(sourceName: string | null | undefined, sourceUrl: string | null | undefined): SourceProvenance {
+  const source = (sourceName ?? "").toLowerCase();
+  const url = (sourceUrl ?? "").toLowerCase();
+  if (source.includes("developmentaid") || url.includes("developmentaid.org")) return "aggregator";
+  if (!sourceName && !sourceUrl) return "unknown";
+  return "primary";
+}
+
+function readableSector(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) return trimmed;
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    const values = Array.isArray(parsed) ? parsed : [parsed];
+    const labels = values.flatMap((value) => {
+      if (typeof value === "string") {
+        try {
+          const nested = JSON.parse(value) as { sector_description?: string; sector_code?: string };
+          return nested.sector_description ?? nested.sector_code ?? value;
+        } catch {
+          return value;
+        }
+      }
+      if (value && typeof value === "object") {
+        const item = value as { sector_description?: string; sector_code?: string };
+        return item.sector_description ?? item.sector_code ?? "";
+      }
+      return "";
+    }).filter(Boolean);
+    return labels.join(", ") || trimmed;
+  } catch {
+    return trimmed;
+  }
+}
+
+function procurementCategory(args: {
+  title: string;
+  sector: string | null;
+  opportunityType: string | null;
+}): string {
+  const text = `${args.title} ${args.sector ?? ""} ${args.opportunityType ?? ""}`.toLowerCase();
+  if (/\bgrant|call for proposals|cfp\b/.test(text)) return "Grant";
+  if (/\broster|long[- ]term agreement|\blta\b|framework agreement|framework contract/.test(text)) return "Roster/LTA";
+  if (/\beoi\b|expression of interest|request for expressions/.test(text)) return "EOI";
+  if (/works|civil works|construction|rehabilitation|retrofitting|installation works|repair works/.test(text)) return "Works";
+  if (/consult|advisory|evaluation|feasibility|technical assistance|study|trainer|training program|research/.test(text)) return "Consulting services";
+  if (/goods|supply|procurement of|purchase|equipment|vehicle|poultry|meat|food|pump|pipe|kit|furniture|materials/.test(text)) return "Goods";
+  if (/services|maintenance|rental|accommodation|travel|event|logistics|transport|internet|connectivity/.test(text)) return "Non-consulting services";
+  return args.opportunityType?.trim() || "Procurement notice";
+}
+
 async function loadFeedbackProfile(email: string | null | undefined): Promise<FeedbackProfile> {
   const empty = {
     dismissedTenderIds: new Set<number>(),
@@ -613,6 +667,7 @@ export async function matchTenders(
     opportunity_type: string | null; source_url: string | null;
     submission_language: string | null;
     estimated_value: string | number | null;
+    source_name: string | null; created_at: string | null; updated_at: string | null;
   };
   const byId = new Map<number, Row>();
 
@@ -626,7 +681,7 @@ export async function matchTenders(
       const rows = await sql`
         SELECT id, title, description, agency, deadline, country, sector,
                reference_id, requirements, experience_level, opportunity_type,
-               source_url, submission_language, estimated_value
+               source_url, submission_language, estimated_value, source_name, created_at, updated_at
         FROM tenders
         WHERE status = 'open'
           AND deadline >= CURRENT_DATE
@@ -646,7 +701,7 @@ export async function matchTenders(
     const strictCountryRows = await sql`
       SELECT id, title, description, agency, deadline, country, sector,
              reference_id, requirements, experience_level, opportunity_type,
-             source_url, submission_language, estimated_value
+             source_url, submission_language, estimated_value, source_name, created_at, updated_at
       FROM tenders
       WHERE status = 'open'
         AND deadline >= CURRENT_DATE
@@ -664,7 +719,7 @@ export async function matchTenders(
     const baseline = await sql`
       SELECT id, title, description, agency, deadline, country, sector,
              reference_id, requirements, experience_level, opportunity_type,
-             source_url, submission_language, estimated_value
+             source_url, submission_language, estimated_value, source_name, created_at, updated_at
       FROM tenders
       WHERE status = 'open'
         AND deadline >= CURRENT_DATE
@@ -713,6 +768,15 @@ export async function matchTenders(
     if (shouldSuppressSource(tSourceUrl, countrySet)) continue;
 
     const tSector = (t.sector as string ?? "");
+    const tSectorLabel = readableSector(tSector);
+    const tOpportunityType = (t.opportunity_type as string | null) ?? null;
+    const tSourceName = (t.source_name as string | null) ?? null;
+    const tProvenance = sourceProvenance(tSourceName, tSourceUrl);
+    const tProcurementCategory = procurementCategory({
+      title: rawTitle,
+      sector: tSectorLabel ?? tSector,
+      opportunityType: tOpportunityType,
+    });
     const tCountry = (t.country as string ?? "").toLowerCase();
     const tTitle = rawTitle;
     const tAgency = (t.agency as string ?? "");
@@ -845,6 +909,17 @@ export async function matchTenders(
       matchedSectors: srSectorNames.length ? srSectorNames : undefined,
       matchedCapabilities: srCaps.length ? srCaps : undefined,
       matchedKeywords: srKws.length ? srKws : undefined,
+      procurement: {
+        category: tProcurementCategory,
+        opportunityType: tOpportunityType,
+        sourceName: tSourceName,
+        sourceUrl: tSourceUrl || null,
+        sourceProvenance: tProvenance,
+        postedDate: (t.created_at as string | null) ?? null,
+        updatedDate: (t.updated_at as string | null) ?? null,
+        sectorLabel: tSectorLabel,
+        estimatedValue: (t.estimated_value as string | number | null) ?? null,
+      },
       geographyAlignment: { userCountries: countries, tenderCountry: t.country as string | null, mode: geoMode },
       scoreBreakdown: {
         sector: sectorScore,
@@ -873,7 +948,13 @@ export async function matchTenders(
       sector: t.sector as string,
       score: Math.min(100, total),
       reference_id: t.reference_id as string,
+      source_name: tSourceName,
       source_url: (t.source_url as string | null) ?? null,
+      opportunity_type: tOpportunityType,
+      procurement_category: tProcurementCategory,
+      source_provenance: tProvenance,
+      posted_date: (t.created_at as string | null) ?? null,
+      updated_at: (t.updated_at as string | null) ?? null,
       estimated_value: (t.estimated_value as string | number | null) ?? null,
       match_reasons: matchReasons,
       structured_reasons,
@@ -940,7 +1021,7 @@ export async function matchTenders(
       const rows = await sql`
         SELECT id, title, description, agency, deadline, country, sector,
                reference_id, requirements, experience_level, opportunity_type,
-               source_url, submission_language, estimated_value
+               source_url, submission_language, estimated_value, source_name, created_at, updated_at
         FROM tenders
         WHERE status = 'open'
           AND deadline >= CURRENT_DATE
@@ -972,6 +1053,15 @@ export async function matchTenders(
       if (shouldSuppressSource(adjSourceUrl, countrySet)) continue;
 
       const tSector = (t.sector as string ?? "");
+      const tSectorLabel = readableSector(tSector);
+      const tOpportunityType = (t.opportunity_type as string | null) ?? null;
+      const tSourceName = (t.source_name as string | null) ?? null;
+      const tProvenance = sourceProvenance(tSourceName, adjSourceUrl);
+      const tProcurementCategory = procurementCategory({
+        title: rawTitle,
+        sector: tSectorLabel ?? tSector,
+        opportunityType: tOpportunityType,
+      });
       const tCountry = (t.country as string ?? "").toLowerCase();
       const tTitle = rawTitle;
       const tAgency = (t.agency as string ?? "");
@@ -1073,6 +1163,17 @@ export async function matchTenders(
         matchedSectors: adjSectorNames.length ? adjSectorNames : undefined,
         matchedCapabilities: adjCaps.length ? adjCaps : undefined,
         matchedKeywords: adjKws.length ? adjKws : undefined,
+        procurement: {
+          category: tProcurementCategory,
+          opportunityType: tOpportunityType,
+          sourceName: tSourceName,
+          sourceUrl: adjSourceUrl || null,
+          sourceProvenance: tProvenance,
+          postedDate: (t.created_at as string | null) ?? null,
+          updatedDate: (t.updated_at as string | null) ?? null,
+          sectorLabel: tSectorLabel,
+          estimatedValue: (t.estimated_value as string | number | null) ?? null,
+        },
         geographyAlignment: { userCountries: countries, tenderCountry: t.country as string | null, mode: adjGeoMode },
         scoreBreakdown: {
           sector: sectorScore,
@@ -1102,7 +1203,13 @@ export async function matchTenders(
         sector: t.sector as string,
         score: Math.min(100, total),
         reference_id: t.reference_id as string,
+        source_name: tSourceName,
         source_url: (t.source_url as string | null) ?? null,
+        opportunity_type: tOpportunityType,
+        procurement_category: tProcurementCategory,
+        source_provenance: tProvenance,
+        posted_date: (t.created_at as string | null) ?? null,
+        updated_at: (t.updated_at as string | null) ?? null,
         estimated_value: (t.estimated_value as string | number | null) ?? null,
         match_reasons: adjMatchReasons,
         structured_reasons: adj_structured_reasons,

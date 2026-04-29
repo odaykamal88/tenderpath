@@ -75,6 +75,17 @@ export interface MatchReason {
   matchedSectors?: string[];
   matchedCapabilities?: string[];
   matchedKeywords?: string[];
+  procurement?: {
+    category?: string | null;
+    opportunityType?: string | null;
+    sourceName?: string | null;
+    sourceUrl?: string | null;
+    sourceProvenance?: "primary" | "aggregator" | "unknown";
+    postedDate?: string | null;
+    updatedDate?: string | null;
+    sectorLabel?: string | null;
+    estimatedValue?: string | number | null;
+  };
   geographyAlignment?: {
     userCountries?: string[];
     tenderCountry?: string | null;
@@ -102,7 +113,13 @@ export interface MatchedTender {
   sector: string;
   score: number;
   reference_id?: string;
+  source_name?: string | null;
   source_url?: string | null;
+  opportunity_type?: string | null;
+  procurement_category?: string | null;
+  source_provenance?: "primary" | "aggregator" | "unknown";
+  posted_date?: string | null;
+  updated_at?: string | null;
   estimated_value?: string | number | null;
   jv_allowed?: boolean;
   match_reason?: string | null;

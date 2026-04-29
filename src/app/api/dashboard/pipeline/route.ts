@@ -26,13 +26,18 @@ export async function GET(request: Request) {
   const dismissedTenderIds = new Set(feedbackRows.map((r) => r.tender_id as number));
 
   const rows = await sql`
-    SELECT id, tender_id, tender_title, tender_agency, tender_deadline,
-           tender_value, fit_score, stage, position, notes, match_reasons,
-           assessment_id, updated_at
-    FROM pipeline_items
-    WHERE user_id = ${userId}
-    ${stageFilter && isStage(stageFilter) ? sql`AND stage = ${stageFilter}` : sql``}
-    ORDER BY stage, position, id
+    SELECT
+      pi.id, pi.tender_id, pi.tender_title, pi.tender_agency, pi.tender_deadline,
+      pi.tender_value, pi.fit_score, pi.stage, pi.position, pi.notes, pi.match_reasons,
+      pi.assessment_id, pi.updated_at,
+      t.source_name, t.source_url, t.opportunity_type, t.sector AS tender_sector,
+      t.created_at AS tender_created_at, t.updated_at AS tender_updated_at,
+      t.has_broken_link
+    FROM pipeline_items pi
+    LEFT JOIN tenders t ON t.id = pi.tender_id
+    WHERE pi.user_id = ${userId}
+    ${stageFilter && isStage(stageFilter) ? sql`AND pi.stage = ${stageFilter}` : sql``}
+    ORDER BY pi.stage, pi.position, pi.id
   `;
 
   // Filter out items that have been dismissed via feedback (not_relevant)

@@ -38,13 +38,6 @@ function formatDate(value: string | null | undefined): string {
   return d.toISOString().slice(0, 10);
 }
 
-function scoreColor(score: number): string {
-  if (score >= 70) return "bg-green";
-  if (score >= 50) return "bg-yellow-500";
-  if (score >= 35) return "bg-orange-500";
-  return "bg-red";
-}
-
 function isDeadlineSoon(value: string | null | undefined): boolean {
   if (!value) return false;
   const d = new Date(value);
@@ -269,6 +262,9 @@ function TenderCard({ t, gaps, feedbackStatus, onFeedback }: TenderCardProps) {
   const amount = formatAmount(t.estimated_value);
   const sr = t.structured_reasons;
   const brief = t.decision_brief;
+  const procurementCategory = t.procurement_category ?? sr?.procurement?.category ?? t.opportunity_type ?? null;
+  const sourceName = t.source_name ?? sr?.procurement?.sourceName ?? null;
+  const provenance = t.source_provenance ?? sr?.procurement?.sourceProvenance ?? (t.source_url ? "primary" : "unknown");
 
   const opportunityBucketCls =
     t.opportunity_bucket === "act_now" ? "bg-red/15 text-red border border-red/30"
@@ -317,6 +313,12 @@ function TenderCard({ t, gaps, feedbackStatus, onFeedback }: TenderCardProps) {
             {feedbackStatus === "saved" && (
               <span className="rounded bg-teal-500/20 text-teal-300 border border-teal-500/30 px-2 py-0.5 text-[10px] font-medium">✓ Saved</span>
             )}
+            {procurementCategory && (
+              <span className="rounded bg-white/5 text-gray-300 border border-white/10 px-2 py-0.5 text-[10px] font-medium">{procurementCategory}</span>
+            )}
+            <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${provenance === "primary" ? "bg-green/10 text-green border border-green/20" : "bg-amber-500/10 text-amber-300 border border-amber-500/20"}`}>
+              {provenance === "primary" ? "Primary source" : provenance === "aggregator" ? "Aggregator" : "Source pending"}
+            </span>
           </div>
           {amount && <span className="text-xs font-semibold text-gray-200 flex-shrink-0">{amount}</span>}
         </div>
@@ -332,6 +334,7 @@ function TenderCard({ t, gaps, feedbackStatus, onFeedback }: TenderCardProps) {
         {/* Row 4: agency · country · deadline */}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-gray-400">
           {t.agency && <span className="truncate max-w-[12rem]">{t.agency}</span>}
+          {sourceName && sourceName !== t.agency && <span className="truncate max-w-[10rem]">{sourceName}</span>}
           {t.country && (
             <span className="rounded bg-gold/20 px-1.5 py-0.5 text-[10px] font-medium text-gold uppercase">{t.country}</span>
           )}
@@ -430,6 +433,11 @@ function TenderCard({ t, gaps, feedbackStatus, onFeedback }: TenderCardProps) {
                 <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase border ${sourceConfidenceCls}`}>
                   {brief.source_confidence} confidence
                 </span>
+                {procurementCategory && (
+                  <span className="rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase border border-white/10 text-gray-300">
+                    {procurementCategory}
+                  </span>
+                )}
                 {brief.source_confidence_reason && (
                   <span className="text-gray-400">{brief.source_confidence_reason}</span>
                 )}
@@ -1008,6 +1016,18 @@ export default function AssessmentResults({ data, onReset }: Props) {
                 structured_reasons: t.structured_reasons
                   ? {
                       ...t.structured_reasons,
+                      procurement: {
+                        ...(t.structured_reasons.procurement ?? {}),
+                        category: t.procurement_category ?? t.structured_reasons.procurement?.category ?? null,
+                        opportunityType: t.opportunity_type ?? t.structured_reasons.procurement?.opportunityType ?? null,
+                        sourceName: t.source_name ?? t.structured_reasons.procurement?.sourceName ?? null,
+                        sourceUrl: t.source_url ?? t.structured_reasons.procurement?.sourceUrl ?? null,
+                        sourceProvenance: t.source_provenance ?? t.structured_reasons.procurement?.sourceProvenance ?? "unknown",
+                        postedDate: t.posted_date ?? t.structured_reasons.procurement?.postedDate ?? null,
+                        updatedDate: t.updated_at ?? t.structured_reasons.procurement?.updatedDate ?? null,
+                        sectorLabel: t.structured_reasons.procurement?.sectorLabel ?? null,
+                        estimatedValue: t.estimated_value ?? t.structured_reasons.procurement?.estimatedValue ?? null,
+                      },
                       opportunityBucket: t.opportunity_bucket ?? null,
                       opportunityBucketLabel: t.opportunity_bucket_label ?? null,
                       opportunityBucketReason: t.opportunity_bucket_reason ?? null,
