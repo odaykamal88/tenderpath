@@ -97,8 +97,6 @@ function applyConcreteIndustryGuards(
 ): IndustryClassification {
   const text = [
     context,
-    classification.detected_industry,
-    ...classification.sectors,
     ...classification.services,
   ].join(" ").toLowerCase();
 
@@ -142,16 +140,109 @@ function applyConcreteIndustryGuards(
   };
 }
 
+function applyBroadProfileGuards(
+  classification: IndustryClassification,
+  context: string,
+  orgType?: string,
+  devThemes?: string[],
+): IndustryClassification {
+  const contextText = context.toLowerCase();
+  const text = [
+    context,
+    orgType ?? "",
+    ...(devThemes ?? []),
+    classification.detected_industry,
+    ...classification.sectors,
+    ...classification.services,
+  ].join(" ").toLowerCase();
+
+  const broadSignals = [
+    "consulting", "consultancy", "advisory", "technical assistance",
+    "monitoring", "evaluation", "research", "strategy", "facilitation",
+    "capacity building", "training", "needs assessment", "impact assessment",
+    "humanitarian", "development", "livelihood", "livelihoods",
+    "early recovery", "protection", "education", "food security",
+    "cccm", "camp coordination", "community stabilization",
+    "private sector development", "enterprise development", "access to finance",
+  ];
+  const concreteTradeSignals = [
+    "commodity trading", "agri-processor", "agricultural commodity",
+    "warehousing", "freight", "transport", "transportation", "food aid",
+    "supply chain management", "supply and delivery", "construction",
+    "engineering", "software", "platform", "translation", "interpretation",
+    "localization",
+  ];
+  const directSecuritySignals = [
+    "guard service", "guarding", "armed security", "security guards",
+    "surveillance", "access control", "protective service",
+  ];
+
+  const isNgo = ["ngo", "non-profit", "nonprofit", "civil-society"].includes((orgType ?? "").toLowerCase());
+  const hasBroadSignal = hasAnySignal(text, broadSignals);
+  const hasConcreteTrade = hasAnySignal(contextText, concreteTradeSignals);
+  const hasDirectSecurity = hasAnySignal(contextText, directSecuritySignals);
+  const hasManyProgramAreas = (devThemes?.length ?? 0) >= 3 || classification.sectors.length >= 4;
+  const coreConsulting = hasAnySignal(text, [
+    "consulting firm", "consultancy firm", "development consulting",
+    "boutique consulting", "advisory services", "evaluation center",
+    "research and evaluation", "monitoring evaluation",
+  ]);
+
+  if (!hasBroadSignal || hasConcreteTrade) return classification;
+
+  const baseSectors = isNgo && !hasConcreteTrade
+    ? classification.sectors.filter((sector) => {
+        const s = sector.toLowerCase();
+        return !s.includes("logistics")
+          && !s.includes("warehousing")
+          && !s.includes("security service");
+      })
+    : classification.sectors;
+
+  const sectors = addUnique(baseSectors, [
+    ...(coreConsulting || !isNgo ? ["Consulting Services", "Research & Evaluation", "Technical Assistance"] : []),
+    ...(hasAnySignal(text, ["capacity building", "training"]) ? ["Education & Training"] : []),
+    ...(hasAnySignal(text, ["livelihood", "livelihoods", "enterprise development", "private sector development", "access to finance"]) ? ["Economic Development"] : []),
+    ...(hasAnySignal(text, ["food security"]) ? ["Food Security"] : []),
+    ...(hasAnySignal(text, ["protection", "cccm", "camp coordination", "humanitarian"]) ? ["Humanitarian Response"] : []),
+  ]);
+
+  let detected_industry = classification.detected_industry;
+  if (coreConsulting) {
+    detected_industry = "consulting";
+  } else if (isNgo && hasManyProgramAreas) {
+    // "Protection" and broad programme delivery are humanitarian evidence,
+    // not proof that the organization sells security or logistics services.
+    // Use consulting as the broadest available procurement identity unless
+    // the raw profile explicitly says it provides a concrete trade.
+    if (detected_industry === "security") {
+      detected_industry = hasDirectSecurity ? "security" : "consulting";
+    } else if ((detected_industry === "logistics" || detected_industry === "") && !hasConcreteTrade) {
+      detected_industry = "consulting";
+    }
+  } else if (!isNgo && hasManyProgramAreas && detected_industry === "") {
+    detected_industry = "consulting";
+  }
+
+  return {
+    ...classification,
+    detected_industry,
+    sectors,
+  };
+}
+
 /**
  * Stage 1: Classify the company's industry and extract initial sector/services.
  */
 export async function classifyIndustry(
   crawledData: CrawledData | null,
   description: string,
-  countries: string[]
+  countries: string[],
+  orgType?: string,
+  devThemes?: string[],
 ): Promise<IndustryClassification> {
   const client = getClient();
-  const context = buildCompanyContext(crawledData, description, countries);
+  const context = buildCompanyContext(crawledData, description, countries, orgType, devThemes);
 
   const msg = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
@@ -173,7 +264,9 @@ CRITICAL classification rules:
 - A warehousing / freight / supply-chain / transport / storage company is "logistics", NOT "consulting". Even if their website mentions "solutions" or "services" or "expertise".
 - A translation / interpretation / editorial / subtitling / localization company is "language_services", NOT "consulting".
 - A software / SaaS / platform / digital-product company is "it", NOT "consulting".
-- Only use "consulting" when the company's primary offering is advisory work itself (management consulting, M&E consulting, policy research, strategy firms, feasibility studies for hire). If unsure, pick the concrete trade (logistics, it, education, etc.) over "consulting". DO NOT default to "consulting" when website content is thin or ambiguous — pick the closest concrete industry from any available signal (company description, countries, services listed).
+- Use "consulting" for development consulting, M&E, research, strategy, facilitation, technical assistance, capacity-building advisory, and broad multi-sector professional-service firms.
+- For NGOs and humanitarian organizations, do not convert "protection" or "community safety" programme language into "security" unless the organization clearly sells guarding, surveillance, access-control, or protective services. Keep multiple programme areas in "sectors" so matching can remain broad.
+- If unsure, pick the concrete trade (logistics, it, education, etc.) over "consulting". DO NOT default to "consulting" when website content is thin or ambiguous — pick the closest concrete industry from any available signal (company description, countries, services listed).
 
 Return ONLY valid JSON, no explanation.`,
       },
@@ -192,7 +285,12 @@ Return ONLY valid JSON, no explanation.`,
     services: [],
   });
 
-  return applyConcreteIndustryGuards(parsed, context);
+  return applyBroadProfileGuards(
+    applyConcreteIndustryGuards(parsed, context),
+    context,
+    orgType,
+    devThemes,
+  );
 }
 
 /**
@@ -282,7 +380,12 @@ Return ONLY valid JSON, no explanation.`,
 
   const parsed = safeParseJSON<Partial<AIAnalysis>>(text, {});
 
-  const guardedClassification = applyConcreteIndustryGuards(classification, context);
+  const guardedClassification = applyBroadProfileGuards(
+    applyConcreteIndustryGuards(classification, context),
+    context,
+    orgType,
+    devThemes,
+  );
 
   // Merge analysis fields, but keep Stage 1 company identity authoritative.
   // The full-readiness prompt evaluates readiness; it must not reclassify a

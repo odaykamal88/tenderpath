@@ -82,6 +82,7 @@ export async function initializeDatabase() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+  await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS include_consultancies BOOLEAN DEFAULT false`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS tenders (
@@ -196,6 +197,16 @@ export async function initializeDatabase() {
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS pipeline_items_user_tender_idx
+    ON pipeline_items (user_id, tender_id)
+    WHERE tender_id IS NOT NULL
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS pipeline_items_user_assessment_title_idx
+    ON pipeline_items (user_id, assessment_id, tender_title)
+    WHERE tender_id IS NULL AND assessment_id IS NOT NULL
   `;
 
   await sql`

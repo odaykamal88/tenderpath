@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS assessments (
   grant_readiness_score INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE assessments ADD COLUMN IF NOT EXISTS include_consultancies BOOLEAN DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS tenders (
   id SERIAL PRIMARY KEY,
@@ -111,6 +112,9 @@ CREATE TABLE IF NOT EXISTS email_queue (
   sent_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS attempts INTEGER DEFAULT 0;
+ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS provider TEXT;
+ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS error TEXT;
 
 CREATE TABLE IF NOT EXISTS crawl_logs (
   id SERIAL PRIMARY KEY,
@@ -168,6 +172,8 @@ CREATE TABLE IF NOT EXISTS pipeline_items (
 );
 CREATE INDEX IF NOT EXISTS pipeline_items_user_id ON pipeline_items (user_id);
 CREATE INDEX IF NOT EXISTS pipeline_items_stage ON pipeline_items (user_id, stage);
+CREATE INDEX IF NOT EXISTS pipeline_items_user_tender_idx ON pipeline_items (user_id, tender_id) WHERE tender_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS pipeline_items_user_assessment_title_idx ON pipeline_items (user_id, assessment_id, tender_title) WHERE tender_id IS NULL AND assessment_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS user_tender_feedback (
   id SERIAL PRIMARY KEY,

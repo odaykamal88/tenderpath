@@ -16,6 +16,7 @@ interface DigestAssessment {
   ai_analysis: AIAnalysis;
   org_type: string | null;
   dev_themes: string[];
+  include_consultancies: boolean | null;
 }
 
 interface PipelineSeedResult {
@@ -72,7 +73,7 @@ async function loadSubscribers(limit: number): Promise<DigestSubscriber[]> {
 
 async function loadLatestAssessment(email: string): Promise<DigestAssessment | null> {
   const rows = await sql`
-    SELECT id, company_name, countries, ai_analysis, org_type, dev_themes
+    SELECT id, company_name, countries, ai_analysis, org_type, dev_themes, include_consultancies
     FROM assessments
     WHERE email = ${email}
       AND ai_analysis IS NOT NULL
@@ -89,6 +90,7 @@ async function loadLatestAssessment(email: string): Promise<DigestAssessment | n
     ai_analysis: row.ai_analysis as AIAnalysis,
     org_type: (row.org_type as string | null) ?? null,
     dev_themes: (row.dev_themes as string[] | null) ?? [],
+    include_consultancies: (row.include_consultancies as boolean | null) ?? null,
   };
 }
 
@@ -254,6 +256,8 @@ export async function runWeeklyDigest(options: {
     try {
       const tenders = (await matchTenders(assessment.ai_analysis, assessment.countries, {
         userEmail: subscriber.email,
+        orgType: assessment.org_type,
+        includeConsultancies: assessment.include_consultancies ?? undefined,
       })).slice(0, 10);
       const grants = (await matchGrants(
         assessment.ai_analysis.sectors ?? [],

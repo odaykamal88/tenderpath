@@ -76,7 +76,9 @@ export async function POST(request: Request) {
     const classification = await classifyIndustry(
       crawledData,
       analysisDescription,
-      body.countries
+      body.countries,
+      body.orgType,
+      body.devThemes
     );
 
     // Stage 3: Full analysis
@@ -106,11 +108,13 @@ export async function POST(request: Request) {
         includeConsultancies: body.includeConsultancies,
         userEmail: body.email,
         adjacentSectorLabels: body.adjacentSectors,
+        orgType: body.orgType,
       }),
       matchGrants(
         classification.sectors,
         body.orgType ?? null,
-        body.devThemes ?? []
+        body.devThemes ?? [],
+        body.countries ?? []
       ),
     ]);
 

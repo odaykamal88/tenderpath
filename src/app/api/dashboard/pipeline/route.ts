@@ -83,6 +83,58 @@ export async function POST(request: Request) {
 
   const matchReasonsJson = match_reasons ? JSON.stringify(match_reasons) : null;
 
+  const existing = tender_id != null
+    ? await sql`
+        SELECT id, stage
+        FROM pipeline_items
+        WHERE user_id = ${guard.user!.id} AND tender_id = ${tender_id}
+        ORDER BY id ASC
+        LIMIT 1
+      `
+    : assessment_id != null
+      ? await sql`
+          SELECT id, stage
+          FROM pipeline_items
+          WHERE user_id = ${guard.user!.id}
+            AND assessment_id = ${assessment_id}
+            AND tender_title = ${tender_title}
+          ORDER BY id ASC
+          LIMIT 1
+        `
+      : [];
+
+  if (existing.length) {
+    const rows = await sql`
+      UPDATE pipeline_items SET
+        assessment_id = COALESCE(assessment_id, ${assessment_id}),
+        tender_title = ${tender_title},
+        tender_agency = COALESCE(${tender_agency}, tender_agency),
+        tender_deadline = COALESCE(${tender_deadline}, tender_deadline),
+        tender_value = COALESCE(${tender_value}, tender_value),
+        fit_score = GREATEST(fit_score, ${fit_score}),
+        stage = CASE
+          WHEN stage = 'matched' THEN ${stage}
+          ELSE stage
+        END,
+        notes = COALESCE(${notes}, notes),
+        match_reasons = COALESCE(${matchReasonsJson}::jsonb, match_reasons),
+        updated_at = NOW()
+      WHERE id = ${existing[0].id as number}
+      RETURNING *
+    `;
+
+    console.log("[tp:pipeline:seeded]", {
+      userId: guard.user!.id,
+      stage: rows[0].stage,
+      assessmentId: assessment_id,
+      tenderId: tender_id,
+      action: "updated",
+      hasMatchReasons: !!match_reasons,
+    });
+
+    return NextResponse.json({ item: rows[0], action: "updated" });
+  }
+
   const rows = await sql`
     INSERT INTO pipeline_items
       (user_id, tender_id, assessment_id, tender_title, tender_agency, tender_deadline,
@@ -99,8 +151,10 @@ export async function POST(request: Request) {
     userId: guard.user!.id,
     stage,
     assessmentId: assessment_id,
+    tenderId: tender_id,
+    action: "created",
     hasMatchReasons: !!match_reasons,
   });
 
-  return NextResponse.json({ item: rows[0] }, { status: 201 });
+  return NextResponse.json({ item: rows[0], action: "created" }, { status: 201 });
 }

@@ -27,7 +27,7 @@ export async function POST(request: Request) {
 
     let detectedSectors: string[] = [];
     let detectedServices: string[] = [];
-    let detectedName: string | null = crawl?.title ?? null;
+    const detectedName: string | null = crawl?.title ?? null;
     let detectedOrgType: string | null = null;
     let detectedCountries: string[] = [];
     let detectedLanguage: string | null = null;
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     if (description) {
       if (confidence !== "low" && crawl) {
         const [classification, extras] = await Promise.all([
-          classifyIndustry(crawl, description, []),
+          classifyIndustry(crawl, description, [], undefined, undefined),
           inferProfileExtras(crawl, description),
         ]);
         detectedSectors = classification.sectors ?? [];

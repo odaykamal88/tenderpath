@@ -475,7 +475,7 @@ async function loadFeedbackProfile(email: string | null | undefined): Promise<Fe
 export async function matchTenders(
   analysis: AIAnalysis,
   countries: string[],
-  options?: { includeConsultancies?: boolean; userEmail?: string; adjacentSectorLabels?: string[] },
+  options?: { includeConsultancies?: boolean; userEmail?: string; adjacentSectorLabels?: string[]; orgType?: string | null },
 ): Promise<MatchedTender[]> {
   // Expand user country list through alias table so "Syria" matches tenders
   // posted as "Syrian Arab Republic", "Palestine" matches "West Bank and Gaza",
@@ -517,9 +517,10 @@ export async function matchTenders(
   // slug), which would otherwise disable the filter for translation firms,
   // logistics companies, etc. If consulting isn't the primary trade, skip them.
   const userIsConsulting = (analysis.detected_industry ?? "").toLowerCase() === "consulting";
+  const userIsNgo = ["ngo", "non-profit", "nonprofit", "civil-society"].includes((options?.orgType ?? "").toLowerCase());
   // User may explicitly opt in to consultancy-style tenders (e.g. sole traders,
   // individuals bidding as consultants). Default is OFF for org/company flows.
-  const allowConsultancies = userIsConsulting || (options?.includeConsultancies ?? false);
+  const allowConsultancies = (userIsConsulting && !userIsNgo) || (options?.includeConsultancies ?? false);
 
   // Pool per slug instead of a single deadline-sorted LIMIT 600 — otherwise a
   // heavy sector (M&E / consulting) dominates the candidate window and starves
