@@ -131,6 +131,7 @@ export default function PipelinePage() {
     tender_deadline: "",
     tender_value: "",
     fit_score: 0,
+    source_url: "",
   });
 
   useEffect(() => {
@@ -195,12 +196,13 @@ export default function PipelinePage() {
         tender_value: form.tender_value || null,
         fit_score: Number(form.fit_score) || 0,
         stage: "matched",
+        source_url: form.source_url || null,
       }),
     });
     if (res.ok) {
       const body = await res.json();
       setItems((prev) => [...prev, body.item]);
-      setForm({ tender_title: "", tender_agency: "", tender_deadline: "", tender_value: "", fit_score: 0 });
+      setForm({ tender_title: "", tender_agency: "", tender_deadline: "", tender_value: "", fit_score: 0, source_url: "" });
       setAdding(false);
     }
   }
@@ -252,6 +254,13 @@ export default function PipelinePage() {
             value={form.tender_title}
             onChange={(e) => setForm({ ...form, tender_title: e.target.value })}
             required
+          />
+          <input
+            className="border rounded px-2 py-1 text-sm md:col-span-3"
+            placeholder="Source URL (optional — link to the tender notice)"
+            type="url"
+            value={form.source_url}
+            onChange={(e) => setForm({ ...form, source_url: e.target.value })}
           />
           <input
             className="border rounded px-2 py-1 text-sm"
@@ -348,11 +357,18 @@ export default function PipelinePage() {
                                 <div className="font-medium text-gray-900 line-clamp-2 flex-1">
                                   {item.tender_title}
                                 </div>
-                                {item.match_reasons?.opportunityBucketLabel && (
-                                  <span className={`flex-shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${BUCKET_STYLES[item.match_reasons.opportunityBucket ?? ""] ?? "bg-gray-100 text-gray-600 border-gray-200"}`}>
-                                    {item.match_reasons.opportunityBucketLabel}
-                                  </span>
-                                )}
+                                <div className="flex shrink-0 items-center gap-1">
+                                  {!item.tender_id && (
+                                    <span className="rounded-full border border-dashed border-gray-300 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-400">
+                                      Manually added
+                                    </span>
+                                  )}
+                                  {item.match_reasons?.opportunityBucketLabel && (
+                                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${BUCKET_STYLES[item.match_reasons.opportunityBucket ?? ""] ?? "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                                      {item.match_reasons.opportunityBucketLabel}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                               {item.tender_agency && (
                                 <div className="mt-1 text-xs text-gray-600">

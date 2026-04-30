@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import type { TierSlug, Gap, MatchedTender, MatchedGrant, ReadinessDimensions, OpportunityBucket } from "@/lib/types";
 import { TIER_INFO_BY_SLUG } from "@/lib/pricing";
+import SampleOutputPreview, { type SamplePreviewType } from "@/components/SampleOutputPreview";
 
 interface AssessmentData {
   id: number;
@@ -618,6 +619,120 @@ function BidNoBidCTA({ count }: { count: number }) {
   );
 }
 
+/* ── PrimaryActionCTA ── */
+
+const PREVIEW_MAP: Record<TierSlug, SamplePreviewType> = {
+  "tender-intelligence": "digest",
+  "submission-package": "proposal",
+  "strategic-partnership": "roster",
+};
+
+function PrimaryActionCTA({ data }: { data: AssessmentData }) {
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const slug = data.recommended_tier;
+  const tier = TIER_INFO[slug];
+  const highGaps = data.gaps.filter((g) => g.severity === "high");
+  const topGap = highGaps[0];
+  const strongMatchCount = data.matched_tenders.filter((t) => t.score >= 50).length;
+  const urgentCount = data.matched_tenders.filter((t) => isDeadlineSoon(t.deadline) && t.score >= 50).length;
+  const isHighFit = data.readiness_score >= 65 && strongMatchCount >= 12;
+
+  const ctxLine =
+    slug === "strategic-partnership"
+      ? `${data.company_name} has ${highGaps.length} compliance gap${highGaps.length !== 1 ? "s" : ""} that will block roster applications.${topGap ? ` Most critical: ${topGap.gap}.` : ""} A roster entry with one UN agency typically unlocks a pipeline of repeat contracts within 3–6 months.`
+      : slug === "submission-package"
+      ? `${data.company_name} has ${strongMatchCount} strong match${strongMatchCount !== 1 ? "es" : ""}${urgentCount > 0 ? ` — ${urgentCount} with deadlines in the next 30 days` : ""}. Your profile is ready to compete; a polished proposal closes the remaining gap.`
+      : `We found ${data.matched_tenders.length} tenders and ${data.matched_grants.length} grants for your profile. Get the best 5–10 AI-matched weekly so you never miss a window that fits.`;
+
+  const otherSlugs = (["tender-intelligence", "submission-package", "strategic-partnership"] as TierSlug[]).filter(
+    (s) => s !== slug
+  );
+
+  return (
+    <>
+      <div className="rounded-xl border-2 border-gold/40 bg-gold/5 p-6 mb-6">
+        <div className="flex items-start justify-between gap-4 mb-1">
+          <p className="text-xs font-bold uppercase tracking-wider text-gold">Recommended for {data.company_name}</p>
+          <div className="text-right flex-shrink-0">
+            <span className="text-2xl font-bold text-gold">{tier.price}</span>
+            <span className="text-xs text-gray-500">{tier.billingPeriod}</span>
+          </div>
+        </div>
+        <h3 className="text-xl font-bold text-white mb-2">{tier.name}</h3>
+        <p className="text-sm text-gray-300 mb-2 leading-relaxed">{tier.tagline}</p>
+        <p className="text-xs text-gray-400 mb-5 leading-relaxed">{ctxLine}</p>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={() => { window.location.href = `/login?plan=${slug}`; }}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gold px-5 py-3 text-sm font-semibold text-white hover:bg-gold-dark transition-colors"
+          >
+            {tier.cta} →
+          </button>
+          <a
+            href={`/pay?plan=${slug}`}
+            className="inline-flex items-center justify-center rounded-lg border border-white/20 px-5 py-3 text-sm font-medium text-gray-300 hover:border-white/40 hover:text-white transition-colors"
+          >
+            Pay with USDT / Wire / Whish
+          </a>
+        </div>
+        <button
+          type="button"
+          onClick={() => setPreviewOpen((o) => !o)}
+          className="mt-3 text-xs text-gray-500 hover:text-gold transition-colors underline underline-offset-2"
+        >
+          {previewOpen ? "↑ Hide sample output" : "↓ Preview what you'd get"}
+        </button>
+        {previewOpen && (
+          <div className="mt-4 rounded-lg border border-white/10 bg-white/5 p-4">
+            <SampleOutputPreview
+              type={PREVIEW_MAP[slug]}
+              companyName={data.company_name}
+              sector={data.sector || data.sectors?.[0]}
+              variant="dark"
+            />
+          </div>
+        )}
+        {otherSlugs.length > 0 && (
+          <div className="mt-5 pt-4 border-t border-white/8">
+            <p className="text-[11px] text-gray-500 mb-2">Also available:</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {otherSlugs.map((s) => (
+                <a
+                  key={s}
+                  href={`/login?plan=${s}`}
+                  className="text-xs text-gray-400 hover:text-gold underline underline-offset-2 transition-colors"
+                >
+                  {TIER_INFO[s].name} — {TIER_INFO[s].price}{TIER_INFO[s].billingPeriod}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {isHighFit && (
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4 mb-6 flex flex-col sm:flex-row items-center gap-4">
+          <div className="text-2xl flex-shrink-0 select-none">📞</div>
+          <div className="flex-1 text-center sm:text-left">
+            <p className="text-sm font-semibold text-white">Your profile is a strong fit — let&apos;s talk</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Book a 15-min call to map out your fastest path to a first contract.
+            </p>
+          </div>
+          <a
+            href="https://cal.com/tenderpath/15min"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 rounded-lg border border-gold/40 px-4 py-2 text-xs font-semibold text-gold hover:bg-gold/10 transition-colors whitespace-nowrap"
+          >
+            Book a call →
+          </a>
+        </div>
+      )}
+    </>
+  );
+}
+
 /* ── Group header styles ── */
 
 const GROUP_HEADER: Record<GroupVariant, string> = {
@@ -709,8 +824,6 @@ export default function AssessmentResults({ data, onReset }: Props) {
   const [expandedGaps, setExpandedGaps] = useState<Set<number>>(new Set());
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<Record<number, FeedbackStatus>>(() => readStoredFeedback(data.id));
-  const [selectedTier, setSelectedTier] = useState<TierSlug>(data.recommended_tier);
-
   useEffect(() => {
     const handle = window.setTimeout(() => setFeedback(readStoredFeedback(data.id)), 0);
     return () => window.clearTimeout(handle);
@@ -760,10 +873,6 @@ export default function AssessmentResults({ data, onReset }: Props) {
   const criticalGapCount = data.gaps.filter((g) => g.severity === "high").length;
 
   const grantTotal = data.grant_readiness_score;
-
-  // Derive a sector display label for the "Next Step" copy
-  const sectorLabel = data.sector || (data.sectors?.[0] ?? "your industry");
-  const topGap = data.gaps.find((g) => g.severity === "high");
 
   return (
     <div className="mx-auto max-w-4xl px-6 pb-20" style={{ animation: "fadeIn 0.5s ease-out both" }}>
@@ -931,114 +1040,24 @@ export default function AssessmentResults({ data, onReset }: Props) {
       )}
 
       {/* ── Your Next Step ── */}
-      <div className="text-center mb-8">
+      <div className="text-center mb-6">
         <h2 className="font-serif text-2xl font-bold text-gold mb-2">Your Next Step</h2>
         <p className="text-sm text-gray-400">
-          {data.company_name} scored {data.readiness_score}% — a few targeted moves will close the gap.
+          {data.readiness_score >= 65
+            ? `${data.company_name} is well-positioned — the gap is execution, not eligibility.`
+            : `${data.company_name} scored ${data.readiness_score}% — a few targeted moves will unlock the pipeline.`}
         </p>
       </div>
 
-      <div className="rounded-xl border border-gold/30 bg-navy-light p-6 mb-8">
-        <p className="text-xs font-bold tracking-wider uppercase text-gold mb-4">Your Recommended Path to Your First Contract</p>
-        <div className="space-y-4">
-          {[
-            {
-              title: "Close the capability gaps",
-              body: topGap
-                ? `Start with: ${topGap.fix}`
-                : `Obtain relevant certifications, document past performance with measurable outcomes, and prepare your full vendor documentation package — these are what procurement panels score first.`,
-            },
-            {
-              title: `Monitor ${sectorLabel} opportunities`,
-              body: `Real-time alerts for tenders matching your exact capabilities and target countries — start with SME-friendly contracts that fit your capacity.`,
-            },
-            {
-              title: "Submit a winning proposal",
-              body: "Professional technical and financial proposal writing that follows the scoring criteria used by UN evaluation panels.",
-            },
-          ].map((step, i) => (
-            <div key={i} className="flex gap-3">
-              <span className="w-6 h-6 rounded-full bg-gold/20 text-gold text-xs font-bold flex items-center justify-center flex-shrink-0">{i + 1}</span>
-              <div>
-                <h4 className="text-sm font-semibold">{step.title}</h4>
-                <p className="text-xs text-gray-400 mt-0.5">{step.body}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Pricing cards */}
-      <div className="grid sm:grid-cols-3 gap-4 mb-8">
-        {(["tender-intelligence", "submission-package", "strategic-partnership"] as TierSlug[]).map((slug, i) => {
-          const tier = TIER_INFO[slug];
-          const isRec = slug === data.recommended_tier;
-          const isSelected = slug === selectedTier;
-          return (
-            <div
-              key={slug}
-              onClick={() => setSelectedTier(slug)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelectedTier(slug); }}
-              className={`rounded-xl border-2 p-5 bg-navy-light relative flex flex-col transition-all cursor-pointer ${
-                isSelected
-                  ? "border-gold ring-2 ring-gold/30"
-                  : "border-white/10 hover:border-white/30"
-              }`}
-              style={{ animation: "fadeInUp 0.5s ease-out both", animationDelay: `${i * 0.1}s` }}
-            >
-              {isRec && (
-                <span className="absolute -top-3 right-4 rounded-full bg-gold px-3 py-0.5 text-[10px] font-bold text-white uppercase">Best Fit</span>
-              )}
-              {isSelected && !isRec && (
-                <span className="absolute -top-3 right-4 rounded-full bg-white/20 px-3 py-0.5 text-[10px] font-bold text-white uppercase">Selected</span>
-              )}
-              <h3 className="text-base font-bold mb-1">{tier.name}</h3>
-              <div className="mt-2 mb-3">
-                <span className={`text-2xl font-bold ${isSelected ? "text-gold" : "text-white"}`}>{tier.price}</span>
-                <span className="text-xs text-gray-500">{tier.billingPeriod}</span>
-              </div>
-              <p className="text-xs text-gray-400 mb-4 leading-relaxed flex-1">{tier.tagline}</p>
-              <button
-                onClick={(e) => { e.stopPropagation(); window.location.href = `/login?plan=${slug}`; }}
-                className={`w-full rounded-lg py-2.5 text-xs font-semibold text-center transition-colors mb-2 ${isSelected ? "bg-gold text-white hover:bg-gold-dark" : "border border-white/20 text-white hover:bg-white/5"}`}
-              >
-                {tier.cta} →
-              </button>
-              <a
-                href={`/pay?plan=${slug}`}
-                onClick={(e) => e.stopPropagation()}
-                className="w-full rounded-lg py-1.5 text-[11px] font-medium text-center text-gray-500 hover:text-gray-300 border border-white/10 hover:border-white/20 transition-colors"
-              >
-                Pay with USDT / Wire / Whish
-              </a>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Bid/No-Bid CTA */}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-5 mb-6 flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold text-white">Already have a tender in mind?</p>
-          <p className="text-xs text-gray-400 mt-0.5">Get an instant bid/no-bid recommendation grounded in your profile and the tender requirements.</p>
-        </div>
-        <a
-          href="/dashboard/services/bid-no-bid"
-          className="shrink-0 rounded-lg bg-gold px-4 py-2 text-xs font-semibold text-white hover:bg-gold-dark transition-colors whitespace-nowrap"
-        >
-          Evaluate a tender →
-        </a>
-      </div>
+      <PrimaryActionCTA data={data} />
 
       {/* Dashboard CTA */}
       <div className="rounded-xl border border-gold/40 bg-gold/10 p-6 text-center">
         <div className="text-xs font-semibold uppercase tracking-widest text-gold mb-2">Your pipeline is ready</div>
         <h3 className="text-xl font-bold text-white mb-2">See your matched tenders and track your progress</h3>
         <p className="text-sm text-gray-400 mb-5">
-          We&apos;ve found {data.matched_tenders.length} tenders and {data.matched_grants.length} grants for you.
-          Start your 14-day free trial and track them all in your personal pipeline.
+          We&apos;ve found {data.matched_tenders.length} tenders and {data.matched_grants.length} grants for your profile.
+          Track them all in your personal pipeline and move the best ones toward submission.
         </p>
         <button
           onClick={() => {

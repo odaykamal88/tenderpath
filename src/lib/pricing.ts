@@ -98,6 +98,27 @@ export const TIERS: Tier[] = [
     ctaHref: "/assessment",
     featured: false,
   },
+  {
+    slug: "founding-member",
+    name: "Founding Member — Annual",
+    label: "Annual subscription",
+    price: "$390",
+    billingPeriod: "/yr",
+    billingNote: "locked rate forever — first 100 only",
+    tagline: "Lock in founding-member pricing before the list price rises to $59/mo.",
+    description: "Everything in Grants + Tenders Matching, billed annually at the founding rate. First 100 subscribers keep this price permanently.",
+    features: [
+      "Everything in Grants + Tenders Matching",
+      "Weekly digest of 5–10 matched opportunities",
+      "AI fit score for each opportunity",
+      "Arabic and English",
+      "Deadline alerts & reminders",
+      "Founding rate locked forever",
+    ],
+    cta: "Lock in founding rate",
+    ctaHref: "/assessment",
+    featured: false,
+  },
 ];
 
 export interface LegacyTierInfo {

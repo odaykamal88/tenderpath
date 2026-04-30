@@ -997,6 +997,12 @@ export default function DashboardOverview() {
               );
             })}
           </div>
+          <p className="mt-3 text-xs text-gray-400">
+            Tracking a tender we haven&apos;t picked up?{" "}
+            <Link href="/dashboard/pipeline" className="underline underline-offset-2 hover:text-gray-700 transition-colors">
+              Add it to your pipeline →
+            </Link>
+          </p>
         </div>
       )}
 

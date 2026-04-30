@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TIERS } from "@/lib/pricing";
 import ServiceIntakeForm from "../ServiceIntakeForm";
+import SampleOutputPreview, { type SamplePreviewType } from "@/components/SampleOutputPreview";
 
 type ServiceSlug = "bid-no-bid" | "digest" | "proposal" | "lta-roster";
 
@@ -145,6 +146,13 @@ const SERVICES: Record<ServiceSlug, ServiceConfig> = {
   },
 };
 
+const SERVICE_PREVIEW_MAP: Record<ServiceSlug, SamplePreviewType> = {
+  "bid-no-bid": "bid-no-bid",
+  "digest": "digest",
+  "proposal": "proposal",
+  "lta-roster": "roster",
+};
+
 function firstValue(value: string | string[] | undefined): string | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value ?? null;
@@ -225,10 +233,11 @@ export default async function ServiceDetailPage({
               </svg>
               Sample output
             </summary>
-            <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 px-4 py-3 space-y-1.5">
-              {service.sampleLines.map((line, i) => (
-                <p key={i} className={`text-xs leading-5 ${line.startsWith("[") ? "text-gray-400 italic" : "text-gray-700"}`}>{line}</p>
-              ))}
+            <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 px-4 py-4">
+              <SampleOutputPreview
+                type={SERVICE_PREVIEW_MAP[service.slug]}
+                variant="light"
+              />
             </div>
           </details>
         </section>

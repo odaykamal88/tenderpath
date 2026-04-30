@@ -22,7 +22,7 @@ export default function Hero() {
               whether a tender is worth pursuing, and move faster on the ones
               you can actually win.
             </p>
-            <div className="flex flex-wrap gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <a
                 href="/assessment"
                 className="inline-flex items-center gap-2 rounded-lg bg-gold px-6 py-3.5 text-sm font-semibold text-white shadow-md shadow-gold/20 hover:bg-gold-dark transition-colors"
@@ -44,11 +44,14 @@ export default function Hero() {
               </a>
               <a
                 href="#how-it-works"
-                className="inline-flex items-center rounded-lg border-2 border-navy/15 px-6 py-3.5 text-sm font-semibold text-navy hover:border-navy/30 transition-colors"
+                className="text-sm font-medium text-navy/60 hover:text-navy transition-colors"
               >
                 See how it works ↓
               </a>
             </div>
+            <p className="text-[11px] text-gray-400 mt-2">
+              Built by someone who spent years inside WFP reviewing supplier bids — and kept seeing qualified vendors lose on paperwork.
+            </p>
             <p className="text-xs text-gray-400 mt-1">
               Already assessed?{" "}
               <a href="/login" className="font-medium text-navy hover:underline underline-offset-2">
