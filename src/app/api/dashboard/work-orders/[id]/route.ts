@@ -32,3 +32,35 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   return NextResponse.json({ workOrder: rows[0] });
 }
+
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const guard = await requireAuth(request);
+  if (!guard.authorized) return guard.response!;
+
+  const { id } = await params;
+  const numericId = Number(id);
+  if (!Number.isInteger(numericId) || numericId <= 0) {
+    return NextResponse.json({ error: "Invalid work order id" }, { status: 400 });
+  }
+
+  const body = await request.json().catch(() => null) as { intake?: Record<string, string> } | null;
+  if (!body?.intake || typeof body.intake !== "object") {
+    return NextResponse.json({ error: "intake object is required" }, { status: 400 });
+  }
+
+  // Merge new intake fields into existing JSONB without overwriting unchanged keys
+  const rows = await sql`
+    UPDATE work_orders
+    SET
+      intake = COALESCE(intake, '{}'::jsonb) || ${JSON.stringify(body.intake)}::jsonb,
+      updated_at = NOW()
+    WHERE id = ${numericId} AND user_id = ${guard.user!.id}
+    RETURNING id, intake, updated_at
+  `;
+
+  if (!rows.length) {
+    return NextResponse.json({ error: "Work order not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ workOrder: rows[0] });
+}

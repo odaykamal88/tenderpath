@@ -226,7 +226,12 @@ export default function PipelinePage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Pipeline</h1>
-          <p className="text-sm text-gray-600">Drag tenders between stages.</p>
+          <p className="text-sm text-gray-600">
+            Drag tenders between stages.{" "}
+            <span className="text-gray-400">
+              Last refreshed: {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </p>
         </div>
         <button
           onClick={() => setAdding((v) => !v)}

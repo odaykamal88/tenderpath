@@ -214,4 +214,6 @@ export interface AssessmentInput {
   devThemes?: string[];
   /** Include individual-consultant / consultancy-style tenders. Default OFF for org/company flows. */
   includeConsultancies?: boolean;
+  /** User's primary intent — used to override score-based tier recommendation. */
+  intent?: string;
 }

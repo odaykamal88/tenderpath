@@ -17,7 +17,7 @@ const CONFIG = {
   omt:   process.env.NEXT_PUBLIC_OMT_LINK   || "",
   wire: {
     bankName:    process.env.NEXT_PUBLIC_WIRE_EG_BANK_NAME    || "Commercial International Bank (CIB)",
-    accountName: process.env.NEXT_PUBLIC_WIRE_EG_ACCOUNT_NAME || "Oday Kamal",
+    accountName: process.env.NEXT_PUBLIC_WIRE_EG_ACCOUNT_NAME || "TenderPath",
     iban:        process.env.NEXT_PUBLIC_WIRE_EG_IBAN         || "EG020010001800000100041263622",
     swift:       process.env.NEXT_PUBLIC_WIRE_EG_SWIFT        || "",
   },

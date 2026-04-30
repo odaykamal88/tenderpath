@@ -272,6 +272,24 @@ export default function DashboardOverview() {
   const [wonItems, setWonItems] = useState<PipelineTender[]>([]);
   const [lostItems, setLostItems] = useState<PipelineTender[]>([]);
   const [stageSavingId, setStageSavingId] = useState<number | null>(null);
+  const [activeOrderCount, setActiveOrderCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+    if (!token) return;
+    fetch("/api/dashboard/work-orders?limit=50", { headers: { authorization: `Bearer ${token}` } })
+      .then((r) => r.ok ? r.json() : null)
+      .then((body) => {
+        const active = (body?.workOrders ?? []).filter(
+          (o: { status: string }) => ["new", "in_progress", "waiting_on_client"].includes(o.status)
+        ).length;
+        setActiveOrderCount(active);
+      })
+      .catch((err) => {
+        console.warn("[tp:dashboard:work-orders] fetch failed", err);
+        setActiveOrderCount(0);
+      });
+  }, []);
 
   const loadDashboard = useCallback(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
@@ -545,6 +563,85 @@ export default function DashboardOverview() {
       {workflowError && (
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {workflowError}
+        </div>
+      )}
+
+      {/* Top match orientation */}
+      {primaryTender && (
+        <div className="mt-5 rounded-lg border border-blue-100 bg-blue-50 px-5 py-3 flex items-center justify-between gap-4">
+          <p className="text-sm text-blue-800">
+            <span className="font-semibold">Your top match:</span>{" "}
+            {primaryTender.tender_title}
+            {daysUntilDeadline(primaryTender.tender_deadline) != null && (
+              <> — deadline in <span className={daysUntilDeadline(primaryTender.tender_deadline)! <= 7 ? "font-semibold text-red-700" : "font-semibold"}>{daysUntilDeadline(primaryTender.tender_deadline)} day{daysUntilDeadline(primaryTender.tender_deadline) === 1 ? "" : "s"}</span></>
+            )}
+          </p>
+          <Link
+            href={serviceHref("bid-no-bid", primaryTender)}
+            className="shrink-0 rounded-md bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-800 whitespace-nowrap"
+          >
+            Start bid/no-bid →
+          </Link>
+        </div>
+      )}
+
+      {/* What to do this week */}
+      {(activeOrderCount != null || (readiness?.action_plan?.length ?? 0) > 0 || matchedTenders.some((t) => isDeadlineSoon(t.tender_deadline))) && (
+        <div className="mt-5 rounded-lg border border-gray-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-gray-900 mb-3">What to do this week</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {/* Active services */}
+            <div className="rounded-md bg-gray-50 px-3 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Active services</div>
+              {activeOrderCount == null ? (
+                <div className="text-xs text-gray-400">Loading…</div>
+              ) : activeOrderCount === 0 ? (
+                <div className="text-xs text-gray-500">No active work orders yet. <Link href="/dashboard/services" className="underline">Start a service →</Link></div>
+              ) : (
+                <div className="text-xs text-gray-900">
+                  <span className="font-semibold">{activeOrderCount}</span> order{activeOrderCount === 1 ? "" : "s"} in progress.{" "}
+                  <Link href="/dashboard/work-orders" className="underline text-gray-600 hover:text-gray-900">View status →</Link>
+                </div>
+              )}
+            </div>
+            {/* Upcoming deadlines */}
+            <div className="rounded-md bg-gray-50 px-3 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Deadlines this week</div>
+              {(() => {
+                const urgent = matchedTenders.filter((t) => isDeadlineSoon(t.tender_deadline));
+                if (urgent.length === 0) return <div className="text-xs text-gray-500">No deadlines in the next 7 days.</div>;
+                return (
+                  <ul className="space-y-1">
+                    {urgent.slice(0, 2).map((t) => (
+                      <li key={t.id} className="text-xs text-gray-900 truncate">
+                        <span className="font-semibold text-red-600">{daysUntilDeadline(t.tender_deadline)}d</span>{" "}
+                        <Link href="/dashboard/pipeline" className="underline text-gray-700 hover:text-gray-900">{t.tender_title}</Link>
+                      </li>
+                    ))}
+                    {urgent.length > 2 && <li className="text-xs text-gray-400">+{urgent.length - 2} more</li>}
+                  </ul>
+                );
+              })()}
+            </div>
+            {/* Top uncovered gap */}
+            <div className="rounded-md bg-gray-50 px-3 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Top gap to close</div>
+              {(() => {
+                const gap = readiness?.action_plan?.find((a) => a.severity === "high" && !a.covered_by_vault);
+                if (!gap) {
+                  const anyGap = readiness?.action_plan?.[0];
+                  if (!anyGap) return <div className="text-xs text-gray-500">No open gaps detected.</div>;
+                  return <div className="text-xs text-gray-500">All critical gaps are covered. <Link href="/dashboard/vault" className="underline">View vault →</Link></div>;
+                }
+                return (
+                  <div className="text-xs text-gray-900">
+                    <div className="font-semibold truncate">{gap.gap}</div>
+                    <Link href={gap.primary_action_href} className="mt-1 inline-block underline text-gray-600 hover:text-gray-900">{gap.primary_action_label} →</Link>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
         </div>
       )}
 

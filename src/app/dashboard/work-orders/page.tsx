@@ -50,6 +50,25 @@ function formatDate(value: string | null): string {
   return date.toLocaleDateString("en-GB", { dateStyle: "medium" });
 }
 
+function expectedDelivery(slug: string | null, createdAt: string): string {
+  const base = new Date(createdAt);
+  if (Number.isNaN(base.getTime())) return "—";
+  if (slug === "bid-no-bid") return "Instant after payment";
+  if (slug === "proposal" || slug === "proposal-draft") {
+    const d = new Date(base.getTime() + 2 * 60 * 60 * 1000);
+    return `~${d.toLocaleDateString("en-GB", { dateStyle: "medium" })}`;
+  }
+  if (slug === "lta-roster" || slug === "roster-fast-track") {
+    const d = new Date(base.getTime() + 3 * 24 * 60 * 60 * 1000);
+    return `~${d.toLocaleDateString("en-GB", { dateStyle: "medium" })}`;
+  }
+  if (slug === "digest" || slug === "grants-tenders-matching") {
+    const d = new Date(base.getTime() + 24 * 60 * 60 * 1000);
+    return `~${d.toLocaleDateString("en-GB", { dateStyle: "medium" })}`;
+  }
+  return "Confirmed after intake";
+}
+
 function StatusPill({ status }: { status: string }) {
   const cls = status === "new"
     ? "bg-gray-100 text-gray-700"
@@ -171,6 +190,7 @@ export default function WorkOrdersPage() {
                       {order.pipeline_item_id && <span>Pipeline #{order.pipeline_item_id}</span>}
                       <span>{money(order.amount_cents, order.currency)}</span>
                       <span>Opened {formatDate(order.created_at)}</span>
+                      <span>Expected: {expectedDelivery(order.service_slug, order.created_at)}</span>
                     </div>
                     {order.fulfillment_notes && (
                       <p className="mt-2 line-clamp-2 text-xs leading-5 text-gray-600">

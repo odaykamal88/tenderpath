@@ -1018,6 +1018,20 @@ export default function AssessmentResults({ data, onReset }: Props) {
         })}
       </div>
 
+      {/* Bid/No-Bid CTA */}
+      <div className="rounded-xl border border-white/10 bg-white/5 p-5 mb-6 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-white">Already have a tender in mind?</p>
+          <p className="text-xs text-gray-400 mt-0.5">Get an instant bid/no-bid recommendation grounded in your profile and the tender requirements.</p>
+        </div>
+        <a
+          href="/dashboard/services/bid-no-bid"
+          className="shrink-0 rounded-lg bg-gold px-4 py-2 text-xs font-semibold text-white hover:bg-gold-dark transition-colors whitespace-nowrap"
+        >
+          Evaluate a tender →
+        </a>
+      </div>
+
       {/* Dashboard CTA */}
       <div className="rounded-xl border border-gold/40 bg-gold/10 p-6 text-center">
         <div className="text-xs font-semibold uppercase tracking-widest text-gold mb-2">Your pipeline is ready</div>

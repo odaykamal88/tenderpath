@@ -463,8 +463,13 @@ Return ONLY valid JSON, no explanation.`,
  */
 export function determineRecommendedTier(
   gaps: Gap[],
-  overallScore: number
+  overallScore: number,
+  intent?: string
 ): TierSlug {
+  if (intent === "track-tenders" || intent === "evaluate-tender") return "tender-intelligence";
+  if (intent === "prepare-proposal") return "submission-package";
+  if (intent === "register-roster") return "strategic-partnership";
+
   const highGaps = gaps.filter((g) => g.severity === "high").length;
   if (overallScore >= 60) return "tender-intelligence";
   if (overallScore >= 40) return "submission-package";

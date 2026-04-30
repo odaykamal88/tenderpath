@@ -77,7 +77,8 @@ export async function POST(request: Request) {
     // Compute scores & tier
     const recommendedTier = determineRecommendedTier(
       analysis.gaps,
-      analysis.overall_score
+      analysis.overall_score,
+      body.intent
     );
     const grantScore = computeGrantReadinessScore(
       body.orgType ?? null,

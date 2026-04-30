@@ -11,13 +11,15 @@ interface ServiceIntakeFormProps {
   pipelineItemId?: string | null;
   tenderTitle?: string | null;
   agency?: string | null;
+  docId?: string | null;
   label: string;
 }
 
-const SERVICE_FIELDS: Record<ServiceSlug, Array<{ key: string; label: string; placeholder: string; required?: boolean }>> = {
+const SERVICE_FIELDS: Record<ServiceSlug, Array<{ key: string; label: string; placeholder: string; required?: boolean; rows?: number }>> = {
   "bid-no-bid": [
     { key: "decision_deadline", label: "When do you need the decision?", placeholder: "e.g. Tomorrow, before the Friday bid meeting" },
     { key: "main_concern", label: "What is your biggest concern?", placeholder: "e.g. Eligibility, references, pricing, deadline, required documents" },
+    { key: "tender_context", label: "Paste eligibility or evaluation criteria", placeholder: "Copy the key requirements from the TOR, RFP, or tender notice — the more specific, the sharper the analysis", rows: 6 },
   ],
   digest: [
     { key: "focus", label: "What should the digest prioritize?", placeholder: "Countries, agencies, sectors, contract types, or exclusions" },
@@ -64,6 +66,7 @@ export default function ServiceIntakeForm({
   pipelineItemId,
   tenderTitle,
   agency,
+  docId,
   label,
 }: ServiceIntakeFormProps) {
   const router = useRouter();
@@ -71,6 +74,32 @@ export default function ServiceIntakeForm({
   const [fields, setFields] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<{ name: string; url: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+      const headers: HeadersInit = token ? { authorization: `Bearer ${token}` } : {};
+      const res = await fetch("/api/dashboard/vault/upload", { method: "POST", headers, body: formData });
+      const data = (await res.json().catch(() => ({}))) as { url?: string; name?: string; error?: string };
+      if (!res.ok || !data.url) {
+        setError(data.error ?? "File upload failed. Try again or skip.");
+        return;
+      }
+      setUploadedFile({ url: data.url, name: data.name ?? file.name });
+    } catch {
+      setError("File upload failed. Try again or skip.");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -78,6 +107,12 @@ export default function ServiceIntakeForm({
     setError(null);
 
     try {
+      const intakeWithFile = {
+        ...fields,
+        ...(uploadedFile ? { vault_url: uploadedFile.url, vault_filename: uploadedFile.name } : {}),
+        ...(docId ? { vault_doc_id: docId } : {}),
+      };
+
       const res = await fetch("/api/service-orders", {
         method: "POST",
         headers: authHeaders(),
@@ -87,7 +122,7 @@ export default function ServiceIntakeForm({
           tender_title: tenderTitle,
           agency,
           tender_url: tenderUrl,
-          intake: fields,
+          intake: intakeWithFile,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -175,6 +210,39 @@ export default function ServiceIntakeForm({
         />
       </div>
 
+      {(service === "proposal" || service === "lta-roster") && (
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Upload TOR / RFP / call document
+          </label>
+          <div className="mt-1">
+            {uploadedFile ? (
+              <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
+                <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z"/>
+                </svg>
+                <span className="flex-1 truncate">{uploadedFile.name} uploaded</span>
+                <button type="button" onClick={() => setUploadedFile(null)} className="shrink-0 text-green-700 underline hover:text-green-900">Remove</button>
+              </div>
+            ) : (
+              <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-gray-300 px-3 py-3 text-xs text-gray-500 hover:border-gray-400 hover:text-gray-700">
+                <svg className="h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                {uploading ? "Uploading…" : "Choose file — PDF, Word, or Excel up to 10 MB"}
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx"
+                  className="sr-only"
+                  disabled={uploading}
+                  onChange={handleFileChange}
+                />
+              </label>
+            )}
+          </div>
+        </div>
+      )}
+
       {SERVICE_FIELDS[service].map((field) => (
         <div key={field.key}>
           <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -185,7 +253,7 @@ export default function ServiceIntakeForm({
             value={fields[field.key] ?? ""}
             onChange={(e) => setFields((prev) => ({ ...prev, [field.key]: e.target.value }))}
             placeholder={field.placeholder}
-            rows={3}
+            rows={field.rows ?? 3}
             className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-900 focus:outline-none"
           />
         </div>

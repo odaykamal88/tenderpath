@@ -944,7 +944,7 @@ export async function matchTenders(
     // Flat match_reasons (legacy compat)
     const matchReasons: string[] = [];
     const matchedSlugs = [...effectiveUserSlugs].filter((s) => tSlugs.has(s));
-    if (matchedSlugs.length) matchReasons.push(`Sector: ${matchedSlugs.map((s) => s.replace(/_/g, " ")).join(", ")}`);
+    if (matchedSlugs.length) matchReasons.push(`Sector: ${matchedSlugs.map((s) => SECTOR_LABELS[s] || s.replace(/_/g, " ")).join(", ")}`);
     if (tokenHits > 0) {
       const matchedTokens = [...userTokens].filter((tok) => tenderTokens.has(tok)).slice(0, 3);
       if (matchedTokens.length) matchReasons.push(`Keywords: ${matchedTokens.join(", ")}`);
@@ -954,9 +954,10 @@ export async function matchTenders(
     else if (isGeoOpen && (acceptsGlobal || autoGeoOpen)) {
       matchReasons.push(tCountry === "remote" ? "Remote (location-agnostic)" : "Global (no country required)");
     }
+    if (procurement.estimatedValue) matchReasons.push(`Value: ${procurement.estimatedValue}`);
 
     // Structured match reason (Sprint 5)
-    const srSectorNames = matchedSlugs.map((s) => s.replace(/_/g, " "));
+    const srSectorNames = matchedSlugs.map((s) => SECTOR_LABELS[s] || s.replace(/_/g, " "));
     const srCaps = [...capabilityTokens].filter((tok) => tenderTokens.has(tok)).slice(0, 5);
     const srKws = [...serviceTokens].filter((tok) => tenderTokens.has(tok) && !capabilityTokens.has(tok)).slice(0, 5);
 
@@ -987,6 +988,7 @@ export async function matchTenders(
     if (srSectorNames.length) srSummary.push(`Matched on ${srSectorNames.join(", ")} sector${srSectorNames.length > 1 ? "s" : ""}.`);
     if (srCaps.length) srSummary.push(`Capabilities: ${srCaps.join(", ")}.`);
     else if (srKws.length) srSummary.push(`Keywords: ${srKws.join(", ")}.`);
+    if (procurement.estimatedValue) srSummary.push(`Estimated value: ${procurement.estimatedValue}.`);
     if (feedbackScore > 0) srSummary.push("Boosted by your prior tender feedback.");
     if (geoMode === "direct") srSummary.push(`Posted in ${t.country as string}.`);
     else if (geoMode === "regional") srSummary.push("Regional opportunity near your target countries.");
@@ -1456,6 +1458,13 @@ export async function matchGrants(
     // grants to appear for every company regardless of relevance.
     if (score === 0) continue;
 
+    const NGO_TERMS = new Set(["ngo", "non-profit", "nonprofit", "civil society", "charity", "foundation", "ingo", "non profit"]);
+    const eligibleOrgsForMismatch = g.eligible_org_types as string[] | null;
+    const isNgoOnly = !!eligibleOrgsForMismatch?.length &&
+      eligibleOrgsForMismatch.every((o) => NGO_TERMS.has(o.toLowerCase()));
+    const NON_NGO_TYPES = new Set(["company", "sole-trader", "government"]);
+    const orgTypeMismatch = isNgoOnly && !!orgType && NON_NGO_TYPES.has(orgType.toLowerCase());
+
     scored.push({
       id: g.id as number,
       title: g.title as string,
@@ -1468,6 +1477,7 @@ export async function matchGrants(
       value_range: (g.value_range as string | null) ?? null,
       country: (g.country as string | null) ?? null,
       region: (g.region as string | null) ?? null,
+      org_type_mismatch: orgTypeMismatch || undefined,
     });
   }
 

@@ -28,6 +28,8 @@ function NavIcon({ path }: { path: string }) {
 }
 
 const NAV_ICONS: Record<string, string> = {
+  "/dashboard/pipeline":
+    "M3 7.5h18M3 12h18M3 16.5h18M3 4.5A1.5 1.5 0 014.5 3h15A1.5 1.5 0 0121 4.5v15a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 19.5v-15z",
   "/dashboard":
     "M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25",
   "/dashboard/bid-analysis":
@@ -96,6 +98,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const navItems = [
     { href: "/dashboard", label: "Overview" },
+    { href: "/dashboard/pipeline", label: "Pipeline" },
     { href: "/dashboard/bid-analysis", label: "Bid Analysis", requiresPaid: true },
     { href: "/dashboard/applications", label: "Applications", requiresPaid: true },
     { href: "/dashboard/services", label: "Services" },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -201,6 +201,131 @@ function RosterPackageView({ output }: { output: ProposalOutput }) {
   );
 }
 
+function SupplementaryInfoForm({ workOrderId }: { workOrderId: string }) {
+  const [notes, setNotes] = useState("");
+  const [uploadedFile, setUploadedFile] = useState<{ name: string; url: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+      const headers: HeadersInit = token ? { authorization: `Bearer ${token}` } : {};
+      const res = await fetch("/api/dashboard/vault/upload", { method: "POST", headers, body: formData });
+      const data = (await res.json().catch(() => ({}))) as { url?: string; name?: string; error?: string };
+      if (!res.ok || !data.url) {
+        setError(data.error ?? "File upload failed.");
+        return;
+      }
+      setUploadedFile({ url: data.url, name: data.name ?? file.name });
+    } catch {
+      setError("File upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleSave() {
+    if (!notes && !uploadedFile) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const intake: Record<string, string> = {};
+      if (notes) intake.supplementary_notes = notes;
+      if (uploadedFile) {
+        intake.supplementary_vault_url = uploadedFile.url;
+        intake.supplementary_filename = uploadedFile.name;
+      }
+      const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+      const headers: HeadersInit = {
+        "content-type": "application/json",
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      };
+      const res = await fetch(`/api/dashboard/work-orders/${workOrderId}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ intake }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        setError(data.error ?? "Could not save.");
+        return;
+      }
+      setSaved(true);
+      setNotes("");
+      setUploadedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch {
+      setError("Could not save. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 rounded-xl border border-blue-100 bg-blue-50 p-5">
+      <h3 className="text-sm font-semibold text-blue-900">Add more information</h3>
+      <p className="mt-1 text-xs leading-5 text-blue-700">
+        You can return here any time while the tender window is open to upload additional documents or notes — your support access stays active until the window closes.
+      </p>
+      <div className="mt-4 space-y-3">
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-blue-800">
+            Additional notes or context
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="New requirements, agency feedback, registration status update…"
+            rows={4}
+            className="mt-1 w-full rounded-md border border-blue-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-blue-800">
+            Upload additional document
+          </label>
+          {uploadedFile ? (
+            <div className="mt-1 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
+              <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z"/>
+              </svg>
+              <span className="flex-1 truncate">{uploadedFile.name}</span>
+              <button type="button" onClick={() => { setUploadedFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }} className="shrink-0 text-green-700 underline hover:text-green-900">Remove</button>
+            </div>
+          ) : (
+            <label className="mt-1 flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-blue-200 bg-white px-3 py-3 text-xs text-blue-600 hover:border-blue-400">
+              <svg className="h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {uploading ? "Uploading…" : "Choose file — PDF, Word, or Excel up to 10 MB"}
+              <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" className="sr-only" disabled={uploading} onChange={handleFileChange} />
+            </label>
+          )}
+        </div>
+        {error && <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
+        {saved && <p className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">Information saved — our team will incorporate it into your support.</p>}
+        <button
+          onClick={handleSave}
+          disabled={saving || uploading || (!notes && !uploadedFile)}
+          className="rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save additional information"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ProposalPackagePage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -345,7 +470,10 @@ export default function ProposalPackagePage() {
       {isProposal ? (
         <ProposalDraftView output={pkg.output} />
       ) : (
-        <RosterPackageView output={pkg.output} />
+        <>
+          <RosterPackageView output={pkg.output} />
+          <SupplementaryInfoForm workOrderId={workOrderId} />
+        </>
       )}
 
       <div className="mt-6 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500">

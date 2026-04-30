@@ -42,6 +42,7 @@ const INITIAL_DATA: WizardData = {
   companyName: "",
   email: "",
   orgType: "",
+  intent: "",
   operatingCountries: [],
   submissionLanguage: "",
   description: "",
@@ -74,6 +75,7 @@ function buildAssessmentInput(data: WizardData): AssessmentInput {
     orgType: data.orgType || undefined,
     devThemes: data.devThemes.length ? data.devThemes : undefined,
     includeConsultancies: false,
+    intent: data.intent || undefined,
   };
 }
 

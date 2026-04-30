@@ -24,6 +24,7 @@ export interface WizardData {
   companyName: string;
   email: string;
   orgType: string;
+  intent: string;
   operatingCountries: string[];
   submissionLanguage: string;
   description: string;
@@ -360,6 +361,27 @@ export function Step1({ data, preview, onChange, onNext }: {
                   : "border-white/10 text-gray-400 hover:border-white/25 hover:text-white"
               }`}>
               {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <FieldLabel>What are you trying to do first?</FieldLabel>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { value: "track-tenders", label: "Find & track tenders" },
+            { value: "evaluate-tender", label: "Evaluate a specific tender" },
+            { value: "prepare-proposal", label: "Prepare a proposal" },
+            { value: "register-roster", label: "Register on a roster / LTA" },
+          ].map((opt) => (
+            <button key={opt.value} type="button" onClick={() => onChange({ intent: opt.value })}
+              className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
+                data.intent === opt.value
+                  ? "border-gold bg-gold/20 text-white"
+                  : "border-white/10 text-gray-400 hover:border-white/25 hover:text-white"
+              }`}>
+              {opt.label}
             </button>
           ))}
         </div>

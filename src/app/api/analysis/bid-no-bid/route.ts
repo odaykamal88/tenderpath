@@ -160,6 +160,24 @@ export async function POST(request: Request) {
       ].filter(Boolean).join("\n")
     : "No company profile found. Assume a small consultancy with limited track record.";
 
+  // Fetch intake from work order if the session carries one
+  const workOrderId = stripeSession.metadata?.work_order_id;
+  let intakeSummary = "";
+  if (workOrderId) {
+    const workOrderRows = await sql`
+      SELECT intake FROM work_orders
+      WHERE id = ${Number(workOrderId)} AND user_id = ${user.id}
+      LIMIT 1
+    `;
+    const intake = workOrderRows[0]?.intake as Record<string, string> | null;
+    if (intake) {
+      intakeSummary = Object.entries(intake)
+        .filter(([, v]) => v)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join("\n");
+    }
+  }
+
   const client = getClient();
 
   // Stage 1 — Haiku: extract structured tender requirements
@@ -210,7 +228,7 @@ TENDER REQUIREMENTS (extracted):
 ${JSON.stringify(tenderRequirements, null, 2)}
 
 TENDER SUMMARY:
-${tenderText}
+${tenderText}${intakeSummary ? `\n\nUSER INTAKE NOTES:\n${intakeSummary}` : ""}
 
 Analyse whether this company should bid on this tender and return a JSON object with:
 - "win_probability": number 0-100 — realistic estimate given the company profile vs. requirements

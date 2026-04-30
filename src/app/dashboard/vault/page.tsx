@@ -252,6 +252,7 @@ export default function VaultPage() {
                 <th className="px-4 py-2 font-medium">Type</th>
                 <th className="px-4 py-2 font-medium">Expires</th>
                 <th className="px-4 py-2 font-medium">File</th>
+                <th className="px-4 py-2 font-medium">Action</th>
                 <th className="px-4 py-2" />
               </tr>
             </thead>
@@ -280,6 +281,14 @@ export default function VaultPage() {
                         className="text-gray-900 underline hover:no-underline"
                       >
                         Open
+                      </a>
+                    </td>
+                    <td className="px-4 py-2">
+                      <a
+                        href={`/dashboard/services/proposal?doc_id=${d.id}`}
+                        className="text-xs text-blue-600 hover:underline whitespace-nowrap"
+                      >
+                        Use in proposal
                       </a>
                     </td>
                     <td className="px-4 py-2 text-right">
