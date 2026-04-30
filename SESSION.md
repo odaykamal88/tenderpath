@@ -1314,6 +1314,37 @@ Preserve all payment, webhook, work_order, and dashboard contracts. Do not push 
 
 ---
 
+### Wave 1–3 Audit Fixes + Commit/Push/Deploy — 2026-04-30
+
+- **Agent**: Claude Code
+- **Date**: 2026-04-30
+- **Commit**: `a541c81` — "Fix purchase_logs.tier nullable and document Stripe E2E completion"
+- **Task Completed**: Full Wave 0–3 QA audit across all dashboard features introduced in prior sessions. Found and fixed 4 confirmed FAILs. Committed 19 modified files, pushed to `origin/main`, and triggered Vercel auto-deploy.
+- **Files Changed** (19 files in commit):
+  - `src/app/api/assessment/public/route.ts` — Wave 1 regression fix: pass `body.intent` as 3rd arg to `determineRecommendedTier` so intent-aware tier selection works end-to-end.
+  - `src/app/api/assessment/route.ts` — same Wave 1 intent fix for authenticated assessment route.
+  - `src/app/dashboard/services/[service]/page.tsx` — Wave 2 fix: extract `doc_id` from `searchParams` and pass as `docId` to `ServiceIntakeForm`.
+  - `src/app/dashboard/services/ServiceIntakeForm.tsx` — Wave 2 fix: add `docId?: string | null` prop, thread it to intake payload as `vault_doc_id`.
+  - `src/app/dashboard/layout.tsx` — Wave 3 fix: add Pipeline entry `{ href: "/dashboard/pipeline", label: "Pipeline" }` to `navItems` array (icon was already registered in `NAV_ICONS`).
+  - `src/app/dashboard/page.tsx` — Wave 3 fix: replace silent `.catch(() => {})` on work-orders fetch with `console.warn + setActiveOrderCount(0)` fallback so "What to do this week" resolves correctly on error.
+  - Plus 13 files from prior sessions (assessment wizard UX, service intake forms, work-order fulfillment loop, proposals page, bid-no-bid route, vault, pay page, analyze, match, types) that were accumulated in the working tree without a commit.
+- **Audit Findings — All Resolved**:
+  - A-1d (Wave 1): `determineRecommendedTier` called without `intent` arg → fixed.
+  - C-1 + C-2 (Wave 2): `doc_id` silently discarded at all three layers → fixed (service page + form prop + intake payload).
+  - Nav (Wave 3): Pipeline missing from sidebar navItems → fixed.
+  - Silent fetch (Wave 3): `.catch(() => {})` on work-orders fetch → fixed.
+- **Wave 0–1 QA (confirmed PASS)**:
+  - Intent threading end-to-end: `WizardSteps` → `buildAssessmentInput` → `public/route.ts` → `determineRecommendedTier`.
+  - `SECTOR_LABELS` used correctly in `match.ts`.
+  - `BidNoBidCTA` renders at correct threshold (`strongMatchCount > 0`, score ≥ 50).
+  - `ServiceIntakeForm` file upload working end-to-end.
+- **Deployment**: Vercel deployment `dpl_7Faxez5aVE3fVg3tNvFDJ3GtYxrs` triggered (`BUILDING` at time of session update).
+- **Blockers**: None from this session. Phase 4C Stripe E2E remains blocked on Vercel production Stripe config.
+- **Contracts or Interfaces Changed**: Additive only. `ServiceIntakeFormProps` gains `docId?: string | null`; intake payload gains optional `vault_doc_id` field. No API, DB schema, or crawler contracts changed.
+- **Docs Updated**: `SESSION.md` only.
+
+---
+
 ## Next Recommended Task
 
 1. **Vercel production Stripe config** (required before live payments):
