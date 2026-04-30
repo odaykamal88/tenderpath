@@ -1345,15 +1345,32 @@ Preserve all payment, webhook, work_order, and dashboard contracts. Do not push 
 
 ---
 
+### Vercel Live Stripe Config + Redeploy — 2026-04-30
+
+- **Agent**: Claude Code
+- **Date**: 2026-04-30
+- **Commit**: No code changes — env-var-only update + `vercel --prod` redeploy
+- **Deployment**: `dpl_AhAuHWAZiXT5Q1xE4ESCGv99cuEY` — target: production, status: Ready
+- **Task Completed**: Updated all three Vercel production Stripe env vars from test-mode to live-mode values using `npx vercel env add ... --force`:
+  - `STRIPE_SECRET_KEY` → `sk_live_51R40A601HOM3YIKo...` (was `sk_test_...`)
+  - `STRIPE_WEBHOOK_SECRET` → `whsec_PD03Kj1GNVeMObX9bSpZIENwXExVy9Vb` (was `whsec_ab17d...` CLI listener secret)
+  - `STRIPE_BIDNOBID_PRICE_ID` → `price_1TQjQb01HOM3YIKoVF8dO6ce` (was `price_1TRtiN1...` test price)
+- **Blockers**: Live Stripe webhook endpoint registration still required (manual step in Stripe dashboard). Without it, `checkout.session.completed` events won't reach the webhook handler and `work_orders.payment_status` won't update to `paid`.
+- **Contracts or Interfaces Changed**: None.
+- **Docs Updated**: `SESSION.md` only.
+
+---
+
 ## Next Recommended Task
 
-1. **Vercel production Stripe config** (required before live payments):
-   - Set `STRIPE_SECRET_KEY=sk_live_51R40A601HOM3YIKo...` in Vercel dashboard (Settings → Environment Variables → Production).
-   - Set `STRIPE_WEBHOOK_SECRET=whsec_PD03Kj1GNVeMObX9bSpZIENwXExVy9Vb` (the registered endpoint secret, not the CLI listener secret).
-   - Set `STRIPE_BIDNOBID_PRICE_ID=price_1TQjQb01HOM3YIKoVF8dO6ce` (live-account price ID).
-2. **Run production migration**: `node scripts/migrate.mjs` against the production DB once more after deploying, or verify Neon DB already has the `purchase_logs.tier nullable` change (it was applied to the live Neon DB in this session).
-3. **Register live webhook endpoint**: In Stripe live dashboard → Developers → Webhooks → Add endpoint: `https://tenderpath.me/api/webhooks/stripe`, events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`. The signing secret from this registration should match `STRIPE_WEBHOOK_SECRET` in Vercel.
-4. **Turkey-translation actionability**: Minor data-drift issue — not a launch blocker. Can be addressed in a follow-up matching pass.
+1. **Register live webhook endpoint** (**Required before live payments work end-to-end**):
+   - In Stripe live dashboard → Developers → Webhooks → Add endpoint
+   - URL: `https://tenderpath.me/api/webhooks/stripe`
+   - Events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
+   - The signing secret Stripe shows after adding the endpoint MUST match `STRIPE_WEBHOOK_SECRET` in Vercel (`whsec_PD03Kj1GNVeMObX9bSpZIENwXExVy9Vb`)
+   - If the signing secret doesn't match, update `STRIPE_WEBHOOK_SECRET` in Vercel to the new value and redeploy
+2. **Verify production DB migration**: `purchase_logs.tier nullable` was applied to the live Neon DB in a prior session — no action needed unless issues appear.
+3. **Turkey-translation actionability**: Minor data-drift issue — not a launch blocker. Can be addressed in a follow-up matching pass.
 
 ---
 
