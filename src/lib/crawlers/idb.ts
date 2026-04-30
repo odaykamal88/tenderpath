@@ -32,6 +32,12 @@ interface IDBRecord {
   prcrmnt_mthd_engl_nm?: string;
   process_nm?: string;
   process_desc?: string;
+  // Value fields — present in some dataset versions; captured if the API returns them
+  amount?: number | string | null;
+  estimatedamount?: number | string | null;
+  contractamount?: number | string | null;
+  totalamount?: number | string | null;
+  currency?: string | null;
 }
 
 interface IDBResponse {
@@ -58,6 +64,15 @@ function parseDate(value: string | null | undefined): string | null {
   if (!value) return null;
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
   return match ? `${match[1]}-${match[2]}-${match[3]}` : null;
+}
+
+function formatIDBValue(record: IDBRecord): string | null {
+  const raw = record.estimatedamount ?? record.contractamount ?? record.amount ?? record.totalamount;
+  if (raw == null || raw === "" || raw === 0) return null;
+  const num = typeof raw === "number" ? raw : Number(String(raw).replace(/[^0-9.]/g, ""));
+  if (!num || isNaN(num)) return null;
+  const currency = record.currency ?? "USD";
+  return `${currency} ${num.toLocaleString()}`;
 }
 
 function mapOpportunityType(record: IDBRecord): string {
@@ -117,7 +132,7 @@ function mapRecord(record: IDBRecord): RawTender | null {
     region: "Latin America and the Caribbean",
     sector: sectors[0] ?? null,
     deadline: parseDate(record.deadline),
-    estimated_value: null,
+    estimated_value: formatIDBValue(record),
     source_url: cleanText(record.documenturl) ?? cleanText(record.proyecturl),
     opportunity_type: mapOpportunityType(record),
     eligibility_summary: "Follow the notice instructions and executing-agency procurement documents.",

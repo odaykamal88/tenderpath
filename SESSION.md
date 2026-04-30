@@ -1118,6 +1118,65 @@ Preserve existing payment, webhook, work_order, and dashboard contracts. Do not 
 
 ---
 
+### Pre-Launch Reliability Hardening — 2026-04-29
+
+- **Agent**: Claude Code
+- **Date**: 2026-04-29
+- **Task Completed**: Pre-launch reliability hardening pass covering Vercel function timeouts, React error boundaries, admin alert wiring, and post-payment UX routing.
+- **Files Changed**:
+  - `src/app/api/assessment/public/route.ts` — added `export const maxDuration = 300;` immediately after `export const runtime = "nodejs"`. Without this, Vercel kills assessment requests at 10 s; assessment + AI analysis takes 30-60 s.
+  - `src/app/api/proposals/generate/route.ts` — added `export const runtime = "nodejs"; export const maxDuration = 300;` at the top. Two-stage Anthropic call takes 30-60 s and would silently time out on Vercel without these declarations.
+  - `src/app/api/analysis/bid-no-bid/route.ts` — same additions as proposals/generate for the same reason.
+  - `src/app/error.tsx` — new global React error boundary. Shows "Something went wrong" with Try again (calls `reset()`) and Go to dashboard buttons. Logs `[tp:ui:error]` prefix to console.
+  - `src/app/dashboard/error.tsx` — new dashboard-scoped error boundary. Shows "Dashboard error" with Retry and Dashboard home anchors. Logs `[tp:dashboard:error]` prefix. Scoped so dashboard layout/nav stays intact on sub-page crashes.
+  - `src/app/pay/success/page.tsx` — added "View work orders" as the primary CTA (`/dashboard/work-orders`, dark button). Kept "Back to pipeline" and "Upload documents" as secondary CTAs. Work order ID is not available on the success page (created asynchronously by Stripe webhook), so linking to the index is correct.
+  - `src/lib/email/notifyAdmin.ts` — new utility: Resend-based admin alert (no-op if `RESEND_API_KEY` or `ADMIN_ALERT_EMAIL` missing; wraps in try/catch so it never surfaces to caller).
+  - `src/lib/email/sendWeeklyDigest.ts` — fixed try/catch so Resend `{ error }` return and thrown network errors are both handled.
+  - `src/lib/email/sendAssessment.ts` — wired `notifyAdmin` on assessment email failure.
+  - `src/lib/digest/weekly.ts` — wired `notifyAdmin` on digest generation failure.
+  - `src/app/api/webhooks/stripe/route.ts` — wired `notifyAdmin` on webhook processing failure.
+  - `src/app/api/assessment/latest-matches/route.ts` — new cross-device bridge fallback endpoint.
+  - `src/app/api/proposals/checkout/route.ts` — new Stripe checkout session creator for proposal packages.
+  - `src/app/dashboard/proposals/[workOrderId]/loading.tsx` — new loading skeleton for proposal page.
+  - `src/app/dashboard/proposals/[workOrderId]/page.tsx` — new proposal package display page.
+- **Tests Run**:
+  - `npm run build` — clean, 0 TypeScript errors, all pages compiled successfully.
+  - `git push origin main` — succeeded; Vercel auto-deploy triggered from `main`.
+- **Result**: Three AI-heavy API routes now declare explicit Vercel timeouts (300 s) and Node.js runtime, eliminating silent 10 s kills. Global and dashboard-scoped error boundaries prevent white-screen crashes. Admin alerts fire on email/webhook failures. Post-payment page now routes users to their work orders as the primary action.
+- **Blockers**: None.
+- **Important Decisions**:
+  - `maxDuration = 300` is the Vercel Pro limit; it must be paired with `runtime = "nodejs"` to prevent edge-runtime assignment which would break Node.js APIs.
+  - `/pay/success` links to `/dashboard/work-orders` (index) rather than a specific work order because the work order is created asynchronously by the Stripe webhook and its ID is not available at success-page render time.
+  - `notifyAdmin` is fire-and-forget: it must never throw or block the caller, even if Resend is unconfigured.
+- **Contracts or Interfaces Changed**: Additive only. No existing API, DB schema, or TypeScript interface was modified.
+- **Docs Updated**: `SESSION.md` only.
+- **Commit**: `f957149` — "Harden launch reliability: timeouts, error boundaries, admin alerts, and dashboard completeness"
+- **Next Recommended Task**: Complete Phase 4C payment E2E — supply actual Stripe test-mode `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`, run a real Checkout + signed webhook, verify `purchase_logs` and `work_orders.payment_status = paid`, then rerun `npx tsx scripts/phase4-launch-qa.ts` and confirm `paymentReady: true`.
+- **Recommended Agent**: Codex
+- **Paste-Ready Next Prompt**:
+
+```text
+Read SESSION.md first, then AGENTS.md, CLAUDE.md, docs/agents/dashboard-architecture.md.
+
+Continue Phase 4C payment and fulfillment QA. Actual Stripe test-mode secrets are now required:
+- STRIPE_SECRET_KEY
+- STRIPE_WEBHOOK_SECRET
+- Any missing service price IDs for the chosen checkout path
+
+Use pending demo work order #4 or create a fresh one. Run a real Stripe Checkout test payment and signed webhook E2E:
+- confirm before submitting the final test payment,
+- verify purchase_logs,
+- verify work_orders.payment_status = paid,
+- verify paid user and ops emails,
+- verify the customer work-order page at /dashboard/work-orders/[id],
+- verify the admin fulfillment view,
+- rerun `npx tsx scripts/phase4-launch-qa.ts` and confirm paymentReady is true.
+
+Preserve all payment, webhook, work_order, and dashboard contracts. Do not push or deploy unless explicitly asked. Update SESSION.md when finished.
+```
+
+---
+
 ### Phase 4C Dashboard UX Pass — 2026-04-28
 
 - **Agent**: Claude Code

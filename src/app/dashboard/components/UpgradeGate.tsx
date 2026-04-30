@@ -55,6 +55,8 @@ export default function UpgradeGate({ children, title, description }: UpgradeGat
             </span>
             <Link
               href="/pay?plan=grants-tenders-matching"
+              target="_blank"
+              rel="noreferrer"
               className="shrink-0 text-sm font-semibold text-amber-700 underline whitespace-nowrap hover:text-amber-900"
             >
               Subscribe — $49/mo
@@ -82,6 +84,8 @@ export default function UpgradeGate({ children, title, description }: UpgradeGat
         <div className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
           <Link
             href="/pay?plan=grants-tenders-matching"
+            target="_blank"
+            rel="noreferrer"
             className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700"
           >
             Subscribe to unlock

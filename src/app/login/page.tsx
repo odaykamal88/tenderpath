@@ -10,7 +10,6 @@ function LoginForm() {
   const next = search.get("next") || "/dashboard";
 
   const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [step, setStep] = useState<"request" | "verify">("request");
   const [loginMode, setLoginMode] = useState<"magic" | "password">("magic");
@@ -66,7 +65,7 @@ function LoginForm() {
     const res = await fetch("/api/auth/signup", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email, name: name || null }),
+      body: JSON.stringify({ email }),
     });
     const body = await res.json();
     setBusy(false);
@@ -161,7 +160,7 @@ function LoginForm() {
           <svg className="h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
-          Use a secure email code, or sign into a demo workspace with a password.
+          We'll email you a secure sign-in link, or sign into a demo workspace with a password.
         </p>
 
         <div className="mb-4 grid grid-cols-2 rounded-lg border border-white/10 bg-navy p-1">
@@ -201,7 +200,7 @@ function LoginForm() {
           <svg className="w-4 h-4 text-gold flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
           <p className="text-xs text-gray-400 leading-relaxed">
             {loginMode === "magic"
-              ? "No password needed. We'll email you a secure verification code."
+              ? "No password needed. We'll email you a secure sign-in link."
               : "Password sign-in is available for prepared demo and internal accounts."}
           </p>
         </div>
@@ -241,13 +240,6 @@ function LoginForm() {
               onChange={(e) => setEmail(e.target.value)}
               required
             />
-            <input
-              type="text"
-              className="rounded-lg bg-navy border border-white/10 px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-gold focus:outline-none"
-              placeholder="Your name (new accounts only)"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
             <button
               disabled={busy}
               className="rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-white hover:bg-gold-dark transition-colors disabled:opacity-50"
@@ -256,28 +248,21 @@ function LoginForm() {
             </button>
           </form>
         ) : (
-          <form onSubmit={verify} className="flex flex-col gap-3">
-            <p className="text-sm text-gray-400">
-              Enter the verification code we emailed to <span className="text-white">{email}</span>. Check your inbox (and spam folder).
-            </p>
+          <div className="flex flex-col gap-4">
+            <div className="rounded-lg bg-navy border border-white/10 px-4 py-4 text-center">
+              <svg className="mx-auto mb-3 h-8 w-8 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              <p className="text-sm text-white font-medium mb-1">Check your inbox</p>
+              <p className="text-xs text-gray-400 leading-relaxed">
+                We've sent a sign-in link to <span className="text-white">{email}</span>. Click the link in your email to continue. Also check your spam folder.
+              </p>
+            </div>
             {process.env.NODE_ENV === "development" && devToken && (
               <p className="text-xs text-gray-500 break-all rounded bg-navy border border-white/10 px-3 py-2">
                 Dev token: <code className="text-gold">{devToken}</code>
               </p>
             )}
-            <input
-              className="rounded-lg bg-navy border border-white/10 px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-gold focus:outline-none"
-              placeholder="Paste verification code"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              required
-            />
-            <button
-              disabled={busy}
-              className="rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-white hover:bg-gold-dark transition-colors disabled:opacity-50"
-            >
-              {busy ? "Verifying…" : "Sign in"}
-            </button>
             <button
               type="button"
               onClick={() => setStep("request")}
@@ -285,7 +270,7 @@ function LoginForm() {
             >
               Use a different email
             </button>
-          </form>
+          </div>
         )}
 
         {error && <div className="mt-3 text-xs text-red">{error}</div>}

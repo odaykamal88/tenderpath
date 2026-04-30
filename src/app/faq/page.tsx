@@ -22,7 +22,7 @@ const faqs = [
   },
   {
     q: "How is the magic link sign-in different from a password?",
-    a: "Instead of a password, we email you a secure verification code each time you sign in. Just enter your email, check your inbox for the code, and paste it in. No passwords to remember or reset — and it's more secure because the code expires after one use.",
+    a: "Instead of a password, we email you a secure sign-in link each time you want to access your account. Just enter your email, check your inbox for the link, and click it to sign in. No passwords to remember or reset — and it's more secure because the link expires after one use.",
   },
   {
     q: "What documents will I need for UN tenders?",

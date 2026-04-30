@@ -34,6 +34,12 @@ export default function CTA() {
         <p className="mt-6 text-xs text-gray-400">
           Free · No credit card required · Results in minutes
         </p>
+        <p className="mt-2 text-xs text-gray-500">
+          Already a member?{" "}
+          <a href="/login" className="text-gold hover:underline underline-offset-2">
+            Sign in to your dashboard →
+          </a>
+        </p>
       </div>
     </section>
   );

@@ -45,6 +45,7 @@ interface PipelineItem {
   tender_agency: string | null;
   tender_deadline: string | null;
   tender_value: string | null;
+  display_value: string | null;
   fit_score: number;
   stage: Stage;
   position: number;
@@ -360,7 +361,7 @@ export default function PipelinePage() {
                                     {new Date(item.tender_deadline).toLocaleDateString()}
                                   </span>
                                 )}
-                                {item.tender_value && <span>{item.tender_value}</span>}
+                                {item.display_value && <span>{item.display_value}</span>}
                                 {item.fit_score > 0 && (
                                   <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700">
                                     {item.fit_score}% fit

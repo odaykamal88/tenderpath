@@ -51,9 +51,9 @@ export default function Navbar() {
               <>
                 <a
                   href="/login"
-                  className="text-sm text-gray-600 hover:text-navy transition-colors"
+                  className="rounded-md border border-navy/20 px-4 py-2 text-sm font-medium text-navy hover:border-navy/40 hover:bg-navy/5 transition-colors"
                 >
-                  Log in
+                  Sign in
                 </a>
                 <a
                   href="/assessment"
@@ -119,10 +119,10 @@ export default function Navbar() {
               <>
                 <a
                   href="/login"
-                  className="block text-sm text-gray-600 hover:text-navy"
+                  className="block rounded-md border border-navy/20 px-5 py-2 text-sm font-medium text-navy text-center hover:border-navy/40 hover:bg-navy/5"
                   onClick={() => setMobileOpen(false)}
                 >
-                  Log in
+                  Sign in
                 </a>
                 <a
                   href="/assessment"

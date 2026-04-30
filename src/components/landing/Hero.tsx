@@ -49,6 +49,12 @@ export default function Hero() {
                 See how it works ↓
               </a>
             </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Already assessed?{" "}
+              <a href="/login" className="font-medium text-navy hover:underline underline-offset-2">
+                Sign in to your dashboard →
+              </a>
+            </p>
             <div className="mt-8 space-y-1">
               <p className="text-xs text-gray-400 leading-relaxed">
                 Used by vendors exploring UN procurement across Africa, the

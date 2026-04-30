@@ -156,7 +156,9 @@ type PipelineTender = {
   tender_agency: string | null;
   tender_deadline: string | null;
   tender_value: string | null;
+  display_value: string | null;
   fit_score: number;
+  stage?: string;
   match_reasons?: MatchReason | null;
   source_name?: string | null;
   source_url?: string | null;
@@ -265,6 +267,11 @@ export default function DashboardOverview() {
   const [completedGapKeys, setCompletedGapKeys] = useState<Set<string>>(new Set());
   const [expandedTenderId, setExpandedTenderId] = useState<number | null>(null);
   const [expandedGapKey, setExpandedGapKey] = useState<string | null>(null);
+  const [evaluatingItems, setEvaluatingItems] = useState<PipelineTender[]>([]);
+  const [submittedItems, setSubmittedItems] = useState<PipelineTender[]>([]);
+  const [wonItems, setWonItems] = useState<PipelineTender[]>([]);
+  const [lostItems, setLostItems] = useState<PipelineTender[]>([]);
+  const [stageSavingId, setStageSavingId] = useState<number | null>(null);
 
   const loadDashboard = useCallback(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
@@ -309,6 +316,10 @@ export default function DashboardOverview() {
           (i) => i.stage === "matched" && !(i.tender_id != null && dismissed.has(i.tender_id))
         ).sort((a, b) => priorityRank(a) - priorityRank(b) || b.fit_score - a.fit_score).slice(0, 6);
         setMatchedTenders(matched);
+        setEvaluatingItems(items.filter((i) => i.stage === "evaluating" || i.stage === "preparing"));
+        setSubmittedItems(items.filter((i) => i.stage === "submitted"));
+        setWonItems(items.filter((i) => i.stage === "won"));
+        setLostItems(items.filter((i) => i.stage === "lost"));
       }
 
       if (readinessBody?.assessment) {
@@ -457,6 +468,35 @@ export default function DashboardOverview() {
     });
   }
 
+  async function moveItemStage(id: number, newStage: string) {
+    setStageSavingId(id);
+    // Optimistic: remove from current list
+    setEvaluatingItems((prev) => prev.filter((t) => t.id !== id));
+    setSubmittedItems((prev) => prev.filter((t) => t.id !== id));
+    setWonItems((prev) => prev.filter((t) => t.id !== id));
+    setLostItems((prev) => prev.filter((t) => t.id !== id));
+    // Find the item
+    const item = [...evaluatingItems, ...submittedItems, ...wonItems, ...lostItems].find((t) => t.id === id);
+    if (item) {
+      const updated = { ...item, stage: newStage };
+      if (newStage === "evaluating" || newStage === "preparing") setEvaluatingItems((prev) => [...prev, updated]);
+      else if (newStage === "submitted") setSubmittedItems((prev) => [...prev, updated]);
+      else if (newStage === "won") setWonItems((prev) => [...prev, updated]);
+      else if (newStage === "lost") setLostItems((prev) => [...prev, updated]);
+    }
+    try {
+      await fetch(`/api/dashboard/pipeline/${id}`, {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify({ stage: newStage }),
+      });
+    } catch (err) {
+      console.error("[tp:dashboard:stage_move_failed]", err);
+    } finally {
+      setStageSavingId(null);
+    }
+  }
+
   const primaryTender = matchedTenders[0] ?? null;
 
   return (
@@ -476,12 +516,6 @@ export default function DashboardOverview() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            href="/dashboard/pipeline"
-            className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700"
-          >
-            Open pipeline
-          </Link>
-          <Link
             href="/dashboard/services/digest"
             className="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:border-gray-400"
           >
@@ -499,14 +533,11 @@ export default function DashboardOverview() {
             </div>
             <p className="text-sm text-green-700 mt-0.5">
               {seeded
-                ? "Your matched tenders have been added to your pipeline."
-                : "Seeding your pipeline with matched tenders…"}
+                ? "Your matched tenders are ready below."
+                : "Seeding your dashboard with matched tenders…"}
               {bridge?.gaps && bridge.gaps.length > 0 && " Upload documents to close your top compliance gaps."}
             </p>
           </div>
-          <Link href="/dashboard/pipeline" className="shrink-0 text-xs font-semibold text-green-800 underline whitespace-nowrap">
-            View pipeline
-          </Link>
         </div>
       )}
 
@@ -522,7 +553,7 @@ export default function DashboardOverview() {
         {[
           { label: "Matched tenders", value: pipelineStats?.matched ?? "—", note: `${pipelineStats?.strong ?? 0} strong fit` },
           { label: "Deadline pressure", value: pipelineStats?.dueSoon ?? "—", note: "Due in 7 days" },
-          { label: "Active bids", value: pipelineStats?.active ?? "—", note: "Evaluating or later" },
+          { label: "Active bids", value: pipelineStats?.active ?? "—", note: "Evaluating or preparing" },
           { label: "Total pipeline", value: pipelineStats?.total ?? "—", note: `${pipelineStats?.won ?? 0} won` },
         ].map((stat) => (
           <div key={stat.label} className="rounded-lg border border-gray-200 bg-white px-4 py-3">
@@ -622,7 +653,7 @@ export default function DashboardOverview() {
               {!readiness && (
                 <p className="mt-3 text-sm text-gray-500">
                   Run an assessment to see your readiness score and compliance gaps.{" "}
-                  <Link href="/assessment" className="text-gray-700 underline">Start assessment</Link>
+                  <Link href="/assessment" target="_blank" rel="noreferrer" className="text-gray-700 underline">Start assessment</Link>
                 </p>
               )}
             </div>
@@ -662,7 +693,9 @@ export default function DashboardOverview() {
                 <span className={isDeadlineSoon(primaryTender.tender_deadline) ? "font-semibold text-red-600" : ""}>
                   {deadlineLabel(primaryTender.tender_deadline)}
                 </span>
-                {primaryTender.tender_value && <span>{primaryTender.tender_value}</span>}
+                {(primaryTender.display_value ?? primaryTender.match_reasons?.procurement?.estimatedValue) && (
+                  <span>{primaryTender.display_value ?? primaryTender.match_reasons?.procurement?.estimatedValue}</span>
+                )}
                 <span>{provenanceLabel(primaryTender)}</span>
               </div>
               <p className="mt-2 text-xs leading-5 text-gray-600 line-clamp-2">
@@ -702,6 +735,8 @@ export default function DashboardOverview() {
               <p className="text-sm text-gray-500">No matched tenders yet.</p>
               <Link
                 href="/assessment"
+                target="_blank"
+                rel="noreferrer"
                 className="mt-3 inline-block rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700"
               >
                 Run an assessment
@@ -714,14 +749,9 @@ export default function DashboardOverview() {
       {/* Compact expandable tender feed */}
       {matchedTenders.length > 0 && (
         <div className="mt-5">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">Matched tenders</h2>
-              <p className="text-xs text-gray-500">Click a row to see match detail and actions.</p>
-            </div>
-            <Link href="/dashboard/pipeline" className="text-xs text-gray-500 hover:text-gray-900 underline">
-              View all in pipeline
-            </Link>
+          <div className="mb-3">
+            <h2 className="text-base font-semibold text-gray-900">Matched tenders</h2>
+            <p className="text-xs text-gray-500">Click a row to see match detail and next actions.</p>
           </div>
           <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
             {matchedTenders.map((t) => {
@@ -815,7 +845,7 @@ export default function DashboardOverview() {
                           </div>
                           <div>
                             <div className="font-semibold text-gray-900">Value</div>
-                            <div>{t.tender_value ?? t.match_reasons?.procurement?.estimatedValue ?? "Not listed"}</div>
+                            <div>{t.display_value ?? t.match_reasons?.procurement?.estimatedValue ?? "Not listed"}</div>
                           </div>
                           <div>
                             <div className="font-semibold text-gray-900">Updated</div>
@@ -882,10 +912,165 @@ export default function DashboardOverview() {
           </p>
           <Link
             href="/assessment"
+            target="_blank"
+            rel="noreferrer"
             className="mt-4 inline-block rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700"
           >
             Start assessment
           </Link>
+        </div>
+      )}
+
+      {/* Active Work — Evaluating & Preparing */}
+      {evaluatingItems.length > 0 && (
+        <div className="mt-5">
+          <div className="mb-3">
+            <h2 className="text-base font-semibold text-gray-900">Active work</h2>
+            <p className="text-xs text-gray-500">Tenders you're currently evaluating or preparing a bid for.</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
+            {evaluatingItems.map((t) => (
+              <div key={t.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  t.stage === "preparing" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+                }`}>
+                  {t.stage === "preparing" ? "Preparing" : "Evaluating"}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-medium text-gray-900 truncate">{t.tender_title}</span>
+                  {t.tender_agency && <span className="text-xs text-gray-500">{t.tender_agency}</span>}
+                </span>
+                {t.tender_deadline && (
+                  <span className={`shrink-0 text-xs ${isDeadlineSoon(t.tender_deadline) ? "font-semibold text-red-600" : "text-gray-400"}`}>
+                    {deadlineLabel(t.tender_deadline)}
+                  </span>
+                )}
+                {t.fit_score > 0 && (
+                  <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-700">
+                    {t.fit_score}% fit
+                  </span>
+                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  {t.stage === "evaluating" && (
+                    <button
+                      onClick={() => moveItemStage(t.id, "preparing")}
+                      disabled={stageSavingId === t.id}
+                      className="text-xs font-semibold text-blue-700 border border-blue-200 rounded px-2 py-0.5 bg-blue-50 hover:bg-blue-100 disabled:opacity-50"
+                    >
+                      → Preparing
+                    </button>
+                  )}
+                  <button
+                    onClick={() => moveItemStage(t.id, "submitted")}
+                    disabled={stageSavingId === t.id}
+                    className="text-xs font-semibold text-gray-700 border border-gray-200 rounded px-2 py-0.5 bg-white hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Mark submitted
+                  </button>
+                  <Link
+                    href={serviceHref("bid-no-bid", t)}
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+                  >
+                    Bid analysis
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Submitted */}
+      {submittedItems.length > 0 && (
+        <div className="mt-5">
+          <div className="mb-3">
+            <h2 className="text-base font-semibold text-gray-900">Submitted</h2>
+            <p className="text-xs text-gray-500">Bids and grants you've applied for. Mark the outcome when you hear back.</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
+            {submittedItems.map((t) => (
+              <div key={t.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                  Submitted
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-medium text-gray-900 truncate">{t.tender_title}</span>
+                  {t.tender_agency && <span className="text-xs text-gray-500">{t.tender_agency}</span>}
+                </span>
+                {t.tender_deadline && (
+                  <span className="shrink-0 text-xs text-gray-400">{deadlineLabel(t.tender_deadline)}</span>
+                )}
+                {t.fit_score > 0 && (
+                  <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-700">
+                    {t.fit_score}% fit
+                  </span>
+                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => moveItemStage(t.id, "won")}
+                    disabled={stageSavingId === t.id}
+                    className="text-xs font-semibold text-green-700 border border-green-200 rounded px-2 py-0.5 bg-green-50 hover:bg-green-100 disabled:opacity-50"
+                  >
+                    ✓ Won
+                  </button>
+                  <button
+                    onClick={() => moveItemStage(t.id, "lost")}
+                    disabled={stageSavingId === t.id}
+                    className="text-xs font-semibold text-red-600 border border-red-200 rounded px-2 py-0.5 bg-red-50 hover:bg-red-100 disabled:opacity-50"
+                  >
+                    Lost
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Performance trail */}
+      {(wonItems.length > 0 || lostItems.length > 0) && (
+        <div className="mt-5">
+          <div className="mb-3">
+            <h2 className="text-base font-semibold text-gray-900">Performance trail</h2>
+            <p className="text-xs text-gray-500">
+              {wonItems.length} won · {lostItems.length} lost
+              {wonItems.length + lostItems.length > 0 &&
+                ` · ${Math.round((wonItems.length / (wonItems.length + lostItems.length)) * 100)}% win rate`}
+            </p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
+            {[
+              ...wonItems.map((i) => ({ ...i, _outcome: "won" as const })),
+              ...lostItems.map((i) => ({ ...i, _outcome: "lost" as const })),
+            ].map((t) => (
+              <div key={t.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  t._outcome === "won" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                }`}>
+                  {t._outcome === "won" ? "✓ Won" : "Lost"}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-medium text-gray-900 truncate">{t.tender_title}</span>
+                  {t.tender_agency && <span className="text-xs text-gray-500">{t.tender_agency}</span>}
+                </span>
+                {t.fit_score > 0 && (
+                  <span className="shrink-0 text-xs text-gray-400">{t.fit_score}% fit</span>
+                )}
+                {t.tender_deadline && (
+                  <span className="shrink-0 text-xs text-gray-400">{deadlineLabel(t.tender_deadline)}</span>
+                )}
+                {t._outcome === "lost" && (
+                  <button
+                    onClick={() => moveItemStage(t.id, "evaluating")}
+                    disabled={stageSavingId === t.id}
+                    className="text-xs text-gray-400 hover:text-gray-700 disabled:opacity-50"
+                  >
+                    Re-open
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

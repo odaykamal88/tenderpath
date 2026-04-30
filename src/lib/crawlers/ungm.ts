@@ -45,12 +45,17 @@ function workerConfigured(): boolean {
 
 interface WorkerPageResult { status: number; body: string }
 interface UngmRequest {
-  kind: "page" | "title-search";
+  kind: "page" | "title-search" | "detail";
   label: string;
+  url?: string; // overrides UNGM_API; used for detail page GETs
   method: "GET" | "POST";
   body?: string;
   headers?: Record<string, string>;
 }
+
+// Fetch up to this many notice detail pages per run to extract estimated_value.
+// Page 0 yields ~15 notices; 25 covers those plus a few supplemental results.
+const MAX_ENRICHMENT = 25;
 
 /**
  * Derive /fetch-many endpoint from the configured CRAWLER_WORKER_URL. The env
@@ -83,7 +88,7 @@ async function workerFetchMany(
       waitMs: opts.waitMs ?? 2500,
       delayMs: 700,
       requests: requests.map((r) => ({
-        url: UNGM_API,
+        url: r.url ?? UNGM_API,
         method: r.method,
         body: r.body,
         headers: r.headers ?? {},
@@ -267,6 +272,35 @@ function mapNotice(n: UNGMNotice): RawTender {
   };
 }
 
+/**
+ * Extract estimated value from a UNGM notice detail page.
+ * The detail page renders a table of label/value pairs; the value field is
+ * labelled "Estimated Value" or "Estimated Contract Value".
+ */
+function parseDetailValue(html: string): string | null {
+  // UNGM detail pages use patterns like:
+  //   <td ...>Estimated Value</td><td ...>USD 500,000</td>
+  //   <label>Estimated Value</label> ... <span>USD 500,000</span>
+  const patterns = [
+    /Estimated\s+(?:Contract\s+)?Value[^<]{0,40}<\/t[dh]>\s*<t[dh][^>]*>\s*([^<]{3,80})/i,
+    /Estimated\s+(?:Contract\s+)?Value[^<]{0,40}<\/(?:label|strong|span|p|div)[^>]*>\s*(?:<[^>]+>\s*)*([^<]{3,80})/i,
+  ];
+  for (const re of patterns) {
+    const m = html.match(re);
+    if (!m) continue;
+    const val = m[1]
+      .replace(/&#\d+;/g, " ")
+      .replace(/&[a-z]+;/g, " ")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (val && val.length > 1 && !/^N\/A$|not\s+available|to\s+be\s+determined|TBD/i.test(val)) {
+      return val.slice(0, 80);
+    }
+  }
+  return null;
+}
+
 export async function crawlUNGM(): Promise<CrawlResult> {
   const start = Date.now();
   if (!workerConfigured()) {
@@ -349,7 +383,44 @@ export async function crawlUNGM(): Promise<CrawlResult> {
       };
     }
 
-    return { platform: "UNGM", status: "success", tenders: dedupeNotices(tenders), durationMs: Date.now() - start };
+    // Best-effort detail enrichment: fetch notice detail pages for the most
+    // recently published notices (first MAX_ENRICHMENT results, already sorted
+    // by publish date desc). A second /fetch-many call reuses the same worker
+    // Chromium binary but needs its own warmup (~8-12s) plus N×~1.5s for the
+    // GETs — adds ~35s at MAX_ENRICHMENT=25, well within the 300s cron budget.
+    const deduped = dedupeNotices(tenders);
+    const toEnrich = deduped.filter((t) => t.source_url).slice(0, MAX_ENRICHMENT);
+    if (toEnrich.length > 0) {
+      try {
+        const detailRequests: UngmRequest[] = toEnrich.map((t) => ({
+          kind: "detail" as const,
+          label: `detail ${t.reference_id}`,
+          url: t.source_url!,
+          method: "GET" as const,
+          headers: {
+            Accept: "text/html,application/xhtml+xml",
+            Referer: "https://www.ungm.org/Public/Notice",
+          },
+        }));
+        const detailResults = await workerFetchMany(detailRequests, { waitMs: 1000 });
+        let enriched = 0;
+        for (let i = 0; i < detailResults.length; i++) {
+          const r = detailResults[i];
+          const t = toEnrich[i];
+          if (!t || r.status !== 200) continue;
+          const val = parseDetailValue(r.body);
+          if (val) { t.estimated_value = val; enriched++; }
+        }
+        if (enriched > 0) {
+          console.log(`[ungm] enriched ${enriched}/${toEnrich.length} notices with estimated_value`);
+        }
+      } catch (err) {
+        // Enrichment is best-effort — log but don't fail the crawl.
+        console.warn("[ungm] detail enrichment failed:", err instanceof Error ? err.message : err);
+      }
+    }
+
+    return { platform: "UNGM", status: "success", tenders: deduped, durationMs: Date.now() - start };
   } catch (err) {
     return {
       platform: "UNGM",

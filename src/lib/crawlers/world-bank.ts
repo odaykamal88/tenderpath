@@ -33,6 +33,12 @@ interface WBNotice {
   submission_deadline_date?: string;
   url?: string;
   contract_signed_date?: string;
+  // Value fields — present on contract award notices in the STEP system.
+  // Included speculatively; WB API silently omits fields it doesn't know.
+  totalcontractamount?: number | string | null;
+  estimatedamount?: number | string | null;
+  contract_amount?: number | string | null;
+  currency?: string | null;
 }
 
 interface WBResponse {
@@ -45,7 +51,7 @@ async function fetchPage(offset: number): Promise<WBNotice[]> {
     format: "json",
     rows: String(PAGE_SIZE),
     os: String(offset),
-    fl: "id,bid_reference_no,notice_no,project_name,project_id,bid_description,notice_type,procurement_method,procurement_method_name,country_name,project_ctry_name,country_code,region,sector,major_sector,borrower,agency,notice_status,publication_date,noticedate,submission_deadline_date,url",
+    fl: "id,bid_reference_no,notice_no,project_name,project_id,bid_description,notice_type,procurement_method,procurement_method_name,country_name,project_ctry_name,country_code,region,sector,major_sector,borrower,agency,notice_status,publication_date,noticedate,submission_deadline_date,url,totalcontractamount,estimatedamount,contract_amount,currency",
     srt: "noticedate desc",
   });
   const resp = await fetchWithTimeout(`${WB_API}?${params}`, {
@@ -54,6 +60,15 @@ async function fetchPage(offset: number): Promise<WBNotice[]> {
   if (!resp.ok) throw new Error(`World Bank ${resp.status}`);
   const data = (await resp.json()) as WBResponse;
   return Object.values(data.procnotices ?? {});
+}
+
+function formatWBValue(n: WBNotice): string | null {
+  const raw = n.totalcontractamount ?? n.estimatedamount ?? n.contract_amount;
+  if (raw == null || raw === "" || raw === 0) return null;
+  const num = typeof raw === "number" ? raw : Number(String(raw).replace(/[^0-9.]/g, ""));
+  if (!num || isNaN(num)) return null;
+  const currency = n.currency ?? "USD";
+  return `${currency} ${num.toLocaleString()}`;
 }
 
 function mapNotice(n: WBNotice): RawTender | null {
@@ -71,9 +86,7 @@ function mapNotice(n: WBNotice): RawTender | null {
     region: n.region ?? null,
     sector: n.major_sector ?? n.sector ?? null,
     deadline: n.submission_deadline_date?.slice(0, 10) ?? null,
-    // The /procnotices API does not expose contract value or budget amounts —
-    // those fields are absent from the response schema and the WB portal UI.
-    estimated_value: null,
+    estimated_value: formatWBValue(n),
     source_url: n.url ?? (n.id ? `https://projects.worldbank.org/en/projects-operations/procurement-detail/${n.id}` : null),
     opportunity_type: mapType(n.notice_type, n.procurement_method_name),
     eligibility_summary: null,

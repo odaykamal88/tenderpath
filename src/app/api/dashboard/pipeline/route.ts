@@ -32,7 +32,8 @@ export async function GET(request: Request) {
       pi.assessment_id, pi.updated_at,
       t.source_name, t.source_url, t.opportunity_type, t.sector AS tender_sector,
       t.created_at AS tender_created_at, t.updated_at AS tender_updated_at,
-      t.has_broken_link
+      t.has_broken_link,
+      COALESCE(pi.tender_value, t.estimated_value) AS display_value
     FROM pipeline_items pi
     LEFT JOIN tenders t ON t.id = pi.tender_id
     WHERE pi.user_id = ${userId}

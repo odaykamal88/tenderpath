@@ -79,11 +79,12 @@ export default function VaultPage() {
     [docs]
   );
 
-  async function upload(e: React.FormEvent) {
-    e.preventDefault();
+  async function upload(e?: React.FormEvent, fileOverride?: File) {
+    e?.preventDefault();
     setError(null);
 
-    if (!selectedFile) {
+    const file = fileOverride ?? selectedFile;
+    if (!file) {
       setError("Please select a file to upload.");
       return;
     }
@@ -93,7 +94,7 @@ export default function VaultPage() {
     try {
       // Upload file first
       const uploadData = new FormData();
-      uploadData.append("file", selectedFile);
+      uploadData.append("file", file);
 
       const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
       const uploadRes = await fetch("/api/dashboard/vault/upload", {
@@ -116,7 +117,7 @@ export default function VaultPage() {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify({
-          name: form.name || selectedFile.name,
+          name: form.name || file.name,
           type: form.type,
           expiry_date: form.expiry_date || null,
           file_url,
@@ -214,29 +215,25 @@ export default function VaultPage() {
               type="file"
               accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp"
               className="w-full text-sm text-gray-600 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-gray-900 file:text-white hover:file:bg-gray-700 cursor-pointer"
-              onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                setSelectedFile(file);
+                if (file) upload(undefined, file);
+              }}
               required
             />
             <p className="mt-1 text-xs text-gray-400">PDF, Word, Excel, or image — max 10MB</p>
           </div>
         </div>
-        <button
-          type="submit"
-          disabled={uploading || !selectedFile}
-          className="w-full px-4 py-2 bg-gray-900 text-white text-sm rounded disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-        >
-          {uploading ? (
-            <>
-              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              Uploading…
-            </>
-          ) : (
-            "Upload document"
-          )}
-        </button>
+        {uploading && (
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <svg className="animate-spin h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Uploading…
+          </div>
+        )}
         {error && (
           <div className="text-xs text-red-600">{error}</div>
         )}

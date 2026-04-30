@@ -67,7 +67,9 @@ export async function getUserFromRequest(
 
   const rows = await sql`
     SELECT id, email, name, tier, subscription_status,
-           subscription_expires_at, is_super_admin, created_at
+           subscription_expires_at, is_super_admin, created_at,
+           business_name, website, sector, country_focus, org_type,
+           profile_description, profile_source
     FROM users WHERE id = ${payload.userId}
   `;
 
@@ -78,6 +80,13 @@ export async function getUserFromRequest(
     id: row.id as number,
     email: row.email as string,
     name: row.name as string | null,
+    business_name: row.business_name as string | null,
+    website: row.website as string | null,
+    sector: row.sector as string | null,
+    country_focus: (row.country_focus as string[] | null) ?? [],
+    org_type: row.org_type as string | null,
+    profile_description: row.profile_description as string | null,
+    profile_source: (row.profile_source as "assessment" | "manual" | "unset") ?? "unset",
     tier: row.tier as User["tier"],
     subscription_status: row.subscription_status as User["subscription_status"],
     subscription_expires_at: row.subscription_expires_at as string | null,

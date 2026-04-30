@@ -172,6 +172,13 @@ export interface User {
   id: number;
   email: string;
   name: string | null;
+  business_name: string | null;
+  website: string | null;
+  sector: string | null;
+  country_focus: string[];
+  org_type: string | null;
+  profile_description: string | null;
+  profile_source: "assessment" | "manual" | "unset";
   tier: TierSlug | null;
   subscription_status: SubscriptionStatus | null;
   subscription_expires_at: string | null;

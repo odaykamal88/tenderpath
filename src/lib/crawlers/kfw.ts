@@ -91,10 +91,10 @@ async function fetchListingPage(page: number): Promise<string> {
   return html;
 }
 
-async function fetchDetail(path: string): Promise<{ deadline: string | null; description: string | null; country: string | null; reference: string | null }> {
+async function fetchDetail(path: string): Promise<{ deadline: string | null; description: string | null; country: string | null; reference: string | null; estimated_value: string | null }> {
   const url = `${BASE_URL}${path}`;
   const resp = await fetchWithTimeout(url, { headers: HEADERS }, 20000);
-  if (!resp.ok) return { deadline: null, description: null, country: null, reference: null };
+  if (!resp.ok) return { deadline: null, description: null, country: null, reference: null, estimated_value: null };
   const html = await resp.text();
 
   const deadlineSection = html.match(/(?:[Ss]ubmission|[Dd]eadline|[Aa]ngebotsschluss)[^<]*<[^>]+>([^<]+)/);
@@ -109,7 +109,14 @@ async function fetchDetail(path: string): Promise<{ deadline: string | null; des
   const bodyM = html.match(/<div[^>]*class="[^"]*(?:article|body|content|text)[^"]*"[^>]*>([\s\S]{100,1500}?)<\/div>/i);
   const description = bodyM ? stripTags(bodyM[1]).slice(0, 600) || null : null;
 
-  return { deadline, description, country, reference };
+  // Extract contract/budget value from GTAI detail page structured fields.
+  // GTAI typically renders key-value pairs like "Estimated Contract Value: EUR 500,000"
+  const valueM = html.match(
+    /(?:[Cc]ontract\s+[Vv]alue|[Ee]stimated\s+[Vv]alue|[Bb]udget|[Aa]uftragswert)[^<]*<[^>]+>\s*([^<]{3,80})/,
+  );
+  const estimated_value = valueM ? stripTags(valueM[1]).replace(/\s+/g, " ").trim() || null : null;
+
+  return { deadline, description, country, reference, estimated_value };
 }
 
 export async function crawlKfW(): Promise<CrawlResult> {
@@ -140,7 +147,7 @@ export async function crawlKfW(): Promise<CrawlResult> {
 
     const tenders: RawTender[] = [];
     for (const { path, title, deadline, country, category, description } of allLinks) {
-      let detail = { deadline: null as string | null, description: null as string | null, country: null as string | null, reference: null as string | null };
+      let detail = { deadline: null as string | null, description: null as string | null, country: null as string | null, reference: null as string | null, estimated_value: null as string | null };
       try {
         detail = await withRetry(() => fetchDetail(path));
       } catch (err) {
@@ -162,7 +169,7 @@ export async function crawlKfW(): Promise<CrawlResult> {
         region: null,
         sector: sectors[0] ?? null,
         deadline: detail.deadline ?? deadline,
-        estimated_value: null,
+        estimated_value: detail.estimated_value,
         source_url: `${BASE_URL}${path}`,
         opportunity_type: "RFP",
         eligibility_summary: null,
