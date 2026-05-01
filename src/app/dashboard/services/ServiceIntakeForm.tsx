@@ -190,6 +190,20 @@ export default function ServiceIntakeForm({
 
   const requiresPipeline = service === "bid-no-bid" && !pipelineItemId;
 
+  const uploadLabel: Record<ServiceSlug, string> = {
+    "bid-no-bid": "Upload TOR or eligibility criteria (optional)",
+    "proposal": "Upload TOR / RFP / call document",
+    "lta-roster": "Upload vendor guide / call for applications",
+    "digest": "",
+  };
+
+  const uploadHint: Record<ServiceSlug, string> = {
+    "bid-no-bid": "PDF or Word — paste the eligibility criteria, evaluation criteria, or TOR excerpt so the analysis is grounded",
+    "proposal": "PDF, Word, or Excel up to 10 MB",
+    "lta-roster": "PDF, Word, or Excel up to 10 MB",
+    "digest": "",
+  };
+
   return (
     <form onSubmit={submit} className="mt-5 space-y-4">
       {requiresPipeline && (
@@ -210,10 +224,10 @@ export default function ServiceIntakeForm({
         />
       </div>
 
-      {(service === "proposal" || service === "lta-roster") && (
+      {(service === "bid-no-bid" || service === "proposal" || service === "lta-roster") && (
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Upload TOR / RFP / call document
+            {uploadLabel[service]}
           </label>
           <div className="mt-1">
             {uploadedFile ? (
@@ -229,7 +243,7 @@ export default function ServiceIntakeForm({
                 <svg className="h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                {uploading ? "Uploading…" : "Choose file — PDF, Word, or Excel up to 10 MB"}
+                {uploading ? "Uploading…" : `Choose file — ${uploadHint[service]}`}
                 <input
                   type="file"
                   accept=".pdf,.doc,.docx,.xls,.xlsx"

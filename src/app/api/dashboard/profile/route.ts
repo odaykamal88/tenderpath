@@ -15,6 +15,7 @@ interface ProfileRow {
   org_type: string | null;
   profile_description: string | null;
   profile_source: string | null;
+  contact_phone: string | null;
 }
 
 interface AssessmentRow {
@@ -44,10 +45,11 @@ export async function GET(request: Request) {
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS org_type TEXT`;
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_description TEXT`;
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_source TEXT DEFAULT 'unset'`;
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS contact_phone TEXT`;
 
   const rows = await sql`
     SELECT business_name, website, sector, country_focus,
-           org_type, profile_description, profile_source
+           org_type, profile_description, profile_source, contact_phone
     FROM users WHERE id = ${user.id}
   `;
   const profile = rows[0] as ProfileRow | undefined;
@@ -57,6 +59,8 @@ export async function GET(request: Request) {
 
   if (hasProfile) {
     return NextResponse.json({
+      email: user.email ?? null,
+      contact_phone: profile!.contact_phone ?? null,
       business_name: profile!.business_name,
       website: profile!.website,
       sector: profile!.sector,
@@ -79,6 +83,8 @@ export async function GET(request: Request) {
 
   if (!aRows.length) {
     return NextResponse.json({
+      email: user.email ?? null,
+      contact_phone: profile?.contact_phone ?? null,
       business_name: null,
       website: null,
       sector: null,
@@ -108,6 +114,8 @@ export async function GET(request: Request) {
   `;
 
   return NextResponse.json({
+    email: user.email ?? null,
+    contact_phone: profile?.contact_phone ?? null,
     business_name: a.company_name,
     website: a.website ?? null,
     sector: inferredSector ?? null,
@@ -124,6 +132,7 @@ export async function PATCH(request: Request) {
   const user = guard.user!;
 
   const body = await request.json() as Partial<{
+    contact_phone: string;
     business_name: string;
     website: string;
     sector: string;
@@ -134,6 +143,7 @@ export async function PATCH(request: Request) {
 
   await sql`
     UPDATE users SET
+      contact_phone       = COALESCE(${body.contact_phone ?? null}, contact_phone),
       business_name       = COALESCE(${body.business_name ?? null}, business_name),
       website             = COALESCE(${body.website ?? null}, website),
       sector              = COALESCE(${body.sector ?? null}, sector),

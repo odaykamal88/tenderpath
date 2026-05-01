@@ -18,6 +18,24 @@ export async function GET(request: Request) {
   const stageFilter = searchParams.get("stage");
   const excludeNotRelevant = searchParams.get("exclude_dismissed") !== "false";
 
+  // Purge expired active-stage items on read so the pipeline stays current.
+  // submitted/won/lost are kept as historical records regardless of deadline.
+  const purged = await sql`
+    DELETE FROM pipeline_items
+    WHERE user_id = ${userId}
+      AND tender_deadline IS NOT NULL
+      AND tender_deadline < NOW()
+      AND stage IN ('matched', 'evaluating', 'preparing')
+    RETURNING id, tender_title, stage
+  `;
+  if (purged.length > 0) {
+    console.log("[tp:pipeline:expired_purged]", {
+      userId,
+      count: purged.length,
+      titles: purged.map((r) => r.tender_title),
+    });
+  }
+
   // Load user's not_relevant feedback to exclude those pipeline items
   const feedbackRows = await sql`
     SELECT tender_id FROM user_tender_feedback

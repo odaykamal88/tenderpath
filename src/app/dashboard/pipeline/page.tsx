@@ -225,6 +225,28 @@ export default function PipelinePage() {
 
   return (
     <div>
+      {/* Sub-tab bar */}
+      <div className="flex gap-1 mb-6 border-b border-gray-200">
+        <Link
+          href="/dashboard/pipeline"
+          className="px-4 py-2.5 text-sm font-medium border-b-2 border-gray-900 text-gray-900 -mb-px"
+        >
+          Kanban
+        </Link>
+        <Link
+          href="/dashboard/applications"
+          className="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px"
+        >
+          Applications
+        </Link>
+        <Link
+          href="/dashboard/bid-analysis"
+          className="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px"
+        >
+          Bid Analysis
+        </Link>
+      </div>
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Pipeline</h1>

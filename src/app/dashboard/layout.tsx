@@ -98,11 +98,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const navItems = [
     { href: "/dashboard", label: "Overview" },
-    { href: "/dashboard/pipeline", label: "Pipeline" },
-    { href: "/dashboard/bid-analysis", label: "Bid Analysis", requiresPaid: true },
-    { href: "/dashboard/applications", label: "Applications", requiresPaid: true },
+    { href: "/dashboard/pipeline", label: "Pipeline", matchPaths: ["/dashboard/pipeline", "/dashboard/applications", "/dashboard/bid-analysis"] },
     { href: "/dashboard/services", label: "Services" },
-    { href: "/dashboard/work-orders", label: "Work Orders" },
     { href: "/dashboard/vault", label: "Document Vault", requiresPaid: true },
     { href: "/dashboard/settings", label: "Settings" },
   ];
@@ -123,7 +120,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             const active =
               item.href === "/dashboard"
                 ? pathname === "/dashboard"
-                : pathname?.startsWith(item.href);
+                : (item.matchPaths ?? [item.href]).some((p) => pathname?.startsWith(p));
             const previewLocked = item.requiresPaid && !isPaid;
             return (
               <Link
@@ -157,6 +154,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Bottom utility links */}
         <div className="mt-6 pt-4 border-t border-gray-100 flex flex-col gap-0.5">
+          <Link
+            href="/dashboard/work-orders"
+            className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors ${
+              pathname?.startsWith("/dashboard/work-orders")
+                ? "bg-gray-900 text-white"
+                : "text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            }`}
+          >
+            <NavIcon path={NAV_ICONS["/dashboard/work-orders"]} />
+            <span>Billing &amp; Orders</span>
+          </Link>
           <a
             href="mailto:info@tenderpath.me?subject=Support Request"
             className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"

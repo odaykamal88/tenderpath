@@ -15,7 +15,11 @@ function LoginForm() {
   const [loginMode, setLoginMode] = useState<"magic" | "password">("magic");
   const [token, setToken] = useState("");
   const [devToken, setDevToken] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    search.get("error") === "google_denied" ? null
+    : search.get("error") ? "Google sign-in failed. Please try again or use a magic link."
+    : null
+  );
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -207,6 +211,20 @@ function LoginForm() {
 
         {loginMode === "password" ? (
           <form onSubmit={passwordLogin} className="flex flex-col gap-3">
+            <div className="rounded-lg border border-gold/30 bg-gold/5 px-3 py-2.5 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-gold mb-0.5">Demo account</p>
+                <p className="text-xs text-gray-400 font-mono leading-tight">demo@tenderpath.me</p>
+                <p className="text-xs text-gray-400 font-mono leading-tight">TenderDemo2025!</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setEmail("demo@tenderpath.me"); setPassword("TenderDemo2025!"); }}
+                className="shrink-0 rounded-md border border-gold/40 px-2.5 py-1.5 text-xs font-semibold text-gold hover:bg-gold/10 transition-colors"
+              >
+                Fill
+              </button>
+            </div>
             <input
               type="email"
               className="rounded-lg bg-navy border border-white/10 px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-gold focus:outline-none"
@@ -281,10 +299,9 @@ function LoginForm() {
               <span className="text-xs text-gray-600">or</span>
               <div className="flex-1 border-t border-white/10" />
             </div>
-            <button
-              disabled
-              title="Coming soon"
-              className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-navy px-4 py-2.5 text-sm text-gray-500 cursor-not-allowed opacity-60"
+            <a
+              href={`/api/auth/google?next=${encodeURIComponent(next)}`}
+              className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-navy px-4 py-2.5 text-sm text-gray-300 hover:border-white/25 hover:text-white transition-colors"
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -293,8 +310,7 @@ function LoginForm() {
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
               </svg>
               Continue with Google
-              <span className="text-[10px] bg-white/10 rounded px-1.5 py-0.5">Soon</span>
-            </button>
+            </a>
           </>
         )}
       </div>

@@ -267,6 +267,7 @@ export default function DashboardOverview() {
   const [completedGapKeys, setCompletedGapKeys] = useState<Set<string>>(new Set());
   const [expandedTenderId, setExpandedTenderId] = useState<number | null>(null);
   const [expandedGapKey, setExpandedGapKey] = useState<string | null>(null);
+  const [deadlinesExpanded, setDeadlinesExpanded] = useState(false);
   const [evaluatingItems, setEvaluatingItems] = useState<PipelineTender[]>([]);
   const [submittedItems, setSubmittedItems] = useState<PipelineTender[]>([]);
   const [wonItems, setWonItems] = useState<PipelineTender[]>([]);
@@ -606,19 +607,40 @@ export default function DashboardOverview() {
             </div>
             {/* Upcoming deadlines */}
             <div className="rounded-md bg-gray-50 px-3 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Deadlines this week</div>
+              <button
+                className="flex w-full items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1 hover:text-gray-600 transition-colors"
+                onClick={() => setDeadlinesExpanded((v) => !v)}
+              >
+                <span>Deadlines this week</span>
+                <svg className={`h-3 w-3 transition-transform ${deadlinesExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
               {(() => {
                 const urgent = matchedTenders.filter((t) => isDeadlineSoon(t.tender_deadline));
                 if (urgent.length === 0) return <div className="text-xs text-gray-500">No deadlines in the next 7 days.</div>;
+                const visible = deadlinesExpanded ? urgent : urgent.slice(0, 2);
                 return (
                   <ul className="space-y-1">
-                    {urgent.slice(0, 2).map((t) => (
-                      <li key={t.id} className="text-xs text-gray-900 truncate">
+                    {visible.map((t) => (
+                      <li key={t.id} className="text-xs text-gray-900">
                         <span className="font-semibold text-red-600">{daysUntilDeadline(t.tender_deadline)}d</span>{" "}
-                        <Link href="/dashboard/pipeline" className="underline text-gray-700 hover:text-gray-900">{t.tender_title}</Link>
+                        <Link href="/dashboard/pipeline" className="underline text-gray-700 hover:text-gray-900 truncate">{t.tender_title}</Link>
+                        {t.tender_deadline && (
+                          <span className="ml-1 text-gray-400">· {new Date(t.tender_deadline).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+                        )}
                       </li>
                     ))}
-                    {urgent.length > 2 && <li className="text-xs text-gray-400">+{urgent.length - 2} more</li>}
+                    {!deadlinesExpanded && urgent.length > 2 && (
+                      <li>
+                        <button
+                          className="text-xs text-gold hover:underline"
+                          onClick={(e) => { e.stopPropagation(); setDeadlinesExpanded(true); }}
+                        >
+                          +{urgent.length - 2} more
+                        </button>
+                      </li>
+                    )}
                   </ul>
                 );
               })()}

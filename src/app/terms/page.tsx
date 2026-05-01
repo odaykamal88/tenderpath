@@ -41,6 +41,16 @@ export default function TermsPage() {
           professional procurement, legal, or financial advice. You remain solely responsible for
           your procurement decisions.
         </p>
+        <p className="text-sm font-medium text-red-700 bg-red-50 border border-red-100 rounded-lg px-4 py-3 mt-3">
+          <strong>AI-generated content — user responsibility.</strong> TenderPath uses artificial
+          intelligence to generate assessments, tender matches, bid analyses, proposal drafts, and
+          application content. All AI-generated outputs may contain errors, omissions, or
+          inaccuracies. <strong>You are solely responsible for reviewing, verifying, and approving
+          all AI-generated content before submitting it to any procurement authority, donor agency,
+          or third party.</strong> TenderPath makes no warranty that AI-generated content is
+          accurate, complete, or fit for submission. Submitting unreviewed AI output is done
+          entirely at your own risk.
+        </p>
       </Section>
 
       <Section heading="3. Accounts">

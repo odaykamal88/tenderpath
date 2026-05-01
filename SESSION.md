@@ -1520,7 +1520,51 @@ Until Prompt 2 and 3 are confirmed complete:
 
 ## Blockers
 
-None. Dashboard changes are committed. Landing page + pricing changes are in the working tree, uncommitted.
+None. All changes committed, pushed, and deployed.
+
+---
+
+## Session Update (2026-05-02)
+- Agent: Claude Sonnet 4.6 (claude-code)
+- Date: 2026-05-02
+- Task Completed: Wave 1–3 UI/UX overhaul + expired-bid auto-cleanup + demo account seeding
+- Files Changed:
+  - `src/app/api/dashboard/pipeline/route.ts` — cleanup-on-read: DELETE expired active-stage pipeline items on every GET (matched/evaluating/preparing only; submitted/won/lost preserved)
+  - `src/app/api/dashboard/profile/route.ts` — added `email` (read-only) and `contact_phone` (editable) fields
+  - `src/app/dashboard/applications/page.tsx` — sub-tab bar (Kanban | Applications active | Bid Analysis)
+  - `src/app/dashboard/bid-analysis/page.tsx` — sub-tab bar (Kanban | Applications | Bid Analysis active)
+  - `src/app/dashboard/layout.tsx` — layout adjustments
+  - `src/app/dashboard/page.tsx` — dashboard home updates
+  - `src/app/dashboard/pipeline/page.tsx` — Kanban sub-tab bar (Kanban active | Applications | Bid Analysis)
+  - `src/app/dashboard/services/ServiceIntakeForm.tsx` — extended document upload to bid-no-bid; per-service uploadLabel/uploadHint maps
+  - `src/app/dashboard/services/page.tsx` — flat 2×2 grid replaced with in-page tabbed UI; `?tab=` query param initialises active tab
+  - `src/app/dashboard/settings/page.tsx` — email (read-only) + contact phone (editable) fields
+  - `src/app/login/page.tsx` — Google OAuth button wired; demo account hint card with Fill auto-fill button (password mode only); error handling for `?error=google_denied`
+  - `src/app/page.tsx` — landing page copy/layout
+  - `src/app/terms/page.tsx` — terms copy update
+  - `src/components/landing/Services.tsx` — landing copy update
+  - `scripts/create-demo-user.mjs` (NEW) — idempotent seed script for demo@tenderpath.me / TenderDemo2025! as active pro user
+  - `src/app/api/auth/google/route.ts` (NEW) — initiates Google OAuth with base64url state param
+  - `src/app/api/auth/google/callback/route.ts` (NEW) — OAuth callback: find/create user, issue 5-min magic token, redirect to /login?token=…
+  - `src/app/icon.svg` (NEW) — app favicon
+- Tests Run: `npx tsc --noEmit` — passed clean
+- Result: All changes deployed to production via Vercel (auto-triggered on push to main)
+- Blockers: None
+- Important Decisions:
+  - Expired bid cleanup uses cleanup-on-read (DELETE before SELECT in GET handler) — no cron needed, no schema changes needed
+  - Only purge active stages (matched/evaluating/preparing); preserve submitted/won/lost as historical records
+  - Google OAuth reuses existing magic-token verify flow via short-lived (5 min) server-side token — avoids localStorage write from server redirect
+  - Demo password hashing reimplemented inline in .mjs using node:crypto (identical scrypt$salt$hash format as src/lib/password.ts)
+- Contracts or Interfaces Changed: None — pipeline_items schema unchanged, RawTender/CrawlResult contracts intact
+- Docs Updated: SESSION.md (this entry)
+- Next Recommended Task: Monitor dashboard activation reliability — confirm assessment → pipeline population → email notification flow end-to-end in production
+- Recommended Agent: general-purpose / researcher (production monitoring)
+- Paste-Ready Next Prompt: "Read SESSION.md and AGENTS.md. Verify end-to-end activation reliability in production: complete an assessment as demo@tenderpath.me, confirm pipeline populates with matched tenders, confirm any follow-up email sends, and check for any silent failures in logs."
+
+### Short Resume State
+- What is now true: All Wave 1–3 changes + expired-bid cleanup + demo account seeding are committed, pushed, and live in production. Google OAuth is wired. Services page is tabbed. Pipeline auto-purges expired active-stage items on load.
+- What remains: End-to-end activation reliability validation; monitoring first real-user sessions post-launch.
+- What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/dashboard-architecture.md
 
 ---
 

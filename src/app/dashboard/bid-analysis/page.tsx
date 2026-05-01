@@ -87,6 +87,28 @@ export default function BidAnalysisPage() {
       description="Preview the decision queue and process flow. A subscription opens the full bid/no-bid workspace so your team can qualify tenders before writing proposals."
     >
     <div>
+      {/* Sub-tab bar */}
+      <div className="flex gap-1 mb-6 border-b border-gray-200">
+        <Link
+          href="/dashboard/pipeline"
+          className="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px"
+        >
+          Kanban
+        </Link>
+        <Link
+          href="/dashboard/applications"
+          className="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px"
+        >
+          Applications
+        </Link>
+        <Link
+          href="/dashboard/bid-analysis"
+          className="px-4 py-2.5 text-sm font-medium border-b-2 border-gray-900 text-gray-900 -mb-px"
+        >
+          Bid Analysis
+        </Link>
+      </div>
+
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">

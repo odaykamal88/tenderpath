@@ -31,6 +31,8 @@ const SECTORS = [
 ];
 
 interface Profile {
+  email: string | null;
+  contact_phone: string | null;
   business_name: string | null;
   website: string | null;
   sector: string | null;
@@ -99,6 +101,7 @@ export default function SettingsPage() {
       .then((data: Profile) => {
         setProfile(data);
         setForm({
+          contact_phone: data.contact_phone ?? "",
           business_name: data.business_name ?? "",
           website: data.website ?? "",
           sector: data.sector ?? "",
@@ -122,6 +125,7 @@ export default function SettingsPage() {
         method: "PATCH",
         headers: { "content-type": "application/json", authorization: `Bearer ${token ?? ""}` },
         body: JSON.stringify({
+          contact_phone: (form.contact_phone ?? "").trim() || null,
           business_name: (form.business_name ?? "").trim() || null,
           website: (form.website ?? "").trim() || null,
           sector: (form.sector ?? "").trim() || null,
@@ -164,6 +168,39 @@ export default function SettingsPage() {
       )}
 
       <form onSubmit={save} className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+        {/* Email — read-only */}
+        <div className="px-6 py-5 grid sm:grid-cols-3 gap-4 items-start">
+          <div>
+            <label className="text-sm font-medium text-gray-700">Email address</label>
+            <p className="text-xs text-gray-400 mt-0.5">Your login email</p>
+          </div>
+          <div className="sm:col-span-2">
+            <input
+              readOnly
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 cursor-default focus:outline-none"
+              value={profile?.email ?? ""}
+            />
+            <p className="mt-1 text-xs text-gray-400">Change your email in account settings via your login provider.</p>
+          </div>
+        </div>
+
+        {/* Contact phone */}
+        <div className="px-6 py-5 grid sm:grid-cols-3 gap-4 items-start">
+          <div>
+            <label className="text-sm font-medium text-gray-700">Contact phone</label>
+            <p className="text-xs text-gray-400 mt-0.5">Optional · used for service follow-up</p>
+          </div>
+          <div className="sm:col-span-2">
+            <input
+              type="tel"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+              placeholder="+1 555 000 0000"
+              value={form.contact_phone ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, contact_phone: e.target.value }))}
+            />
+          </div>
+        </div>
+
         {/* Business name */}
         <div className="px-6 py-5 grid sm:grid-cols-3 gap-4 items-start">
           <div>

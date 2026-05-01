@@ -23,9 +23,12 @@ export default function Services() {
           </p>
         </div>
 
-        {/* Free tier card */}
-        <div className="mb-6 rounded-xl border-2 border-dashed border-gold/30 bg-cream/40 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold">
+        {/* Free tier card — entire card is a link to /assessment */}
+        <a
+          href="/assessment"
+          className="mb-6 rounded-xl border-2 border-dashed border-gold/30 bg-cream/40 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 hover:border-gold/60 hover:bg-cream/70 transition-colors group"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold group-hover:bg-gold/20 transition-colors">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -37,13 +40,10 @@ export default function Services() {
               Describe your business and get an instant readiness score, UNGM status check, compliance gap analysis, and a preview of matched tenders — no payment required.
             </p>
           </div>
-          <a
-            href="/assessment"
-            className="shrink-0 rounded-lg bg-gold px-5 py-2.5 text-xs font-semibold text-white hover:bg-gold-dark shadow-md shadow-gold/20 transition-colors"
-          >
+          <span className="shrink-0 rounded-lg bg-gold px-5 py-2.5 text-xs font-semibold text-white group-hover:bg-gold-dark shadow-md shadow-gold/20 transition-colors">
             Start free →
-          </a>
-        </div>
+          </span>
+        </a>
 
         {/* Paid tier cards */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
