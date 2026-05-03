@@ -15,6 +15,8 @@ interface ServiceIntakeFormProps {
   label: string;
 }
 
+const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
+
 const SERVICE_FIELDS: Record<ServiceSlug, Array<{ key: string; label: string; placeholder: string; required?: boolean; rows?: number }>> = {
   "bid-no-bid": [
     { key: "decision_deadline", label: "When do you need the decision?", placeholder: "e.g. Tomorrow, before the Friday bid meeting" },
@@ -191,7 +193,7 @@ export default function ServiceIntakeForm({
   const requiresPipeline = service === "bid-no-bid" && !pipelineItemId;
 
   const uploadLabel: Record<ServiceSlug, string> = {
-    "bid-no-bid": "Upload TOR or eligibility criteria (optional)",
+    "bid-no-bid": "Upload TOR or eligibility criteria · optional",
     "proposal": "Upload TOR / RFP / call document",
     "lta-roster": "Upload vendor guide / call for applications",
     "digest": "",
@@ -204,46 +206,65 @@ export default function ServiceIntakeForm({
     "digest": "",
   };
 
+  const inputCls =
+    "mt-1.5 w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] text-stone-900 focus:border-stone-700 focus:outline-none";
+
+  const labelCls = "block text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500";
+
   return (
     <form onSubmit={submit} className="mt-5 space-y-4">
       {requiresPipeline && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+        <div className="rounded-sm border-l-2 border-amber-600 bg-amber-50/40 px-3.5 py-2.5 text-[12px] leading-relaxed text-amber-900">
           Bid/no-bid analysis needs a selected pipeline tender so the recommendation can use your saved match evidence.
         </div>
       )}
 
+      {/* Tender URL */}
       <div>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">
+        <label className={labelCls} style={{ fontFamily: MONO }}>
           Tender or document URL
         </label>
         <input
           value={tenderUrl}
           onChange={(e) => setTenderUrl(e.target.value)}
           placeholder="Paste source page, TOR, or portal link if available"
-          className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-900 focus:outline-none"
+          className={inputCls}
+          style={{ fontFamily: MONO }}
         />
       </div>
 
+      {/* File upload */}
       {(service === "bid-no-bid" || service === "proposal" || service === "lta-roster") && (
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">
+          <label className={labelCls} style={{ fontFamily: MONO }}>
             {uploadLabel[service]}
           </label>
-          <div className="mt-1">
+          <div className="mt-1.5">
             {uploadedFile ? (
-              <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
+              <div
+                className="flex items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 text-[12px] text-emerald-800"
+                style={{ fontFamily: MONO }}
+              >
                 <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z"/>
+                  <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
                 </svg>
-                <span className="flex-1 truncate">{uploadedFile.name} uploaded</span>
-                <button type="button" onClick={() => setUploadedFile(null)} className="shrink-0 text-green-700 underline hover:text-green-900">Remove</button>
+                <span className="flex-1 truncate">{uploadedFile.name} · uploaded</span>
+                <button
+                  type="button"
+                  onClick={() => setUploadedFile(null)}
+                  className="shrink-0 text-emerald-700 hover:text-emerald-900 underline underline-offset-2"
+                >
+                  Remove
+                </button>
               </div>
             ) : (
-              <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-gray-300 px-3 py-3 text-xs text-gray-500 hover:border-gray-400 hover:text-gray-700">
-                <svg className="h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round"/>
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-stone-300 px-3.5 py-3 text-[12px] text-stone-500 hover:border-stone-700 hover:text-stone-700 transition-colors">
+                <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                {uploading ? "Uploading…" : `Choose file — ${uploadHint[service]}`}
+                <span className="leading-snug flex-1">
+                  {uploading ? "Uploading…" : <><span className="font-semibold text-stone-700">Choose file</span> — {uploadHint[service]}</>}
+                </span>
                 <input
                   type="file"
                   accept=".pdf,.doc,.docx,.xls,.xlsx"
@@ -257,10 +278,12 @@ export default function ServiceIntakeForm({
         </div>
       )}
 
+      {/* Custom fields */}
       {SERVICE_FIELDS[service].map((field) => (
         <div key={field.key}>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">
-            {field.label}{field.required ? " *" : ""}
+          <label className={labelCls} style={{ fontFamily: MONO }}>
+            {field.label}
+            {field.required && <span className="text-red-600 ml-1">*</span>}
           </label>
           <textarea
             required={field.required}
@@ -268,23 +291,25 @@ export default function ServiceIntakeForm({
             onChange={(e) => setFields((prev) => ({ ...prev, [field.key]: e.target.value }))}
             placeholder={field.placeholder}
             rows={field.rows ?? 3}
-            className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-900 focus:outline-none"
+            className={inputCls + " resize-none"}
           />
         </div>
       ))}
 
+      {/* Error */}
       {error && (
-        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <p className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3.5 py-2.5 text-[12px] text-red-700">
           {error}
         </p>
       )}
 
+      {/* Submit */}
       <button
         type="submit"
         disabled={busy || requiresPipeline}
-        className="w-full rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full rounded-sm bg-stone-900 px-4 py-3 text-[13px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {busy ? "Saving intake..." : label}
+        {busy ? "Saving intake…" : `${label} →`}
       </button>
     </form>
   );
