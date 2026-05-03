@@ -1,100 +1,105 @@
+/* Footer — paper-toned, editorial colophon */
+
 export default function Footer() {
+  const product = [
+    { label: "Free assessment", href: "/assessment" },
+    { label: "Weekly digest · $49/mo", href: "/assessment" },
+    { label: "Bid/no-bid analysis · $39", href: "/assessment" },
+    { label: "Proposal draft · $299", href: "/assessment" },
+    { label: "Roster fast-track · $749", href: "/assessment" },
+  ];
+
+  const resources = [
+    { label: "UN procurement guide", href: "#" },
+    { label: "UNGM registration", href: "#" },
+    { label: "Founder note", href: "#builtby" },
+    { label: "FAQ", href: "/faq" },
+  ];
+
+  const company = [
+    { label: "Contact", href: "/contact" },
+    { label: "Disclaimer", href: "/disclaimer" },
+    { label: "Security", href: "/security" },
+  ];
+
+  const legal = [
+    { label: "Privacy Policy", href: "/privacy" },
+    { label: "Terms", href: "/terms" },
+    { label: "Cookie Policy", href: "/cookie-policy" },
+    { label: "Disclaimer", href: "/disclaimer" },
+    { label: "Security", href: "/security" },
+  ];
+
   return (
-    <footer className="bg-navy-light border-t border-white/5">
-      <div className="mx-auto max-w-7xl px-6 lg:px-8 py-12">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
-          {/* Brand */}
-          <div className="sm:col-span-2 lg:col-span-1">
-            <span className="text-xl font-semibold text-white">
-              Tender<span className="text-gold">Path</span>
-            </span>
-            <p className="mt-3 text-sm text-gray-400 leading-relaxed max-w-xs">
-              Decoding the UN procurement maze so qualified businesses can
-              compete — and win.
+    <footer className="bg-paper-2 border-t border-rule">
+      <div className="mx-auto max-w-7xl px-6 lg:px-8 py-16">
+        {/* Top: editorial colophon */}
+        <div className="grid lg:grid-cols-[1.5fr_1fr_1fr_1fr] gap-10 lg:gap-14 pb-12 border-b border-rule">
+          <div>
+            <a href="/" className="font-serif text-[26px] font-medium tracking-[-0.01em] text-ink">
+              Tender<span className="text-accent">·</span>Path
+            </a>
+            <p className="mt-5 text-[14px] text-ink-2 leading-[1.6] max-w-sm">
+              UN procurement readiness, scored. Decoding the maze for vendors
+              across the global south.
+            </p>
+            <p className="mt-5 font-mono text-[10px] tracking-[0.08em] uppercase text-mute leading-relaxed">
+              Amman · Beirut<br />
+              Built {new Date().getFullYear()}
             </p>
           </div>
 
-          {/* Links */}
-          <div>
-            <h4 className="text-xs font-bold tracking-wider uppercase text-gray-400 mb-4">
-              Product
-            </h4>
-            <ul className="space-y-2.5">
-              {[
-                { label: "Free Assessment", href: "/assessment" },
-                { label: "Tender Matching", href: "#" },
-                { label: "Readiness Report", href: "#" },
-                { label: "Pricing", href: "#" },
-              ].map((link) => (
-                <li key={link.label}>
-                  <a href={link.href} className="text-sm text-gray-400 hover:text-white transition-colors">
-                    {link.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-xs font-bold tracking-wider uppercase text-gray-400 mb-4">
-              Resources
-            </h4>
-            <ul className="space-y-2.5">
-              {[
-                { label: "UN Procurement Guide", href: "#" },
-                { label: "UNGM Registration", href: "#" },
-                { label: "Blog", href: "#" },
-                { label: "FAQ", href: "/faq" },
-              ].map((link) => (
-                <li key={link.label}>
-                  <a href={link.href} className="text-sm text-gray-400 hover:text-white transition-colors">
-                    {link.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-xs font-bold tracking-wider uppercase text-gray-400 mb-4">
-              Company
-            </h4>
-            <ul className="space-y-2.5">
-              {[
-                { label: "About", href: "#" },
-                { label: "Contact", href: "/contact" },
-                { label: "Disclaimer", href: "/disclaimer" },
-                { label: "Security", href: "/security" },
-              ].map((link) => (
-                <li key={link.label}>
-                  <a href={link.href} className="text-sm text-gray-400 hover:text-white transition-colors">
-                    {link.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <FooterColumn title="Services" links={product} />
+          <FooterColumn title="Resources" links={resources} />
+          <FooterColumn title="Company" links={company} />
         </div>
 
-        <div className="mt-12 pt-8 border-t border-white/5 text-center space-y-3">
-          <p className="text-xs text-gray-500">
-            &copy; {new Date().getFullYear()} TenderPath. All rights reserved.
+        {/* Bottom: legal strip */}
+        <div className="mt-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <p className="font-mono text-[10px] tracking-[0.08em] text-mute">
+            © {new Date().getFullYear()} TenderPath. All rights reserved.
           </p>
-          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-gray-600">
-            {[
-              { label: "Privacy Policy", href: "/privacy" },
-              { label: "Terms", href: "/terms" },
-              { label: "Cookie Policy", href: "/cookie-policy" },
-              { label: "Disclaimer", href: "/disclaimer" },
-              { label: "Security", href: "/security" },
-            ].map((link) => (
-              <a key={link.href} href={link.href} className="hover:text-gray-400 transition-colors underline underline-offset-2">
-                {link.label}
+          <div className="flex flex-wrap gap-x-5 gap-y-1">
+            {legal.map((l) => (
+              <a
+                key={l.label}
+                href={l.href}
+                className="font-mono text-[10px] tracking-[0.06em] uppercase text-ink-3 hover:text-ink transition-colors"
+              >
+                {l.label}
               </a>
             ))}
           </div>
         </div>
       </div>
     </footer>
+  );
+}
+
+function FooterColumn({
+  title,
+  links,
+}: {
+  title: string;
+  links: Array<{ label: string; href: string }>;
+}) {
+  return (
+    <div>
+      <h4 className="font-mono text-[10px] tracking-[0.16em] uppercase text-accent mb-5">
+        {title}
+      </h4>
+      <ul className="space-y-3">
+        {links.map((link) => (
+          <li key={link.label}>
+            <a
+              href={link.href}
+              className="text-[13px] text-ink-2 hover:text-ink transition-colors"
+            >
+              {link.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
