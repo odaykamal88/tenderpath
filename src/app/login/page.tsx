@@ -235,14 +235,14 @@ function LoginForm() {
                     style={{ fontFamily: MONO }}
                   >
                     demo@tenderpath.me<br />
-                    TenderDemo2025!
+                    TenderDemo2026!
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
                     setEmail("demo@tenderpath.me");
-                    setPassword("TenderDemo2025!");
+                    setPassword("TenderDemo2026!");
                   }}
                   className="shrink-0 rounded-sm border border-orange-300 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-orange-700 hover:bg-orange-100/60 transition-colors"
                   style={{ fontFamily: MONO }}
