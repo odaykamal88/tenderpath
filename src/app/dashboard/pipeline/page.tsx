@@ -24,18 +24,39 @@ interface MatchReason {
   opportunityBucketReason?: string | null;
 }
 
-const BUCKET_STYLES: Record<string, string> = {
-  act_now: "bg-red-100 text-red-800 border-red-200",
-  strong_fit: "bg-green-100 text-green-700 border-green-200",
-  strategic: "bg-blue-100 text-blue-700 border-blue-200",
-  adjacent: "bg-amber-100 text-amber-700 border-amber-200",
-  watchlist: "bg-gray-100 text-gray-600 border-gray-200",
+const BUCKET_DOT: Record<string, string> = {
+  act_now: "bg-red-500",
+  strong_fit: "bg-emerald-500",
+  strategic: "bg-sky-500",
+  adjacent: "bg-amber-500",
+  watchlist: "bg-stone-300",
 };
+
+const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
+const SERIF = "'Fraunces', 'Times New Roman', serif";
 
 function isDeadlineSoon(deadline: string | null): boolean {
   if (!deadline) return false;
   const days = (new Date(deadline).getTime() - Date.now()) / 86_400_000;
   return days >= 0 && days <= 7;
+}
+
+function daysUntilDeadline(deadline: string | null): number | null {
+  if (!deadline) return null;
+  const time = new Date(deadline).getTime();
+  if (Number.isNaN(time)) return null;
+  return Math.ceil((time - Date.now()) / 86_400_000);
+}
+
+function shortDate(deadline: string | null): string | null {
+  if (!deadline) return null;
+  const d = new Date(deadline);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function tenderRef(id: number): string {
+  return `TP-${id.toString(16).toUpperCase().padStart(4, "0")}`;
 }
 
 interface PipelineItem {
@@ -60,40 +81,22 @@ const UN_AGENCIES = [
   "IFC", "AfDB", "ADB", "EBRD",
 ];
 
-const STAGES: { key: Stage; label: string }[] = [
-  { key: "matched", label: "Matched" },
-  { key: "evaluating", label: "Evaluating" },
-  { key: "preparing", label: "Preparing" },
-  { key: "submitted", label: "Submitted" },
-  { key: "won", label: "Won" },
-  { key: "lost", label: "Lost" },
+const STAGES: { key: Stage; index: string; label: string; sub: string }[] = [
+  { key: "matched", index: "01", label: "Matched", sub: "shortlist" },
+  { key: "evaluating", index: "02", label: "Evaluating", sub: "fit check" },
+  { key: "preparing", index: "03", label: "Preparing", sub: "drafting" },
+  { key: "submitted", index: "04", label: "Submitted", sub: "awaiting" },
+  { key: "won", index: "05", label: "Won", sub: "secured" },
+  { key: "lost", index: "06", label: "Lost", sub: "archive" },
 ];
 
 const STAGE_GUIDANCE: Record<Stage, { next: string; button?: string; moveTo?: Stage }> = {
-  matched: {
-    next: "Decide if this deserves pursuit.",
-    button: "Start Evaluating",
-    moveTo: "evaluating",
-  },
-  evaluating: {
-    next: "Run bid/no-bid, check blockers, then prepare.",
-    button: "Move to Preparing",
-    moveTo: "preparing",
-  },
-  preparing: {
-    next: "Draft proposal, assemble docs, and confirm compliance.",
-    button: "Mark Submitted",
-    moveTo: "submitted",
-  },
-  submitted: {
-    next: "Track outcome and keep follow-up notes current.",
-  },
-  won: {
-    next: "Capture evidence for future past-performance proof.",
-  },
-  lost: {
-    next: "Archive the lesson and tune future fit signals.",
-  },
+  matched: { next: "Decide if this deserves pursuit.", button: "Start evaluating", moveTo: "evaluating" },
+  evaluating: { next: "Run bid/no-bid and check blockers.", button: "Move to preparing", moveTo: "preparing" },
+  preparing: { next: "Draft proposal, assemble docs, confirm compliance.", button: "Mark submitted", moveTo: "submitted" },
+  submitted: { next: "Track outcome and keep follow-up notes current." },
+  won: { next: "Capture evidence for past-performance proof." },
+  lost: { next: "Archive the lesson and tune fit signals." },
 };
 
 function authHeaders(): HeadersInit {
@@ -125,6 +128,7 @@ export default function PipelinePage() {
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
   const [form, setForm] = useState({
     tender_title: "",
     tender_agency: "",
@@ -140,6 +144,7 @@ export default function PipelinePage() {
       if (res.ok) {
         const body = await res.json();
         setItems(body.items);
+        setRefreshedAt(new Date());
       }
       setLoading(false);
     })();
@@ -155,6 +160,15 @@ export default function PipelinePage() {
     }
     return map;
   }, [items]);
+
+  // Totals for the headline strip
+  const totals = useMemo(() => ({
+    total: items.length,
+    active: byStage.matched.length + byStage.evaluating.length + byStage.preparing.length,
+    submitted: byStage.submitted.length,
+    won: byStage.won.length,
+    dueSoon: items.filter((i) => isDeadlineSoon(i.tender_deadline) && i.stage !== "won" && i.stage !== "lost").length,
+  }), [items, byStage]);
 
   async function onDragEnd(result: DropResult) {
     const { source, destination, draggableId } = result;
@@ -224,298 +238,410 @@ export default function PipelinePage() {
   }
 
   return (
-    <div>
-      {/* Sub-tab bar */}
-      <div className="flex gap-1 mb-6 border-b border-gray-200">
+    <div className="px-8 py-8 max-w-[1400px]">
+      {/* Sub-tab bar (kanban / applications / bid analysis) */}
+      <div className="flex gap-6 mb-7 border-b border-stone-200/70">
         <Link
           href="/dashboard/pipeline"
-          className="px-4 py-2.5 text-sm font-medium border-b-2 border-gray-900 text-gray-900 -mb-px"
+          className="pb-3 text-[12px] font-semibold uppercase tracking-[0.15em] text-stone-900 border-b border-stone-900 -mb-px"
         >
           Kanban
         </Link>
         <Link
           href="/dashboard/applications"
-          className="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px"
+          className="pb-3 text-[12px] font-semibold uppercase tracking-[0.15em] text-stone-400 hover:text-stone-700 transition-colors"
         >
           Applications
         </Link>
         <Link
           href="/dashboard/bid-analysis"
-          className="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px"
+          className="pb-3 text-[12px] font-semibold uppercase tracking-[0.15em] text-stone-400 hover:text-stone-700 transition-colors"
         >
-          Bid Analysis
+          Bid analysis
         </Link>
       </div>
 
-      <div className="flex items-center justify-between mb-6">
+      {/* Header */}
+      <header className="flex items-end justify-between gap-6 mb-2">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Pipeline</h1>
-          <p className="text-sm text-gray-600">
-            Drag tenders between stages.{" "}
-            <span className="text-gray-400">
-              Last refreshed: {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          <div className="flex items-center gap-3 text-[11px] text-stone-500">
+            <span className="font-semibold uppercase tracking-[0.18em] text-stone-400">Workbench</span>
+            <span className="text-stone-300">·</span>
+            <span style={{ fontFamily: MONO }}>
+              {refreshedAt ? `Refreshed ${refreshedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Loading…"}
             </span>
+          </div>
+          <h1
+            className="mt-1 text-[56px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+            style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
+          >
+            Pipeline
+          </h1>
+          <p className="mt-1 max-w-2xl text-[15px] leading-relaxed text-stone-600">
+            Drag tenders between stages. Use the buttons on each card to advance — or click <em>Why this match?</em> to see the evidence.
           </p>
         </div>
         <button
           onClick={() => setAdding((v) => !v)}
-          className="px-4 py-2 bg-gray-900 text-white text-sm rounded-md hover:bg-gray-700"
+          className="shrink-0 rounded-sm bg-stone-900 px-4 py-2.5 text-[12.5px] font-medium text-white hover:bg-stone-800 transition-colors"
         >
-          {adding ? "Cancel" : "+ Add Tender"}
+          {adding ? "Cancel" : "+ Add tender"}
         </button>
+      </header>
+
+      {/* Headline numbers strip */}
+      <div className="mt-6 grid grid-cols-2 sm:grid-cols-5 gap-px bg-stone-200/70 rounded-md overflow-hidden">
+        {[
+          { label: "Total", value: totals.total, sub: "all stages" },
+          { label: "Active", value: totals.active, sub: "matched · prep" },
+          { label: "Submitted", value: totals.submitted, sub: "awaiting" },
+          { label: "Won", value: totals.won, sub: "this period" },
+          { label: "Due soon", value: totals.dueSoon, sub: "≤ 7 days", urgent: totals.dueSoon > 0 },
+        ].map((s) => (
+          <div key={s.label} className="bg-stone-50/60 px-4 py-3.5">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500">{s.label}</div>
+            <div
+              className={`mt-1 text-[28px] leading-none font-medium tabular-nums ${s.urgent ? "text-red-600" : "text-stone-900"}`}
+              style={{ fontFamily: SERIF }}
+            >
+              {loading ? "—" : s.value}
+            </div>
+            <div className="mt-1 text-[11px] text-stone-500">{s.sub}</div>
+          </div>
+        ))}
       </div>
 
+      {/* Add form */}
       {adding && (
         <form
           onSubmit={addItem}
-          className="mb-6 rounded-lg border border-gray-200 bg-white p-4 grid grid-cols-1 md:grid-cols-5 gap-3"
+          className="mt-6 rounded-md border border-stone-200/70 bg-white p-5"
         >
-          <input
-            className="border rounded px-2 py-1 text-sm md:col-span-2"
-            placeholder="Tender title"
-            value={form.tender_title}
-            onChange={(e) => setForm({ ...form, tender_title: e.target.value })}
-            required
-          />
-          <input
-            className="border rounded px-2 py-1 text-sm md:col-span-3"
-            placeholder="Source URL (optional — link to the tender notice)"
-            type="url"
-            value={form.source_url}
-            onChange={(e) => setForm({ ...form, source_url: e.target.value })}
-          />
-          <input
-            className="border rounded px-2 py-1 text-sm"
-            placeholder="Agency (e.g. UNDP, WHO)"
-            list="agency-suggestions"
-            value={form.tender_agency}
-            onChange={(e) => setForm({ ...form, tender_agency: e.target.value })}
-          />
-          <datalist id="agency-suggestions">
-            {UN_AGENCIES.map((a) => <option key={a} value={a} />)}
-          </datalist>
-          <input
-            type="date"
-            className="border rounded px-2 py-1 text-sm"
-            value={form.tender_deadline}
-            onChange={(e) => setForm({ ...form, tender_deadline: e.target.value })}
-          />
-          <input
-            className="border rounded px-2 py-1 text-sm"
-            placeholder="Est. value"
-            value={form.tender_value}
-            onChange={(e) => setForm({ ...form, tender_value: e.target.value })}
-          />
-          <input
-            type="number"
-            min={0}
-            max={100}
-            className="border rounded px-2 py-1 text-sm"
-            placeholder="Fit %"
-            value={form.fit_score}
-            onChange={(e) => setForm({ ...form, fit_score: Number(e.target.value) })}
-          />
-          <button
-            type="submit"
-            className="md:col-span-5 px-4 py-2 bg-gray-900 text-white text-sm rounded"
-          >
-            Add to Matched
-          </button>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-3">
+            New tender · entered manually
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+            <input
+              className="md:col-span-3 rounded-sm border border-stone-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-stone-700"
+              placeholder="Tender title"
+              value={form.tender_title}
+              onChange={(e) => setForm({ ...form, tender_title: e.target.value })}
+              required
+            />
+            <input
+              className="md:col-span-3 rounded-sm border border-stone-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-stone-700"
+              placeholder="Source URL (optional)"
+              type="url"
+              value={form.source_url}
+              onChange={(e) => setForm({ ...form, source_url: e.target.value })}
+              style={{ fontFamily: MONO }}
+            />
+            <input
+              className="md:col-span-2 rounded-sm border border-stone-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-stone-700"
+              placeholder="Agency (e.g. UNDP, WHO)"
+              list="agency-suggestions"
+              value={form.tender_agency}
+              onChange={(e) => setForm({ ...form, tender_agency: e.target.value })}
+            />
+            <datalist id="agency-suggestions">
+              {UN_AGENCIES.map((a) => <option key={a} value={a} />)}
+            </datalist>
+            <input
+              type="date"
+              className="rounded-sm border border-stone-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-stone-700"
+              value={form.tender_deadline}
+              onChange={(e) => setForm({ ...form, tender_deadline: e.target.value })}
+              style={{ fontFamily: MONO }}
+            />
+            <input
+              className="rounded-sm border border-stone-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-stone-700"
+              placeholder="Est. value"
+              value={form.tender_value}
+              onChange={(e) => setForm({ ...form, tender_value: e.target.value })}
+              style={{ fontFamily: MONO }}
+            />
+            <input
+              type="number"
+              min={0}
+              max={100}
+              className="rounded-sm border border-stone-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-stone-700"
+              placeholder="Fit %"
+              value={form.fit_score}
+              onChange={(e) => setForm({ ...form, fit_score: Number(e.target.value) })}
+              style={{ fontFamily: MONO }}
+            />
+            <button
+              type="submit"
+              className="md:col-span-6 rounded-sm bg-stone-900 px-4 py-2.5 text-[12.5px] font-medium text-white hover:bg-stone-800 mt-1"
+            >
+              Add to Matched →
+            </button>
+          </div>
         </form>
       )}
 
+      {/* Kanban grid */}
       {loading ? (
-        <div className="text-sm text-gray-500">Loading…</div>
+        <div className="mt-8 text-[13px] text-stone-500">Loading pipeline…</div>
       ) : (
         <DragDropContext onDragEnd={onDragEnd}>
-          <div className="overflow-x-auto pb-4">
-          <div className="grid grid-cols-6 gap-4 min-w-[900px]">
-            {STAGES.map(({ key, label }) => (
-              <Droppable droppableId={key} key={key}>
-                {(provided, snapshot) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className={`rounded-lg border p-3 min-h-[400px] ${
-                      snapshot.isDraggingOver
-                        ? "bg-gray-100 border-gray-400"
-                        : key === "won"
-                        ? "bg-green-50 border-green-200"
-                        : key === "lost"
-                        ? "bg-red-50/50 border-red-100"
-                        : "bg-white border-gray-200"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-600">
-                          {label}
+          <div className="mt-7 overflow-x-auto pb-4 -mx-2 px-2">
+            <div className="grid grid-cols-6 gap-4 min-w-[1180px]">
+              {STAGES.map(({ key, index, label, sub }) => (
+                <Droppable droppableId={key} key={key}>
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={`rounded-md border min-h-[480px] flex flex-col transition-colors ${
+                        snapshot.isDraggingOver
+                          ? "bg-stone-100 border-stone-400"
+                          : "bg-stone-50/40 border-stone-200/70"
+                      }`}
+                    >
+                      {/* Column header */}
+                      <div className="px-3.5 pt-3.5 pb-2.5 border-b border-stone-200/70">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <div className="flex items-baseline gap-2 min-w-0">
+                            <span
+                              className="text-[10px] font-semibold tabular-nums text-stone-400"
+                              style={{ fontFamily: MONO }}
+                            >
+                              {index}
+                            </span>
+                            <span
+                              className="text-[15px] font-medium text-stone-900 truncate"
+                              style={{ fontFamily: SERIF }}
+                            >
+                              {label}
+                            </span>
+                          </div>
+                          <span
+                            className="text-[11px] font-semibold tabular-nums text-stone-500"
+                            style={{ fontFamily: MONO }}
+                          >
+                            {byStage[key].length.toString().padStart(2, "0")}
+                          </span>
                         </div>
-                        <div className="mt-0.5 text-[11px] normal-case tracking-normal text-gray-400">
+                        <div className="mt-1 text-[10px] uppercase tracking-[0.15em] text-stone-400 font-semibold">
+                          {sub}
+                        </div>
+                        <div className="mt-1.5 text-[11px] leading-snug text-stone-500">
                           {STAGE_GUIDANCE[key].next}
                         </div>
                       </div>
-                      <div className="text-xs text-gray-400">
-                        {byStage[key].length}
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {byStage[key].map((item, idx) => (
-                        <Draggable
-                          key={item.id}
-                          draggableId={String(item.id)}
-                          index={idx}
-                        >
-                          {(p, s) => (
-                            <div
-                              ref={p.innerRef}
-                              {...p.draggableProps}
-                              {...p.dragHandleProps}
-                              className={`rounded-md border bg-white p-3 text-sm shadow-sm ${
-                                s.isDragging ? "ring-2 ring-gray-900" : "border-gray-200"
-                              }`}
-                            >
-                              <div className="flex items-start gap-2 justify-between">
-                                <div className="font-medium text-gray-900 line-clamp-2 flex-1">
-                                  {item.tender_title}
-                                </div>
-                                <div className="flex shrink-0 items-center gap-1">
-                                  {!item.tender_id && (
-                                    <span className="rounded-full border border-dashed border-gray-300 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-400">
-                                      Manually added
-                                    </span>
-                                  )}
-                                  {item.match_reasons?.opportunityBucketLabel && (
-                                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${BUCKET_STYLES[item.match_reasons.opportunityBucket ?? ""] ?? "bg-gray-100 text-gray-600 border-gray-200"}`}>
-                                      {item.match_reasons.opportunityBucketLabel}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              {item.tender_agency && (
-                                <div className="mt-1 text-xs text-gray-600">
-                                  {item.tender_agency}
-                                </div>
-                              )}
-                              <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
-                                {item.tender_deadline && (
-                                  <span className={isDeadlineSoon(item.tender_deadline) ? "font-semibold text-red-600" : ""}>
-                                    {isDeadlineSoon(item.tender_deadline) ? "⚡ Due " : "Due "}
-                                    {new Date(item.tender_deadline).toLocaleDateString()}
-                                  </span>
-                                )}
-                                {item.display_value && <span>{item.display_value}</span>}
-                                {item.fit_score > 0 && (
-                                  <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700">
-                                    {item.fit_score}% fit
-                                  </span>
-                                )}
-                              </div>
 
-                              {/* Why this match? expandable panel */}
-                              {item.match_reasons && (
-                                <div className="mt-2">
-                                  <button
-                                    onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}
-                                    className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
-                                  >
-                                    <svg className={`h-3 w-3 transition-transform ${expandedId === item.id ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                    </svg>
-                                    Why this match?
-                                  </button>
-                                  {expandedId === item.id && (
-                                    <div className="mt-2 rounded bg-indigo-50 border border-indigo-100 p-2 text-xs text-indigo-800 space-y-1">
-                                      {item.match_reasons.summary?.map((s, i) => (
-                                        <div key={i}>• {s}</div>
-                                      ))}
-                                      {item.match_reasons.matchedSectors && item.match_reasons.matchedSectors.length > 0 && (
-                                        <div className="text-indigo-600">Sectors: {item.match_reasons.matchedSectors.join(", ")}</div>
-                                      )}
-                                      {item.match_reasons.matchedCapabilities && item.match_reasons.matchedCapabilities.length > 0 && (
-                                        <div className="text-indigo-600">Capabilities: {item.match_reasons.matchedCapabilities.join(", ")}</div>
-                                      )}
-                                      {item.match_reasons.matchedKeywords && item.match_reasons.matchedKeywords.length > 0 && (
-                                        <div className="text-indigo-600">Keywords: {item.match_reasons.matchedKeywords.join(", ")}</div>
-                                      )}
-                                      {item.match_reasons.geographyAlignment?.mode && item.match_reasons.geographyAlignment.mode !== "unknown" && (
-                                        <div className="text-indigo-600">
-                                          Geography: {item.match_reasons.geographyAlignment.mode.replace(/-/g, " ")}
-                                          {item.match_reasons.geographyAlignment.tenderCountry ? ` · ${item.match_reasons.geographyAlignment.tenderCountry}` : ""}
-                                        </div>
-                                      )}
-                                      {item.match_reasons.opportunityBucketReason && (
-                                        <div className="text-indigo-500 italic">{item.match_reasons.opportunityBucketReason}</div>
-                                      )}
-                                      {item.match_reasons.confidence != null && (
-                                        <div className="text-indigo-500">Confidence: {Math.round(item.match_reasons.confidence * 100)}%</div>
-                                      )}
-                                      {item.match_reasons.caveats?.map((c, i) => (
-                                        <div key={i} className="text-amber-700">⚠ {c}</div>
-                                      ))}
+                      {/* Cards */}
+                      <div className="flex flex-col gap-2 p-2.5 flex-1">
+                        {byStage[key].length === 0 && (
+                          <div className="text-[11px] text-stone-400 italic px-2 py-3">
+                            No tenders here yet.
+                          </div>
+                        )}
+                        {byStage[key].map((item, idx) => {
+                          const bucketDot = BUCKET_DOT[item.match_reasons?.opportunityBucket ?? "watchlist"] ?? "bg-stone-300";
+                          const isExpanded = expandedId === item.id;
+                          const days = daysUntilDeadline(item.tender_deadline);
+                          return (
+                            <Draggable
+                              key={item.id}
+                              draggableId={String(item.id)}
+                              index={idx}
+                            >
+                              {(p, s) => (
+                                <div
+                                  ref={p.innerRef}
+                                  {...p.draggableProps}
+                                  {...p.dragHandleProps}
+                                  className={`rounded-md bg-white border p-3 text-[13px] transition-shadow ${
+                                    s.isDragging
+                                      ? "border-stone-700 shadow-lg"
+                                      : "border-stone-200/70 hover:border-stone-300"
+                                  }`}
+                                >
+                                  {/* Top row: bucket dot + ref id + manual badge */}
+                                  <div className="flex items-center gap-2 mb-1.5">
+                                    <span className={`shrink-0 h-1.5 w-1.5 rounded-full ${bucketDot}`} />
+                                    <span
+                                      className="text-[10px] tracking-wider text-stone-400"
+                                      style={{ fontFamily: MONO }}
+                                    >
+                                      {tenderRef(item.id)}
+                                    </span>
+                                    {!item.tender_id && (
+                                      <span className="text-[9px] uppercase tracking-wider text-stone-400 border border-dashed border-stone-300 rounded-sm px-1.5 py-px">
+                                        Manual
+                                      </span>
+                                    )}
+                                    {item.match_reasons?.opportunityBucketLabel && (
+                                      <span className="ml-auto text-[9px] uppercase tracking-wider font-semibold text-stone-500 truncate">
+                                        {item.match_reasons.opportunityBucketLabel}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Title */}
+                                  <div className="font-medium text-stone-900 leading-snug line-clamp-2 text-[13.5px]">
+                                    {item.tender_title}
+                                  </div>
+
+                                  {/* Agency */}
+                                  {item.tender_agency && (
+                                    <div className="mt-1 text-[11.5px] text-stone-500 truncate">
+                                      {item.tender_agency}
                                     </div>
                                   )}
+
+                                  {/* Meta strip — deadline / value / fit */}
+                                  <div
+                                    className="mt-2.5 flex items-center justify-between gap-2 text-[11px] tabular-nums border-t border-stone-100 pt-2"
+                                    style={{ fontFamily: MONO }}
+                                  >
+                                    <span className={isDeadlineSoon(item.tender_deadline) ? "font-semibold text-red-600" : "text-stone-500"}>
+                                      {item.tender_deadline ? (
+                                        <>
+                                          {shortDate(item.tender_deadline)}
+                                          {days != null && days >= 0 && (
+                                            <span className="ml-1 text-stone-400">· {days}d</span>
+                                          )}
+                                          {days != null && days < 0 && (
+                                            <span className="ml-1 text-stone-400">· expired</span>
+                                          )}
+                                        </>
+                                      ) : "—"}
+                                    </span>
+                                    {item.display_value && (
+                                      <span className="text-stone-500 truncate ml-2 flex-1 text-right">
+                                        {item.display_value}
+                                      </span>
+                                    )}
+                                    {item.fit_score > 0 && (
+                                      <span
+                                        className="font-semibold tabular-nums shrink-0"
+                                        style={{ color: item.fit_score >= 70 ? "#0f766e" : item.fit_score >= 50 ? "#a16207" : "#78716c" }}
+                                      >
+                                        {item.fit_score}%
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Why match toggle */}
+                                  {item.match_reasons && (
+                                    <div className="mt-2">
+                                      <button
+                                        onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                                        className="text-[11px] text-stone-500 hover:text-stone-900 flex items-center gap-1 underline-offset-2 hover:underline"
+                                      >
+                                        <svg className={`h-3 w-3 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                        </svg>
+                                        Why this match?
+                                      </button>
+                                      {isExpanded && (
+                                        <div className="mt-2 rounded-sm bg-stone-50 border border-stone-200/70 p-2.5 text-[11px] leading-relaxed text-stone-700 space-y-1">
+                                          {item.match_reasons.summary?.map((s, i) => (
+                                            <div key={i}>· {s}</div>
+                                          ))}
+                                          {item.match_reasons.matchedSectors && item.match_reasons.matchedSectors.length > 0 && (
+                                            <div className="text-stone-500">
+                                              <span className="font-semibold uppercase tracking-wider text-[9px] text-stone-400">Sectors </span>
+                                              {item.match_reasons.matchedSectors.join(", ")}
+                                            </div>
+                                          )}
+                                          {item.match_reasons.matchedCapabilities && item.match_reasons.matchedCapabilities.length > 0 && (
+                                            <div className="text-stone-500">
+                                              <span className="font-semibold uppercase tracking-wider text-[9px] text-stone-400">Capabilities </span>
+                                              {item.match_reasons.matchedCapabilities.join(", ")}
+                                            </div>
+                                          )}
+                                          {item.match_reasons.matchedKeywords && item.match_reasons.matchedKeywords.length > 0 && (
+                                            <div className="text-stone-500">
+                                              <span className="font-semibold uppercase tracking-wider text-[9px] text-stone-400">Keywords </span>
+                                              {item.match_reasons.matchedKeywords.join(", ")}
+                                            </div>
+                                          )}
+                                          {item.match_reasons.geographyAlignment?.mode && item.match_reasons.geographyAlignment.mode !== "unknown" && (
+                                            <div className="text-stone-500">
+                                              <span className="font-semibold uppercase tracking-wider text-[9px] text-stone-400">Geography </span>
+                                              {item.match_reasons.geographyAlignment.mode.replace(/-/g, " ")}
+                                              {item.match_reasons.geographyAlignment.tenderCountry ? ` · ${item.match_reasons.geographyAlignment.tenderCountry}` : ""}
+                                            </div>
+                                          )}
+                                          {item.match_reasons.opportunityBucketReason && (
+                                            <div className="italic text-stone-500 pt-1">{item.match_reasons.opportunityBucketReason}</div>
+                                          )}
+                                          {item.match_reasons.confidence != null && (
+                                            <div className="text-stone-500">
+                                              <span className="font-semibold uppercase tracking-wider text-[9px] text-stone-400">Confidence </span>
+                                              {Math.round(item.match_reasons.confidence * 100)}%
+                                            </div>
+                                          )}
+                                          {item.match_reasons.caveats?.map((c, i) => (
+                                            <div key={i} className="text-amber-700">⚠ {c}</div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Actions */}
+                                  <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
+                                    {STAGE_GUIDANCE[item.stage].moveTo && (
+                                      <button
+                                        onClick={() => moveStage(item.id, STAGE_GUIDANCE[item.stage].moveTo!)}
+                                        className="text-[10.5px] font-semibold uppercase tracking-wider text-stone-700 border border-stone-300 rounded-sm px-2 py-1 bg-white hover:border-stone-700 hover:text-stone-900 transition-colors"
+                                      >
+                                        → {STAGE_GUIDANCE[item.stage].button}
+                                      </button>
+                                    )}
+                                    <Link
+                                      href={serviceHref("bid-no-bid", item)}
+                                      title="Get win probability, criteria breakdown, and gap analysis ($39)"
+                                      className="text-[10.5px] font-semibold uppercase tracking-wider text-stone-700 border border-stone-300 rounded-sm px-2 py-1 bg-white hover:border-stone-700 hover:text-stone-900 transition-colors"
+                                    >
+                                      Bid analysis
+                                    </Link>
+                                    <Link
+                                      href={serviceHref("proposal", item)}
+                                      className="text-[10.5px] font-semibold uppercase tracking-wider text-stone-700 border border-stone-300 rounded-sm px-2 py-1 bg-white hover:border-stone-700 hover:text-stone-900 transition-colors"
+                                    >
+                                      Proposal
+                                    </Link>
+                                    {isRosterAgency(item.tender_agency) && (
+                                      <Link
+                                        href={serviceHref("lta-roster", item)}
+                                        className="text-[10.5px] font-semibold uppercase tracking-wider text-amber-800 border border-amber-300 rounded-sm px-2 py-1 bg-amber-50 hover:border-amber-500 transition-colors"
+                                      >
+                                        Roster
+                                      </Link>
+                                    )}
+                                    <div className="flex-1" />
+                                    <button
+                                      onClick={() => {
+                                        if (confirm(`Remove "${item.tender_title}" from your pipeline?`)) {
+                                          remove(item.id);
+                                        }
+                                      }}
+                                      className="text-stone-400 hover:text-red-600 transition-colors p-0.5"
+                                      title="Remove from pipeline"
+                                    >
+                                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                      </svg>
+                                    </button>
+                                  </div>
                                 </div>
                               )}
-
-                              <div className="mt-2 flex items-center gap-3 flex-wrap">
-                                {STAGE_GUIDANCE[item.stage].moveTo && (
-                                  <button
-                                    onClick={() => moveStage(item.id, STAGE_GUIDANCE[item.stage].moveTo!)}
-                                    className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 border border-emerald-200 rounded px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 transition-colors"
-                                  >
-                                    {STAGE_GUIDANCE[item.stage].button}
-                                  </button>
-                                )}
-                                <Link
-                                  href={serviceHref("bid-no-bid", item)}
-                                  title="Get win probability, criteria breakdown, and gap analysis for this tender ($39)"
-                                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
-                                >
-                                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                                  </svg>
-                                  Bid Analysis
-                                </Link>
-                                <Link
-                                  href={serviceHref("proposal", item)}
-                                  className="text-xs font-semibold text-gray-700 hover:text-gray-900 border border-gray-200 rounded px-2 py-0.5 bg-white hover:bg-gray-50 transition-colors"
-                                >
-                                  Draft Proposal
-                                </Link>
-                                {isRosterAgency(item.tender_agency) && (
-                                  <Link
-                                    href={serviceHref("lta-roster", item)}
-                                    className="text-xs font-semibold text-amber-800 hover:text-amber-950 border border-amber-200 rounded px-2 py-0.5 bg-amber-50 hover:bg-amber-100 transition-colors"
-                                  >
-                                    Roster/LTA
-                                  </Link>
-                                )}
-                                <button
-                                  onClick={() => {
-                                    if (confirm(`Remove "${item.tender_title}" from your pipeline?`)) {
-                                      remove(item.id);
-                                    }
-                                  }}
-                                  className="text-xs text-gray-400 hover:text-red-600 transition-colors"
-                                  title="Remove from pipeline"
-                                >
-                                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
+                            </Draggable>
+                          );
+                        })}
+                        {provided.placeholder}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </Droppable>
-            ))}
-          </div>
+                  )}
+                </Droppable>
+              ))}
+            </div>
           </div>
         </DragDropContext>
       )}
