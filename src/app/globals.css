@@ -1,40 +1,99 @@
 @import "tailwindcss";
 
+/* ============================================================
+   TenderPath visual system — "editorial dossier"
+   Direction A · Paper / ink / accent
+   ============================================================ */
+
 @theme inline {
-  --color-navy: #1a2332;
-  --color-navy-light: #2a3a4e;
-  --color-gold: #c8973e;
+  /* — Surfaces — */
+  --color-paper: #f5f1e8;            /* primary page background */
+  --color-paper-2: #ebe5d3;          /* sunken / panel */
+  --color-paper-3: #faf7ee;          /* raised card */
+  --color-ink: #1a1a1a;              /* primary text */
+  --color-ink-2: #4a4a4a;            /* secondary text */
+  --color-ink-3: #6b6b6b;            /* tertiary / meta */
+  --color-rule: #d8d0bd;             /* hairline rule */
+  --color-mute: #8a8377;             /* mono caption */
+
+  /* — Accent — */
+  --color-accent: #b08530;           /* gold ink, used sparingly */
+  --color-accent-2: #d4a843;         /* gold highlight */
+
+  /* — Semantic — */
+  --color-pos: #2d8a4e;
+  --color-neg: #b8463f;
+  --color-warn: #c8973e;
+
+  /* — Legacy aliases (kept so existing components don't break mid-migration) — */
+  --color-navy: #1a1a1a;
+  --color-navy-light: #2a2a2a;
+  --color-gold: #b08530;
   --color-gold-light: #d4a843;
-  --color-gold-dark: #b08530;
-  --color-gold-bg: #fdf8f0;
-  --color-cream: #fefcf7;
-  --color-cream-dark: #f9f3e8;
+  --color-gold-dark: #8e6a23;
+  --color-gold-bg: #faf3e3;
+  --color-cream: #f5f1e8;
+  --color-cream-dark: #ebe5d3;
   --color-green: #2d8a4e;
-  --color-green-light: #e8f5ed;
-  --color-red: #d94f4f;
-  --color-gray-50: #f9fafb;
-  --color-gray-100: #f3f4f6;
-  --color-gray-200: #e5e7eb;
-  --color-gray-300: #d1d5db;
-  --color-gray-400: #9ca3af;
-  --color-gray-500: #6b7280;
-  --color-gray-600: #4b5563;
-  --color-gray-700: #374151;
-  --color-gray-800: #1f2937;
-  --color-gray-900: #111827;
+  --color-green-light: #e3ecdf;
+  --color-red: #b8463f;
+  --color-gray-50: #faf7ee;
+  --color-gray-100: #f0ebdf;
+  --color-gray-200: #e3dcc8;
+  --color-gray-300: #d8d0bd;
+  --color-gray-400: #b3ab98;
+  --color-gray-500: #8a8377;
+  --color-gray-600: #6b6b6b;
+  --color-gray-700: #4a4a4a;
+  --color-gray-800: #2a2a2a;
+  --color-gray-900: #1a1a1a;
+
+  /* — Type stack — */
   --font-sans: var(--font-inter);
-  --font-serif: var(--font-playfair);
+  --font-serif: var(--font-fraunces);
+  --font-mono: var(--font-jetbrains);
 }
 
 body {
-  background: #ffffff;
-  color: var(--color-navy);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-feature-settings: "ss01", "ss02", "cv11";
 }
 
 html {
   scroll-behavior: smooth;
 }
 
+/* Editorial display ramp — apply via .display utility */
+.display {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.0;
+  text-wrap: balance;
+}
+
+/* Mono caption — apply via .mono utility */
+.mono {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+/* Eyebrow — small caps tracked label, used above headlines */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+/* Hairline rule — replaces card borders for a more editorial feel */
+.rule {
+  border-color: var(--color-rule);
+}
+
+/* Animations */
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -48,4 +107,23 @@ html {
 @keyframes scaleIn {
   from { opacity: 0; transform: scale(0.95); }
   to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes ticker {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+@keyframes countUp {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
