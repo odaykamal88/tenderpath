@@ -1,71 +1,78 @@
+/* Challenge — editorial numbered list with quantified callouts */
+
 const problems = [
   {
-    icon: (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-      </svg>
-    ),
-    title: "Opportunities Are Fragmented",
-    description:
-      "Live tenders are scattered across UNGM, agency portals, regional offices, and grant systems. Most qualifying businesses never see the right contracts at the right time.",
+    n: "01",
+    pull: "$25.7B",
+    pullLabel: "Spread across UNGM, agency portals, regional offices, and grant systems",
+    title: "Opportunities are fragmented.",
+    body: "Live tenders sit on a dozen different portals. Most qualifying vendors never see the right contract at the right time — by the time it surfaces in a roundup, the deadline is already tight.",
   },
   {
-    icon: (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-      </svg>
-    ),
-    title: "Compliance Mistakes Knock You Out Early",
-    description:
-      "UNGM registration errors, missing financial documents, and legal gaps disqualify vendors before evaluation begins. The paperwork barrier stops more bids than fit does.",
+    n: "02",
+    pull: "70%",
+    pullLabel: "of bids that fail are eliminated on paperwork, not fit",
+    title: "Compliance gaps disqualify you before evaluation.",
+    body: "UNGM registration errors, missing financial documents, and legal gaps stop more bids than technical capability does. The paperwork barrier is solvable — but only if you know which barrier you're hitting.",
   },
   {
-    icon: (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
-    title: "The Expensive Mistake Is Chasing the Wrong Bid",
-    description:
-      "A full proposal takes 20–40 hours. Vendors routinely invest that time in tenders they were never going to win — wrong geography, wrong experience tier, wrong technical fit.",
+    n: "03",
+    pull: "30hrs",
+    pullLabel: "Average time to draft a serious UN proposal",
+    title: "The expensive mistake is chasing the wrong bid.",
+    body: "Vendors routinely invest 30 hours in tenders they were never going to win — wrong geography, wrong experience tier, wrong technical fit. The cost isn't the proposal. It's the ones you didn't write because you were busy with this one.",
   },
 ];
 
 export default function Challenge() {
   return (
-    <section id="challenge" className="bg-white py-20 lg:py-28">
+    <section id="challenge" className="bg-paper py-20 lg:py-28">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         {/* Header */}
-        <div className="text-center max-w-2xl mx-auto mb-16">
-          <p className="text-xs font-bold tracking-[0.2em] uppercase text-gold mb-4">
-            The Challenge
-          </p>
-          <h2 className="font-serif text-3xl sm:text-4xl font-bold text-navy mb-4">
-            UN procurement is real — but hard for new vendors to navigate
-          </h2>
-          <p className="text-gray-500 text-base leading-relaxed">
-            The contracts exist. The barrier is knowing where you stand and which
-            opportunities are actually worth pursuing.
+        <div className="grid lg:grid-cols-[1fr_2fr] gap-10 lg:gap-16 mb-16 items-end">
+          <div>
+            <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-accent mb-5">
+              The Challenge
+            </p>
+            <h2 className="font-serif text-[40px] lg:text-[52px] font-normal leading-[1.0] tracking-[-0.02em] text-ink text-balance">
+              UN procurement is real.<br />
+              <span className="text-ink-3">Just hard to navigate.</span>
+            </h2>
+          </div>
+          <p className="text-[16px] text-ink-2 leading-[1.6] max-w-lg lg:pb-3">
+            The contracts exist. The barrier is knowing where you stand and
+            which opportunities are actually worth pursuing — before you spend
+            a week of evenings on a proposal nobody will read.
           </p>
         </div>
 
-        {/* Problem cards */}
-        <div className="grid md:grid-cols-3 gap-8">
-          {problems.map((problem) => (
-            <div
-              key={problem.title}
-              className="p-6 rounded-xl border border-gray-100 hover:border-gold/20 hover:shadow-lg transition-all"
+        {/* Numbered problem list */}
+        <div className="border-t border-rule">
+          {problems.map((p) => (
+            <article
+              key={p.n}
+              className="grid lg:grid-cols-[80px_1fr_280px] gap-8 lg:gap-12 py-10 lg:py-12 border-b border-rule"
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red/5 text-red mb-4">
-                {problem.icon}
+              <div className="font-serif text-[44px] text-accent leading-none tracking-[-0.02em]">
+                {p.n}
               </div>
-              <h3 className="text-lg font-semibold text-navy mb-2">
-                {problem.title}
-              </h3>
-              <p className="text-sm text-gray-500 leading-relaxed">
-                {problem.description}
-              </p>
-            </div>
+              <div>
+                <h3 className="font-serif text-[26px] lg:text-[28px] text-ink leading-[1.15] tracking-[-0.01em] mb-3">
+                  {p.title}
+                </h3>
+                <p className="text-[15px] text-ink-2 leading-[1.6] max-w-xl">
+                  {p.body}
+                </p>
+              </div>
+              <aside className="border-l border-ink pl-5 lg:self-center">
+                <p className="font-serif text-[36px] lg:text-[40px] leading-none text-ink tabular-nums">
+                  {p.pull}
+                </p>
+                <p className="font-mono text-[10px] tracking-[0.06em] text-ink-3 mt-2 leading-relaxed">
+                  {p.pullLabel}
+                </p>
+              </aside>
+            </article>
           ))}
         </div>
       </div>
