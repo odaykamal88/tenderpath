@@ -46,43 +46,80 @@ const faqs = [
   },
 ];
 
+const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
+const SERIF = "'Fraunces', 'Times New Roman', serif";
+
 export default function FAQPage() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen" style={{ backgroundColor: "#fafaf7" }}>
       {/* Nav */}
-      <nav className="border-b border-gray-100 bg-white/95 backdrop-blur-sm sticky top-0 z-50">
-        <div className="mx-auto max-w-7xl px-6 flex h-14 items-center justify-between">
-          <a href="/" className="text-lg font-semibold text-gray-900">
-            Tender<span className="text-amber-500">Path</span>
+      <nav className="border-b border-stone-200/70 bg-white/95 backdrop-blur-sm sticky top-0 z-50">
+        <div className="mx-auto max-w-5xl px-6 flex h-14 items-center justify-between">
+          <a
+            href="/"
+            className="text-[15px] font-semibold text-stone-900"
+            style={{ fontFamily: SERIF }}
+          >
+            Tender<span style={{ color: "#ea580c" }}>·</span>Path
           </a>
-          <a href="/" className="text-sm text-gray-500 hover:text-gray-900">← Back to home</a>
+          <a
+            href="/"
+            className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-500 hover:text-stone-900 transition-colors"
+            style={{ fontFamily: MONO }}
+          >
+            ← Home
+          </a>
         </div>
       </nav>
 
       <div className="mx-auto max-w-3xl px-6 py-16">
+        {/* Header */}
         <div className="mb-12">
-          <h1 className="font-serif text-4xl font-bold text-gray-900 mb-4">
-            Frequently Asked Questions
+          <div
+            className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+            style={{ fontFamily: MONO }}
+          >
+            Reference · Frequently asked
+          </div>
+          <h1
+            className="mt-1.5 text-[56px] leading-[1.02] font-medium text-stone-900 tracking-tight"
+            style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
+          >
+            Questions, answered.
           </h1>
-          <p className="text-gray-500 text-lg">
-            Everything you need to know about TenderPath and UN procurement.
-            Can&apos;t find your answer?{" "}
-            <a href="mailto:hello@tenderpath.co" className="text-amber-600 underline hover:no-underline">
+          <p className="mt-3 text-[15px] leading-relaxed text-stone-600 max-w-2xl">
+            Everything you need to know about TenderPath and UN procurement. Can&apos;t find your answer?{" "}
+            <a
+              href="mailto:hello@tenderpath.co"
+              className="text-stone-900 underline underline-offset-2 hover:text-stone-700"
+            >
               Email us
             </a>
             .
           </p>
         </div>
 
-        <div className="space-y-0 divide-y divide-gray-100">
-          {faqs.map((faq) => (
-            <details key={faq.q} className="group py-5">
-              <summary className="flex cursor-pointer items-center justify-between gap-4 list-none">
-                <h2 className="text-base font-semibold text-gray-900 group-open:text-amber-600 transition-colors">
-                  {faq.q}
-                </h2>
+        {/* FAQ list */}
+        <div className="border-t border-stone-200">
+          {faqs.map((faq, i) => (
+            <details key={faq.q} className="group border-b border-stone-200 py-5">
+              <summary className="flex cursor-pointer items-baseline justify-between gap-4 list-none">
+                <div className="flex items-baseline gap-4 flex-1">
+                  <span
+                    className="text-[10px] font-semibold tabular-nums text-stone-400 shrink-0"
+                    style={{ fontFamily: MONO }}
+                  >
+                    {(i + 1).toString().padStart(2, "0")}
+                  </span>
+                  <h2
+                    className="text-[18px] leading-snug font-medium text-stone-900 group-open:text-stone-700 transition-colors"
+                    style={{ fontFamily: SERIF }}
+                  >
+                    {faq.q}
+                  </h2>
+                </div>
                 <svg
-                  className="h-5 w-5 flex-shrink-0 text-gray-400 group-open:rotate-45 transition-transform"
+                  className="h-4 w-4 mt-1.5 flex-shrink-0 text-stone-400 group-open:rotate-45 transition-transform"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -91,37 +128,57 @@ export default function FAQPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
               </summary>
-              <p className="mt-3 text-sm text-gray-600 leading-relaxed">{faq.a}</p>
+              <p className="mt-3 ml-9 text-[14px] leading-relaxed text-stone-600 max-w-2xl">
+                {faq.a}
+              </p>
             </details>
           ))}
         </div>
 
-        <div className="mt-16 rounded-xl bg-gray-50 border border-gray-200 p-8 text-center">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Still have questions?</h3>
-          <p className="text-sm text-gray-500 mb-6">
-            Our team responds within one business day. For complex UN procurement questions,
-            book a free 15-min call with an expert.
+        {/* Still have questions */}
+        <div className="mt-12 rounded-md border border-stone-200/70 bg-white p-7">
+          <div
+            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+            style={{ fontFamily: MONO }}
+          >
+            Still curious
+          </div>
+          <h3
+            className="mt-1 text-[24px] font-medium text-stone-900 tracking-tight"
+            style={{ fontFamily: SERIF }}
+          >
+            We respond within one business day.
+          </h3>
+          <p className="mt-2 text-[13.5px] leading-relaxed text-stone-600">
+            For complex UN procurement questions, book a free 15-minute call with an expert. We can review your shortlist, suggest the right service path, and answer anything specific to your sector.
           </p>
-          <div className="flex flex-wrap justify-center gap-3">
+          <div className="mt-5 flex flex-wrap gap-3">
             <a
               href="mailto:hello@tenderpath.co"
-              className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-700 transition-colors"
+              className="rounded-sm bg-stone-900 px-4 py-2.5 text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors"
             >
-              Email Us
+              Email us
             </a>
             <a
               href="mailto:hello@tenderpath.co?subject=Book a call"
-              className="inline-flex items-center gap-2 rounded-lg border-2 border-gray-200 px-5 py-2.5 text-sm font-semibold text-gray-700 hover:border-gray-400 transition-colors"
+              className="rounded-sm border border-stone-300 px-4 py-2.5 text-[12.5px] font-semibold text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
             >
-              Book a Free Expert Call
+              Book a free expert call
             </a>
           </div>
         </div>
       </div>
 
-      <footer className="border-t border-gray-100 py-8 text-center text-xs text-gray-400">
-        © {new Date().getFullYear()} TenderPath. All rights reserved. |{" "}
-        <a href="/" className="underline hover:text-gray-600">Home</a>
+      <footer className="border-t border-stone-200 py-7 text-center">
+        <p
+          className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+          style={{ fontFamily: MONO }}
+        >
+          © {new Date().getFullYear()} Tender·Path ·{" "}
+          <a href="/" className="underline underline-offset-2 hover:text-stone-700">
+            Home
+          </a>
+        </p>
       </footer>
     </div>
   );
