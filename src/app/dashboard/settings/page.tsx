@@ -30,6 +30,9 @@ const SECTORS = [
   "Other",
 ];
 
+const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
+const SERIF = "'Fraunces', 'Times New Roman', serif";
+
 interface Profile {
   email: string | null;
   contact_phone: string | null;
@@ -43,8 +46,8 @@ interface Profile {
 }
 
 function sourceLabel(source: string) {
-  if (source === "assessment") return "Auto-populated from your assessment · Edit to refine";
-  if (source === "manual") return "Manually updated";
+  if (source === "assessment") return "Auto-populated from assessment · Refine to improve matching";
+  if (source === "manual") return "Manually maintained";
   return "No profile data yet · Run an assessment to auto-populate";
 }
 
@@ -62,25 +65,73 @@ function CountryTagInput({
     setInput("");
   };
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap gap-1.5">
-        {value.map((c) => (
-          <span key={c} className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 text-xs px-2.5 py-1 font-medium">
-            {c}
-            <button type="button" onClick={() => onChange(value.filter((x) => x !== c))} className="text-amber-600 hover:text-amber-900 leading-none">×</button>
-          </span>
-        ))}
-      </div>
+    <div className="flex flex-col gap-2.5">
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {value.map((c) => (
+            <span
+              key={c}
+              className="inline-flex items-center gap-1.5 rounded-sm border border-stone-300 bg-stone-50/60 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-700 px-2 py-1"
+              style={{ fontFamily: MONO }}
+            >
+              {c}
+              <button
+                type="button"
+                onClick={() => onChange(value.filter((x) => x !== c))}
+                className="text-stone-400 hover:text-red-600 leading-none text-[14px]"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       <div className="flex gap-2">
         <input
-          className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+          className="flex-1 rounded-sm border border-stone-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:border-stone-700"
           placeholder="Add country (press Enter)"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
         />
-        <button type="button" onClick={add} className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">Add</button>
+        <button
+          type="button"
+          onClick={add}
+          className="rounded-sm border border-stone-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
+        >
+          Add
+        </button>
       </div>
+    </div>
+  );
+}
+
+function FieldRow({
+  index,
+  label,
+  helper,
+  children,
+}: {
+  index: string;
+  label: string;
+  helper?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="px-6 py-5 grid sm:grid-cols-[180px_1fr] gap-x-6 gap-y-2 items-start">
+      <div>
+        <div className="flex items-baseline gap-2">
+          <span
+            className="text-[10px] font-semibold tabular-nums text-stone-400"
+            style={{ fontFamily: MONO }}
+          >
+            {index}
+          </span>
+          <label className="text-[13px] font-medium text-stone-900">{label}</label>
+        </div>
+        {helper && <p className="mt-0.5 ml-5 text-[11.5px] text-stone-500 leading-snug">{helper}</p>}
+      </div>
+      <div>{children}</div>
     </div>
   );
 }
@@ -145,181 +196,170 @@ export default function SettingsPage() {
     }
   }
 
-  if (loading) return <div className="text-sm text-gray-400 py-10 text-center">Loading profile…</div>;
+  if (loading) {
+    return (
+      <div className="px-8 py-16 text-center">
+        <div
+          className="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-400"
+          style={{ fontFamily: MONO }}
+        >
+          Loading profile…
+        </div>
+      </div>
+    );
+  }
+
+  const inputCls =
+    "w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] focus:outline-none focus:border-stone-700";
 
   return (
-    <div className="max-w-2xl">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">Business Profile</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          {profile ? sourceLabel(profile.profile_source) : ""}
+    <div className="px-8 py-8 max-w-[1100px]">
+      {/* Header */}
+      <header className="mb-2">
+        <div className="flex items-center gap-3 text-[11px] text-stone-500">
+          <span className="font-semibold uppercase tracking-[0.18em] text-stone-400">Workbench · Tools</span>
+          <span className="text-stone-300">·</span>
+          <span style={{ fontFamily: MONO }}>{profile ? sourceLabel(profile.profile_source) : ""}</span>
+        </div>
+        <h1
+          className="mt-1 text-[56px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+          style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
+        >
+          Business <em className="italic text-stone-500">profile</em>
+        </h1>
+        <p className="mt-1 max-w-2xl text-[15px] leading-relaxed text-stone-600">
+          The data we use to match you against tenders, draft proposals, and track readiness. Keep it sharp — fuzzy fields produce fuzzy matches.
         </p>
-      </div>
+      </header>
 
+      {/* Auto-populate notice */}
       {profile?.profile_source === "assessment" && (
-        <div className="mb-6 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 flex items-start gap-2.5">
-          <svg className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span>
-            This profile was auto-generated from your assessment. Your business description and sector were inferred from your website and inputs — review and refine them to improve tender matching.
-          </span>
+        <div className="mt-6 rounded-md border-l-2 border-amber-600 bg-amber-50/40 px-4 py-3">
+          <div
+            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700"
+            style={{ fontFamily: MONO }}
+          >
+            From assessment · please review
+          </div>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-amber-900">
+            We pre-filled this profile from your assessment. Sector and description were inferred — refining them improves match quality.
+          </p>
         </div>
       )}
 
-      <form onSubmit={save} className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
-        {/* Email — read-only */}
-        <div className="px-6 py-5 grid sm:grid-cols-3 gap-4 items-start">
-          <div>
-            <label className="text-sm font-medium text-gray-700">Email address</label>
-            <p className="text-xs text-gray-400 mt-0.5">Your login email</p>
-          </div>
-          <div className="sm:col-span-2">
-            <input
-              readOnly
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 cursor-default focus:outline-none"
-              value={profile?.email ?? ""}
-            />
-            <p className="mt-1 text-xs text-gray-400">Change your email in account settings via your login provider.</p>
-          </div>
-        </div>
+      <form onSubmit={save} className="mt-7 rounded-md border border-stone-200/70 bg-white divide-y divide-stone-200/70">
+        <FieldRow index="01" label="Email address" helper="Your login email">
+          <input
+            readOnly
+            className="w-full rounded-sm border border-stone-200 bg-stone-50/60 px-3 py-2.5 text-[13px] text-stone-500 cursor-default focus:outline-none"
+            value={profile?.email ?? ""}
+            style={{ fontFamily: MONO }}
+          />
+          <p className="mt-1.5 text-[11px] text-stone-500">
+            Change your email through your login provider.
+          </p>
+        </FieldRow>
 
-        {/* Contact phone */}
-        <div className="px-6 py-5 grid sm:grid-cols-3 gap-4 items-start">
-          <div>
-            <label className="text-sm font-medium text-gray-700">Contact phone</label>
-            <p className="text-xs text-gray-400 mt-0.5">Optional · used for service follow-up</p>
-          </div>
-          <div className="sm:col-span-2">
-            <input
-              type="tel"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
-              placeholder="+1 555 000 0000"
-              value={form.contact_phone ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, contact_phone: e.target.value }))}
-            />
-          </div>
-        </div>
+        <FieldRow index="02" label="Contact phone" helper="Optional · used for service follow-up">
+          <input
+            type="tel"
+            className={inputCls}
+            placeholder="+1 555 000 0000"
+            value={form.contact_phone ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, contact_phone: e.target.value }))}
+            style={{ fontFamily: MONO }}
+          />
+        </FieldRow>
 
-        {/* Business name */}
-        <div className="px-6 py-5 grid sm:grid-cols-3 gap-4 items-start">
-          <div>
-            <label className="text-sm font-medium text-gray-700">Business name</label>
-            <p className="text-xs text-gray-400 mt-0.5">Legal or trading name</p>
-          </div>
-          <div className="sm:col-span-2">
-            <input
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
-              placeholder="Your company or organisation name"
-              value={form.business_name ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, business_name: e.target.value }))}
-            />
-          </div>
-        </div>
+        <FieldRow index="03" label="Business name" helper="Legal or trading name">
+          <input
+            className={inputCls}
+            placeholder="Your company or organisation name"
+            value={form.business_name ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, business_name: e.target.value }))}
+          />
+        </FieldRow>
 
-        {/* Website */}
-        <div className="px-6 py-5 grid sm:grid-cols-3 gap-4 items-start">
-          <div>
-            <label className="text-sm font-medium text-gray-700">Website</label>
-            <p className="text-xs text-gray-400 mt-0.5">Used for assessment context</p>
-          </div>
-          <div className="sm:col-span-2">
-            <input
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
-              placeholder="https://yourcompany.com"
-              value={form.website ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))}
-            />
-          </div>
-        </div>
+        <FieldRow index="04" label="Website" helper="Used for assessment context">
+          <input
+            className={inputCls}
+            placeholder="https://yourcompany.com"
+            value={form.website ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))}
+            style={{ fontFamily: MONO }}
+          />
+        </FieldRow>
 
-        {/* Org type */}
-        <div className="px-6 py-5 grid sm:grid-cols-3 gap-4 items-start">
-          <div>
-            <label className="text-sm font-medium text-gray-700">Organisation type</label>
-          </div>
-          <div className="sm:col-span-2">
-            <select
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none bg-white"
-              value={form.org_type ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, org_type: e.target.value }))}
-            >
-              <option value="">Select type…</option>
-              {ORG_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+        <FieldRow index="05" label="Organisation type">
+          <select
+            className={inputCls}
+            value={form.org_type ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, org_type: e.target.value }))}
+          >
+            <option value="">Select type…</option>
+            {ORG_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
+        </FieldRow>
 
-        {/* Sector */}
-        <div className="px-6 py-5 grid sm:grid-cols-3 gap-4 items-start">
-          <div>
-            <label className="text-sm font-medium text-gray-700">Primary sector</label>
-            <p className="text-xs text-gray-400 mt-0.5">Drives tender matching</p>
-          </div>
-          <div className="sm:col-span-2">
-            <select
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none bg-white"
-              value={form.sector ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, sector: e.target.value }))}
-            >
-              <option value="">Select sector…</option>
-              {SECTORS.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+        <FieldRow index="06" label="Primary sector" helper="Drives tender matching">
+          <select
+            className={inputCls}
+            value={form.sector ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, sector: e.target.value }))}
+          >
+            <option value="">Select sector…</option>
+            {SECTORS.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </FieldRow>
 
-        {/* Countries */}
-        <div className="px-6 py-5 grid sm:grid-cols-3 gap-4 items-start">
-          <div>
-            <label className="text-sm font-medium text-gray-700">Countries of operation</label>
-            <p className="text-xs text-gray-400 mt-0.5">Used for geography matching</p>
-          </div>
-          <div className="sm:col-span-2">
-            <CountryTagInput
-              value={form.country_focus ?? []}
-              onChange={(v) => setForm((f) => ({ ...f, country_focus: v }))}
-            />
-          </div>
-        </div>
+        <FieldRow index="07" label="Countries of operation" helper="Used for geography matching">
+          <CountryTagInput
+            value={form.country_focus ?? []}
+            onChange={(v) => setForm((f) => ({ ...f, country_focus: v }))}
+          />
+        </FieldRow>
 
-        {/* Description */}
-        <div className="px-6 py-5 grid sm:grid-cols-3 gap-4 items-start">
-          <div>
-            <label className="text-sm font-medium text-gray-700">Business description</label>
-            <p className="text-xs text-gray-400 mt-0.5">What you do, sell, build, or deliver</p>
-          </div>
-          <div className="sm:col-span-2">
-            <textarea
-              rows={5}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none resize-none"
-              placeholder="Describe your products, services, and key capabilities…"
-              value={form.profile_description ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, profile_description: e.target.value }))}
-            />
-            <p className="mt-1 text-xs text-gray-400">A richer description improves tender matching quality.</p>
-          </div>
-        </div>
+        <FieldRow index="08" label="Business description" helper="What you do, sell, build, or deliver">
+          <textarea
+            rows={5}
+            className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] focus:outline-none focus:border-stone-700 resize-none"
+            placeholder="Describe your products, services, and key capabilities…"
+            value={form.profile_description ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, profile_description: e.target.value }))}
+          />
+          <p className="mt-1.5 text-[11px] text-stone-500">
+            A richer description improves tender matching quality.
+          </p>
+        </FieldRow>
 
-        {/* Actions */}
-        <div className="px-6 py-4 flex items-center justify-between bg-gray-50 rounded-b-xl">
-          <div className="text-xs text-gray-400">
-            Profile data improves your tender matches and proposal documents.
+        {/* Footer actions */}
+        <div className="px-6 py-4 flex items-center justify-between bg-stone-50/40">
+          <div
+            className="text-[11px] text-stone-500"
+            style={{ fontFamily: MONO }}
+          >
+            Profile data → tender matches → proposal documents.
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             {saved && (
-              <span className="text-xs text-green-600 font-medium">Saved ✓</span>
+              <span
+                className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700"
+                style={{ fontFamily: MONO }}
+              >
+                Saved ✓
+              </span>
             )}
             {error && (
-              <span className="text-xs text-red-500">{error}</span>
+              <span className="text-[11px] text-red-700">{error}</span>
             )}
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-700 transition-colors disabled:opacity-50"
+              className="rounded-sm bg-stone-900 px-5 py-2.5 text-[12.5px] font-medium text-white hover:bg-stone-800 transition-colors disabled:opacity-50"
             >
               {saving ? "Saving…" : "Save profile"}
             </button>
