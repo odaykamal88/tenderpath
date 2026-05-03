@@ -1,11 +1,15 @@
 export default function ServiceLoading() {
   return (
-    <div className="space-y-4">
-      <div className="h-8 w-64 rounded-md bg-gray-100" />
-      <div className="h-4 w-full max-w-2xl rounded-md bg-gray-100" />
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.9fr)]">
-        <div className="h-80 rounded-lg border border-gray-200 bg-white" />
-        <div className="h-64 rounded-lg border border-gray-200 bg-white" />
+    <div className="px-8 py-8 max-w-6xl animate-pulse">
+      <div className="h-3 w-24 rounded-sm bg-stone-100 mb-5" />
+      <div className="h-12 w-72 rounded-sm bg-stone-100 mb-2" />
+      <div className="h-4 w-full max-w-2xl rounded-sm bg-stone-100/70 mb-8" />
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.9fr)]">
+        <div className="space-y-6">
+          <div className="h-72 rounded-md border border-stone-200/70 bg-stone-50/40" />
+          <div className="h-56 rounded-md border border-stone-200/70 bg-stone-50/40" />
+        </div>
+        <div className="h-96 rounded-md border border-stone-200/70 bg-stone-50/40" />
       </div>
     </div>
   );
