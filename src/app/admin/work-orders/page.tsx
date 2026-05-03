@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import styles from "../admin.module.css";
+import { StatusDot, StatusTag } from "../_components/StatusTag";
 
 type Status = "all" | "new" | "in_progress" | "waiting_on_client" | "delivered" | "canceled";
 
@@ -27,8 +29,15 @@ interface WorkOrder {
   updated_at: string;
 }
 
-const STATUS_OPTIONS: Status[] = ["all", "new", "in_progress", "waiting_on_client", "delivered", "canceled"];
-const EDITABLE_STATUSES: Exclude<Status, "all">[] = ["new", "in_progress", "waiting_on_client", "delivered", "canceled"];
+const TABS: { key: Status; label: string }[] = [
+  { key: "all",                label: "All" },
+  { key: "new",                label: "New" },
+  { key: "in_progress",        label: "In progress" },
+  { key: "waiting_on_client",  label: "Waiting on client" },
+  { key: "delivered",          label: "Delivered" },
+  { key: "canceled",           label: "Canceled" },
+];
+const EDITABLE: Exclude<Status, "all">[] = ["new", "in_progress", "waiting_on_client", "delivered", "canceled"];
 
 function authHeaders(): HeadersInit {
   const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
@@ -40,22 +49,20 @@ function authHeaders(): HeadersInit {
 function label(value: string): string {
   return value.replace(/-/g, " ").replace(/_/g, " ");
 }
-
 function money(cents: number | null, currency: string | null): string {
   if (cents == null) return "—";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: (currency ?? "usd").toUpperCase(),
+    maximumFractionDigits: 0,
   }).format(cents / 100);
 }
-
-function formatDate(value: string | null): string {
+function fmtDate(value: string | null): string {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+  return date.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
-
 function intakePreview(intake: Record<string, unknown> | null): Array<[string, string]> {
   if (!intake) return [];
   return Object.entries(intake)
@@ -66,40 +73,23 @@ function intakePreview(intake: Record<string, unknown> | null): Array<[string, s
       if (typeof value === "boolean") return [labelText, value ? "Yes" : "No"];
       return [labelText, value == null ? "" : String(value)];
     })
-    .filter(([, value]) => value.trim().length > 0)
+    .filter(([, v]) => v.trim().length > 0)
     .slice(0, 4);
-}
-
-function StatusPill({ status }: { status: string }) {
-  const cls = status === "new"
-    ? "border-violet-500/30 bg-violet-500/15 text-violet-300"
-    : status === "in_progress"
-      ? "border-amber-500/30 bg-amber-500/15 text-amber-300"
-      : status === "waiting_on_client"
-        ? "border-blue-500/30 bg-blue-500/15 text-blue-300"
-        : status === "delivered"
-          ? "border-green-500/30 bg-green-500/15 text-green-300"
-          : "border-slate-500/30 bg-slate-500/15 text-slate-300";
-  return (
-    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${cls}`}>
-      {label(status)}
-    </span>
-  );
 }
 
 export default function WorkOrdersPage() {
   const [orders, setOrders] = useState<WorkOrder[]>([]);
-  const [status, setStatus] = useState<Status>("all");
+  const [filter, setFilter] = useState<Status>("all");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notifyCustomer, setNotifyCustomer] = useState(false);
+  const [notify, setNotify] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/work-orders?status=${status}`, { headers: authHeaders() });
+      const res = await fetch(`/api/admin/work-orders?status=${filter}`, { headers: authHeaders() });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const body = await res.json();
       setOrders(body.workOrders ?? []);
@@ -108,11 +98,9 @@ export default function WorkOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [status]);
+  }, [filter]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   async function updateOrder(id: number, patch: { status?: string; fulfillment_notes?: string; notify_customer?: boolean }) {
     setSavingId(id);
@@ -124,7 +112,7 @@ export default function WorkOrdersPage() {
       });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const body = await res.json();
-      setOrders((prev) => prev.map((order) => order.id === id ? { ...order, ...body.workOrder } : order));
+      setOrders((prev) => prev.map((o) => o.id === id ? { ...o, ...body.workOrder } : o));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update work order");
     } finally {
@@ -132,148 +120,150 @@ export default function WorkOrdersPage() {
     }
   }
 
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: orders.length };
+    orders.forEach((o) => { c[o.status] = (c[o.status] ?? 0) + 1; });
+    return c;
+  }, [orders]);
+
   return (
-    <div className="p-8 max-w-7xl mx-auto">
-      <div className="flex items-start justify-between gap-4 mb-8">
+    <>
+      <header className={styles.pageHeader}>
         <div>
-          <h1 className="text-2xl font-bold text-white">Work Orders</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Service intakes, payment status, and fulfillment notes.
+          <div className={styles.eyebrow}>02 — Work Orders</div>
+          <h1 className={styles.pageTitle}>Service intakes</h1>
+          <p className={styles.pageSub}>
+            Paid services in flight. Edit status and fulfillment notes inline.
           </p>
         </div>
-        <button
-          onClick={load}
-          className="rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-400 hover:border-white/20 hover:text-white"
-        >
-          Refresh
-        </button>
-      </div>
-
-      <label className="mb-5 inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-400">
-        <input
-          type="checkbox"
-          checked={notifyCustomer}
-          onChange={(e) => setNotifyCustomer(e.target.checked)}
-          className="h-3.5 w-3.5 rounded border-white/20 bg-slate-950"
-        />
-        Email customer when status changes
-      </label>
-
-      <div className="mb-5 flex flex-wrap gap-2">
-        {STATUS_OPTIONS.map((option) => (
-          <button
-            key={option}
-            onClick={() => setStatus(option)}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-medium capitalize ${
-              status === option
-                ? "border-violet-500/40 bg-violet-500/20 text-violet-200"
-                : "border-white/10 text-slate-500 hover:text-slate-300"
-            }`}
-          >
-            {label(option)}
-          </button>
-        ))}
-      </div>
-
-      {error && (
-        <div className="mb-5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-          {error}
+        <div className={styles.pageActions}>
+          <button type="button" className={styles.btnGhost} onClick={load}>Refresh</button>
         </div>
-      )}
+      </header>
 
-      <div className="overflow-hidden rounded-xl border border-white/8 bg-white/5">
-        {loading ? (
-          <div className="p-8 text-center text-sm text-slate-500">Loading work orders...</div>
-        ) : orders.length === 0 ? (
-          <div className="p-8 text-center text-sm text-slate-500">No work orders for this filter.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/5 text-xs uppercase tracking-wider text-slate-500">
-                  <th className="px-5 py-3 text-left font-medium">Order</th>
-                  <th className="px-5 py-3 text-left font-medium">Context</th>
-                  <th className="px-5 py-3 text-left font-medium">Customer</th>
-                  <th className="px-5 py-3 text-left font-medium">Status</th>
-                  <th className="px-5 py-3 text-left font-medium">Notes</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {orders.map((order) => (
-                  <tr key={order.id} className="align-top">
-                    <td className="px-5 py-4">
-                      <div className="font-medium text-white capitalize">{label(order.plan)}</div>
-                      <div className="mt-1 text-xs text-slate-500">#{order.id} · {money(order.amount_cents, order.currency)}</div>
-                      {order.service_slug && (
-                        <div className="mt-1 text-xs text-slate-600">Service: {label(order.service_slug)}</div>
-                      )}
-                      <div className="mt-1 text-xs text-slate-600">{formatDate(order.created_at)}</div>
-                    </td>
-                    <td className="px-5 py-4 min-w-72">
-                      <div className="font-medium text-slate-200">{order.tender_title ?? "No tender attached"}</div>
-                      <div className="mt-1 text-xs text-slate-500">
-                        {order.agency ?? "No agency"} · Pipeline {order.pipeline_item_id ?? "—"}
+      {error && <div className={`${styles.toast} ${styles.toastErr}`}>{error}</div>}
+
+      <section className={styles.woControls}>
+        <div className={styles.woTabs}>
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setFilter(t.key)}
+              className={`${styles.woTab} ${filter === t.key ? styles.woTabActive : ""}`}
+            >
+              <span>{t.label}</span>
+              <span className={styles.woTabCount}>{counts[t.key] ?? 0}</span>
+            </button>
+          ))}
+        </div>
+        <label className={styles.woNotify}>
+          <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
+          Notify customer on status change
+        </label>
+      </section>
+
+      {loading ? (
+        <div className={styles.woEmpty}>Loading work orders…</div>
+      ) : orders.length === 0 ? (
+        <div className={styles.woEmpty}>No work orders for this filter.</div>
+      ) : (
+        <section className={styles.woList}>
+          {orders.map((o) => {
+            const intake = intakePreview(o.intake);
+            return (
+              <article key={o.id} className={styles.woCard}>
+                <div className={styles.woCardRail}>
+                  <StatusDot status={o.status} />
+                  <div className={styles.woId}>#{o.id}</div>
+                </div>
+
+                <div className={styles.woCardMain}>
+                  <header className={styles.woHead}>
+                    <div style={{ minWidth: 0 }}>
+                      <div className={styles.eyebrow}>{label(o.plan)}</div>
+                      <h3 className={styles.woTitle}>
+                        {o.tender_title ?? "No tender attached"}
+                      </h3>
+                      <div className={styles.woMeta}>
+                        {o.agency ?? "—"}
+                        {o.tender_deadline && <> · Due {fmtDate(o.tender_deadline)}</>}
+                        {o.fit_score != null && <> · Fit {o.fit_score}%</>}
+                        {o.pipeline_stage && <> · {o.pipeline_stage}</>}
                       </div>
-                      <div className="mt-1 text-xs text-slate-600">
-                        Due {formatDate(order.tender_deadline)} · Fit {order.fit_score ?? "—"}% · {order.pipeline_stage ?? "no stage"}
-                      </div>
-                      {order.tender_url && (
+                      {o.tender_url && (
                         <a
-                          href={order.tender_url}
+                          href={o.tender_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="mt-2 inline-block text-xs text-violet-300 underline hover:text-violet-200"
+                          className={styles.woTenderLink}
                         >
-                          Open tender/doc link
+                          Open tender link ↗
                         </a>
                       )}
-                      {intakePreview(order.intake).length > 0 && (
-                        <div className="mt-3 space-y-1 rounded-lg border border-white/8 bg-slate-950/60 px-3 py-2">
-                          {intakePreview(order.intake).map(([key, value]) => (
-                            <div key={key} className="text-xs">
-                              <span className="font-medium text-slate-400 capitalize">{key}: </span>
-                              <span className="text-slate-300">{value}</span>
-                            </div>
+                    </div>
+                    <div className={styles.woMoney}>
+                      <div className={styles.woAmount}>{money(o.amount_cents, o.currency)}</div>
+                      <div className={styles.woPayment}>{o.payment_status ?? "paid"}</div>
+                    </div>
+                  </header>
+
+                  <div className={styles.woGrid}>
+                    <div>
+                      <div className={styles.woColLabel}>Customer</div>
+                      <div className={styles.woColValue}>
+                        {o.email ?? o.user_email ?? "—"}
+                      </div>
+                      <div className={styles.woColMeta}>
+                        Ordered {fmtDate(o.created_at)}
+                        {o.service_slug && <> · {label(o.service_slug)}</>}
+                      </div>
+                      {intake.length > 0 && (
+                        <div className={styles.woIntake}>
+                          {intake.map(([k, v]) => (
+                            <div key={k}><b>{k}:</b> {v}</div>
                           ))}
                         </div>
                       )}
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="text-slate-300">{order.email ?? order.user_email ?? "—"}</div>
-                      <div className="mt-1 text-xs text-slate-500">{order.payment_status ?? "paid"}</div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <StatusPill status={order.status} />
-                      <select
-                        value={order.status}
-                        disabled={savingId === order.id}
-                        onChange={(e) => updateOrder(order.id, {
-                          status: e.target.value,
-                          notify_customer: notifyCustomer,
-                        })}
-                        className="mt-3 block w-full rounded-lg border border-white/10 bg-slate-950 px-2 py-1.5 text-xs text-slate-300"
-                      >
-                        {EDITABLE_STATUSES.map((option) => (
-                          <option key={option} value={option}>{label(option)}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-5 py-4 min-w-80">
+                    </div>
+
+                    <div>
+                      <div className={styles.woColLabel}>Status</div>
+                      <div className={styles.woStatusRow}>
+                        <StatusTag status={o.status} />
+                        <select
+                          className={styles.woSelect}
+                          value={o.status}
+                          disabled={savingId === o.id}
+                          onChange={(e) => updateOrder(o.id, {
+                            status: e.target.value,
+                            notify_customer: notify,
+                          })}
+                        >
+                          {EDITABLE.map((opt) => (
+                            <option key={opt} value={opt}>{label(opt)}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className={styles.woColLabel}>Fulfillment notes</div>
                       <textarea
-                        defaultValue={order.fulfillment_notes ?? ""}
+                        className={styles.woNotes}
                         rows={3}
-                        onBlur={(e) => updateOrder(order.id, { fulfillment_notes: e.target.value })}
-                        className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-xs text-slate-300 placeholder:text-slate-600"
-                        placeholder="Fulfillment notes, missing docs, delivery link..."
+                        defaultValue={o.fulfillment_notes ?? ""}
+                        onBlur={(e) => updateOrder(o.id, { fulfillment_notes: e.target.value })}
+                        placeholder="Delivery link, missing docs, blockers…"
                       />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      )}
+    </>
   );
 }
