@@ -19,6 +19,9 @@ interface AccessState {
   locked: boolean;
 }
 
+const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
+const SERIF = "'Fraunces', 'Times New Roman', serif";
+
 function NavIcon({ path }: { path: string }) {
   return (
     <svg className="h-[15px] w-[15px] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -90,7 +93,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (loading) {
     return (
-      <div className="min-h-screen grid place-items-center text-sm text-stone-400">
+      <div className="min-h-screen grid place-items-center text-[13px] text-stone-400" style={{ fontFamily: MONO }}>
         Loading…
       </div>
     );
@@ -104,7 +107,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   ];
   const tools = [
     { href: "/dashboard/services", label: "Services" },
-    { href: "/dashboard/vault", label: "Document Vault", requiresPaid: true },
+    { href: "/dashboard/vault", label: "Document vault", requiresPaid: true },
     { href: "/dashboard/settings", label: "Settings" },
   ];
   const isPaid = state.user.is_super_admin || state.user.subscription_status === "active";
@@ -119,7 +122,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Link
         key={item.href}
         href={item.href}
-        className={`group flex items-center justify-between gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] transition-colors ${
+        className={`group relative flex items-center justify-between gap-2.5 rounded-sm pl-3 pr-2.5 py-1.5 text-[13px] transition-colors ${
           active
             ? "bg-stone-900 text-white"
             : previewLocked
@@ -132,11 +135,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <span className="truncate">{item.label}</span>
         </span>
         {previewLocked && (
-          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${
-            active
-              ? "bg-white/20 text-white"
-              : "bg-amber-100 text-amber-700 group-hover:bg-amber-200"
-          }`}>
+          <span
+            className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[8.5px] font-semibold uppercase tracking-[0.18em] ${
+              active
+                ? "bg-white/15 text-white"
+                : "border border-amber-300 text-amber-700 group-hover:border-amber-500"
+            }`}
+            style={{ fontFamily: MONO }}
+          >
             Pro
           </span>
         )}
@@ -144,31 +150,66 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   };
 
-  // Compact trial pill (small, in sidebar — not a full-width banner)
+  // Compact trial pill — editorial style with serif number
   const trialPill = (state.isTrialing || state.locked) && (
     <Link
       href="/pay?plan=grants-tenders-matching"
       target="_blank"
       rel="noreferrer"
-      className={`block rounded-md px-3 py-2.5 text-[12px] leading-snug transition-colors ${
+      className={`block rounded-sm border p-3 transition-colors ${
         state.locked
-          ? "bg-red-50 border border-red-200 text-red-900 hover:bg-red-100"
+          ? "border-red-300 bg-red-50/60 hover:bg-red-50"
           : state.trialDaysLeft <= 3
-          ? "bg-orange-50 border border-orange-200 text-orange-900 hover:bg-orange-100"
-          : "bg-amber-50 border border-amber-200 text-amber-900 hover:bg-amber-100"
+          ? "border-orange-300 bg-orange-50/60 hover:bg-orange-50"
+          : "border-amber-300 bg-amber-50/60 hover:bg-amber-50"
       }`}
     >
       {state.locked ? (
         <>
-          <div className="font-semibold mb-0.5">Trial ended</div>
-          <div className="text-[11px] opacity-80">Subscribe to continue →</div>
+          <div
+            className="text-[9px] font-semibold uppercase tracking-[0.18em] text-red-700"
+            style={{ fontFamily: MONO }}
+          >
+            Trial · ended
+          </div>
+          <div
+            className="mt-1 text-[18px] leading-tight font-medium text-red-900"
+            style={{ fontFamily: SERIF }}
+          >
+            Subscribe to continue
+          </div>
+          <div
+            className="mt-1 text-[10.5px] tracking-wider uppercase text-red-700/80"
+            style={{ fontFamily: MONO }}
+          >
+            $49 / mo →
+          </div>
         </>
       ) : (
         <>
-          <div className="font-semibold mb-0.5">
-            {state.trialDaysLeft} day{state.trialDaysLeft === 1 ? "" : "s"} left
+          <div
+            className="text-[9px] font-semibold uppercase tracking-[0.18em] text-amber-800"
+            style={{ fontFamily: MONO }}
+          >
+            Trial
           </div>
-          <div className="text-[11px] opacity-80">Subscribe — $49/mo →</div>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span
+              className="text-[28px] leading-none font-medium text-stone-900 tabular-nums"
+              style={{ fontFamily: SERIF }}
+            >
+              {state.trialDaysLeft}
+            </span>
+            <span className="text-[11px] text-stone-600">
+              day{state.trialDaysLeft === 1 ? "" : "s"} left
+            </span>
+          </div>
+          <div
+            className="mt-1.5 text-[10.5px] tracking-wider uppercase text-amber-800 group-hover:text-amber-900"
+            style={{ fontFamily: MONO }}
+          >
+            Subscribe · $49/mo →
+          </div>
         </>
       )}
     </Link>
@@ -177,20 +218,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen flex bg-stone-50">
       {/* Sidebar */}
-      <aside className="w-60 bg-white border-r border-stone-200/70 px-4 py-5 flex flex-col shrink-0">
-        <Link href="/" className="flex items-baseline gap-1 mb-7 px-1 group">
+      <aside className="w-64 bg-white border-r border-stone-200/70 px-4 py-5 flex flex-col shrink-0">
+        {/* Logo */}
+        <Link href="/" className="flex items-baseline gap-1 mb-1.5 px-1 group">
           <span
-            className="text-[22px] leading-none font-medium text-stone-900 group-hover:text-stone-700 transition-colors"
-            style={{ fontFamily: "'Fraunces', 'Times New Roman', serif", fontFeatureSettings: "'ss01'" }}
+            className="text-[24px] leading-none font-medium text-stone-900 group-hover:text-stone-700 transition-colors tracking-tight"
+            style={{ fontFamily: SERIF }}
           >
-            TenderPath
+            Tender<span className="text-orange-500">·</span>Path
           </span>
         </Link>
+        <div
+          className="px-1 mb-7 text-[9px] font-semibold uppercase tracking-[0.22em] text-stone-400"
+          style={{ fontFamily: MONO }}
+        >
+          The vendor workbench
+        </div>
 
         {/* Workbench */}
         <div className="mb-1">
-          <div className="px-2.5 mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-400">
-            Workbench
+          <div className="px-1 mb-2 flex items-baseline justify-between">
+            <span
+              className="text-[9px] font-semibold uppercase tracking-[0.22em] text-stone-400"
+              style={{ fontFamily: MONO }}
+            >
+              Workbench
+            </span>
+            <span
+              className="text-[9px] tabular-nums text-stone-300"
+              style={{ fontFamily: MONO }}
+            >
+              01
+            </span>
           </div>
           <nav className="flex flex-col gap-0.5">
             {workbench.map(renderNavItem)}
@@ -199,8 +258,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Tools */}
         <div className="mt-5">
-          <div className="px-2.5 mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-400">
-            Tools
+          <div className="px-1 mb-2 flex items-baseline justify-between">
+            <span
+              className="text-[9px] font-semibold uppercase tracking-[0.22em] text-stone-400"
+              style={{ fontFamily: MONO }}
+            >
+              Tools
+            </span>
+            <span
+              className="text-[9px] tabular-nums text-stone-300"
+              style={{ fontFamily: MONO }}
+            >
+              02
+            </span>
           </div>
           <nav className="flex flex-col gap-0.5">
             {tools.map(renderNavItem)}
@@ -217,27 +287,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="border-t border-stone-200/70 pt-3 flex flex-col gap-0.5">
           <Link
             href="/dashboard/work-orders"
-            className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[12.5px] transition-colors ${
+            className={`flex items-center gap-2.5 pl-3 pr-2.5 py-1.5 rounded-sm text-[12.5px] transition-colors ${
               pathname?.startsWith("/dashboard/work-orders")
                 ? "bg-stone-900 text-white"
                 : "text-stone-500 hover:bg-stone-100 hover:text-stone-800"
             }`}
           >
             <NavIcon path={NAV_ICONS["/dashboard/work-orders"]} />
-            <span>Billing &amp; Orders</span>
+            <span>Billing &amp; orders</span>
           </Link>
           <a
             href="mailto:info@tenderpath.me?subject=Support Request"
-            className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[12.5px] text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors"
+            className="flex items-center gap-2.5 pl-3 pr-2.5 py-1.5 rounded-sm text-[12.5px] text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors"
           >
             <NavIcon path={NAV_ICONS.help} />
-            <span>Help &amp; Support</span>
+            <span>Help &amp; support</span>
           </a>
           <a
             href="/faq"
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[12.5px] text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors"
+            className="flex items-center gap-2.5 pl-3 pr-2.5 py-1.5 rounded-sm text-[12.5px] text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors"
           >
             <NavIcon path={NAV_ICONS.faq} />
             <span>FAQ</span>
@@ -246,13 +316,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* User footer */}
         <div className="mt-3 pt-3 border-t border-stone-200/70">
-          <div className="px-2.5 mb-1 truncate text-[11px] text-stone-400">{state.user.email}</div>
+          <div
+            className="px-1 mb-1.5 truncate text-[10.5px] text-stone-400"
+            style={{ fontFamily: MONO }}
+            title={state.user.email}
+          >
+            {state.user.email}
+          </div>
           <button
             onClick={() => {
               localStorage.removeItem("tp_token");
               router.push("/");
             }}
-            className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[12.5px] text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors w-full text-left"
+            className="flex items-center gap-2.5 pl-3 pr-2.5 py-1.5 rounded-sm text-[12.5px] text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors w-full text-left"
           >
             <NavIcon path={NAV_ICONS.signout} />
             <span>Sign out</span>
