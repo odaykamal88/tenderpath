@@ -1452,6 +1452,31 @@ Preserve existing payment, webhook, work_order, and dashboard contracts. Do not 
 
 ---
 
+### Website Normalization + Retry Fallback — 2026-05-03
+
+- **Agent**: Claude Code
+- **Date**: 2026-05-03
+- **Task Completed**: Added robust website URL normalization with ordered retry fallback to the assessment crawl flow.
+- **Files Changed**:
+  - `src/lib/assessment/crawl.ts` — removed old single-variant `normalizeUrl()`; added `isValidDomainLike()` (early rejection of invalid inputs), `normalizeWebsiteCandidates()` (returns up to 4 ordered URL variants: https→http, www↔bare), and updated `crawlWebsite()` to iterate candidates sequentially, stopping on first success; `seenFinalUrls` Set deduplicates redirects; all return paths now include `originalInput` and `normalizedInputUsed`.
+  - `src/lib/types.ts` — added two optional backward-compatible fields to `CrawledData`: `originalInput?: string | null` and `normalizedInputUsed?: string | null`.
+- **Tests Run**:
+  - `npx tsc --noEmit` — passed (clean, no errors).
+  - `npx eslint src/lib/assessment/crawl.ts src/lib/types.ts` — passed.
+- **Result**: Assessment now reliably crawls company websites regardless of whether the user enters `company.com`, `www.example.com`, `https://example.com`, or an HTTP URL. All URL variants are tried in sequence (https→http, www↔bare) with deduplication of final URLs to avoid redundant crawls. Raw user input and the winning normalized variant are stored on every crawled result for audit/debug purposes.
+- **Blockers**: None.
+- **Important Decisions**:
+  - `isValidDomainLike()` rejects garbage inputs (no dot, spaces, invalid characters) before any fetch is attempted.
+  - Protocol-prefixed inputs (https:// or http://) only get a www/bare alternate for the same protocol — no downgrade to http unless the user explicitly entered http.
+  - Protocol-unprefixed inputs get all four variants in priority order: `https://bare`, `https://www.`, `http://bare`, `http://www.` — http variants are last-resort.
+  - `seenFinalUrls` prevents duplicate crawls when multiple candidate URLs redirect to the same destination.
+  - All new fields in `CrawledData` are optional with `?` — full backward compatibility with all pre-existing assessment rows.
+- **Contracts or Interfaces Changed**: `CrawledData` gains two optional fields (`originalInput`, `normalizedInputUsed`). All existing callers are unaffected.
+- **Docs Updated**: `SESSION.md` only.
+- **Deployment**: Committed and pushed to `origin/main`; Vercel auto-deploy triggered.
+
+---
+
 ## Files To Read First
 
 Every session, mandatory:

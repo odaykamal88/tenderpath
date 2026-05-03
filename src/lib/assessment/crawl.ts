@@ -44,10 +44,77 @@ interface FetchResult {
   finalUrl: string;
 }
 
-function normalizeUrl(raw: string): string {
-  let url = raw.trim();
-  if (!url.match(/^https?:\/\//)) url = "https://" + url;
-  return url.replace(/\/+$/, "");
+/**
+ * Returns false for inputs that are clearly not valid domain-like strings,
+ * preventing pointless retry loops for garbage input.
+ */
+function isValidDomainLike(raw: string): boolean {
+  const trimmed = raw.trim();
+  if (!trimmed) return false;
+  // Strip protocol if present
+  const withoutProtocol = trimmed.replace(/^https?:\/\//i, "");
+  // Strip path / query / hash to isolate the host
+  const host = withoutProtocol.split(/[/?#]/)[0].toLowerCase();
+  if (!host) return false;
+  // Must have at least one dot (rejects bare labels like "localhost")
+  if (!host.includes(".")) return false;
+  // Only valid hostname characters; no consecutive dots
+  if (!/^[a-z0-9]([a-z0-9\-.]*[a-z0-9])?$/.test(host)) return false;
+  if (host.includes("..")) return false;
+  return true;
+}
+
+/**
+ * Returns an ordered list of URL candidates to try for a user-supplied website
+ * string, from most- to least-preferred:
+ *   1. https://{domain}           (or as-is if protocol was supplied)
+ *   2. https://www.{domain}       (skip if input already had www or a full path)
+ *   3. http://{domain}            lower-priority plain-HTTP fallback
+ *   4. http://www.{domain}        last resort
+ *
+ * Preserves any path/query the user included. Handles mixed-case and accidental
+ * leading/trailing whitespace.
+ */
+function normalizeWebsiteCandidates(raw: string): string[] {
+  const trimmed = raw.trim();
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    // User supplied a full URL — use as-is first, then add/remove www
+    const base = trimmed.replace(/\/+$/, "");
+    try {
+      const u = new URL(base);
+      const host = u.hostname.toLowerCase();
+      const path = u.pathname === "/" ? "" : u.pathname;
+      const rest = `${path}${u.search}`;
+      const altHost = host.startsWith("www.") ? host.slice(4) : `www.${host}`;
+      return [`${u.protocol}//${host}${rest}`, `${u.protocol}//${altHost}${rest}`];
+    } catch {
+      return [base];
+    }
+  }
+
+  // No protocol — extract host + optional path
+  const withoutTrailingSlash = trimmed.replace(/\/+$/, "");
+  const slashIdx = withoutTrailingSlash.indexOf("/");
+  const rawHost = (slashIdx === -1
+    ? withoutTrailingSlash
+    : withoutTrailingSlash.slice(0, slashIdx)
+  ).toLowerCase();
+  const rawPath = slashIdx === -1 ? "" : withoutTrailingSlash.slice(slashIdx);
+
+  const hasWww = rawHost.startsWith("www.");
+  const bareHost = hasWww ? rawHost.slice(4) : rawHost;
+  const wwwHost = `www.${bareHost}`;
+
+  // Prefer the variant the user wrote (www or bare) first within each scheme
+  const [first, second] = hasWww ? [wwwHost, bareHost] : [bareHost, wwwHost];
+
+  return [
+    `https://${first}${rawPath}`,
+    `https://${second}${rawPath}`,
+    `http://${first}${rawPath}`,
+    `http://${second}${rawPath}`,
+  ];
 }
 
 /** eTLD+1 approximation — last two dot-segments of the hostname. */
@@ -251,12 +318,47 @@ function htmlToText(html: string): string {
  * - Assembles content with about/services text first, homepage body second
  *   so the CONTENT_CAP budget is spent on business-description material.
  */
-export async function crawlWebsite(url: string): Promise<CrawledData | null> {
-  const inputBase = normalizeUrl(url);
+export async function crawlWebsite(rawInput: string): Promise<CrawledData | null> {
+  const originalInput = rawInput.trim();
 
-  // --- Stage 1: static homepage fetch ---
-  let homeResult = await fetchPage(inputBase);
-  if (!homeResult) return null;
+  // Reject clearly non-domain inputs before wasting any fetch budget
+  if (!isValidDomainLike(originalInput)) {
+    console.warn(`[crawl] Rejected invalid domain input: "${originalInput}"`);
+    return null;
+  }
+
+  const candidates = normalizeWebsiteCandidates(originalInput);
+
+  // --- Stage 1: try candidates in order until one returns a meaningful response ---
+  let homeResult: FetchResult | null = null;
+  let normalizedInputUsed: string | null = null;
+  const seenFinalUrls = new Set<string>();
+
+  for (const candidate of candidates) {
+    const result = await fetchPage(candidate);
+    if (!result) {
+      console.log(`[crawl] Candidate failed (no response): ${candidate}`);
+      continue;
+    }
+    // Deduplicate: skip if this final destination was already reached via an earlier candidate
+    const canonFinal = result.finalUrl.replace(/\/+$/, "").toLowerCase();
+    if (seenFinalUrls.has(canonFinal)) {
+      console.log(`[crawl] Skipping duplicate final URL ${result.finalUrl} (from ${candidate})`);
+      continue;
+    }
+    seenFinalUrls.add(canonFinal);
+    homeResult = result;
+    normalizedInputUsed = candidate;
+    console.log(`[crawl] Candidate succeeded: ${candidate} → ${result.finalUrl}`);
+    break;
+  }
+
+  if (!homeResult || !normalizedInputUsed) {
+    console.warn(`[crawl] All candidates failed for input: "${originalInput}"`);
+    return null;
+  }
+
+  const inputBase = normalizedInputUsed;
 
   // --- Stage 2: domain-drift guard ---
   const inputEtld = etld1(inputBase);
@@ -274,6 +376,8 @@ export async function crawlWebsite(url: string): Promise<CrawledData | null> {
       isThinContent: true,
       finalUrl: homeResult.finalUrl,
       renderMethod: "failed",
+      originalInput,
+      normalizedInputUsed,
     };
   }
 
@@ -297,6 +401,8 @@ export async function crawlWebsite(url: string): Promise<CrawledData | null> {
         isThinContent: true,
         finalUrl: homeResult.finalUrl,
         renderMethod: "failed",
+        originalInput,
+        normalizedInputUsed,
       };
     }
   }
@@ -318,6 +424,8 @@ export async function crawlWebsite(url: string): Promise<CrawledData | null> {
       isThinContent: true,
       finalUrl: homeResult.finalUrl,
       renderMethod: "parked",
+      originalInput,
+      normalizedInputUsed,
     };
   }
 
@@ -373,5 +481,7 @@ export async function crawlWebsite(url: string): Promise<CrawledData | null> {
     isThinContent,
     finalUrl: homeResult.finalUrl,
     renderMethod,
+    originalInput,
+    normalizedInputUsed,
   };
 }

@@ -35,6 +35,10 @@ export interface CrawledData {
   finalUrl?: string | null;
   /** How the page was rendered. Absent on assessments saved before this field was added. */
   renderMethod?: "static" | "browser" | "failed" | "parked";
+  /** Raw user-supplied input before normalization, for audit/debug. */
+  originalInput?: string | null;
+  /** The normalized URL variant that produced a successful response. */
+  normalizedInputUsed?: string | null;
 }
 
 export interface AIAnalysis {
