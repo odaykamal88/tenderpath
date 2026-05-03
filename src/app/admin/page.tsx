@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import styles from "./admin.module.css";
+import { StatusTag, StatusDot, Sparkbar } from "./_components/StatusTag";
 
+// ─────────────────────────────────────────────────────────────────────
+// Types — mirror /api/admin/stats response
+// ─────────────────────────────────────────────────────────────────────
 interface CrawlLog {
   id: number;
   started_at: string;
@@ -15,9 +20,32 @@ interface CrawlLog {
   error: string | null;
 }
 
-interface SubscriptionRow {
-  tier: string;
-  count: number;
+interface SubscriptionRow { tier: string; count: number; }
+
+interface PlatformHealth {
+  platform: string;
+  role: "primary" | "supplement" | "observed";
+  status: "healthy" | "degraded" | "down" | "never_run";
+  last_run: string | null;
+  last_success: string | null;
+  added_24h: number;
+  updated_24h: number;
+  failures_24h: number;
+  open_tenders: number;
+  message: string;
+}
+
+interface SourceQuality {
+  platform: string;
+  open_tenders: number;
+  description_complete_pct: number;
+  deadline_complete_pct: number;
+  sector_complete_pct: number;
+  source_url_complete_pct: number;
+  broken_link_pct: number;
+  thin_descriptions: number;
+  quality_status: "healthy" | "degraded" | "critical";
+  message: string;
 }
 
 interface Stats {
@@ -26,37 +54,12 @@ interface Stats {
   openTenders: number;
   activeSubscriptions: SubscriptionRow[];
   recentCrawls: CrawlLog[];
-  platformHealth: Array<{
-    platform: string;
-    role: "primary" | "supplement" | "observed";
-    status: "healthy" | "degraded" | "down" | "never_run";
-    last_run: string | null;
-    last_success: string | null;
-    added_24h: number;
-    updated_24h: number;
-    failures_24h: number;
-    open_tenders: number;
-    message: string;
-  }>;
-  sourceQuality: Array<{
-    platform: string;
-    open_tenders: number;
-    description_complete_pct: number;
-    deadline_complete_pct: number;
-    sector_complete_pct: number;
-    source_url_complete_pct: number;
-    broken_link_pct: number;
-    thin_descriptions: number;
-    quality_status: "healthy" | "degraded" | "critical";
-    message: string;
-  }>;
+  platformHealth: PlatformHealth[];
+  sourceQuality: SourceQuality[];
   ungmFamilyHealth: {
     status: "healthy" | "degraded" | "critical";
     message: string;
-    agencies: Array<{
-      agency: string;
-      open_tenders: number;
-    }>;
+    agencies: Array<{ agency: string; open_tenders: number }>;
   };
   workerHealth: {
     configured: boolean;
@@ -73,80 +76,50 @@ interface Stats {
 }
 
 const TIER_LABELS: Record<string, string> = {
-  "tender-intelligence": "Grants + Tenders Matching",
-  "submission-package": "Proposal Draft",
-  "strategic-partnership": "Roster Fast-Track",
+  "tender-intelligence":    "Grants + Tenders Matching",
+  "submission-package":     "Proposal Draft",
+  "strategic-partnership":  "Roster Fast-Track",
 };
-
 const TIER_PRICES: Record<string, string> = {
-  "tender-intelligence": "$49/mo",
-  "submission-package": "$299",
-  "strategic-partnership": "$749/roster",
+  "tender-intelligence":    "$49/mo",
+  "submission-package":     "$299",
+  "strategic-partnership":  "$749",
 };
 
-function formatDate(v: string | null | undefined): string {
+// ─────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────
+function fmtNum(n: number | string): string {
+  return Number(n).toLocaleString("en-US");
+}
+function fmtDate(v: string | null | undefined): string {
   if (!v) return "—";
   const d = new Date(v);
   if (isNaN(d.getTime())) return v;
-  return d.toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" });
+  return d.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
-
-function duration(ms: number | null): string {
+function fmtDur(ms: number | null): string {
   if (ms == null) return "—";
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
+  return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000).toString().padStart(2, "0")}s`;
+}
+function relTime(v: string | null | undefined): string {
+  if (!v) return "—";
+  const d = new Date(v).getTime();
+  if (isNaN(d)) return "—";
+  const diff = Date.now() - d;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }
 
-function StatCard({
-  label,
-  value,
-  sub,
-  color = "violet",
-}: {
-  label: string;
-  value: string | number;
-  sub?: string;
-  color?: "violet" | "amber" | "teal" | "blue";
-}) {
-  const accent: Record<string, string> = {
-    violet: "text-violet-400",
-    amber: "text-amber-400",
-    teal: "text-teal-400",
-    blue: "text-blue-400",
-  };
-  return (
-    <div className="rounded-xl bg-white/5 border border-white/8 p-5">
-      <p className="text-xs text-slate-500 uppercase tracking-wider font-medium mb-2">{label}</p>
-      <p className={`text-3xl font-bold ${accent[color]}`}>{value}</p>
-      {sub && <p className="text-xs text-slate-500 mt-1">{sub}</p>}
-    </div>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    success: "bg-green-500/15 text-green-400 border-green-500/30",
-    completed: "bg-green-500/15 text-green-400 border-green-500/30",
-    healthy: "bg-green-500/15 text-green-400 border-green-500/30",
-    running: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-    degraded: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-    never_run: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-    failed: "bg-red-500/15 text-red-400 border-red-500/30",
-    error: "bg-red-500/15 text-red-400 border-red-500/30",
-    down: "bg-red-500/15 text-red-400 border-red-500/30",
-    critical: "bg-red-500/15 text-red-400 border-red-500/30",
-    unreachable: "bg-red-500/15 text-red-400 border-red-500/30",
-    unconfigured: "bg-red-500/15 text-red-400 border-red-500/30",
-  };
-  const cls = map[status.toLowerCase()] ?? "bg-slate-500/15 text-slate-400 border-slate-500/30";
-  return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${cls}`}>
-      {status}
-    </span>
-  );
-}
-
+// ─────────────────────────────────────────────────────────────────────
+// Page
+// ─────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -157,23 +130,19 @@ export default function AdminPage() {
   const load = useCallback(async () => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
     if (!token) return;
-
     try {
-      const res = await fetch("/api/admin/stats", {
-        headers: { authorization: `Bearer ${token}` },
-      });
+      const res = await fetch("/api/admin/stats", { headers: { authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = await res.json();
       setStats(data);
       setLastRefreshed(new Date());
+      setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load stats");
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   const triggerSync = async () => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
@@ -181,13 +150,9 @@ export default function AdminPage() {
     setSyncing(true);
     setSyncResult(null);
     try {
-      const res = await fetch("/api/admin/sync-tenders", {
-        method: "POST",
-        headers: { authorization: `Bearer ${token}` },
-      });
+      const res = await fetch("/api/admin/sync-tenders", { method: "POST", headers: { authorization: `Bearer ${token}` } });
       const data = await res.json();
       setSyncResult({ ok: data.ok, message: data.message ?? (data.ok ? "Sync triggered." : "Sync failed.") });
-      // Reload stats after a brief delay to pick up new crawl log
       setTimeout(load, 2000);
     } catch {
       setSyncResult({ ok: false, message: "Network error — sync not triggered." });
@@ -196,318 +161,261 @@ export default function AdminPage() {
     }
   };
 
-  const totalActiveSubs = stats?.activeSubscriptions.reduce((s, r) => s + Number(r.count), 0) ?? 0;
+  const totalSubs = stats?.activeSubscriptions.reduce((s, r) => s + Number(r.count), 0) ?? 0;
+  const flagged = stats?.platformHealth.filter((p) => p.status !== "healthy") ?? [];
 
   return (
-    <div className="p-8 max-w-6xl mx-auto" style={{ animation: "fadeIn 0.4s ease-out both" }}>
+    <>
       {/* Header */}
-      <div className="flex items-start justify-between mb-8">
+      <header className={styles.pageHeader}>
         <div>
-          <h1 className="text-2xl font-bold text-white">Admin Overview</h1>
+          <div className={styles.eyebrow}>01 — Overview</div>
+          <h1 className={styles.pageTitle}>System dossier</h1>
+          <p className={styles.pageSub}>
+            Daily snapshot of users, paid seats, source health, and crawl integrity.
+          </p>
+        </div>
+        <div className={styles.pageActions}>
           {lastRefreshed && (
-            <p className="text-xs text-slate-500 mt-1">
-              Last refreshed: {lastRefreshed.toLocaleTimeString()}
-            </p>
+            <div className={styles.refreshed}>
+              <span className={styles.statusDot} style={{ background: "var(--color-green)" }} />
+              Refreshed {relTime(lastRefreshed.toISOString())}
+            </div>
           )}
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={load}
-            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-400 hover:text-white hover:border-white/20 transition-colors"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Refresh
-          </button>
-          <button
-            onClick={triggerSync}
-            disabled={syncing}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-              syncing
-                ? "bg-violet-500/40 text-violet-300 cursor-not-allowed"
-                : "bg-violet-600 text-white hover:bg-violet-500"
-            }`}
-          >
-            {syncing ? (
-              <>
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Syncing…
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                </svg>
-                Sync Tenders
-              </>
-            )}
+          <button type="button" className={styles.btnGhost} onClick={load}>Refresh</button>
+          <button type="button" className={styles.btnPrimary} onClick={triggerSync} disabled={syncing}>
+            {syncing ? "Syncing…" : "Sync sources"}
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* Sync result toast */}
+      {/* Toast */}
       {syncResult && (
-        <div
-          className={`mb-6 rounded-lg border px-4 py-3 text-sm flex items-center gap-2 ${
-            syncResult.ok
-              ? "bg-green-500/10 border-green-500/30 text-green-400"
-              : "bg-red-500/10 border-red-500/30 text-red-400"
-          }`}
-        >
-          {syncResult.ok ? (
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-            </svg>
-          )}
+        <div className={`${styles.toast} ${syncResult.ok ? styles.toastOk : styles.toastErr}`}>
           {syncResult.message}
         </div>
       )}
-
-      {/* Error */}
       {error && (
-        <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-          {error}
-        </div>
+        <div className={`${styles.toast} ${styles.toastErr}`}>{error}</div>
       )}
 
-      {/* Stats grid */}
       {stats ? (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <StatCard label="Total Users" value={Number(stats.totalUsers).toLocaleString()} color="violet" />
-            <StatCard label="Assessments Run" value={Number(stats.totalAssessments).toLocaleString()} color="blue" />
-            <StatCard label="Open Tenders" value={Number(stats.openTenders).toLocaleString()} color="teal" />
-            <StatCard
-              label="Active Subscriptions"
-              value={totalActiveSubs}
-              sub={totalActiveSubs === 1 ? "1 paid seat" : `${totalActiveSubs} paid seats`}
-              color="amber"
-            />
-          </div>
+          {/* Hero stats */}
+          <section className={styles.heroRow}>
+            <HeroStat label="Total users"       value={fmtNum(stats.totalUsers)} />
+            <HeroStat label="Assessments run"   value={fmtNum(stats.totalAssessments)} />
+            <HeroStat label="Open tenders"      value={fmtNum(stats.openTenders)} sub={`${stats.platformHealth.length} sources`} />
+            <HeroStat label="Paid seats"        value={fmtNum(totalSubs)} sub={totalSubs === 1 ? "1 active subscription" : `${totalSubs} active subscriptions`} />
+          </section>
 
-          {/* Subscriptions breakdown */}
-          <div className="rounded-xl bg-white/5 border border-white/8 p-6 mb-6">
-            <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-              <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-              </svg>
-              Active Subscriptions by Tier
-            </h2>
-            {stats.activeSubscriptions.length === 0 ? (
-              <p className="text-sm text-slate-500">No active subscriptions yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {stats.activeSubscriptions.map((row) => {
-                  const pct = totalActiveSubs > 0 ? Math.round((Number(row.count) / totalActiveSubs) * 100) : 0;
-                  return (
-                    <div key={row.tier}>
-                      <div className="flex items-center justify-between mb-1">
-                        <div>
-                          <span className="text-sm text-slate-200">{TIER_LABELS[row.tier] ?? row.tier}</span>
-                          <span className="ml-2 text-xs text-slate-500">{TIER_PRICES[row.tier] ?? ""}</span>
+          {/* Two-up: subs + worker */}
+          <section className={styles.grid2}>
+            {/* Subscriptions */}
+            <article className={styles.panel}>
+              <header className={styles.panelHead}>
+                <h2 className={styles.panelTitle}>Active subscriptions</h2>
+                <span className={styles.panelMeta}>{totalSubs} seats</span>
+              </header>
+              <div className={styles.panelBody}>
+                {stats.activeSubscriptions.length === 0 ? (
+                  <p className={styles.mute} style={{ fontSize: 13 }}>No active subscriptions yet.</p>
+                ) : (
+                  stats.activeSubscriptions.map((row) => {
+                    const pct = totalSubs > 0 ? Math.round((Number(row.count) / totalSubs) * 100) : 0;
+                    return (
+                      <div key={row.tier} className={styles.subRow}>
+                        <div className={styles.subRowHead}>
+                          <div>
+                            <div className={styles.subRowName}>{TIER_LABELS[row.tier] ?? row.tier}</div>
+                            <div className={styles.subRowPrice}>{TIER_PRICES[row.tier] ?? ""}</div>
+                          </div>
+                          <div>
+                            <span className={styles.subRowCount}>{Number(row.count)}</span>
+                            <span className={styles.subRowPct}> · {pct}%</span>
+                          </div>
                         </div>
-                        <span className="text-sm font-semibold text-white">
-                          {Number(row.count)} <span className="text-slate-500 font-normal text-xs">({pct}%)</span>
-                        </span>
+                        <Sparkbar pct={pct} tone="warn" />
                       </div>
-                      <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-amber-400 transition-all"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
-            )}
-          </div>
+            </article>
 
-          {/* Worker health */}
-          <div className="rounded-xl bg-white/5 border border-white/8 p-6 mb-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
-                  <svg className="w-4 h-4 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                  Browser Worker Health
-                </h2>
-                <div className="flex flex-wrap items-center gap-3">
-                  <StatusPill status={stats.workerHealth.status} />
-                  <span className="text-xs text-slate-500">
-                    Browser: {stats.workerHealth.browser ?? "—"}
-                  </span>
-                  {stats.workerHealth.version && (
-                    <span className="text-xs text-slate-500">{stats.workerHealth.version}</span>
-                  )}
-                  {stats.workerHealth.durationMs != null && (
-                    <span className="text-xs text-slate-500">{duration(stats.workerHealth.durationMs)}</span>
-                  )}
-                </div>
+            {/* Worker + UNGM */}
+            <article className={styles.panel}>
+              <header className={styles.panelHead}>
+                <h2 className={styles.panelTitle}>Browser worker</h2>
+                <StatusTag status={stats.workerHealth.status} />
+              </header>
+              <div className={styles.panelBody}>
+                <dl className={styles.kvList}>
+                  <div><dt>Browser</dt><dd>{stats.workerHealth.browser ?? "—"}</dd></div>
+                  {stats.workerHealth.version && <div><dt>Version</dt><dd className={styles.mono}>{stats.workerHealth.version}</dd></div>}
+                  {stats.workerHealth.durationMs != null && <div><dt>Latency</dt><dd className={styles.mono}>{fmtDur(stats.workerHealth.durationMs)}</dd></div>}
+                  {stats.workerHealth.endpoint && <div><dt>Endpoint</dt><dd className={`${styles.mono} ${styles.trunc}`} title={stats.workerHealth.endpoint}>{stats.workerHealth.endpoint}</dd></div>}
+                  <div><dt>Checked</dt><dd className={styles.mono}>{relTime(stats.workerHealth.checkedAt)}</dd></div>
+                </dl>
+
                 {(stats.workerHealth.error || stats.workerHealth.browserError) && (
-                  <p className="mt-2 text-xs text-red-400">
+                  <p style={{ marginTop: 10, fontSize: 12, color: "var(--color-red)" }}>
                     {stats.workerHealth.error ?? stats.workerHealth.browserError}
                   </p>
                 )}
-              </div>
-              <div className="text-right text-xs text-slate-500">
-                <div>Checked {formatDate(stats.workerHealth.checkedAt)}</div>
-                {stats.workerHealth.endpoint && (
-                  <div className="mt-1 max-w-sm truncate" title={stats.workerHealth.endpoint}>
-                    {stats.workerHealth.endpoint}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
 
-          {/* UNGM family coverage */}
-          <div className="rounded-xl bg-white/5 border border-white/8 p-6 mb-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <h2 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
-                  <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7.5 4.5v9L12 21l-7.5-4.5v-9L12 3z" />
-                  </svg>
-                  UNGM Family Coverage
-                </h2>
-                <div className="flex flex-wrap items-center gap-3">
-                  <StatusPill status={stats.ungmFamilyHealth.status} />
-                  <span className="text-xs text-slate-400">{stats.ungmFamilyHealth.message}</span>
+                <div className={styles.ungmStrip}>
+                  <div className={styles.ungmHead}>
+                    <div className={styles.ungmTitle}>UNGM family coverage</div>
+                    <StatusTag status={stats.ungmFamilyHealth.status} />
+                  </div>
+                  <div className={styles.ungmGrid}>
+                    {stats.ungmFamilyHealth.agencies.map((a) => (
+                      <div key={a.agency} className={styles.ungmCell}>
+                        <div className={styles.ungmName}>{a.agency}</div>
+                        <div
+                          className={styles.ungmNum}
+                          style={{ color: a.open_tenders > 0 ? "var(--color-accent)" : "var(--color-red)" }}
+                        >
+                          {a.open_tenders}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {stats.ungmFamilyHealth.message && (
+                    <p style={{ marginTop: 10, fontSize: 11, color: "var(--color-ink-3)" }}>
+                      {stats.ungmFamilyHealth.message}
+                    </p>
+                  )}
                 </div>
               </div>
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                {stats.ungmFamilyHealth.agencies.map((agency) => (
-                  <div key={agency.agency} className="rounded-lg border border-white/8 bg-black/10 px-3 py-2 text-center">
-                    <div className="text-[11px] text-slate-500 font-medium">{agency.agency}</div>
-                    <div className={`text-sm font-semibold ${agency.open_tenders > 0 ? "text-teal-400" : "text-red-400"}`}>
-                      {agency.open_tenders}
+            </article>
+          </section>
+
+          {/* Source health */}
+          <section className={styles.panel}>
+            <header className={styles.panelHead}>
+              <div>
+                <h2 className={styles.panelTitle}>Source health</h2>
+                <p className={styles.panelSub}>
+                  {stats.platformHealth.length} sources · {flagged.length} need attention
+                </p>
+              </div>
+            </header>
+
+            {flagged.length > 0 && (
+              <div className={styles.alertStrip}>
+                {flagged.map((p) => (
+                  <div
+                    key={p.platform}
+                    className={`${styles.alert} ${p.status === "down" ? styles.alertDown : styles.alertDegraded}`}
+                  >
+                    <StatusDot status={p.status} />
+                    <div>
+                      <span className={styles.alertPlatform}>{p.platform}</span>
+                      <span className={styles.alertMsg}> — {p.message}</span>
                     </div>
+                    <span className={styles.alertMeta}>{relTime(p.last_success)}</span>
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* Platform health */}
-          <div className="rounded-xl bg-white/5 border border-white/8 overflow-hidden mb-6">
-            <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-                <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h10a4 4 0 100-8h-1.26A8 8 0 103 15z" />
-                </svg>
-                Source Health
-              </h2>
-              <span className="text-xs text-slate-500">Expected sources + observed sources</span>
-            </div>
             {stats.platformHealth.length === 0 ? (
-              <div className="px-6 py-8 text-sm text-slate-500 text-center">No platform health yet.</div>
+              <div className={styles.woEmpty}>No platform health yet.</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className={styles.tableWrap}>
+                <table className={styles.dossierTable}>
                   <thead>
-                    <tr className="border-b border-white/5 text-xs text-slate-500 uppercase tracking-wider">
-                      <th className="px-6 py-3 text-left font-medium">Platform</th>
-                      <th className="px-6 py-3 text-left font-medium">Status</th>
-                      <th className="px-6 py-3 text-left font-medium">Role</th>
-                      <th className="px-6 py-3 text-left font-medium">Last Success</th>
-                      <th className="px-6 py-3 text-left font-medium">Last Run</th>
-                      <th className="px-6 py-3 text-right font-medium">Open</th>
-                      <th className="px-6 py-3 text-right font-medium">24h Added</th>
-                      <th className="px-6 py-3 text-right font-medium">24h Failures</th>
-                      <th className="px-6 py-3 text-left font-medium">Signal</th>
+                    <tr>
+                      <th>Platform</th>
+                      <th>Status</th>
+                      <th>Role</th>
+                      <th>Last success</th>
+                      <th className={styles.num}>Open</th>
+                      <th className={styles.num}>+24h</th>
+                      <th className={styles.num}>Fails</th>
+                      <th>Signal</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {stats.platformHealth.map((row) => (
-                      <tr key={row.platform} className="hover:bg-white/3 transition-colors">
-                        <td className="px-6 py-3 text-slate-300 whitespace-nowrap">{row.platform}</td>
-                        <td className="px-6 py-3 whitespace-nowrap"><StatusPill status={row.status} /></td>
-                        <td className="px-6 py-3 text-slate-500 whitespace-nowrap capitalize">{row.role}</td>
-                        <td className="px-6 py-3 text-slate-400 whitespace-nowrap">{formatDate(row.last_success)}</td>
-                        <td className="px-6 py-3 text-slate-500 whitespace-nowrap">{formatDate(row.last_run)}</td>
-                        <td className="px-6 py-3 text-right text-slate-300 font-medium">{row.open_tenders}</td>
-                        <td className="px-6 py-3 text-right text-teal-400 font-medium">{row.added_24h}</td>
-                        <td className={`px-6 py-3 text-right font-medium ${row.failures_24h > 0 ? "text-red-400" : "text-slate-500"}`}>
-                          {row.failures_24h}
+                  <tbody>
+                    {stats.platformHealth.map((p) => (
+                      <tr key={p.platform}>
+                        <td><span className={styles.cellName}>{p.platform}</span></td>
+                        <td><StatusTag status={p.status} /></td>
+                        <td className={styles.muteNum} style={{ textTransform: "capitalize" }}>{p.role}</td>
+                        <td className={styles.mono}>{fmtDate(p.last_success)}</td>
+                        <td className={styles.num}>{fmtNum(p.open_tenders)}</td>
+                        <td className={`${styles.num} ${p.added_24h > 0 ? styles.posNum : styles.muteNum}`}>
+                          {p.added_24h > 0 ? `+${p.added_24h}` : "0"}
                         </td>
-                        <td className="px-6 py-3 text-xs text-slate-500 min-w-56">
-                          {row.message}
+                        <td className={`${styles.num} ${p.failures_24h > 0 ? styles.negNum : styles.muteNum}`}>
+                          {p.failures_24h}
                         </td>
+                        <td className={styles.signal}>{p.message}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
-          </div>
+          </section>
 
           {/* Source quality */}
-          <div className="rounded-xl bg-white/5 border border-white/8 overflow-hidden mb-6">
-            <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-                <svg className="w-4 h-4 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-6h6v6m-8 4h10a2 2 0 002-2V7.8a2 2 0 00-.59-1.42l-3.79-3.79A2 2 0 0013.2 2H7a2 2 0 00-2 2v15a2 2 0 002 2z" />
-                </svg>
-                Source Data Quality
-              </h2>
-              <span className="text-xs text-slate-500">Open tender field completeness</span>
-            </div>
+          <section className={styles.panel}>
+            <header className={styles.panelHead}>
+              <div>
+                <h2 className={styles.panelTitle}>Source data quality</h2>
+                <p className={styles.panelSub}>Field completeness across open tenders</p>
+              </div>
+            </header>
+
             {stats.sourceQuality.length === 0 ? (
-              <div className="px-6 py-8 text-sm text-slate-500 text-center">No source quality metrics yet.</div>
+              <div className={styles.woEmpty}>No source quality metrics yet.</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className={styles.tableWrap}>
+                <table className={styles.dossierTable}>
                   <thead>
-                    <tr className="border-b border-white/5 text-xs text-slate-500 uppercase tracking-wider">
-                      <th className="px-6 py-3 text-left font-medium">Platform</th>
-                      <th className="px-6 py-3 text-left font-medium">Quality</th>
-                      <th className="px-6 py-3 text-right font-medium">Open</th>
-                      <th className="px-6 py-3 text-right font-medium">Descriptions</th>
-                      <th className="px-6 py-3 text-right font-medium">Deadlines</th>
-                      <th className="px-6 py-3 text-right font-medium">Sectors</th>
-                      <th className="px-6 py-3 text-right font-medium">URLs</th>
-                      <th className="px-6 py-3 text-right font-medium">Broken</th>
-                      <th className="px-6 py-3 text-left font-medium">Signal</th>
+                    <tr>
+                      <th>Platform</th>
+                      <th>Quality</th>
+                      <th className={styles.num}>Open</th>
+                      <th>Descriptions</th>
+                      <th>Deadlines</th>
+                      <th>Sectors</th>
+                      <th>URLs</th>
+                      <th className={styles.num}>Broken</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {stats.sourceQuality.map((row) => (
-                      <tr key={row.platform} className="hover:bg-white/3 transition-colors">
-                        <td className="px-6 py-3 text-slate-300 whitespace-nowrap">{row.platform}</td>
-                        <td className="px-6 py-3 whitespace-nowrap"><StatusPill status={row.quality_status} /></td>
-                        <td className="px-6 py-3 text-right text-slate-300 font-medium">{row.open_tenders}</td>
-                        <td className={`px-6 py-3 text-right font-medium ${row.description_complete_pct < 70 ? "text-amber-400" : "text-teal-400"}`}>
-                          {row.description_complete_pct}%
-                        </td>
-                        <td className={`px-6 py-3 text-right font-medium ${row.deadline_complete_pct < 70 ? "text-amber-400" : "text-teal-400"}`}>
-                          {row.deadline_complete_pct}%
-                        </td>
-                        <td className={`px-6 py-3 text-right font-medium ${row.sector_complete_pct < 70 ? "text-amber-400" : "text-teal-400"}`}>
-                          {row.sector_complete_pct}%
-                        </td>
-                        <td className={`px-6 py-3 text-right font-medium ${row.source_url_complete_pct < 95 ? "text-amber-400" : "text-teal-400"}`}>
-                          {row.source_url_complete_pct}%
-                        </td>
-                        <td className={`px-6 py-3 text-right font-medium ${row.broken_link_pct > 10 ? "text-red-400" : "text-slate-500"}`}>
-                          {row.broken_link_pct}%
-                        </td>
-                        <td className="px-6 py-3 text-xs text-slate-500 min-w-56">
-                          {row.message}
-                          {row.thin_descriptions > 0 && (
-                            <span className="block text-slate-600">
-                              {row.thin_descriptions} thin description{row.thin_descriptions === 1 ? "" : "s"}
-                            </span>
-                          )}
+                  <tbody>
+                    {stats.sourceQuality.map((q) => (
+                      <tr key={q.platform}>
+                        <td><span className={styles.cellName}>{q.platform}</span></td>
+                        <td><StatusTag status={q.quality_status} /></td>
+                        <td className={styles.num}>{fmtNum(q.open_tenders)}</td>
+                        {([
+                          ["description_complete_pct", 70],
+                          ["deadline_complete_pct", 70],
+                          ["sector_complete_pct", 70],
+                          ["source_url_complete_pct", 95],
+                        ] as const).map(([k, threshold]) => {
+                          const v = q[k];
+                          const tone = v < threshold ? "warn" : "pos";
+                          return (
+                            <td key={k} className={styles.barCell}>
+                              <div className={styles.barRow}>
+                                <span className={styles.barNum}>{v}%</span>
+                                <Sparkbar pct={v} tone={tone} />
+                              </div>
+                            </td>
+                          );
+                        })}
+                        <td className={`${styles.num} ${
+                          q.broken_link_pct > 10 ? styles.negNum :
+                          q.broken_link_pct > 0  ? styles.warnNum :
+                                                   styles.muteNum
+                        }`}>
+                          {q.broken_link_pct}%
                         </td>
                       </tr>
                     ))}
@@ -515,56 +423,46 @@ export default function AdminPage() {
                 </table>
               </div>
             )}
-          </div>
+          </section>
 
           {/* Crawl logs */}
-          <div className="rounded-xl bg-white/5 border border-white/8 overflow-hidden">
-            <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-                <svg className="w-4 h-4 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-                Recent Crawl Logs
-              </h2>
-              <span className="text-xs text-slate-500">Last 10 runs</span>
-            </div>
+          <section className={styles.panel}>
+            <header className={styles.panelHead}>
+              <div>
+                <h2 className={styles.panelTitle}>Recent crawl logs</h2>
+                <p className={styles.panelSub}>Last 10 runs · all sources</p>
+              </div>
+            </header>
 
             {stats.recentCrawls.length === 0 ? (
-              <div className="px-6 py-10 text-sm text-slate-500 text-center">No crawl logs yet. Trigger a sync to start.</div>
+              <div className={styles.woEmpty}>No crawl logs yet. Trigger a sync to start.</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className={styles.tableWrap}>
+                <table className={styles.dossierTable}>
                   <thead>
-                    <tr className="border-b border-white/5 text-xs text-slate-500 uppercase tracking-wider">
-                      <th className="px-6 py-3 text-left font-medium">Started</th>
-                      <th className="px-6 py-3 text-left font-medium">Platform</th>
-                      <th className="px-6 py-3 text-left font-medium">Status</th>
-                      <th className="px-6 py-3 text-right font-medium">Added</th>
-                      <th className="px-6 py-3 text-right font-medium">Updated</th>
-                      <th className="px-6 py-3 text-right font-medium">Duration</th>
+                    <tr>
+                      <th>Started</th>
+                      <th>Platform</th>
+                      <th>Status</th>
+                      <th className={styles.num}>Added</th>
+                      <th className={styles.num}>Updated</th>
+                      <th className={styles.num}>Duration</th>
+                      <th>Notes</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
+                  <tbody>
                     {stats.recentCrawls.map((log) => (
-                      <tr key={log.id} className="hover:bg-white/3 transition-colors">
-                        <td className="px-6 py-3 text-slate-300 whitespace-nowrap">{formatDate(log.started_at)}</td>
-                        <td className="px-6 py-3 text-slate-400 whitespace-nowrap">{log.platform ?? "—"}</td>
-                        <td className="px-6 py-3">
-                          <StatusPill status={log.status} />
-                          {log.error && (
-                            <p className="text-[11px] text-red-400 mt-1 max-w-xs truncate" title={log.error}>
-                              {log.error}
-                            </p>
-                          )}
+                      <tr key={log.id}>
+                        <td className={styles.mono}>{fmtDate(log.started_at)}</td>
+                        <td><span className={styles.cellName}>{log.platform ?? "—"}</span></td>
+                        <td><StatusTag status={log.status} /></td>
+                        <td className={`${styles.num} ${log.tenders_added > 0 ? styles.posNum : styles.muteNum}`}>
+                          {log.tenders_added > 0 ? `+${log.tenders_added}` : "0"}
                         </td>
-                        <td className="px-6 py-3 text-right text-teal-400 font-medium">
-                          {`+${log.tenders_added ?? 0}`}
-                        </td>
-                        <td className="px-6 py-3 text-right text-slate-300">
-                          {log.tenders_updated ?? 0}
-                        </td>
-                        <td className="px-6 py-3 text-right text-slate-500 whitespace-nowrap">
-                          {duration(log.duration_ms)}
+                        <td className={styles.num}>{log.tenders_updated ?? 0}</td>
+                        <td className={`${styles.num} ${styles.muteNum}`}>{fmtDur(log.duration_ms)}</td>
+                        <td className={styles.signal} style={{ color: log.error ? "var(--color-red)" : undefined }}>
+                          {log.error ?? "—"}
                         </td>
                       </tr>
                     ))}
@@ -572,20 +470,38 @@ export default function AdminPage() {
                 </table>
               </div>
             )}
-          </div>
+          </section>
         </>
       ) : !error ? (
-        /* Loading skeleton */
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="rounded-xl bg-white/5 border border-white/8 p-5 h-24 animate-pulse" />
-            ))}
-          </div>
-          <div className="rounded-xl bg-white/5 border border-white/8 h-40 animate-pulse" />
-          <div className="rounded-xl bg-white/5 border border-white/8 h-64 animate-pulse" />
-        </div>
+        <LoadingSkeleton />
       ) : null}
+    </>
+  );
+}
+
+function HeroStat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className={styles.heroStat}>
+      <div className={styles.heroStatLabel}>{label}</div>
+      <div className={styles.heroStatValue}>{value}</div>
+      {sub && <div className={styles.heroStatMeta}>{sub}</div>}
     </div>
+  );
+}
+
+function LoadingSkeleton() {
+  return (
+    <>
+      <div className={styles.heroRow}>
+        {[0,1,2,3].map((i) => (
+          <div key={i} className={styles.heroStat}>
+            <div className={styles.skeleton} style={{ height: 10, width: 80 }} />
+            <div className={styles.skeleton} style={{ height: 36, width: 120, marginTop: 8 }} />
+          </div>
+        ))}
+      </div>
+      <div className={styles.skeleton} style={{ height: 220, marginBottom: 24 }} />
+      <div className={styles.skeleton} style={{ height: 320 }} />
+    </>
   );
 }
