@@ -27,12 +27,12 @@ interface MatchReason {
   opportunityBucketReason?: string | null;
 }
 
-const BUCKET_STYLES: Record<string, string> = {
-  act_now: "bg-red-100 text-red-800",
-  strong_fit: "bg-green-100 text-green-700",
-  strategic: "bg-blue-100 text-blue-700",
-  adjacent: "bg-amber-100 text-amber-700",
-  watchlist: "bg-gray-100 text-gray-600",
+const BUCKET_DOT: Record<string, string> = {
+  act_now: "bg-red-500",
+  strong_fit: "bg-emerald-500",
+  strategic: "bg-sky-500",
+  adjacent: "bg-amber-500",
+  watchlist: "bg-stone-300",
 };
 
 function isDeadlineSoon(deadline: string | null): boolean {
@@ -55,7 +55,14 @@ function deadlineLabel(deadline: string | null): string {
   if (days < 0) return `Expired ${date}`;
   if (days === 0) return `Due today`;
   if (days === 1) return `Due tomorrow`;
-  return `${days} days left`;
+  return `${days}d left`;
+}
+
+function shortDate(deadline: string | null): string | null {
+  if (!deadline) return null;
+  const d = new Date(deadline);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function procurementLabel(item: PipelineTender): string | null {
@@ -81,6 +88,13 @@ function dateLabel(date: string | null | undefined): string | null {
   const parsed = new Date(date);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed.toLocaleDateString();
+}
+
+// Fake-ish reference id from numeric pipeline id; the real schema doesn't have refs,
+// so we synthesize a short hex code so the table reads as procurement-grade.
+function tenderRef(id: number): string {
+  const hex = id.toString(16).toUpperCase().padStart(4, "0");
+  return `TP-${hex}`;
 }
 
 interface BridgeData {
@@ -217,33 +231,100 @@ function gapKey(action: ReadinessAction): string {
   return `${action.severity}:${action.gap}`;
 }
 
-function ReadinessRing({ score }: { score: number }) {
-  const r = 40;
-  const circumference = 2 * Math.PI * r;
-  const offset = circumference * (1 - score / 100);
-  const color = score >= 70 ? "#16a34a" : score >= 50 ? "#d97706" : "#dc2626";
-  const label = score >= 70 ? "Good foundation" : score >= 50 ? "Needs attention" : "Critical gaps";
+// Big editorial readiness ring used in the page hero.
+function HeroReadiness({ score, tier }: { score: number | null; tier: string | null }) {
+  const display = score == null ? "—" : score;
+  const verdict = score == null
+    ? "Run an assessment"
+    : score >= 70
+    ? "Good foundation"
+    : score >= 50
+    ? "Needs attention"
+    : "Critical gaps";
 
   return (
-    <div className="flex flex-col items-center gap-1">
-      <svg width="96" height="96" viewBox="0 0 96 96">
-        <circle cx="48" cy="48" r={r} fill="none" stroke="#f3f4f6" strokeWidth="8" />
-        <circle
-          cx="48"
-          cy="48"
-          r={r}
-          fill="none"
-          stroke={color}
-          strokeWidth="8"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          transform="rotate(-90 48 48)"
-        />
-        <text x="48" y="45" textAnchor="middle" fontSize="20" fontWeight="700" fill={color}>{score}</text>
-        <text x="48" y="59" textAnchor="middle" fontSize="10" fill="#9ca3af">%</text>
-      </svg>
-      <div className="text-xs font-medium text-gray-600">{label}</div>
+    <div className="flex flex-col">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500">
+        Readiness score
+      </div>
+      <div className="mt-2 flex items-baseline gap-2">
+        <span
+          className="text-[112px] leading-none font-medium text-stone-900 tracking-tight"
+          style={{ fontFamily: "'Fraunces', 'Times New Roman', serif", fontFeatureSettings: "'ss01'" }}
+        >
+          {display}
+        </span>
+        <span className="text-[28px] leading-none text-stone-400 font-light">/100</span>
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <span className="text-sm text-stone-600">{verdict}</span>
+        {tier && (
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-500 border-l border-stone-300 pl-3">
+            {tier}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// 5-stage horizontal funnel
+function PipelineFunnel({ stats }: { stats: { matched: number; strong: number; active: number; submitted: number; won: number } | null }) {
+  const stages = [
+    { label: "Matched", value: stats?.matched ?? 0, sub: "in shortlist" },
+    { label: "Strong fit", value: stats?.strong ?? 0, sub: "≥70% fit" },
+    { label: "Active", value: stats?.active ?? 0, sub: "evaluating" },
+    { label: "Submitted", value: stats?.submitted ?? 0, sub: "awaiting result" },
+    { label: "Won", value: stats?.won ?? 0, sub: "this period" },
+  ];
+  const max = Math.max(1, ...stages.map((s) => s.value));
+
+  return (
+    <div className="grid grid-cols-5 gap-px bg-stone-200/70 rounded-md overflow-hidden">
+      {stages.map((s, i) => (
+        <div key={s.label} className="bg-stone-50/60 px-4 py-4">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-[10px] font-semibold text-stone-400 tabular-nums">0{i + 1}</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">{s.label}</span>
+          </div>
+          <div
+            className="mt-2 text-[34px] leading-none font-medium text-stone-900 tabular-nums"
+            style={{ fontFamily: "'Fraunces', 'Times New Roman', serif" }}
+          >
+            {stats == null ? "—" : s.value}
+          </div>
+          {/* tiny bar */}
+          <div className="mt-2.5 h-[3px] w-full bg-stone-200 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-stone-900 rounded-full"
+              style={{ width: stats == null ? "0%" : `${(s.value / max) * 100}%` }}
+            />
+          </div>
+          <div className="mt-1.5 text-[11px] text-stone-500">{s.sub}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SectionHeader({ index, title, count, hint }: { index: string; title: string; count?: number | null; hint?: string }) {
+  return (
+    <div className="mb-3 flex items-end justify-between gap-4 border-b border-stone-200/70 pb-3">
+      <div className="flex items-baseline gap-3">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-400 tabular-nums">{index}</span>
+        <h2
+          className="text-[22px] leading-tight font-medium text-stone-900"
+          style={{ fontFamily: "'Fraunces', 'Times New Roman', serif" }}
+        >
+          {title}
+        </h2>
+        {count != null && (
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+            · {count} {count === 1 ? "item" : "items"}
+          </span>
+        )}
+      </div>
+      {hint && <span className="text-[11px] text-stone-500 hidden sm:block">{hint}</span>}
     </div>
   );
 }
@@ -258,6 +339,7 @@ export default function DashboardOverview() {
     active: number;
     won: number;
     matched: number;
+    submitted: number;
     dueSoon: number;
     strong: number;
   } | null>(null);
@@ -267,7 +349,6 @@ export default function DashboardOverview() {
   const [completedGapKeys, setCompletedGapKeys] = useState<Set<string>>(new Set());
   const [expandedTenderId, setExpandedTenderId] = useState<number | null>(null);
   const [expandedGapKey, setExpandedGapKey] = useState<string | null>(null);
-  const [deadlinesExpanded, setDeadlinesExpanded] = useState(false);
   const [evaluatingItems, setEvaluatingItems] = useState<PipelineTender[]>([]);
   const [submittedItems, setSubmittedItems] = useState<PipelineTender[]>([]);
   const [wonItems, setWonItems] = useState<PipelineTender[]>([]);
@@ -326,7 +407,8 @@ export default function DashboardOverview() {
         setPipelineStats({
           total: items.length,
           matched: items.filter((i) => i.stage === "matched").length,
-          active: items.filter((i) => ["evaluating", "preparing", "submitted"].includes(i.stage)).length,
+          active: items.filter((i) => ["evaluating", "preparing"].includes(i.stage)).length,
+          submitted: items.filter((i) => i.stage === "submitted").length,
           won: items.filter((i) => i.stage === "won").length,
           dueSoon: items.filter((i) => i.stage === "matched" && isDeadlineSoon(i.tender_deadline)).length,
           strong: items.filter((i) => i.stage === "matched" && (i.fit_score >= 70 || i.match_reasons?.opportunityBucket === "strong_fit" || i.match_reasons?.opportunityBucket === "act_now")).length,
@@ -489,12 +571,10 @@ export default function DashboardOverview() {
 
   async function moveItemStage(id: number, newStage: string) {
     setStageSavingId(id);
-    // Optimistic: remove from current list
     setEvaluatingItems((prev) => prev.filter((t) => t.id !== id));
     setSubmittedItems((prev) => prev.filter((t) => t.id !== id));
     setWonItems((prev) => prev.filter((t) => t.id !== id));
     setLostItems((prev) => prev.filter((t) => t.id !== id));
-    // Find the item
     const item = [...evaluatingItems, ...submittedItems, ...wonItems, ...lostItems].find((t) => t.id === id);
     if (item) {
       const updated = { ...item, stage: newStage };
@@ -516,41 +596,265 @@ export default function DashboardOverview() {
     }
   }
 
-  const primaryTender = matchedTenders[0] ?? null;
+  const companyName = readiness?.company_name ?? bridge?.company_name ?? "Dashboard";
+  const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  const urgentCount = matchedTenders.filter((t) => isDeadlineSoon(t.tender_deadline)).length;
+  const topGap = readiness?.action_plan?.find((a) => a.severity === "high" && !a.covered_by_vault);
+
+  // ───────── Tender table row ─────────
+  const renderTenderRow = (t: PipelineTender, opts: { showStage?: boolean } = {}) => {
+    const isExpanded = expandedTenderId === t.id;
+    const action = nextActionFor(t);
+    const bucket = t.match_reasons?.opportunityBucket ?? "watchlist";
+    const dotColor = BUCKET_DOT[bucket] ?? "bg-stone-300";
+
+    return (
+      <div key={t.id} className="border-b border-stone-200/70 last:border-b-0">
+        <button
+          className="w-full text-left px-5 py-4 flex items-center gap-4 hover:bg-stone-50/80 transition-colors"
+          onClick={() => setExpandedTenderId(isExpanded ? null : t.id)}
+        >
+          {/* Status dot */}
+          <span className={`shrink-0 h-2 w-2 rounded-full ${dotColor}`} />
+
+          {/* Ref id (mono) */}
+          <span
+            className="shrink-0 text-[11px] tracking-wider text-stone-400 hidden md:block"
+            style={{ fontFamily: "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace" }}
+          >
+            {tenderRef(t.id)}
+          </span>
+
+          {/* Title + agency */}
+          <span className="flex-1 min-w-0 flex flex-col">
+            <span className="text-[14px] leading-snug text-stone-900 line-clamp-1">
+              {t.tender_title}
+            </span>
+            <span className="mt-0.5 flex items-center gap-2 text-[11px] text-stone-500">
+              {t.tender_agency && <span className="truncate">{t.tender_agency}</span>}
+              {procurementLabel(t) && (
+                <>
+                  <span className="text-stone-300">·</span>
+                  <span>{procurementLabel(t)}</span>
+                </>
+              )}
+              {opts.showStage && t.stage && (
+                <>
+                  <span className="text-stone-300">·</span>
+                  <span className="uppercase tracking-wider text-[10px] font-semibold">{t.stage}</span>
+                </>
+              )}
+            </span>
+          </span>
+
+          {/* Value */}
+          <span
+            className="shrink-0 text-[12px] text-stone-500 tabular-nums hidden lg:block w-[110px] text-right"
+            style={{ fontFamily: "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace" }}
+          >
+            {t.display_value ?? (typeof t.match_reasons?.procurement?.estimatedValue === "string" ? t.match_reasons.procurement.estimatedValue : null) ?? "—"}
+          </span>
+
+          {/* Fit % */}
+          <span
+            className="shrink-0 text-[13px] font-medium tabular-nums w-[52px] text-right"
+            style={{
+              fontFamily: "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace",
+              color: t.fit_score >= 70 ? "#0f766e" : t.fit_score >= 50 ? "#a16207" : "#78716c",
+            }}
+          >
+            {t.fit_score > 0 ? `${t.fit_score}%` : "—"}
+          </span>
+
+          {/* Deadline */}
+          <span
+            className={`shrink-0 text-[12px] tabular-nums w-[80px] text-right ${
+              isDeadlineSoon(t.tender_deadline) ? "font-semibold text-red-600" : "text-stone-500"
+            }`}
+            style={{ fontFamily: "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace" }}
+          >
+            {deadlineLabel(t.tender_deadline)}
+          </span>
+
+          {/* Caret */}
+          <svg
+            className={`shrink-0 h-3.5 w-3.5 text-stone-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {isExpanded && (
+          <div className="px-5 pb-5 pt-2 bg-stone-50/60 border-t border-stone-200/50">
+            {/* Why matched */}
+            <div className="mb-3">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500 mb-1.5">
+                Why this matched
+              </div>
+              <p className="text-[13px] leading-relaxed text-stone-700 max-w-3xl">
+                {t.match_reasons?.summary?.[0]
+                  ?? t.match_reasons?.opportunityBucketReason
+                  ?? "TenderPath found sector, capability, or geography evidence that makes this worth a closer look."}
+              </p>
+              {((t.match_reasons?.matchedSectors ?? []).length > 0 || (t.match_reasons?.matchedKeywords ?? []).length > 0) && (
+                <div className="flex flex-wrap gap-1.5 pt-2">
+                  {(t.match_reasons?.matchedSectors ?? []).slice(0, 3).map((s) => (
+                    <span key={s} className="rounded-sm border border-stone-200 bg-white px-2 py-0.5 text-[10px] font-medium text-stone-600">{s}</span>
+                  ))}
+                  {(t.match_reasons?.matchedKeywords ?? []).slice(0, 3).map((k) => (
+                    <span key={k} className="rounded-sm border border-stone-200 bg-white px-2 py-0.5 text-[10px] font-medium text-stone-600">{k}</span>
+                  ))}
+                </div>
+              )}
+              {(t.match_reasons?.caveats ?? []).length > 0 && (
+                <p className="mt-2 text-[11px] text-amber-700">{t.match_reasons!.caveats![0]}</p>
+              )}
+            </div>
+
+            {/* Detail grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-3 py-3 border-y border-stone-200/70">
+              {[
+                { label: "Type", value: procurementLabel(t) ?? "Procurement notice" },
+                { label: "Source", value: `${sourceLabel(t) ?? "Not listed"} · ${provenanceLabel(t)}` },
+                { label: "Value", value: t.display_value ?? (typeof t.match_reasons?.procurement?.estimatedValue === "string" ? t.match_reasons.procurement.estimatedValue : null) ?? "Not listed" },
+                { label: "Updated", value: dateLabel(t.match_reasons?.procurement?.updatedDate ?? t.tender_updated_at) ?? "Not listed" },
+              ].map((d) => (
+                <div key={d.label}>
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-400 mb-0.5">{d.label}</div>
+                  <div className="text-[12px] text-stone-800">{d.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Next action */}
+            <div className="mt-3 mb-3">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500 mb-1">Next step</div>
+              <div className="text-[14px] font-medium text-stone-900">{action.label}</div>
+              <div className="text-[12px] text-stone-600 mt-0.5">{action.detail}</div>
+            </div>
+
+            {/* CTAs */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href={serviceHref("bid-no-bid", t)}
+                className="rounded-sm bg-stone-900 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-stone-800"
+              >
+                Bid / no-bid
+              </Link>
+              <Link
+                href={serviceHref("proposal", t)}
+                className="rounded-sm border border-stone-300 bg-white px-3 py-1.5 text-[12px] font-medium text-stone-700 hover:border-stone-500"
+              >
+                Proposal package
+              </Link>
+              {isRosterAgency(t.tender_agency) && (
+                <Link
+                  href={serviceHref("lta-roster", t)}
+                  className="rounded-sm border border-amber-300 bg-amber-50 px-3 py-1.5 text-[12px] font-medium text-amber-800 hover:border-amber-400"
+                >
+                  Roster / LTA
+                </Link>
+              )}
+              <div className="flex-1" />
+              <button
+                onClick={() => handleTenderFeedback(t, "saved")}
+                disabled={feedbackSavingId === t.id}
+                className="text-[11px] text-stone-500 hover:text-stone-900 disabled:opacity-50 underline-offset-2 hover:underline"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => handleTenderFeedback(t, "not_relevant")}
+                disabled={feedbackSavingId === t.id}
+                className="text-[11px] text-stone-400 hover:text-red-600 disabled:opacity-50 underline-offset-2 hover:underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Compact stage row for active/submitted/won/lost (no expand)
+  const renderStageRow = (t: PipelineTender, options: Array<{ label: string; nextStage: string }>) => (
+    <div key={t.id} className="border-b border-stone-200/70 last:border-b-0 px-5 py-3.5 flex items-center gap-4 hover:bg-stone-50/80 transition-colors">
+      <span
+        className="shrink-0 text-[11px] tracking-wider text-stone-400 hidden md:block"
+        style={{ fontFamily: "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace" }}
+      >
+        {tenderRef(t.id)}
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-[14px] text-stone-900 truncate">{t.tender_title}</span>
+        {t.tender_agency && <span className="text-[11px] text-stone-500">{t.tender_agency}</span>}
+      </span>
+      {t.tender_deadline && (
+        <span
+          className={`shrink-0 text-[11px] tabular-nums hidden sm:block ${isDeadlineSoon(t.tender_deadline) ? "font-semibold text-red-600" : "text-stone-500"}`}
+          style={{ fontFamily: "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace" }}
+        >
+          {shortDate(t.tender_deadline)}
+        </span>
+      )}
+      {t.fit_score > 0 && (
+        <span
+          className="shrink-0 text-[12px] font-medium text-stone-600 tabular-nums w-[44px] text-right"
+          style={{ fontFamily: "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace" }}
+        >
+          {t.fit_score}%
+        </span>
+      )}
+      <div className="flex items-center gap-1.5 shrink-0">
+        {options.map((opt) => (
+          <button
+            key={opt.nextStage}
+            onClick={() => moveItemStage(t.id, opt.nextStage)}
+            disabled={stageSavingId === t.id}
+            className="rounded-sm border border-stone-300 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-stone-600 hover:border-stone-500 hover:text-stone-900 disabled:opacity-50"
+          >
+            → {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
-    <div>
-      {/* Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Procurement workbench
-          </div>
-          <h1 className="mt-1 text-2xl font-semibold text-gray-900">
-            {readiness?.company_name ? readiness.company_name : "Dashboard"}
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-gray-600">
-            Your matched tenders, readiness status, and next actions in one place.
-          </p>
+    <div className="px-8 py-8 max-w-[1280px]">
+      {/* ───── PAGE HEADER ───── */}
+      <header className="flex flex-col gap-1.5 pb-2">
+        <div className="flex items-center gap-3 text-[11px] text-stone-500">
+          <span className="font-semibold uppercase tracking-[0.18em] text-stone-400">Workbench</span>
+          <span className="text-stone-300">·</span>
+          <span>{today}</span>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/dashboard/services/digest"
-            className="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:border-gray-400"
-          >
-            Weekly digest
-          </Link>
-        </div>
-      </div>
+        <h1
+          className="mt-1 text-[56px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+          style={{ fontFamily: "'Fraunces', 'Times New Roman', serif", fontFeatureSettings: "'ss01'" }}
+        >
+          {companyName}
+        </h1>
+        <p className="mt-1 max-w-2xl text-[15px] leading-relaxed text-stone-600">
+          {urgentCount > 0
+            ? <>You have <span className="font-semibold text-stone-900">{urgentCount} deadline{urgentCount === 1 ? "" : "s"}</span> in the next 7 days. Below is what to look at first.</>
+            : "Your matched tenders, readiness status, and active work — in priority order."}
+        </p>
+      </header>
 
       {/* Welcome banner — shown after fresh assessment seed */}
       {(bridge || seeded) && (
-        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-5 py-3 flex items-start justify-between gap-4">
+        <div className="mt-5 rounded-md border border-emerald-200/70 bg-emerald-50/60 px-5 py-3 flex items-start justify-between gap-4">
           <div>
-            <div className="text-sm font-semibold text-green-800">
-              Welcome{bridge?.company_name ? `, ${bridge.company_name}` : ""}!
+            <div className="text-[13px] font-semibold text-emerald-900">
+              Welcome{bridge?.company_name ? `, ${bridge.company_name}` : ""}.
             </div>
-            <p className="text-sm text-green-700 mt-0.5">
+            <p className="text-[12px] text-emerald-800 mt-0.5">
               {seeded
                 ? "Your matched tenders are ready below."
                 : "Seeding your dashboard with matched tenders…"}
@@ -560,458 +864,247 @@ export default function DashboardOverview() {
         </div>
       )}
 
-      {/* Error */}
+      {/* Error banner */}
       {workflowError && (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mt-5 rounded-md border border-red-200 bg-red-50 px-5 py-3 text-[13px] text-red-800">
           {workflowError}
         </div>
       )}
 
-      {/* Top match orientation */}
-      {primaryTender && (
-        <div className="mt-5 rounded-lg border border-blue-100 bg-blue-50 px-5 py-3 flex items-center justify-between gap-4">
-          <p className="text-sm text-blue-800">
-            <span className="font-semibold">Your top match:</span>{" "}
-            {primaryTender.tender_title}
-            {daysUntilDeadline(primaryTender.tender_deadline) != null && (
-              <> — deadline in <span className={daysUntilDeadline(primaryTender.tender_deadline)! <= 7 ? "font-semibold text-red-700" : "font-semibold"}>{daysUntilDeadline(primaryTender.tender_deadline)} day{daysUntilDeadline(primaryTender.tender_deadline) === 1 ? "" : "s"}</span></>
-            )}
-          </p>
-          <Link
-            href={serviceHref("bid-no-bid", primaryTender)}
-            className="shrink-0 rounded-md bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-800 whitespace-nowrap"
-          >
-            Start bid/no-bid →
-          </Link>
-        </div>
-      )}
-
-      {/* What to do this week */}
-      {(activeOrderCount != null || (readiness?.action_plan?.length ?? 0) > 0 || matchedTenders.some((t) => isDeadlineSoon(t.tender_deadline))) && (
-        <div className="mt-5 rounded-lg border border-gray-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-gray-900 mb-3">What to do this week</h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {/* Active services */}
-            <div className="rounded-md bg-gray-50 px-3 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Active services</div>
-              {activeOrderCount == null ? (
-                <div className="text-xs text-gray-400">Loading…</div>
-              ) : activeOrderCount === 0 ? (
-                <div className="text-xs text-gray-500">No active work orders yet. <Link href="/dashboard/services" className="underline">Start a service →</Link></div>
-              ) : (
-                <div className="text-xs text-gray-900">
-                  <span className="font-semibold">{activeOrderCount}</span> order{activeOrderCount === 1 ? "" : "s"} in progress.{" "}
-                  <Link href="/dashboard/work-orders" className="underline text-gray-600 hover:text-gray-900">View status →</Link>
-                </div>
-              )}
-            </div>
-            {/* Upcoming deadlines */}
-            <div className="rounded-md bg-gray-50 px-3 py-3">
-              <button
-                className="flex w-full items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1 hover:text-gray-600 transition-colors"
-                onClick={() => setDeadlinesExpanded((v) => !v)}
-              >
-                <span>Deadlines this week</span>
-                <svg className={`h-3 w-3 transition-transform ${deadlinesExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              {(() => {
-                const urgent = matchedTenders.filter((t) => isDeadlineSoon(t.tender_deadline));
-                if (urgent.length === 0) return <div className="text-xs text-gray-500">No deadlines in the next 7 days.</div>;
-                const visible = deadlinesExpanded ? urgent : urgent.slice(0, 2);
-                return (
-                  <ul className="space-y-1">
-                    {visible.map((t) => (
-                      <li key={t.id} className="text-xs text-gray-900">
-                        <span className="font-semibold text-red-600">{daysUntilDeadline(t.tender_deadline)}d</span>{" "}
-                        <Link href="/dashboard/pipeline" className="underline text-gray-700 hover:text-gray-900 truncate">{t.tender_title}</Link>
-                        {t.tender_deadline && (
-                          <span className="ml-1 text-gray-400">· {new Date(t.tender_deadline).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
-                        )}
-                      </li>
-                    ))}
-                    {!deadlinesExpanded && urgent.length > 2 && (
-                      <li>
-                        <button
-                          className="text-xs text-gold hover:underline"
-                          onClick={(e) => { e.stopPropagation(); setDeadlinesExpanded(true); }}
-                        >
-                          +{urgent.length - 2} more
-                        </button>
-                      </li>
-                    )}
-                  </ul>
-                );
-              })()}
-            </div>
-            {/* Top uncovered gap */}
-            <div className="rounded-md bg-gray-50 px-3 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Top gap to close</div>
-              {(() => {
-                const gap = readiness?.action_plan?.find((a) => a.severity === "high" && !a.covered_by_vault);
-                if (!gap) {
-                  const anyGap = readiness?.action_plan?.[0];
-                  if (!anyGap) return <div className="text-xs text-gray-500">No open gaps detected.</div>;
-                  return <div className="text-xs text-gray-500">All critical gaps are covered. <Link href="/dashboard/vault" className="underline">View vault →</Link></div>;
-                }
-                return (
-                  <div className="text-xs text-gray-900">
-                    <div className="font-semibold truncate">{gap.gap}</div>
-                    <Link href={gap.primary_action_href} className="mt-1 inline-block underline text-gray-600 hover:text-gray-900">{gap.primary_action_label} →</Link>
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Stats row */}
-      <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-        {[
-          { label: "Matched tenders", value: pipelineStats?.matched ?? "—", note: `${pipelineStats?.strong ?? 0} strong fit` },
-          { label: "Deadline pressure", value: pipelineStats?.dueSoon ?? "—", note: "Due in 7 days" },
-          { label: "Active bids", value: pipelineStats?.active ?? "—", note: "Evaluating or preparing" },
-          { label: "Total pipeline", value: pipelineStats?.total ?? "—", note: `${pipelineStats?.won ?? 0} won` },
-        ].map((stat) => (
-          <div key={stat.label} className="rounded-lg border border-gray-200 bg-white px-4 py-3">
-            <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-            <div className="text-xs text-gray-500 mt-0.5">{stat.label}</div>
-            <div className="mt-1 text-[11px] text-gray-400">{stat.note}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Readiness + Top priority — 2 cols */}
-      <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
-        {/* Readiness card */}
-        <div className="rounded-lg border border-gray-200 bg-white p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Readiness</div>
-              {readiness?.recommended_tier && (
-                <span className="mt-1 inline-block rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
-                  {readiness.recommended_tier}
-                </span>
-              )}
-              {readiness && readiness.action_plan.length > 0 && (
-                <div className="mt-4">
-                  <div className="mb-2">
-                    <div className="text-xs font-semibold text-gray-700">Readiness gaps</div>
-                  </div>
-                  <ul className="space-y-1.5">
-                    {readiness.action_plan.map((action) => {
-                      const key = gapKey(action);
-                      const complete = action.covered_by_vault || completedGapKeys.has(key);
-                      const isOpen = expandedGapKey === key;
-                      return (
-                        <li key={key} className={`rounded-md border text-xs ${
-                          action.severity === "high"
-                            ? "border-red-100 bg-red-50/50"
-                            : action.severity === "medium"
-                            ? "border-amber-100 bg-amber-50/50"
-                            : "border-gray-100 bg-gray-50/50"
-                        }`}>
-                          <button
-                            onClick={() => setExpandedGapKey(isOpen ? null : key)}
-                            className="w-full flex items-center gap-2 px-2.5 py-2 text-left"
-                          >
-                            <span className={`h-2 w-2 shrink-0 rounded-full ${
-                              action.severity === "high"
-                                ? "bg-red-500"
-                                : action.severity === "medium"
-                                ? "bg-amber-400"
-                                : "bg-gray-300"
-                            }`} />
-                            <span className={`flex-1 leading-5 ${complete ? "line-through text-gray-400" : "text-gray-700"}`}>
-                              {action.gap}
-                            </span>
-                            <svg className={`h-3 w-3 shrink-0 text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </button>
-                          {isOpen && (
-                            <div className="px-2.5 pb-3 space-y-2 border-t border-gray-100">
-                              <p className="mt-2 text-gray-600 leading-relaxed">{action.fix}</p>
-                              {action.action_steps.length > 0 && (
-                                <ol className="list-decimal list-inside space-y-0.5 text-gray-500">
-                                  {action.action_steps.map((step, i) => (
-                                    <li key={i}>{step}</li>
-                                  ))}
-                                </ol>
-                              )}
-                              <div className="flex flex-wrap items-center gap-2 pt-1">
-                                {action.primary_action_href && (
-                                  <Link
-                                    href={action.primary_action_href}
-                                    className="rounded bg-gray-900 px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-gray-700"
-                                  >
-                                    {action.primary_action_label || "Take action →"}
-                                  </Link>
-                                )}
-                                <button
-                                  onClick={() => toggleGapDone(action)}
-                                  className={`rounded px-2.5 py-1 text-[10px] font-semibold ${
-                                    complete
-                                      ? "text-green-700 bg-green-100"
-                                      : "text-gray-500 bg-gray-100 hover:bg-gray-200"
-                                  }`}
-                                >
-                                  {complete ? "✓ Marked done" : "Mark as done"}
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              )}
-              {!readiness && (
-                <p className="mt-3 text-sm text-gray-500">
-                  Run an assessment to see your readiness score and compliance gaps.{" "}
-                  <Link href="/assessment" target="_blank" rel="noreferrer" className="text-gray-700 underline">Start assessment</Link>
-                </p>
-              )}
-            </div>
-            {readiness ? (
-              <ReadinessRing score={readiness.readiness_score} />
-            ) : (
-              <div className="h-24 w-24 rounded-full border-8 border-gray-100 flex items-center justify-center">
-                <span className="text-xs text-gray-400">—</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Top priority tender */}
-        <div className="rounded-lg border border-gray-200 bg-white p-5">
-          <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Top priority</div>
-          {primaryTender ? (
-            <>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                {primaryTender.match_reasons?.opportunityBucketLabel && (
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${BUCKET_STYLES[primaryTender.match_reasons.opportunityBucket ?? ""] ?? "bg-gray-100 text-gray-600"}`}>
-                    {primaryTender.match_reasons.opportunityBucketLabel}
-                  </span>
-                )}
-                {primaryTender.fit_score > 0 && (
-                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-700">
-                    {primaryTender.fit_score}% fit
-                  </span>
-                )}
-              </div>
-              <h2 className="mt-2 text-sm font-semibold text-gray-900 line-clamp-2">
-                {primaryTender.tender_title}
-              </h2>
-              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
-                {procurementLabel(primaryTender) && <span>{procurementLabel(primaryTender)}</span>}
-                {primaryTender.tender_agency && <span>{primaryTender.tender_agency}</span>}
-                <span className={isDeadlineSoon(primaryTender.tender_deadline) ? "font-semibold text-red-600" : ""}>
-                  {deadlineLabel(primaryTender.tender_deadline)}
-                </span>
-                {(primaryTender.display_value ?? primaryTender.match_reasons?.procurement?.estimatedValue) && (
-                  <span>{primaryTender.display_value ?? primaryTender.match_reasons?.procurement?.estimatedValue}</span>
-                )}
-                <span>{provenanceLabel(primaryTender)}</span>
-              </div>
-              <p className="mt-2 text-xs leading-5 text-gray-600 line-clamp-2">
-                {primaryTender.match_reasons?.opportunityBucketReason
-                  ?? primaryTender.match_reasons?.summary?.[0]
-                  ?? "Review this opportunity first — it ranks highest for fit, urgency, and actionability."}
-              </p>
-              <div className="mt-3 rounded-md bg-gray-50 px-3 py-2">
-                <div className="text-xs font-semibold text-gray-900">{nextActionFor(primaryTender).label}</div>
-                <div className="mt-0.5 text-[11px] text-gray-500">{nextActionFor(primaryTender).detail}</div>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Link
-                  href={serviceHref("bid-no-bid", primaryTender)}
-                  className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700"
-                >
-                  Bid/no-bid
-                </Link>
-                <Link
-                  href={serviceHref("proposal", primaryTender)}
-                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-400"
-                >
-                  Proposal package
-                </Link>
-                {isRosterAgency(primaryTender.tender_agency) && (
-                  <Link
-                    href={serviceHref("lta-roster", primaryTender)}
-                    className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:border-amber-300"
-                  >
-                    Roster/LTA
-                  </Link>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="mt-4">
-              <p className="text-sm text-gray-500">No matched tenders yet.</p>
+      {/* ───── 00 · READINESS HERO ───── */}
+      <section className="mt-8">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,360px)_1fr] gap-8 xl:gap-10 items-start">
+          {/* Left: big readiness number */}
+          <div>
+            <HeroReadiness score={readiness?.readiness_score ?? null} tier={readiness?.recommended_tier ?? null} />
+            {!readiness && (
               <Link
                 href="/assessment"
                 target="_blank"
                 rel="noreferrer"
-                className="mt-3 inline-block rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700"
+                className="mt-4 inline-block text-[13px] font-semibold text-stone-900 underline underline-offset-4 decoration-stone-400 hover:decoration-stone-900"
               >
-                Run an assessment
+                Run an assessment →
               </Link>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Compact expandable tender feed */}
-      {matchedTenders.length > 0 && (
-        <div className="mt-5">
-          <div className="mb-3">
-            <h2 className="text-base font-semibold text-gray-900">Matched tenders</h2>
-            <p className="text-xs text-gray-500">Click a row to see match detail and next actions.</p>
+            )}
           </div>
-          <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
-            {matchedTenders.map((t) => {
-              const isExpanded = expandedTenderId === t.id;
-              const action = nextActionFor(t);
-              return (
-                <div key={t.id}>
-                  <button
-                    className="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-gray-50 transition-colors"
-                    onClick={() => setExpandedTenderId(isExpanded ? null : t.id)}
+
+          {/* Right: pipeline funnel */}
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500 mb-3">
+              This week's pipeline
+            </div>
+            <PipelineFunnel stats={pipelineStats} />
+          </div>
+        </div>
+      </section>
+
+      {/* ───── 01 · WHAT TO DO THIS WEEK ───── */}
+      {(activeOrderCount != null || (readiness?.action_plan?.length ?? 0) > 0 || urgentCount > 0) && (
+        <section className="mt-12">
+          <SectionHeader index="01" title="This week" hint="Three things to act on" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-stone-200/70 rounded-md overflow-hidden">
+            {/* Active services */}
+            <div className="bg-white px-5 py-4">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-400 mb-1.5">Active services</div>
+              {activeOrderCount == null ? (
+                <div className="text-[13px] text-stone-400">Loading…</div>
+              ) : activeOrderCount === 0 ? (
+                <div className="text-[13px] text-stone-600 leading-relaxed">
+                  No active work orders.{" "}
+                  <Link href="/dashboard/services" className="underline underline-offset-2 text-stone-900">Start a service →</Link>
+                </div>
+              ) : (
+                <div className="text-[13px] text-stone-800 leading-relaxed">
+                  <span
+                    className="text-[28px] leading-none font-medium text-stone-900 mr-1"
+                    style={{ fontFamily: "'Fraunces', 'Times New Roman', serif" }}
                   >
-                    {t.fit_score > 0 && (
-                      <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-700 min-w-[40px] text-center">
-                        {t.fit_score}%
-                      </span>
-                    )}
-                    {t.match_reasons?.opportunityBucketLabel && (
-                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold hidden sm:inline ${BUCKET_STYLES[t.match_reasons.opportunityBucket ?? ""] ?? "bg-gray-100 text-gray-600"}`}>
-                        {t.match_reasons.opportunityBucketLabel}
-                      </span>
-                    )}
-                    <span className="flex-1 min-w-0">
-                      <span className="block text-sm font-medium text-gray-900 truncate">
-                        {t.tender_title}
-                      </span>
-                      <span className="mt-1 hidden sm:flex flex-wrap items-center gap-1.5">
-                        {procurementLabel(t) && (
-                          <span className="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
-                            {procurementLabel(t)}
-                          </span>
-                        )}
-                        {sourceLabel(t) && (
-                          <span className="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
-                            {sourceLabel(t)}
-                          </span>
-                        )}
-                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${provenanceLabel(t) === "Primary source" ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
-                          {provenanceLabel(t)}
+                    {activeOrderCount}
+                  </span>
+                  order{activeOrderCount === 1 ? "" : "s"} in progress.{" "}
+                  <Link href="/dashboard/work-orders" className="underline underline-offset-2 text-stone-900 block mt-1">View status →</Link>
+                </div>
+              )}
+            </div>
+
+            {/* Deadlines */}
+            <div className="bg-white px-5 py-4">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-400 mb-1.5">Deadlines this week</div>
+              {(() => {
+                const urgent = matchedTenders.filter((t) => isDeadlineSoon(t.tender_deadline));
+                if (urgent.length === 0) return <div className="text-[13px] text-stone-500">Nothing in the next 7 days.</div>;
+                return (
+                  <ul className="space-y-1.5">
+                    {urgent.slice(0, 3).map((t) => (
+                      <li key={t.id} className="text-[12.5px] flex items-baseline gap-2">
+                        <span
+                          className="shrink-0 font-semibold text-red-600 tabular-nums w-7"
+                          style={{ fontFamily: "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace" }}
+                        >
+                          {daysUntilDeadline(t.tender_deadline)}d
                         </span>
-                      </span>
+                        <Link href="/dashboard/pipeline" className="text-stone-700 hover:text-stone-900 underline-offset-2 hover:underline truncate">{t.tender_title}</Link>
+                      </li>
+                    ))}
+                    {urgent.length > 3 && (
+                      <li className="text-[11px] text-stone-500">+{urgent.length - 3} more</li>
+                    )}
+                  </ul>
+                );
+              })()}
+            </div>
+
+            {/* Top gap */}
+            <div className="bg-white px-5 py-4">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-400 mb-1.5">Top gap to close</div>
+              {topGap ? (
+                <div>
+                  <div className="text-[13px] text-stone-900 font-medium leading-snug line-clamp-2">{topGap.gap}</div>
+                  <Link
+                    href={topGap.primary_action_href}
+                    className="mt-2 inline-block text-[12px] underline underline-offset-2 text-stone-700 hover:text-stone-900"
+                  >
+                    {topGap.primary_action_label} →
+                  </Link>
+                </div>
+              ) : (
+                <div className="text-[13px] text-stone-500">
+                  All critical gaps covered.{" "}
+                  <Link href="/dashboard/vault" className="underline underline-offset-2 text-stone-900">View vault →</Link>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ───── 02 · MATCHED TENDERS ───── */}
+      {matchedTenders.length > 0 && (
+        <section className="mt-12">
+          <SectionHeader
+            index="02"
+            title="Matched tenders"
+            count={pipelineStats?.matched ?? null}
+            hint="Click a row to see match evidence and next steps"
+          />
+          <div className="rounded-md border border-stone-200/70 bg-white">
+            {/* Header strip */}
+            <div className="hidden md:flex items-center gap-4 px-5 py-2.5 border-b border-stone-200/70 text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-400">
+              <span className="w-2" />
+              <span className="w-[60px]">Ref</span>
+              <span className="flex-1">Title / Agency</span>
+              <span className="w-[110px] text-right hidden lg:block">Value</span>
+              <span className="w-[52px] text-right">Fit</span>
+              <span className="w-[80px] text-right">Deadline</span>
+              <span className="w-3.5" />
+            </div>
+            {matchedTenders.map((t) => renderTenderRow(t))}
+          </div>
+          <p className="mt-3 text-[12px] text-stone-500">
+            Tracking a tender we haven&apos;t picked up?{" "}
+            <Link href="/dashboard/pipeline" className="underline underline-offset-2 text-stone-700 hover:text-stone-900">
+              Add it to your pipeline →
+            </Link>
+          </p>
+        </section>
+      )}
+
+      {/* Empty state */}
+      {matchedTenders.length === 0 && (pipelineStats === null || pipelineStats.total === 0) && (
+        <section className="mt-12">
+          <div className="rounded-md border border-dashed border-stone-300 bg-white px-8 py-14 text-center">
+            <div
+              className="text-[26px] font-medium text-stone-900"
+              style={{ fontFamily: "'Fraunces', 'Times New Roman', serif" }}
+            >
+              No matched tenders yet
+            </div>
+            <p className="mt-2 text-[14px] text-stone-600 max-w-md mx-auto">
+              Run an assessment so we can find tenders and grants that match your company profile.
+            </p>
+            <Link
+              href="/assessment"
+              target="_blank"
+              rel="noreferrer"
+              className="mt-5 inline-block rounded-sm bg-stone-900 px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-stone-800"
+            >
+              Start assessment
+            </Link>
+          </div>
+        </section>
+      )}
+
+      {/* ───── 03 · READINESS GAPS ───── */}
+      {readiness && readiness.action_plan.length > 0 && (
+        <section className="mt-12">
+          <SectionHeader
+            index="03"
+            title="Readiness gaps"
+            count={readiness.action_plan.length}
+            hint={`${readiness.vault_coverage.covered_gaps} of ${readiness.vault_coverage.total_gaps} covered by vault`}
+          />
+          <div className="rounded-md border border-stone-200/70 bg-white">
+            {readiness.action_plan.map((action) => {
+              const key = gapKey(action);
+              const complete = action.covered_by_vault || completedGapKeys.has(key);
+              const isOpen = expandedGapKey === key;
+              const sevDot =
+                action.severity === "high" ? "bg-red-500"
+                : action.severity === "medium" ? "bg-amber-500"
+                : "bg-stone-300";
+              return (
+                <div key={key} className="border-b border-stone-200/70 last:border-b-0">
+                  <button
+                    onClick={() => setExpandedGapKey(isOpen ? null : key)}
+                    className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-stone-50/80 transition-colors"
+                  >
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${sevDot}`} />
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-400 w-14 shrink-0">
+                      {action.severity}
                     </span>
-                    {t.tender_agency && (
-                      <span className="shrink-0 text-xs text-gray-400 hidden md:block truncate max-w-[160px]">
-                        {t.tender_agency}
+                    <span className={`flex-1 text-[14px] ${complete ? "line-through text-stone-400" : "text-stone-900"}`}>
+                      {action.gap}
+                    </span>
+                    {complete && (
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 hidden sm:inline">
+                        ✓ Covered
                       </span>
                     )}
-                    <span className={`shrink-0 text-xs ${isDeadlineSoon(t.tender_deadline) ? "font-semibold text-red-600" : "text-gray-400"}`}>
-                      {deadlineLabel(t.tender_deadline)}
-                    </span>
-                    <svg
-                      className={`shrink-0 h-4 w-4 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
+                    <svg className={`h-3.5 w-3.5 shrink-0 text-stone-400 transition-transform ${isOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
 
-                  {isExpanded && (
-                    <div className="px-4 pb-4 bg-gray-50 border-t border-gray-100">
-                      <div className="pt-3 space-y-2">
-                        <div className="text-xs font-semibold text-gray-700">Why this matched</div>
-                        <p className="text-xs leading-5 text-gray-600">
-                          {t.match_reasons?.summary?.[0]
-                            ?? t.match_reasons?.opportunityBucketReason
-                            ?? "Tenderpath found sector, capability, or geography evidence that makes this worth a closer look."}
-                        </p>
-                        {((t.match_reasons?.matchedSectors ?? []).length > 0 || (t.match_reasons?.matchedKeywords ?? []).length > 0) && (
-                          <div className="flex flex-wrap gap-1.5 pt-1">
-                            {(t.match_reasons?.matchedSectors ?? []).slice(0, 3).map((s) => (
-                              <span key={s} className="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-600">{s}</span>
-                            ))}
-                            {(t.match_reasons?.matchedKeywords ?? []).slice(0, 3).map((k) => (
-                              <span key={k} className="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-600">{k}</span>
-                            ))}
-                          </div>
-                        )}
-                        {(t.match_reasons?.caveats ?? []).length > 0 && (
-                          <p className="text-[11px] text-amber-700">{t.match_reasons!.caveats![0]}</p>
-                        )}
-                        <div className="grid gap-2 rounded-md border border-gray-200 bg-white p-3 text-[11px] text-gray-600 sm:grid-cols-2 lg:grid-cols-4">
-                          <div>
-                            <div className="font-semibold text-gray-900">Type</div>
-                            <div>{procurementLabel(t) ?? "Procurement notice"}</div>
-                          </div>
-                          <div>
-                            <div className="font-semibold text-gray-900">Source</div>
-                            <div>{sourceLabel(t) ?? "Not listed"} · {provenanceLabel(t)}</div>
-                          </div>
-                          <div>
-                            <div className="font-semibold text-gray-900">Value</div>
-                            <div>{t.display_value ?? t.match_reasons?.procurement?.estimatedValue ?? "Not listed"}</div>
-                          </div>
-                          <div>
-                            <div className="font-semibold text-gray-900">Updated</div>
-                            <div>{dateLabel(t.match_reasons?.procurement?.updatedDate ?? t.tender_updated_at) ?? "Not listed"}</div>
-                          </div>
-                        </div>
-                        <div className="pt-1">
-                          <div className="text-xs font-semibold text-gray-900">{action.label}</div>
-                          <div className="mt-0.5 text-[11px] text-gray-500">{action.detail}</div>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                  {isOpen && (
+                    <div className="px-5 pb-5 pt-1 bg-stone-50/60 border-t border-stone-200/50 space-y-3">
+                      <p className="text-[13px] leading-relaxed text-stone-700 max-w-3xl">{action.fix}</p>
+                      {action.action_steps.length > 0 && (
+                        <ol className="list-decimal list-inside space-y-1 text-[12px] text-stone-600 max-w-3xl">
+                          {action.action_steps.map((step, i) => (
+                            <li key={i}>{step}</li>
+                          ))}
+                        </ol>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {action.primary_action_href && (
                           <Link
-                            href={serviceHref("bid-no-bid", t)}
-                            className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700"
+                            href={action.primary_action_href}
+                            className="rounded-sm bg-stone-900 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-stone-800"
                           >
-                            Bid/no-bid
+                            {action.primary_action_label || "Take action →"}
                           </Link>
-                          <Link
-                            href={serviceHref("proposal", t)}
-                            className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-400"
-                          >
-                            Proposal
-                          </Link>
-                          {isRosterAgency(t.tender_agency) && (
-                            <Link
-                              href={serviceHref("lta-roster", t)}
-                              className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:border-amber-300"
-                            >
-                              Roster/LTA
-                            </Link>
-                          )}
-                          <div className="flex-1" />
-                          <button
-                            onClick={() => handleTenderFeedback(t, "saved")}
-                            disabled={feedbackSavingId === t.id}
-                            className="text-xs text-gray-500 hover:text-gray-900 disabled:opacity-50"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={() => handleTenderFeedback(t, "not_relevant")}
-                            disabled={feedbackSavingId === t.id}
-                            className="text-xs text-gray-400 hover:text-red-600 disabled:opacity-50"
-                          >
-                            Dismiss
-                          </button>
-                        </div>
+                        )}
+                        <button
+                          onClick={() => toggleGapDone(action)}
+                          className={`rounded-sm px-3 py-1.5 text-[12px] font-medium ${
+                            complete
+                              ? "text-emerald-700 bg-emerald-100 border border-emerald-200"
+                              : "text-stone-700 bg-white border border-stone-300 hover:border-stone-500"
+                          }`}
+                        >
+                          {complete ? "✓ Marked done" : "Mark as done"}
+                        </button>
                       </div>
                     </div>
                   )}
@@ -1019,240 +1112,60 @@ export default function DashboardOverview() {
               );
             })}
           </div>
-          <p className="mt-3 text-xs text-gray-400">
-            Tracking a tender we haven&apos;t picked up?{" "}
-            <Link href="/dashboard/pipeline" className="underline underline-offset-2 hover:text-gray-700 transition-colors">
-              Add it to your pipeline →
-            </Link>
-          </p>
-        </div>
+        </section>
       )}
 
-      {/* Empty state — no tenders */}
-      {matchedTenders.length === 0 && (pipelineStats === null || pipelineStats.total === 0) && (
-        <div className="mt-5 rounded-lg border border-dashed border-gray-300 bg-white px-6 py-10 text-center">
-          <div className="text-sm font-semibold text-gray-700">No matched tenders yet</div>
-          <p className="mt-1 text-sm text-gray-500">
-            Run an assessment to find tenders and grants that match your company profile.
-          </p>
-          <Link
-            href="/assessment"
-            target="_blank"
-            rel="noreferrer"
-            className="mt-4 inline-block rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700"
-          >
-            Start assessment
-          </Link>
-        </div>
-      )}
-
-      {/* Active Work — Evaluating & Preparing */}
+      {/* ───── 04 · ACTIVE WORK ───── */}
       {evaluatingItems.length > 0 && (
-        <div className="mt-5">
-          <div className="mb-3">
-            <h2 className="text-base font-semibold text-gray-900">Active work</h2>
-            <p className="text-xs text-gray-500">Tenders you're currently evaluating or preparing a bid for.</p>
+        <section className="mt-12">
+          <SectionHeader index="04" title="Active work" count={evaluatingItems.length} hint="Evaluating or preparing" />
+          <div className="rounded-md border border-stone-200/70 bg-white">
+            {evaluatingItems.map((t) =>
+              renderStageRow(t, t.stage === "evaluating"
+                ? [{ label: "Preparing", nextStage: "preparing" }, { label: "Submitted", nextStage: "submitted" }]
+                : [{ label: "Submitted", nextStage: "submitted" }]
+              )
+            )}
           </div>
-          <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
-            {evaluatingItems.map((t) => (
-              <div key={t.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                  t.stage === "preparing" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
-                }`}>
-                  {t.stage === "preparing" ? "Preparing" : "Evaluating"}
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="block text-sm font-medium text-gray-900 truncate">{t.tender_title}</span>
-                  {t.tender_agency && <span className="text-xs text-gray-500">{t.tender_agency}</span>}
-                </span>
-                {t.tender_deadline && (
-                  <span className={`shrink-0 text-xs ${isDeadlineSoon(t.tender_deadline) ? "font-semibold text-red-600" : "text-gray-400"}`}>
-                    {deadlineLabel(t.tender_deadline)}
-                  </span>
-                )}
-                {t.fit_score > 0 && (
-                  <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-700">
-                    {t.fit_score}% fit
-                  </span>
-                )}
-                <div className="flex items-center gap-2 shrink-0">
-                  {t.stage === "evaluating" && (
-                    <button
-                      onClick={() => moveItemStage(t.id, "preparing")}
-                      disabled={stageSavingId === t.id}
-                      className="text-xs font-semibold text-blue-700 border border-blue-200 rounded px-2 py-0.5 bg-blue-50 hover:bg-blue-100 disabled:opacity-50"
-                    >
-                      → Preparing
-                    </button>
-                  )}
-                  <button
-                    onClick={() => moveItemStage(t.id, "submitted")}
-                    disabled={stageSavingId === t.id}
-                    className="text-xs font-semibold text-gray-700 border border-gray-200 rounded px-2 py-0.5 bg-white hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    Mark submitted
-                  </button>
-                  <Link
-                    href={serviceHref("bid-no-bid", t)}
-                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
-                  >
-                    Bid analysis
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        </section>
       )}
 
-      {/* Submitted */}
+      {/* ───── 05 · SUBMITTED ───── */}
       {submittedItems.length > 0 && (
-        <div className="mt-5">
-          <div className="mb-3">
-            <h2 className="text-base font-semibold text-gray-900">Submitted</h2>
-            <p className="text-xs text-gray-500">Bids and grants you've applied for. Mark the outcome when you hear back.</p>
+        <section className="mt-12">
+          <SectionHeader index="05" title="Submitted" count={submittedItems.length} hint="Awaiting outcome" />
+          <div className="rounded-md border border-stone-200/70 bg-white">
+            {submittedItems.map((t) =>
+              renderStageRow(t, [
+                { label: "Won", nextStage: "won" },
+                { label: "Lost", nextStage: "lost" },
+              ])
+            )}
           </div>
-          <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
-            {submittedItems.map((t) => (
-              <div key={t.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
-                  Submitted
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="block text-sm font-medium text-gray-900 truncate">{t.tender_title}</span>
-                  {t.tender_agency && <span className="text-xs text-gray-500">{t.tender_agency}</span>}
-                </span>
-                {t.tender_deadline && (
-                  <span className="shrink-0 text-xs text-gray-400">{deadlineLabel(t.tender_deadline)}</span>
-                )}
-                {t.fit_score > 0 && (
-                  <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-700">
-                    {t.fit_score}% fit
-                  </span>
-                )}
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => moveItemStage(t.id, "won")}
-                    disabled={stageSavingId === t.id}
-                    className="text-xs font-semibold text-green-700 border border-green-200 rounded px-2 py-0.5 bg-green-50 hover:bg-green-100 disabled:opacity-50"
-                  >
-                    ✓ Won
-                  </button>
-                  <button
-                    onClick={() => moveItemStage(t.id, "lost")}
-                    disabled={stageSavingId === t.id}
-                    className="text-xs font-semibold text-red-600 border border-red-200 rounded px-2 py-0.5 bg-red-50 hover:bg-red-100 disabled:opacity-50"
-                  >
-                    Lost
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        </section>
       )}
 
-      {/* Performance trail */}
-      {(wonItems.length > 0 || lostItems.length > 0) && (
-        <div className="mt-5">
-          <div className="mb-3">
-            <h2 className="text-base font-semibold text-gray-900">Performance trail</h2>
-            <p className="text-xs text-gray-500">
-              {wonItems.length} won · {lostItems.length} lost
-              {wonItems.length + lostItems.length > 0 &&
-                ` · ${Math.round((wonItems.length / (wonItems.length + lostItems.length)) * 100)}% win rate`}
-            </p>
+      {/* ───── 06 · WON ───── */}
+      {wonItems.length > 0 && (
+        <section className="mt-12">
+          <SectionHeader index="06" title="Won" count={wonItems.length} />
+          <div className="rounded-md border border-stone-200/70 bg-white">
+            {wonItems.map((t) => renderStageRow(t, []))}
           </div>
-          <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
-            {[
-              ...wonItems.map((i) => ({ ...i, _outcome: "won" as const })),
-              ...lostItems.map((i) => ({ ...i, _outcome: "lost" as const })),
-            ].map((t) => (
-              <div key={t.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                  t._outcome === "won" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                }`}>
-                  {t._outcome === "won" ? "✓ Won" : "Lost"}
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="block text-sm font-medium text-gray-900 truncate">{t.tender_title}</span>
-                  {t.tender_agency && <span className="text-xs text-gray-500">{t.tender_agency}</span>}
-                </span>
-                {t.fit_score > 0 && (
-                  <span className="shrink-0 text-xs text-gray-400">{t.fit_score}% fit</span>
-                )}
-                {t.tender_deadline && (
-                  <span className="shrink-0 text-xs text-gray-400">{deadlineLabel(t.tender_deadline)}</span>
-                )}
-                {t._outcome === "lost" && (
-                  <button
-                    onClick={() => moveItemStage(t.id, "evaluating")}
-                    disabled={stageSavingId === t.id}
-                    className="text-xs text-gray-400 hover:text-gray-700 disabled:opacity-50"
-                  >
-                    Re-open
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+        </section>
       )}
 
-      {/* Service paths */}
-      <div className="mt-6">
-        <div className="mb-3">
-          <h2 className="text-base font-semibold text-gray-900">Service paths</h2>
-          <p className="text-xs text-gray-500">Choose the product that matches your stage.</p>
-        </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {[
-            {
-              label: "Bid/no-bid",
-              title: "Decide before writing",
-              body: "Fit reasoning, blockers, required documents, and a pursuit recommendation.",
-              href: "/dashboard/services/bid-no-bid",
-              price: "$39",
-            },
-            {
-              label: "Digest",
-              title: "Keep matches flowing",
-              body: "Weekly shortlist of tenders and grants scored against the company profile.",
-              href: "/dashboard/services/digest",
-              price: "$49/mo",
-            },
-            {
-              label: "Apply",
-              title: "Build the proposal pack",
-              body: "Technical narrative, compliance checklist, and financial template for a live tender.",
-              href: "/dashboard/services/proposal",
-              price: "$299",
-            },
-            {
-              label: "LTA / roster",
-              title: "Prepare vendor registration",
-              body: "Agency-specific documents, capability statement, and submission support.",
-              href: "/dashboard/services/lta-roster",
-              price: "$749",
-            },
-          ].map((service) => (
-            <Link
-              key={service.label}
-              href={service.href}
-              className="block rounded-lg border border-gray-200 bg-white p-4 transition hover:border-gray-900"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{service.label}</div>
-                <div className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-700">
-                  {service.price}
-                </div>
-              </div>
-              <div className="mt-3 text-sm font-semibold text-gray-900">{service.title}</div>
-              <p className="mt-1 text-xs leading-5 text-gray-500">{service.body}</p>
-            </Link>
-          ))}
-        </div>
-      </div>
+      {/* ───── 07 · LOST (collapsed by default — just count) ───── */}
+      {lostItems.length > 0 && (
+        <section className="mt-12 mb-8">
+          <SectionHeader index="07" title="Lost" count={lostItems.length} hint="Archived" />
+          <div className="rounded-md border border-stone-200/70 bg-white">
+            {lostItems.map((t) => renderStageRow(t, []))}
+          </div>
+        </section>
+      )}
+
+      <div className="h-12" />
     </div>
   );
 }
