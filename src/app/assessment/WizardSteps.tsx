@@ -3,7 +3,14 @@
 import { useState, useMemo, useCallback } from "react";
 import { REGION_GROUPS } from "@/lib/countries";
 
-// ── Types ──────────────────────────────────────────────────────────────────
+/* ============================================================
+   Wizard steps — Direction A (paper, serif, mono)
+   - Same data shape, same exports, same constants as before.
+   - Restyled to match the paper editorial system.
+   - Adds "why we ask" microcopy under each field.
+   ============================================================ */
+
+// ── Types (unchanged contract) ────────────────────────────────────────────
 
 export interface CrawlPreview {
   confidence: "high" | "medium" | "low";
@@ -37,7 +44,7 @@ export interface WizardData {
   certifications: string[];
 }
 
-// ── Constants ──────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────
 
 export const SECTOR_OPTIONS = [
   "Information Technology", "Healthcare", "Education & Training",
@@ -47,25 +54,6 @@ export const SECTOR_OPTIONS = [
   "Financial Services", "Consulting & Advisory", "Media & Communications",
   "Agriculture",
 ];
-
-const SECTOR_META: Record<string, { icon: string; desc: string }> = {
-  "Information Technology":    { icon: "💻", desc: "Software, IT & data systems" },
-  "Healthcare":                { icon: "🏥", desc: "Medical, pharma & health systems" },
-  "Education & Training":      { icon: "📚", desc: "Learning & capacity building" },
-  "Logistics & Supply Chain":  { icon: "🚚", desc: "Transport & warehousing" },
-  "Water & Sanitation":        { icon: "💧", desc: "WASH & water infrastructure" },
-  "Renewable Energy":          { icon: "⚡", desc: "Solar, wind & clean energy" },
-  "Environmental Services":    { icon: "🌱", desc: "Environment & conservation" },
-  "Construction":              { icon: "🏗️", desc: "Civil works & infrastructure" },
-  "Monitoring and Evaluation": { icon: "📊", desc: "M&E, research & assessments" },
-  "Language Services":         { icon: "🌐", desc: "Translation & interpretation" },
-  "Security Services":         { icon: "🛡️", desc: "Guards & risk management" },
-  "Food Services":             { icon: "🍽️", desc: "Food supply & catering" },
-  "Financial Services":        { icon: "💰", desc: "Finance & microfinance" },
-  "Consulting & Advisory":     { icon: "💼", desc: "Strategy & policy advisory" },
-  "Media & Communications":    { icon: "📡", desc: "Media & outreach" },
-  "Agriculture":               { icon: "🌿", desc: "Farming & agribusiness" },
-};
 
 const DEV_THEME_OPTIONS = [
   "Gender Equality", "Climate & Environment", "Health Systems",
@@ -85,6 +73,13 @@ const ORG_TYPES = [
   { value: "ngo", label: "NGO / Non-profit" },
   { value: "sole-trader", label: "Sole trader" },
   { value: "government", label: "Government entity" },
+];
+
+const INTENT_OPTIONS = [
+  { value: "track-tenders", label: "Find & track tenders" },
+  { value: "evaluate-tender", label: "Evaluate a specific tender" },
+  { value: "prepare-proposal", label: "Prepare a proposal" },
+  { value: "register-roster", label: "Register on a roster / LTA" },
 ];
 
 const CONTRACT_VOLUME_OPTIONS = [
@@ -107,118 +102,124 @@ const UN_REG_OPTIONS = [
   { value: "no", label: "Not yet" },
 ];
 
-// ── Shared micro-components ────────────────────────────────────────────────
+// ── Shared editorial micro-components ─────────────────────────────────────
 
-function SparkleIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-    </svg>
-  );
-}
-
-function FieldLabel({
-  children, hint, aiDetected,
+function Field({
+  num, label, why, required, aiFilled, children,
 }: {
+  num: string;
+  label: string;
+  why: string;
+  required?: boolean;
+  aiFilled?: boolean;
   children: React.ReactNode;
-  hint?: string;
-  aiDetected?: boolean;
 }) {
   return (
-    <div className="flex items-baseline justify-between mb-1.5">
-      <label className="text-sm font-medium text-gray-300">{children}</label>
-      <div className="flex items-center gap-2">
-        {hint && <span className="text-xs text-gray-500">{hint}</span>}
-        {aiDetected && (
-          <span className="inline-flex items-center gap-1 text-[10px] text-gold/80 bg-gold/10 rounded px-1.5 py-0.5">
-            <SparkleIcon className="w-2.5 h-2.5" /> AI filled
-          </span>
-        )}
+    <div className="border-b border-rule py-7">
+      <div className="grid lg:grid-cols-[60px_1fr] gap-4 lg:gap-6">
+        <div>
+          <p className="font-mono text-[10px] tracking-[0.12em] text-accent tabular-nums">
+            {num}
+          </p>
+          {aiFilled && (
+            <span className="inline-block mt-2 font-mono text-[8px] tracking-[0.16em] uppercase text-accent border border-accent px-1.5 py-0.5">
+              AI filled
+            </span>
+          )}
+        </div>
+        <div>
+          <label className="block font-serif text-[20px] text-ink leading-tight tracking-[-0.01em] mb-1">
+            {label}
+            {required && <span className="text-accent ml-1">*</span>}
+          </label>
+          <p className="text-[12px] text-ink-3 leading-[1.5] mb-4 max-w-md">{why}</p>
+          {children}
+        </div>
       </div>
     </div>
   );
 }
 
-function ChipSelect({ options, selected, onChange }: {
-  options: string[];
-  selected: string[];
-  onChange: (v: string[]) => void;
-}) {
-  const toggle = (v: string) =>
-    onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
+function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((o) => (
-        <button key={o} type="button" onClick={() => toggle(o)}
-          className={`rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
-            selected.includes(o)
-              ? "border-gold bg-gold/20 text-white"
-              : "border-white/10 bg-navy text-gray-400 hover:border-white/25 hover:text-white"
-          }`}>
-          {selected.includes(o) ? "✓ " : ""}{o}
-        </button>
-      ))}
-    </div>
+    <input
+      {...props}
+      className="w-full bg-transparent border-b border-ink-2 px-0 py-2 font-serif text-[18px] text-ink placeholder:text-mute focus:outline-none focus:border-accent transition-colors"
+    />
   );
 }
 
-function SectorGrid({ selected, onChange, aiDetected = [] }: {
+function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      {...props}
+      className="w-full bg-paper-2 border border-rule p-4 text-[14px] text-ink placeholder:text-mute leading-[1.6] focus:outline-none focus:border-accent resize-none transition-colors"
+    />
+  );
+}
+
+function ChipButton({
+  active, label, onClick,
+}: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`font-mono text-[11px] tracking-[0.04em] px-3 py-2 border transition-colors ${
+        active
+          ? "border-ink bg-ink text-paper"
+          : "border-rule bg-paper text-ink-2 hover:border-ink hover:text-ink"
+      }`}
+    >
+      {active && <span className="mr-1">✓</span>}
+      {label}
+    </button>
+  );
+}
+
+function ChipSelect({
+  options, selected, onChange, aiDetected = [],
+}: {
+  options: string[];
   selected: string[];
   onChange: (v: string[]) => void;
   aiDetected?: string[];
 }) {
-  const [expanded, setExpanded] = useState(false);
   const toggle = (v: string) =>
     onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
-
-  const visible = expanded ? SECTOR_OPTIONS : SECTOR_OPTIONS.slice(0, 10);
-
   return (
-    <div>
-      <div className="flex flex-wrap gap-2">
-        {visible.map((sector) => {
-          const meta = SECTOR_META[sector] ?? { icon: "🔹", desc: "" };
-          const isSelected = selected.includes(sector);
-          const isAi = aiDetected.includes(sector);
-          return (
-            <button
-              key={sector}
-              type="button"
-              onClick={() => toggle(sector)}
-              className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                isSelected
-                  ? "border-gold bg-gold/20 text-white"
-                  : "border-white/10 bg-navy text-gray-400 hover:border-white/25 hover:text-white"
-              }`}
-            >
-              <span className="text-sm leading-none">{meta.icon}</span>
-              {isSelected && <span className="text-gold">✓</span>}
-              {sector}
-              {isAi && !isSelected && (
-                <span className="text-[8px] bg-gold/20 text-gold rounded px-1 py-0.5 font-bold leading-none">AI</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-      {SECTOR_OPTIONS.length > 10 && (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-2.5 text-xs text-gold/70 hover:text-gold transition-colors"
-        >
-          {expanded ? "Show fewer sectors ↑" : `+ ${SECTOR_OPTIONS.length - 10} more sectors`}
-        </button>
-      )}
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((o) => {
+        const isSel = selected.includes(o);
+        const isAi = aiDetected.includes(o);
+        return (
+          <button
+            key={o}
+            type="button"
+            onClick={() => toggle(o)}
+            className={`font-mono text-[11px] tracking-[0.04em] px-3 py-2 border transition-colors inline-flex items-center gap-1.5 ${
+              isSel
+                ? "border-ink bg-ink text-paper"
+                : "border-rule bg-paper text-ink-2 hover:border-ink hover:text-ink"
+            }`}
+          >
+            {isSel && <span>✓</span>}
+            {o}
+            {isAi && !isSel && (
+              <span className="font-mono text-[8px] tracking-[0.12em] text-accent border border-accent px-1">
+                AI
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function TagInput({ values, onChange, placeholder }: {
-  values: string[];
-  onChange: (v: string[]) => void;
-  placeholder?: string;
-}) {
+function TagInput({
+  values, onChange, placeholder,
+}: { values: string[]; onChange: (v: string[]) => void; placeholder?: string }) {
   const [input, setInput] = useState("");
   const add = () => {
     const v = input.trim();
@@ -227,54 +228,86 @@ function TagInput({ values, onChange, placeholder }: {
   };
   return (
     <div>
-      <div className="flex flex-wrap gap-1.5 mb-2">
-        {values.map((v) => (
-          <span key={v} className="inline-flex items-center gap-1 rounded-md bg-gold/15 border border-gold/30 px-2 py-0.5 text-xs text-white">
-            {v}
-            <button type="button" onClick={() => onChange(values.filter((x) => x !== v))}
-              className="text-gold/60 hover:text-white leading-none ml-0.5">×</button>
-          </span>
-        ))}
-      </div>
+      {values.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {values.map((v) => (
+            <span
+              key={v}
+              className="inline-flex items-center gap-2 border border-ink bg-paper-2 px-2.5 py-1 font-mono text-[11px] text-ink"
+            >
+              {v}
+              <button
+                type="button"
+                onClick={() => onChange(values.filter((x) => x !== v))}
+                className="text-mute hover:text-ink leading-none"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       <div className="flex gap-2">
-        <input value={input} onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(); } }}
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
+              add();
+            }
+          }}
           placeholder={placeholder}
-          className="flex-1 rounded-lg bg-navy-light border border-white/10 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none" />
-        <button type="button" onClick={add}
-          className="rounded-lg border border-white/10 px-3 py-2 text-xs text-gray-400 hover:border-gold hover:text-white transition-colors">
-          Add
+          className="flex-1 bg-transparent border-b border-ink-2 px-0 py-2 text-[14px] text-ink placeholder:text-mute focus:outline-none focus:border-accent"
+        />
+        <button
+          type="button"
+          onClick={add}
+          className="font-mono text-[10px] tracking-[0.1em] uppercase text-ink border-b border-ink hover:text-accent hover:border-accent pb-1 px-2"
+        >
+          Add +
         </button>
       </div>
     </div>
   );
 }
 
-export function StepNav({ onBack, onNext, nextLabel = "Continue", canNext = true }: {
+export function StepNav({
+  onBack, onNext, nextLabel = "Continue", canNext = true,
+}: {
   onBack?: () => void;
   onNext: () => void;
   nextLabel?: string;
   canNext?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between pt-6 mt-6 border-t border-white/10">
+    <div className="flex items-center justify-between pt-8 mt-2">
       {onBack ? (
-        <button type="button" onClick={onBack}
-          className="text-sm text-gray-400 hover:text-white transition-colors">
+        <button
+          type="button"
+          onClick={onBack}
+          className="font-mono text-[11px] tracking-[0.12em] uppercase text-ink-3 hover:text-ink"
+        >
           ← Back
         </button>
       ) : <div />}
-      <button type="button" onClick={onNext} disabled={!canNext}
-        className="rounded-lg bg-gold px-6 py-2.5 text-sm font-semibold text-white hover:bg-gold-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+      <button
+        type="button"
+        onClick={onNext}
+        disabled={!canNext}
+        className="bg-ink text-paper font-mono text-[11px] tracking-[0.14em] uppercase px-7 py-3.5 hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+      >
         {nextLabel} →
       </button>
     </div>
   );
 }
 
-// ── Step 1: Company Basics ─────────────────────────────────────────────────
+// ── Step 1: Company Basics ────────────────────────────────────────────────
 
-export function Step1({ data, preview, onChange, onNext }: {
+export function Step1({
+  data, preview, onChange, onNext,
+}: {
   data: WizardData;
   preview: CrawlPreview | null;
   onChange: (patch: Partial<WizardData>) => void;
@@ -305,153 +338,183 @@ export function Step1({ data, preview, onChange, onNext }: {
   const canNext = Boolean(data.companyName.trim() && data.email.trim() && data.operatingCountries.length);
 
   return (
-    <div className="space-y-5">
-      {/* AI autocomplete banner */}
+    <div>
       {aiDidFill && (
-        <div className="rounded-xl border border-gold/25 bg-gold/5 px-4 py-3 flex items-start gap-3">
-          <SparkleIcon className="w-4 h-4 text-gold mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-white">AI read your website</p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              We detected your profile from{" "}
-              <span className="text-gray-300">{preview.finalUrl ?? "your website"}</span>.
-              Review the fields below and edit anything that looks off.
-            </p>
-          </div>
+        <div className="border-l-2 border-accent bg-paper-2 px-5 py-4 mb-2">
+          <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-accent mb-1.5">
+            We read your website
+          </p>
+          <p className="text-[13px] text-ink-2 leading-snug">
+            Pre-filled from{" "}
+            <span className="text-ink font-mono text-[12px]">{preview.finalUrl ?? data.website}</span>.
+            Review each field — edit anything that&rsquo;s off.
+          </p>
         </div>
       )}
       {preview && !aiDidFill && (
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 flex items-start gap-3">
-          <span className="text-gray-500 text-sm mt-0.5">ℹ️</span>
-          <p className="text-xs text-gray-400">
+        <div className="border-l-2 border-mute bg-paper-2 px-5 py-4 mb-2">
+          <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-mute mb-1.5">
+            Limited site content
+          </p>
+          <p className="text-[13px] text-ink-2 leading-snug">
             {preview.renderMethod === "parked"
-              ? "That domain looks parked or for sale — no company content was found. Please fill in your details below."
+              ? "That domain looks parked or for sale — please fill in your details below."
               : "Your website had limited content — please describe your business manually below."}
           </p>
         </div>
       )}
 
-      <div>
-        <FieldLabel aiDetected={!!aiDidFill && !!preview?.detectedName}>Company / Organization Name *</FieldLabel>
-        <input type="text" value={data.companyName}
+      <Field
+        num="01"
+        label="Company / organization name"
+        why="Used on your readiness report and any submitted proposals."
+        required
+        aiFilled={!!aiDidFill && !!preview?.detectedName}
+      >
+        <TextInput
+          type="text"
+          value={data.companyName}
           onChange={(e) => onChange({ companyName: e.target.value })}
-          className={`w-full rounded-lg bg-navy-light border px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none ${
-            aiDidFill && preview?.detectedName ? "border-gold/40" : "border-white/10"
-          }`}
-          placeholder="e.g. Mwamba Consulting Ltd" />
-      </div>
+          placeholder="Mwamba Consulting Ltd"
+        />
+      </Field>
 
-      <div>
-        <FieldLabel>Work Email *</FieldLabel>
-        <input type="email" value={data.email}
+      <Field
+        num="02"
+        label="Work email"
+        why="We send your full report here. No spam, no list-sharing — see /privacy."
+        required
+      >
+        <TextInput
+          type="email"
+          value={data.email}
           onChange={(e) => onChange({ email: e.target.value })}
-          className="w-full rounded-lg bg-navy-light border border-white/10 px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none"
-          placeholder="you@company.com" />
-        <p className="mt-1 text-xs text-gray-500">Your report is sent here — no spam.</p>
-      </div>
+          placeholder="you@company.com"
+        />
+      </Field>
 
-      <div>
-        <FieldLabel aiDetected={!!aiDidFill && !!preview?.detectedOrgType}>Organization type</FieldLabel>
-        <div className="flex flex-wrap gap-2">
+      <Field
+        num="03"
+        label="Organization type"
+        why="Different vendor categories see different opportunities. NGOs also see grants."
+        aiFilled={!!aiDidFill && !!preview?.detectedOrgType}
+      >
+        <div className="flex flex-wrap gap-1.5">
           {ORG_TYPES.map((t) => (
-            <button key={t.value} type="button" onClick={() => onChange({ orgType: t.value })}
-              className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
-                data.orgType === t.value
-                  ? "border-gold bg-gold/20 text-white"
-                  : "border-white/10 text-gray-400 hover:border-white/25 hover:text-white"
-              }`}>
-              {t.label}
-            </button>
+            <ChipButton
+              key={t.value}
+              active={data.orgType === t.value}
+              label={t.label}
+              onClick={() => onChange({ orgType: t.value })}
+            />
           ))}
         </div>
-      </div>
+      </Field>
 
-      <div>
-        <FieldLabel>What are you trying to do first?</FieldLabel>
-        <div className="flex flex-wrap gap-2">
-          {[
-            { value: "track-tenders", label: "Find & track tenders" },
-            { value: "evaluate-tender", label: "Evaluate a specific tender" },
-            { value: "prepare-proposal", label: "Prepare a proposal" },
-            { value: "register-roster", label: "Register on a roster / LTA" },
-          ].map((opt) => (
-            <button key={opt.value} type="button" onClick={() => onChange({ intent: opt.value })}
-              className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
-                data.intent === opt.value
-                  ? "border-gold bg-gold/20 text-white"
-                  : "border-white/10 text-gray-400 hover:border-white/25 hover:text-white"
-              }`}>
-              {opt.label}
-            </button>
+      <Field
+        num="04"
+        label="What do you want to do first?"
+        why="We tune the report toward your immediate goal — no point ranking 50 tenders if you&rsquo;re focused on one."
+      >
+        <div className="flex flex-wrap gap-1.5">
+          {INTENT_OPTIONS.map((o) => (
+            <ChipButton
+              key={o.value}
+              active={data.intent === o.value}
+              label={o.label}
+              onClick={() => onChange({ intent: o.value })}
+            />
           ))}
         </div>
-      </div>
+      </Field>
 
-      <div>
-        <FieldLabel
-          aiDetected={!!aiDidFill && !!preview?.detectedDescription}
-          hint="optional if website provided">
-          About your business
-        </FieldLabel>
-        <textarea value={data.description} onChange={(e) => onChange({ description: e.target.value })}
-          rows={3}
-          className={`w-full rounded-lg bg-navy-light border px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none resize-none ${
-            aiDidFill && preview?.detectedDescription ? "border-gold/40" : "border-white/10"
-          }`}
-          placeholder="What does your organization do, deliver, or sell?" />
+      <Field
+        num="05"
+        label="About your business"
+        why="A short description sharply improves matching — especially if your website is light or focused on one product."
+        aiFilled={!!aiDidFill && !!preview?.detectedDescription}
+      >
+        <Textarea
+          rows={4}
+          value={data.description}
+          onChange={(e) => onChange({ description: e.target.value })}
+          placeholder="What you deliver, who you serve, the geographies you work in…"
+        />
         {preview?.isThinContent && (
-          <p className="mt-1 text-xs text-amber-300/80">
-            Your website appears thin — a description here will improve matching quality.
+          <p className="font-mono text-[10px] tracking-[0.06em] text-accent mt-2">
+            ⚠ Your site was thin on content — a description here meaningfully improves match quality.
           </p>
         )}
-      </div>
+      </Field>
 
-      <div>
-        <FieldLabel hint="optional" aiDetected={!!aiDidFill && !!preview?.detectedLanguage}>Submission language</FieldLabel>
-        <select value={data.submissionLanguage} onChange={(e) => onChange({ submissionLanguage: e.target.value })}
-          className={`w-full rounded-lg bg-navy-light border px-4 py-2.5 text-sm text-white focus:border-gold focus:outline-none ${
-            aiDidFill && preview?.detectedLanguage ? "border-gold/40" : "border-white/10"
-          }`}>
-          <option value="">Select language</option>
-          {LANGUAGE_OPTIONS.map((l) => <option key={l} value={l}>{l}</option>)}
-        </select>
-      </div>
+      <Field
+        num="06"
+        label="Submission language"
+        why="Tenders are language-locked. We surface opportunities you can credibly submit on."
+        aiFilled={!!aiDidFill && !!preview?.detectedLanguage}
+      >
+        <div className="flex flex-wrap gap-1.5">
+          {LANGUAGE_OPTIONS.map((l) => (
+            <ChipButton
+              key={l}
+              active={data.submissionLanguage === l}
+              label={l}
+              onClick={() => onChange({ submissionLanguage: l })}
+            />
+          ))}
+        </div>
+      </Field>
 
-      <div>
-        <FieldLabel aiDetected={!!aiDidFill && preview != null && preview.detectedCountries.length > 0}>Where you operate *</FieldLabel>
+      <Field
+        num="07"
+        label="Where you operate"
+        why="Geography is the #1 disqualifier on UN tenders. We only surface opportunities in countries you serve."
+        required
+        aiFilled={!!aiDidFill && preview != null && preview.detectedCountries.length > 0}
+      >
         {data.operatingCountries.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5 mb-3">
             {data.operatingCountries.map((c) => (
-              <button key={c} type="button" onClick={() => toggleCountry(c)}
-                className="rounded-md bg-gold/15 border border-gold/40 px-2 py-0.5 text-xs text-white hover:bg-gold/25">
-                {c} <span className="text-gold/70">×</span>
+              <button
+                key={c}
+                type="button"
+                onClick={() => toggleCountry(c)}
+                className="inline-flex items-center gap-1.5 border border-ink bg-paper-2 px-2.5 py-1 font-mono text-[11px] text-ink hover:bg-ink hover:text-paper"
+              >
+                {c} <span className="text-mute">×</span>
               </button>
             ))}
           </div>
         )}
         <div className="relative">
-          <input type="text" value={countrySearch}
+          <input
+            type="text"
+            value={countrySearch}
             onChange={(e) => { setCountrySearch(e.target.value); setDropdownOpen(true); }}
             onFocus={() => setDropdownOpen(true)}
             onBlur={() => setTimeout(() => setDropdownOpen(false), 150)}
             placeholder="Type a country to search…"
-            className="w-full rounded-lg bg-navy-light border border-white/10 px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-gold focus:outline-none" />
+            className="w-full bg-transparent border-b border-ink-2 px-0 py-2 text-[14px] text-ink placeholder:text-mute focus:outline-none focus:border-accent"
+          />
           {dropdownOpen && (
-            <div className="absolute z-10 mt-1 w-full max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-navy-light shadow-xl">
+            <div className="absolute z-10 mt-1 w-full max-h-72 overflow-y-auto border border-ink bg-paper shadow-xl">
               {filteredGroups.map((g) => (
                 <div key={g.label}>
-                  <div className="sticky top-0 bg-navy-light/95 backdrop-blur px-3 py-1.5 text-[10px] font-semibold tracking-wider text-gold uppercase border-b border-white/5">
+                  <div className="sticky top-0 bg-paper-2 px-3 py-1.5 font-mono text-[10px] tracking-[0.12em] text-accent uppercase border-b border-rule">
                     {g.label}
                   </div>
                   {g.countries.map((c) => {
                     const active = data.operatingCountries.includes(c);
                     return (
-                      <button key={c} type="button"
+                      <button
+                        key={c}
+                        type="button"
                         onMouseDown={(e) => { e.preventDefault(); toggleCountry(c); }}
-                        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 hover:bg-white/5 text-left">
-                        <span className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center ${active ? "bg-gold border-gold" : "border-white/20"}`}>
+                        className="w-full flex items-center gap-3 px-3 py-2 text-[13px] text-ink-2 hover:bg-paper-2 hover:text-ink text-left"
+                      >
+                        <span className={`w-3.5 h-3.5 border flex items-center justify-center flex-shrink-0 ${active ? "bg-ink border-ink" : "border-rule"}`}>
                           {active && (
-                            <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <svg className="w-2.5 h-2.5 text-paper" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                             </svg>
                           )}
@@ -465,16 +528,18 @@ export function Step1({ data, preview, onChange, onNext }: {
             </div>
           )}
         </div>
-      </div>
+      </Field>
 
-      <StepNav onNext={onNext} nextLabel="Next: What you do" canNext={canNext} />
+      <StepNav onNext={onNext} nextLabel="Next · What you do" canNext={canNext} />
     </div>
   );
 }
 
-// ── Step 2: What You Actually Do ───────────────────────────────────────────
+// ── Step 2: What you do ───────────────────────────────────────────────────
 
-export function Step2({ data, preview, onChange, onBack, onNext }: {
+export function Step2({
+  data, preview, onChange, onBack, onNext,
+}: {
   data: WizardData;
   preview: CrawlPreview | null;
   onChange: (patch: Partial<WizardData>) => void;
@@ -484,49 +549,62 @@ export function Step2({ data, preview, onChange, onBack, onNext }: {
   const aiSectors = preview?.detectedSectors ?? [];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <FieldLabel>Core sectors *</FieldLabel>
-        </div>
-        <p className="text-xs text-gray-500 mb-3">
-          Select all that apply — these drive tender matching.
-          {aiSectors.length > 0 && (
-            <span className="ml-1 text-gold/70">AI-suggested ones are marked.</span>
-          )}
-        </p>
-        <SectorGrid
+    <div>
+      <Field
+        num="01"
+        label="Core sectors"
+        why="The strongest matching signal. Select all that apply — secondary sectors expand your matched pool."
+        required
+      >
+        <ChipSelect
+          options={SECTOR_OPTIONS}
           selected={data.sectors}
           onChange={(v) => onChange({ sectors: v })}
           aiDetected={aiSectors}
         />
-      </div>
+        {aiSectors.length > 0 && (
+          <p className="font-mono text-[10px] tracking-[0.06em] text-mute mt-3">
+            Sectors marked <span className="text-accent">AI</span> were detected on your website. Confirm or remove.
+          </p>
+        )}
+      </Field>
 
-      <div>
-        <FieldLabel hint="optional">Services & capabilities</FieldLabel>
-        <p className="text-xs text-gray-500 mb-3">Add specific services you deliver. Press Enter or comma to add.</p>
-        <TagInput values={data.capabilities} onChange={(v) => onChange({ capabilities: v })}
-          placeholder="e.g. solar installation, data collection, cold-chain logistics…" />
-      </div>
+      <Field
+        num="02"
+        label="Services & specific capabilities"
+        why="Tender requirements often go deeper than sector — e.g. &lsquo;cold-chain logistics in Sahel&rsquo;. The more specific, the better the match."
+      >
+        <TagInput
+          values={data.capabilities}
+          onChange={(v) => onChange({ capabilities: v })}
+          placeholder="solar installation, M&E surveys, cold-chain logistics…"
+        />
+      </Field>
 
       {data.orgType === "ngo" && (
-        <div>
-          <FieldLabel hint="optional">Development themes</FieldLabel>
-          <p className="text-xs text-gray-500 mb-3">Used to surface grant opportunities aligned to your mandate.</p>
-          <ChipSelect options={DEV_THEME_OPTIONS} selected={data.devThemes}
-            onChange={(v) => onChange({ devThemes: v })} />
-        </div>
+        <Field
+          num="03"
+          label="Development themes"
+          why="Used to surface grant opportunities aligned to your mandate, in addition to procurement tenders."
+        >
+          <ChipSelect
+            options={DEV_THEME_OPTIONS}
+            selected={data.devThemes}
+            onChange={(v) => onChange({ devThemes: v })}
+          />
+        </Field>
       )}
 
-      <StepNav onBack={onBack} onNext={onNext} nextLabel="Next: Experience"
-        canNext={data.sectors.length > 0} />
+      <StepNav onBack={onBack} onNext={onNext} nextLabel="Next · Experience" canNext={data.sectors.length > 0} />
     </div>
   );
 }
 
-// ── Step 3: Procurement Experience ─────────────────────────────────────────
+// ── Step 3: Experience ────────────────────────────────────────────────────
 
-export function Step3({ data, onChange, onBack, onNext }: {
+export function Step3({
+  data, onChange, onBack, onNext,
+}: {
   data: WizardData;
   onChange: (patch: Partial<WizardData>) => void;
   onBack: () => void;
@@ -542,77 +620,88 @@ export function Step3({ data, onChange, onBack, onNext }: {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <FieldLabel hint="optional">Number of past UN / donor contracts</FieldLabel>
-        <div className="flex flex-wrap gap-2">
+    <div>
+      <Field
+        num="01"
+        label="Past UN / donor contracts"
+        why="Used to score &lsquo;track record&rsquo; on your readiness report. Honest answer is fine — &lsquo;none yet&rsquo; doesn&rsquo;t disqualify you."
+      >
+        <div className="flex flex-wrap gap-1.5">
           {CONTRACT_VOLUME_OPTIONS.map((o) => (
-            <button key={o.value} type="button" onClick={() => onChange({ contractVolume: o.value })}
-              className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
-                data.contractVolume === o.value
-                  ? "border-gold bg-gold/20 text-white"
-                  : "border-white/10 text-gray-400 hover:border-white/25 hover:text-white"
-              }`}>
-              {o.label}
-            </button>
+            <ChipButton
+              key={o.value}
+              active={data.contractVolume === o.value}
+              label={o.label}
+              onClick={() => onChange({ contractVolume: o.value })}
+            />
           ))}
         </div>
-      </div>
+      </Field>
 
-      <div>
-        <FieldLabel hint="optional">Largest single contract value</FieldLabel>
-        <div className="flex flex-wrap gap-2">
+      <Field
+        num="02"
+        label="Largest single contract value"
+        why="Tenders specify minimum vendor revenue or contract experience. We use this to filter out tenders you&rsquo;d be disqualified on."
+      >
+        <div className="flex flex-wrap gap-1.5">
           {CONTRACT_VALUE_OPTIONS.map((o) => (
-            <button key={o.value} type="button" onClick={() => onChange({ maxContractValue: o.value })}
-              className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
-                data.maxContractValue === o.value
-                  ? "border-gold bg-gold/20 text-white"
-                  : "border-white/10 text-gray-400 hover:border-white/25 hover:text-white"
-              }`}>
-              {o.label}
-            </button>
+            <ChipButton
+              key={o.value}
+              active={data.maxContractValue === o.value}
+              label={o.label}
+              onClick={() => onChange({ maxContractValue: o.value })}
+            />
           ))}
         </div>
-      </div>
+      </Field>
 
-      <div>
-        <FieldLabel hint="optional">UNGM / UN vendor registration</FieldLabel>
-        <div className="flex flex-wrap gap-2">
+      <Field
+        num="03"
+        label="UNGM / UN vendor registration"
+        why="Most agencies require active UNGM registration. If you&rsquo;re not registered, we flag it as the first gap to fix."
+      >
+        <div className="flex flex-wrap gap-1.5">
           {UN_REG_OPTIONS.map((o) => (
-            <button key={o.value} type="button" onClick={() => onChange({ unRegistered: o.value })}
-              className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
-                data.unRegistered === o.value
-                  ? "border-gold bg-gold/20 text-white"
-                  : "border-white/10 text-gray-400 hover:border-white/25 hover:text-white"
-              }`}>
-              {o.label}
-            </button>
+            <ChipButton
+              key={o.value}
+              active={data.unRegistered === o.value}
+              label={o.label}
+              onClick={() => onChange({ unRegistered: o.value })}
+            />
           ))}
         </div>
-      </div>
+      </Field>
 
-      <div>
-        <FieldLabel hint="optional">Certifications & compliance</FieldLabel>
-        <div className="flex flex-wrap gap-2 mb-3">
+      <Field
+        num="04"
+        label="Certifications & compliance"
+        why="ISO, sphere, sector certs unlock specific tender categories. We score documentation strength based on these."
+      >
+        <div className="flex flex-wrap gap-1.5 mb-4">
           {CERT_SUGGESTIONS.map((c) => (
-            <button key={c} type="button" onClick={() => toggleCert(c)}
-              className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
-                data.certifications.includes(c)
-                  ? "border-gold bg-gold/20 text-white"
-                  : "border-white/10 text-gray-400 hover:border-white/25 hover:text-white"
-              }`}>
-              {data.certifications.includes(c) ? "✓ " : ""}{c}
-            </button>
+            <ChipButton
+              key={c}
+              active={data.certifications.includes(c)}
+              label={c}
+              onClick={() => toggleCert(c)}
+            />
           ))}
         </div>
         <TagInput
           values={customCerts}
-          onChange={(v) => onChange({ certifications: [...data.certifications.filter((c) => CERT_SUGGESTIONS.includes(c)), ...v] })}
-          placeholder="Add other certifications…" />
-      </div>
+          onChange={(v) =>
+            onChange({
+              certifications: [
+                ...data.certifications.filter((c) => CERT_SUGGESTIONS.includes(c)),
+                ...v,
+              ],
+            })
+          }
+          placeholder="Other certifications…"
+        />
+      </Field>
 
-      <StepNav onBack={onBack} onNext={onNext} nextLabel="Run Assessment" />
+      <StepNav onBack={onBack} onNext={onNext} nextLabel="Run my assessment" />
     </div>
   );
 }
-
