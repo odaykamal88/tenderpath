@@ -5,21 +5,27 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { TIERS } from "@/lib/pricing";
 
-/* ── Payment config ─────────────────────────────────────────────────────────
-   Env vars are read at build time (NEXT_PUBLIC_*). Known values are provided
-   as fallbacks so the page works on Vercel without manual env configuration.
-──────────────────────────────────────────────────────────────────────────── */
+const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
+const SERIF = "'Fraunces', 'Times New Roman', serif";
+
 const CONFIG = {
   usdt: {
-    trc20: process.env.NEXT_PUBLIC_USDT_TRC20_ADDRESS || "TKh1rcVFrbLX6mTKw9gJcZYoJZR4VSuCWF",
+    trc20:
+      process.env.NEXT_PUBLIC_USDT_TRC20_ADDRESS ||
+      "TKh1rcVFrbLX6mTKw9gJcZYoJZR4VSuCWF",
   },
   whish: process.env.NEXT_PUBLIC_WHISH_LINK || "",
-  omt:   process.env.NEXT_PUBLIC_OMT_LINK   || "",
+  omt: process.env.NEXT_PUBLIC_OMT_LINK || "",
   wire: {
-    bankName:    process.env.NEXT_PUBLIC_WIRE_EG_BANK_NAME    || "Commercial International Bank (CIB)",
-    accountName: process.env.NEXT_PUBLIC_WIRE_EG_ACCOUNT_NAME || "TenderPath",
-    iban:        process.env.NEXT_PUBLIC_WIRE_EG_IBAN         || "EG020010001800000100041263622",
-    swift:       process.env.NEXT_PUBLIC_WIRE_EG_SWIFT        || "",
+    bankName:
+      process.env.NEXT_PUBLIC_WIRE_EG_BANK_NAME ||
+      "Commercial International Bank (CIB)",
+    accountName:
+      process.env.NEXT_PUBLIC_WIRE_EG_ACCOUNT_NAME || "TenderPath",
+    iban:
+      process.env.NEXT_PUBLIC_WIRE_EG_IBAN ||
+      "EG020010001800000100041263622",
+    swift: process.env.NEXT_PUBLIC_WIRE_EG_SWIFT || "",
   },
   supportEmail: "info@tenderpath.me",
 };
@@ -33,8 +39,6 @@ interface PayContext {
   workOrderId: string | null;
 }
 
-/* ── Shared helpers ─────────────────────────────────────────────────────────*/
-
 function CopyBtn({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -44,18 +48,19 @@ function CopyBtn({ value }: { value: string }) {
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       }}
-      className="shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 transition"
+      className="shrink-0 rounded-sm border border-stone-300 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 transition-colors"
+      style={{ fontFamily: MONO }}
     >
-      {copied ? "✓ Copied" : "Copy"}
+      {copied ? "Copied" : "Copy"}
     </button>
   );
 }
 
-function contextLines(context: PayContext): string[] {
+function contextLines(c: PayContext): string[] {
   return [
-    context.tender ? `Tender: ${context.tender}` : null,
-    context.agency ? `Agency: ${context.agency}` : null,
-    context.pipelineItemId ? `Pipeline item ID: ${context.pipelineItemId}` : null,
+    c.tender ? `Tender: ${c.tender}` : null,
+    c.agency ? `Agency: ${c.agency}` : null,
+    c.pipelineItemId ? `Pipeline item ID: ${c.pipelineItemId}` : null,
   ].filter((line): line is string => Boolean(line));
 }
 
@@ -63,22 +68,21 @@ function NotifyButton({ plan, context }: { plan: string; context: PayContext }) 
   const subject = encodeURIComponent(`Payment sent – ${plan}`);
   const lines = contextLines(context);
   const body = encodeURIComponent(
-    `Hi TenderPath team,\n\nI have completed my payment for: ${plan}\nMy account email: [your email here]${lines.length ? `\n\nWork context:\n${lines.join("\n")}` : ""}\n\nI have attached my payment receipt / transaction ID.\n\nPlease activate my account.\n\nThank you.`
+    `Hi TenderPath team,\n\nI have completed my payment for: ${plan}\nMy account email: [your email here]${
+      lines.length ? `\n\nWork context:\n${lines.join("\n")}` : ""
+    }\n\nI have attached my payment receipt / transaction ID.\n\nPlease activate my account.\n\nThank you.`
   );
   return (
     <a
       href={`mailto:${CONFIG.supportEmail}?subject=${subject}&body=${body}`}
-      className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-navy py-3 text-sm font-semibold text-white hover:bg-navy/90 transition"
+      className="mt-5 flex w-full items-center justify-center gap-2 rounded-sm bg-stone-900 px-4 py-3 text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors"
     >
-      I&apos;ve sent payment — notify us
-      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-      </svg>
+      I&apos;ve sent payment — notify us →
     </a>
   );
 }
 
-/* ── Tab: Credit Card (Stripe) ──────────────────────────────────────────────*/
+/* ── Card / Stripe ─────────────────────────────────────────────────────── */
 
 function CardTab({ plan, context }: { plan: string | null; context: PayContext }) {
   const [email, setEmail] = useState("");
@@ -87,7 +91,10 @@ function CardTab({ plan, context }: { plan: string | null; context: PayContext }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!plan) { setError("Please select a plan first."); return; }
+    if (!plan) {
+      setError("Please select a plan first.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -117,10 +124,13 @@ function CardTab({ plan, context }: { plan: string | null; context: PayContext }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-3">
       <div>
-        <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-          Email address
+        <label
+          className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+          style={{ fontFamily: MONO }}
+        >
+          Email
         </label>
         <input
           type="email"
@@ -129,35 +139,32 @@ function CardTab({ plan, context }: { plan: string | null; context: PayContext }
           placeholder="you@company.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20 transition"
+          className="mt-1 w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] text-stone-900 placeholder-stone-400 focus:border-stone-700 focus:outline-none"
         />
       </div>
-
       {error && (
-        <p className="rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-600">
+        <p className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3 py-2 text-[11.5px] text-red-700">
           {error}
         </p>
       )}
-
       <button
         type="submit"
         disabled={loading || !plan}
-        className="w-full rounded-xl bg-gold py-3.5 text-sm font-semibold text-white hover:bg-gold-dark shadow-md shadow-gold/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full rounded-sm bg-stone-900 px-4 py-3 text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {loading ? "Redirecting to checkout…" : "Continue to Secure Checkout →"}
+        {loading ? "Redirecting…" : "Continue to secure checkout →"}
       </button>
-
-      <div className="flex items-center justify-center gap-2 pt-1">
-        <svg className="h-3.5 w-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-        </svg>
-        <span className="text-[11px] text-gray-400">Secured by Stripe · Visa · Mastercard · Amex</span>
-      </div>
+      <p
+        className="flex items-center justify-center gap-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+        style={{ fontFamily: MONO }}
+      >
+        Secured by Stripe · Visa · Mastercard · Amex
+      </p>
     </form>
   );
 }
 
-/* ── Tab: USDT ──────────────────────────────────────────────────────────────*/
+/* ── USDT ──────────────────────────────────────────────────────────────── */
 
 function UsdtTab({ plan, context }: { plan: string | null; context: PayContext }) {
   const tier = TIERS.find((t) => t.slug === plan);
@@ -166,33 +173,51 @@ function UsdtTab({ plan, context }: { plan: string | null; context: PayContext }
   return (
     <div className="space-y-4">
       {tier && (
-        <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
-          <p className="text-sm font-semibold text-amber-900">
-            Send exactly <span className="text-gold">{tier.price} USDT</span> to the address below
+        <div className="rounded-sm border-l-2 border-orange-600 bg-orange-50/40 px-3.5 py-3">
+          <div
+            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-700"
+            style={{ fontFamily: MONO }}
+          >
+            Send exactly
+          </div>
+          <p
+            className="mt-0.5 text-[15px] font-medium text-stone-900 tabular-nums"
+            style={{ fontFamily: SERIF }}
+          >
+            {tier.price} USDT
           </p>
-          <p className="text-xs text-amber-700 mt-0.5">Network: TRC20 (Tron) — lowest fees for MENA region</p>
+          <p className="mt-0.5 text-[11.5px] text-stone-600">
+            Network: TRC20 (Tron) — lowest fees for MENA region.
+          </p>
         </div>
       )}
 
       {/* Address + QR */}
-      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
+      <div className="rounded-md border border-stone-200/70 bg-white p-4 space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
-              USDT Wallet · TRC20 Network
-            </p>
-            <code className="text-xs font-mono text-gray-900 break-all leading-relaxed">
+            <div
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500 mb-1"
+              style={{ fontFamily: MONO }}
+            >
+              USDT wallet · TRC20
+            </div>
+            <code
+              className="text-[11px] text-stone-900 break-all leading-relaxed"
+              style={{ fontFamily: MONO }}
+            >
               {address}
             </code>
           </div>
           <CopyBtn value={address} />
         </div>
-
-        <div className="flex justify-center border-t border-gray-200 pt-4">
-          <div className="rounded-xl border border-gray-200 bg-white p-2 shadow-sm">
+        <div className="flex justify-center border-t border-stone-100 pt-4">
+          <div className="rounded-sm border border-stone-200 bg-white p-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(address)}&margin=4&bgcolor=ffffff`}
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
+                address
+              )}&margin=4&bgcolor=ffffff`}
               alt="USDT TRC20 wallet QR code"
               width={160}
               height={160}
@@ -202,25 +227,36 @@ function UsdtTab({ plan, context }: { plan: string | null; context: PayContext }
         </div>
       </div>
 
-      <p className="rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-600 font-medium">
-        ⚠ Send on <strong>TRC20 (Tron)</strong> network only. Sending on the wrong network results in permanent loss of funds.
-      </p>
+      <div className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3.5 py-2.5">
+        <p className="text-[11.5px] text-red-800 leading-relaxed">
+          <strong>TRC20 (Tron) network only.</strong> Sending on the wrong network results in permanent loss of funds.
+        </p>
+      </div>
 
       {/* Card onramp */}
-      <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
-        <p className="text-xs font-semibold text-blue-800 mb-1">Don&apos;t have USDT? Buy with Visa / Mastercard:</p>
-        <div className="flex flex-wrap gap-2 mt-2">
+      <div className="rounded-md border border-stone-200/70 bg-stone-50/40 p-4">
+        <div
+          className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500 mb-2"
+          style={{ fontFamily: MONO }}
+        >
+          Don&apos;t have USDT?
+        </div>
+        <p className="text-[12px] text-stone-700 leading-relaxed">
+          Buy with Visa or Mastercard from any of these on-ramps:
+        </p>
+        <div className="mt-2.5 flex flex-wrap gap-2">
           {[
             ["Binance P2P", "https://p2p.binance.com"],
-            ["Bybit P2P",   "https://www.bybit.com/fiat/trade/otc"],
-            ["MoonPay",     "https://www.moonpay.com/buy/usdt"],
+            ["Bybit P2P", "https://www.bybit.com/fiat/trade/otc"],
+            ["MoonPay", "https://www.moonpay.com/buy/usdt"],
           ].map(([name, url]) => (
             <a
               key={name}
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition"
+              className="rounded-sm border border-stone-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-stone-700 hover:border-stone-700 transition-colors"
+              style={{ fontFamily: MONO }}
             >
               {name} →
             </a>
@@ -233,145 +269,201 @@ function UsdtTab({ plan, context }: { plan: string | null; context: PayContext }
   );
 }
 
-/* ── Tab: Whish / OMT ───────────────────────────────────────────────────────*/
+/* ── Whish / OMT ───────────────────────────────────────────────────────── */
 
 function WhishTab({ plan, context }: { plan: string | null; context: PayContext }) {
   const hasAny = CONFIG.whish || CONFIG.omt;
 
   if (!hasAny) {
     return (
-      <div className="space-y-4">
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center space-y-2">
-          <p className="text-sm font-semibold text-gray-700">Whish & OMT links coming soon</p>
-          <p className="text-xs text-gray-500">
-            Contact us to arrange payment directly.
-          </p>
-          <a
-            href={`mailto:${CONFIG.supportEmail}?subject=Payment%20via%20Whish%2FOMT`}
-            className="inline-block mt-1 text-sm font-medium text-gold underline"
-          >
-            {CONFIG.supportEmail}
-          </a>
+      <div className="rounded-md border border-stone-200/70 bg-stone-50/40 p-6 text-center">
+        <div
+          className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500 mb-1"
+          style={{ fontFamily: MONO }}
+        >
+          Coming soon
         </div>
+        <h3
+          className="text-[18px] font-medium text-stone-900"
+          style={{ fontFamily: SERIF }}
+        >
+          Whish &amp; OMT links arriving shortly
+        </h3>
+        <p className="mt-2 text-[12px] text-stone-600">
+          Contact us to arrange payment directly:
+        </p>
+        <a
+          href={`mailto:${CONFIG.supportEmail}?subject=Payment%20via%20Whish%2FOMT`}
+          className="mt-2 inline-block text-[12px] font-semibold text-stone-900 underline underline-offset-2 hover:text-stone-700"
+          style={{ fontFamily: MONO }}
+        >
+          {CONFIG.supportEmail}
+        </a>
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-gray-500">
+      <p className="text-[12.5px] text-stone-700 leading-relaxed">
         Pay directly from your Whish Money or OMT wallet — tap to open the payment link.
       </p>
-
       {CONFIG.whish && (
         <a
           href={CONFIG.whish}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 hover:border-green-300 hover:bg-green-50 transition group"
+          className="flex items-center gap-3 rounded-md border border-stone-200/70 bg-white p-4 hover:border-stone-700 transition-colors"
         >
-          <div className="h-11 w-11 shrink-0 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-lg">
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-stone-100 text-stone-700 font-semibold"
+            style={{ fontFamily: MONO }}
+          >
             W
           </div>
           <div className="flex-1">
-            <p className="text-sm font-semibold text-gray-900">Pay with Whish Money</p>
-            <p className="text-xs text-gray-500 mt-0.5">Tap to open in Whish app</p>
+            <div
+              className="text-[13.5px] font-medium text-stone-900"
+              style={{ fontFamily: SERIF }}
+            >
+              Pay with Whish Money
+            </div>
+            <div className="text-[11px] text-stone-500">Tap to open in Whish app</div>
           </div>
-          <span className="text-gray-400 group-hover:text-green-600 transition text-lg">→</span>
+          <span className="text-stone-400 text-[16px]">→</span>
         </a>
       )}
-
       {CONFIG.omt && (
         <a
           href={CONFIG.omt}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 hover:border-blue-300 hover:bg-blue-50 transition group"
+          className="flex items-center gap-3 rounded-md border border-stone-200/70 bg-white p-4 hover:border-stone-700 transition-colors"
         >
-          <div className="h-11 w-11 shrink-0 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm">
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-stone-100 text-stone-700 text-[10px] font-semibold tracking-[0.1em]"
+            style={{ fontFamily: MONO }}
+          >
             OMT
           </div>
           <div className="flex-1">
-            <p className="text-sm font-semibold text-gray-900">Pay with OMT</p>
-            <p className="text-xs text-gray-500 mt-0.5">Tap to open in OMT app</p>
+            <div
+              className="text-[13.5px] font-medium text-stone-900"
+              style={{ fontFamily: SERIF }}
+            >
+              Pay with OMT
+            </div>
+            <div className="text-[11px] text-stone-500">Tap to open in OMT app</div>
           </div>
-          <span className="text-gray-400 group-hover:text-blue-600 transition text-lg">→</span>
+          <span className="text-stone-400 text-[16px]">→</span>
         </a>
       )}
-
       <NotifyButton plan={plan ?? "unknown plan"} context={context} />
     </div>
   );
 }
 
-/* ── Tab: Wire Transfer ─────────────────────────────────────────────────────*/
+/* ── Wire ──────────────────────────────────────────────────────────────── */
 
 function WireTab({ plan, context }: { plan: string | null; context: PayContext }) {
   const w = CONFIG.wire;
-  const rows: [string, string][] = ([
-    ["Bank",         w.bankName],
-    ["Account Name", w.accountName],
-    ["IBAN",         w.iban],
-    ["SWIFT / BIC",  w.swift],
-  ] as [string, string][]).filter(([, v]) => Boolean(v));
+  const rows: [string, string][] = (
+    [
+      ["Bank", w.bankName],
+      ["Account name", w.accountName],
+      ["IBAN", w.iban],
+      ["SWIFT / BIC", w.swift],
+    ] as [string, string][]
+  ).filter(([, v]) => Boolean(v));
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-gray-200 overflow-hidden">
+      <div className="rounded-md border border-stone-200/70 overflow-hidden">
         {rows.map(([label, value]) => (
           <div
             key={label}
-            className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0"
+            className="flex items-center gap-3 px-4 py-3 border-b border-stone-100 last:border-0"
           >
-            <span className="text-xs text-gray-400 w-28 shrink-0">{label}</span>
-            <span className="text-xs font-mono text-gray-900 flex-1 break-all">{value}</span>
+            <span
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500 w-28 shrink-0"
+              style={{ fontFamily: MONO }}
+            >
+              {label}
+            </span>
+            <span
+              className="text-[11.5px] text-stone-900 flex-1 break-all"
+              style={{ fontFamily: MONO }}
+            >
+              {value}
+            </span>
             <CopyBtn value={value} />
           </div>
         ))}
       </div>
-
-      <p className="text-xs text-gray-500 leading-relaxed">
-        Use your <strong>email address</strong> as the payment reference so we can match your transfer.
-        Wire transfers are reflected within 1–3 business days.
+      <p className="text-[12px] leading-relaxed text-stone-600">
+        Use your <strong className="text-stone-900">email address</strong> as the payment reference so we can match your transfer. Wire transfers are reflected within 1–3 business days.
       </p>
-
       <NotifyButton plan={plan ?? "unknown plan"} context={context} />
     </div>
   );
 }
 
+/* ── Context card ──────────────────────────────────────────────────────── */
+
 function ContextCard({ context }: { context: PayContext }) {
   if (!context.tender && !context.agency && !context.pipelineItemId && !context.workOrderId) return null;
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-5">
-      <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-3">
+    <div className="rounded-md border border-stone-200/70 bg-white p-5">
+      <div
+        className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-3"
+        style={{ fontFamily: MONO }}
+      >
         Work context
-      </p>
-      <div className="space-y-2 text-sm">
+      </div>
+      <div className="space-y-3">
         {context.tender && (
           <div>
-            <p className="text-xs text-gray-400">Tender</p>
-            <p className="font-medium text-gray-900 leading-snug">{context.tender}</p>
+            <div
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+              style={{ fontFamily: MONO }}
+            >
+              Tender
+            </div>
+            <p
+              className="mt-0.5 text-[14px] font-medium text-stone-900 leading-snug"
+              style={{ fontFamily: SERIF }}
+            >
+              {context.tender}
+            </p>
           </div>
         )}
         {context.agency && (
           <div>
-            <p className="text-xs text-gray-400">Agency</p>
-            <p className="font-medium text-gray-900">{context.agency}</p>
+            <div
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+              style={{ fontFamily: MONO }}
+            >
+              Agency
+            </div>
+            <p className="mt-0.5 text-[13px] text-stone-700">{context.agency}</p>
           </div>
         )}
-        {context.pipelineItemId && (
-          <p className="text-xs text-gray-500">Pipeline item #{context.pipelineItemId}</p>
-        )}
-        {context.workOrderId && (
-          <p className="text-xs text-gray-500">Work order #{context.workOrderId}</p>
+        {(context.pipelineItemId || context.workOrderId) && (
+          <p
+            className="text-[11px] text-stone-500"
+            style={{ fontFamily: MONO }}
+          >
+            {context.pipelineItemId ? `Pipeline item · #${context.pipelineItemId}` : null}
+            {context.pipelineItemId && context.workOrderId ? "  ·  " : null}
+            {context.workOrderId ? `Work order · #${context.workOrderId}` : null}
+          </p>
         )}
       </div>
     </div>
   );
 }
 
-/* ── Main page ──────────────────────────────────────────────────────────────*/
+/* ── Page ──────────────────────────────────────────────────────────────── */
 
 function PayPage() {
   const searchParams = useSearchParams();
@@ -386,113 +478,190 @@ function PayPage() {
   const [activeTab, setActiveTab] = useState<Tab>("card");
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "card",  label: "💳 Card" },
-    { id: "usdt",  label: "₮ USDT" },
-    { id: "whish", label: "🇱🇧 Whish" },
-    { id: "wire",  label: "🏦 Wire" },
+    { id: "card", label: "Card" },
+    { id: "usdt", label: "USDT" },
+    { id: "whish", label: "Whish" },
+    { id: "wire", label: "Wire" },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ backgroundColor: "#fafaf7" }}>
       {/* Nav */}
-      <nav className="bg-white border-b border-gray-100 sticky top-0 z-50">
+      <nav className="border-b border-stone-200/70 bg-white/95 backdrop-blur-sm sticky top-0 z-50">
         <div className="mx-auto max-w-lg px-6 flex h-14 items-center justify-between">
-          <Link href="/" className="text-base font-semibold text-gray-900">
-            Tender<span className="text-gold">Path</span>
+          <Link
+            href="/"
+            className="text-[15px] font-semibold text-stone-900"
+            style={{ fontFamily: SERIF }}
+          >
+            Tender<span style={{ color: "#ea580c" }}>·</span>Path
           </Link>
-          <Link href="/" className="text-sm text-gray-500 hover:text-gray-900 transition">
-            ← Back
+          <Link
+            href="/"
+            className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-500 hover:text-stone-900 transition-colors"
+            style={{ fontFamily: MONO }}
+          >
+            ← Home
           </Link>
         </div>
       </nav>
 
       <div className="mx-auto max-w-lg px-4 py-10 space-y-5">
         {/* Header */}
-        <div className="px-2">
-          <h1 className="text-2xl font-bold text-gray-900">Complete your purchase</h1>
-          <p className="text-sm text-gray-500 mt-1">Select a plan and pay your preferred way.</p>
+        <div className="px-1">
+          <div
+            className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+            style={{ fontFamily: MONO }}
+          >
+            Checkout · payment
+          </div>
+          <h1
+            className="mt-1 text-[36px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+            style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
+          >
+            Complete your purchase
+          </h1>
+          <p className="mt-1.5 text-[13px] text-stone-600">
+            Select a plan, then choose how to pay.
+          </p>
         </div>
 
         <ContextCard context={context} />
 
-        {/* Step 1: Plan selector */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-4">
-            1 · Select your plan
-          </p>
+        {/* Step 1 — plan */}
+        <div className="rounded-md border border-stone-200/70 bg-white p-5">
+          <div className="flex items-baseline gap-2.5 mb-4">
+            <span
+              className="text-[10px] font-semibold tabular-nums text-stone-400"
+              style={{ fontFamily: MONO }}
+            >
+              01
+            </span>
+            <h2
+              className="text-[15px] font-semibold uppercase tracking-[0.15em] text-stone-700"
+              style={{ fontFamily: MONO }}
+            >
+              Select your plan
+            </h2>
+          </div>
           <div className="grid grid-cols-2 gap-2.5">
             {TIERS.map((t) => (
               <button
                 key={t.slug}
                 onClick={() => setSelectedSlug(t.slug)}
-                className={`rounded-xl border p-3.5 text-left transition-all ${
+                className={`rounded-sm border p-3.5 text-left transition-colors ${
                   selectedSlug === t.slug
-                    ? "border-gold bg-gold/5 ring-1 ring-gold/30"
-                    : "border-gray-200 hover:border-gray-300 bg-white"
+                    ? "border-stone-900 bg-stone-50/40"
+                    : "border-stone-200/70 hover:border-stone-400 bg-white"
                 }`}
               >
                 {t.featured && (
-                  <span className="inline-block rounded-full bg-gold/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-gold mb-1.5">
-                    Popular
+                  <span
+                    className="inline-block text-[9px] font-semibold uppercase tracking-[0.18em] text-orange-700 mb-1.5"
+                    style={{ fontFamily: MONO }}
+                  >
+                    · Popular ·
                   </span>
                 )}
-                <p className="text-xs font-semibold text-gray-900 leading-snug">{t.name}</p>
-                <p className="mt-2 text-lg font-bold text-gray-900">
+                <p
+                  className="text-[12px] font-medium text-stone-700 leading-snug"
+                  style={{ fontFamily: MONO }}
+                >
+                  {t.name}
+                </p>
+                <p
+                  className="mt-1.5 text-[20px] font-medium text-stone-900 tabular-nums tracking-tight"
+                  style={{ fontFamily: SERIF }}
+                >
                   {t.price}
-                  <span className="text-[11px] font-normal text-gray-400 ml-0.5">{t.billingPeriod}</span>
+                  <span
+                    className="text-[10px] font-medium text-stone-500 ml-1"
+                    style={{ fontFamily: MONO }}
+                  >
+                    {t.billingPeriod}
+                  </span>
                 </p>
               </button>
             ))}
           </div>
         </div>
 
-        {/* Step 2: Payment method */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-4">
-            2 · Choose how to pay
-          </p>
+        {/* Step 2 — method */}
+        <div className="rounded-md border border-stone-200/70 bg-white p-5">
+          <div className="flex items-baseline gap-2.5 mb-4">
+            <span
+              className="text-[10px] font-semibold tabular-nums text-stone-400"
+              style={{ fontFamily: MONO }}
+            >
+              02
+            </span>
+            <h2
+              className="text-[15px] font-semibold uppercase tracking-[0.15em] text-stone-700"
+              style={{ fontFamily: MONO }}
+            >
+              Choose how to pay
+            </h2>
+          </div>
 
           {/* Tabs */}
-          <div className="grid grid-cols-4 gap-1 bg-gray-100 rounded-xl p-1 mb-5">
+          <div className="grid grid-cols-4 gap-1 rounded-sm border border-stone-200/70 p-0.5 bg-stone-50/40 mb-5">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`rounded-lg py-2 text-xs font-semibold transition-all ${
+                className={`rounded-sm py-2 text-[10.5px] font-semibold uppercase tracking-[0.15em] transition-colors ${
                   activeTab === tab.id
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
+                    ? "bg-white text-stone-900 shadow-sm"
+                    : "text-stone-500 hover:text-stone-700"
                 }`}
+                style={{ fontFamily: MONO }}
               >
                 {tab.label}
               </button>
             ))}
           </div>
 
-          {/* Tab content */}
-          {activeTab === "card"  && <CardTab  plan={selectedSlug} context={context} />}
-          {activeTab === "usdt"  && <UsdtTab  plan={selectedSlug} context={context} />}
+          {/* Tab body */}
+          {activeTab === "card" && <CardTab plan={selectedSlug} context={context} />}
+          {activeTab === "usdt" && <UsdtTab plan={selectedSlug} context={context} />}
           {activeTab === "whish" && <WhishTab plan={selectedSlug} context={context} />}
-          {activeTab === "wire"  && <WireTab  plan={selectedSlug} context={context} />}
+          {activeTab === "wire" && <WireTab plan={selectedSlug} context={context} />}
         </div>
 
-        {/* After payment instructions (manual methods only) */}
+        {/* After payment */}
         {activeTab !== "card" && (
-          <div className="bg-white rounded-2xl border border-gray-200 p-5">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-3">
-              After payment
-            </p>
+          <div className="rounded-md border border-stone-200/70 bg-white p-5">
+            <div className="flex items-baseline gap-2.5 mb-4">
+              <span
+                className="text-[10px] font-semibold tabular-nums text-stone-400"
+                style={{ fontFamily: MONO }}
+              >
+                03
+              </span>
+              <h2
+                className="text-[15px] font-semibold uppercase tracking-[0.15em] text-stone-700"
+                style={{ fontFamily: MONO }}
+              >
+                After payment
+              </h2>
+            </div>
             <ol className="space-y-3">
               {[
-                "Screenshot or save your transaction receipt / TXID",
-                `Email it to ${CONFIG.supportEmail} — include your plan name and the email you signed up with`,
-                "We'll verify and activate your account within 4 business hours",
+                "Screenshot or save your transaction receipt / TXID.",
+                `Email it to ${CONFIG.supportEmail} — include your plan name and the email you signed up with.`,
+                "We verify and activate your account within 4 business hours.",
               ].map((step, i) => (
-                <li key={i} className="flex gap-3 text-xs text-gray-600">
-                  <span className="h-5 w-5 rounded-full bg-gold/10 text-gold text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                <li
+                  key={i}
+                  className="flex gap-3 text-[12.5px] leading-relaxed text-stone-700"
+                >
+                  <span
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-[9px] font-semibold text-stone-700 tabular-nums mt-0.5"
+                    style={{ fontFamily: MONO }}
+                  >
                     {i + 1}
                   </span>
-                  {step}
+                  <span>{step}</span>
                 </li>
               ))}
             </ol>
@@ -500,11 +669,19 @@ function PayPage() {
         )}
       </div>
 
-      <footer className="py-8 text-center text-xs text-gray-400">
-        © {new Date().getFullYear()} TenderPath &nbsp;·&nbsp;{" "}
-        <a href={`mailto:${CONFIG.supportEmail}`} className="hover:text-gray-600 underline">
-          {CONFIG.supportEmail}
-        </a>
+      <footer className="py-7 text-center">
+        <p
+          className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+          style={{ fontFamily: MONO }}
+        >
+          © {new Date().getFullYear()} Tender·Path ·{" "}
+          <a
+            href={`mailto:${CONFIG.supportEmail}`}
+            className="underline underline-offset-2 hover:text-stone-700"
+          >
+            {CONFIG.supportEmail}
+          </a>
+        </p>
       </footer>
     </div>
   );
