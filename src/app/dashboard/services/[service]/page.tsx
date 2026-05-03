@@ -153,6 +153,9 @@ const SERVICE_PREVIEW_MAP: Record<ServiceSlug, SamplePreviewType> = {
   "lta-roster": "roster",
 };
 
+const MONO_FONT = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
+const SERIF_FONT = "'Fraunces', 'Times New Roman', serif";
+
 function firstValue(value: string | string[] | undefined): string | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value ?? null;
@@ -180,60 +183,157 @@ export default async function ServiceDetailPage({
   const hasContext = Boolean(context.tender || context.agency || context.pipelineItemId);
 
   return (
-    <div>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            {service.eyebrow}
+    <div className="px-8 py-8 max-w-[1400px]">
+      {/* Back link */}
+      <Link
+        href="/dashboard/services"
+        className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-500 hover:text-stone-900 transition-colors"
+        style={{ fontFamily: MONO_FONT }}
+      >
+        ← All service paths
+      </Link>
+
+      {/* Header */}
+      <header className="mt-5 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-3xl">
+          <div className="flex items-center gap-3 text-[11px] text-stone-500">
+            <span
+              className="font-semibold uppercase tracking-[0.18em] text-stone-400"
+              style={{ fontFamily: MONO_FONT }}
+            >
+              Workbench · Service path
+            </span>
+            <span className="text-stone-300">·</span>
+            <span style={{ fontFamily: MONO_FONT }}>{service.eyebrow}</span>
           </div>
-          <h1 className="mt-1 text-2xl font-semibold text-gray-900">{service.title}</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">{service.lead}</p>
+          <h1
+            className="mt-1 text-[56px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+            style={{ fontFamily: SERIF_FONT, fontFeatureSettings: "'ss01'" }}
+          >
+            {service.title}
+          </h1>
+          <p className="mt-2 text-[15.5px] leading-relaxed text-stone-600">
+            {service.lead}
+          </p>
         </div>
         {tier && (
-          <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
-            <div className="text-2xl font-bold text-gray-900">
-              {tier.price}<span className="text-sm font-medium text-gray-500">{tier.billingPeriod}</span>
+          <div className="shrink-0 rounded-md border border-stone-200/70 bg-white px-5 py-4 min-w-[200px]">
+            <div
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+              style={{ fontFamily: MONO_FONT }}
+            >
+              Price
             </div>
-            <div className="mt-1 text-xs text-gray-500">{tier.billingNote}</div>
+            <div className="mt-1.5 flex items-baseline gap-1">
+              <span
+                className="text-[36px] leading-none font-medium tabular-nums text-stone-900"
+                style={{ fontFamily: SERIF_FONT }}
+              >
+                {tier.price}
+              </span>
+              <span
+                className="text-[12px] text-stone-500"
+                style={{ fontFamily: MONO_FONT }}
+              >
+                {tier.billingPeriod}
+              </span>
+            </div>
+            <div className="mt-1 text-[11.5px] text-stone-500 leading-snug">{tier.billingNote}</div>
           </div>
         )}
-      </div>
+      </header>
 
-      <div className="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.9fr)]">
-        <section className="rounded-lg border border-gray-200 bg-white p-5">
-          <h2 className="text-base font-semibold text-gray-900">What you get</h2>
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {service.output.map((item) => (
-              <div key={item} className="rounded-md bg-gray-50 px-3 py-3 text-sm text-gray-700">
-                {item}
-              </div>
-            ))}
+      {/* Two-column layout */}
+      <div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.9fr)]">
+        {/* LEFT — what you get + how it works */}
+        <section className="space-y-7">
+          {/* What you get */}
+          <div className="rounded-md border border-stone-200/70 bg-white p-6">
+            <h2
+              className="text-[22px] font-medium text-stone-900 mb-4"
+              style={{ fontFamily: SERIF_FONT }}
+            >
+              <span
+                className="text-[11px] font-semibold tabular-nums text-stone-400 mr-2 align-middle"
+                style={{ fontFamily: MONO_FONT }}
+              >
+                01 ·
+              </span>
+              Deliverables
+            </h2>
+            <ul className="grid grid-cols-1 gap-px bg-stone-200/70 rounded-sm overflow-hidden sm:grid-cols-2">
+              {service.output.map((item, idx) => (
+                <li
+                  key={item}
+                  className="bg-stone-50/60 px-4 py-3.5 text-[13.5px] leading-relaxed text-stone-800 flex gap-3"
+                >
+                  <span
+                    className="shrink-0 text-[10px] font-semibold tabular-nums text-stone-400 mt-0.5"
+                    style={{ fontFamily: MONO_FONT }}
+                  >
+                    {(idx + 1).toString().padStart(2, "0")}
+                  </span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
           </div>
 
-          <h2 className="mt-6 text-base font-semibold text-gray-900">How it works</h2>
-          <ol className="mt-3 space-y-2">
-            {service.workflow.map((item, index) => (
-              <li key={item} className="flex gap-3 text-sm text-gray-600">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-900 text-xs font-semibold text-white">
-                  {index + 1}
-                </span>
-                <span className="pt-0.5">{item}</span>
-              </li>
-            ))}
-          </ol>
-
-          <div className="mt-6 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            {service.caveat}
+          {/* How it works */}
+          <div className="rounded-md border border-stone-200/70 bg-white p-6">
+            <h2
+              className="text-[22px] font-medium text-stone-900 mb-4"
+              style={{ fontFamily: SERIF_FONT }}
+            >
+              <span
+                className="text-[11px] font-semibold tabular-nums text-stone-400 mr-2 align-middle"
+                style={{ fontFamily: MONO_FONT }}
+              >
+                02 ·
+              </span>
+              How it works
+            </h2>
+            <ol className="space-y-3">
+              {service.workflow.map((item, index) => (
+                <li key={item} className="flex gap-4 text-[14px] text-stone-700 leading-relaxed">
+                  <span
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-[10px] font-semibold text-stone-700 tabular-nums mt-0.5"
+                    style={{ fontFamily: MONO_FONT }}
+                  >
+                    {index + 1}
+                  </span>
+                  <span className="pt-0.5">{item}</span>
+                </li>
+              ))}
+            </ol>
           </div>
 
-          <details className="mt-6 group">
-            <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-semibold text-gray-700 hover:text-gray-900 select-none">
-              <svg className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          {/* Caveat */}
+          <div className="rounded-md border-l-2 border-amber-600 bg-amber-50/40 px-4 py-3.5">
+            <div
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700"
+              style={{ fontFamily: MONO_FONT }}
+            >
+              Note · before you order
+            </div>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-amber-950">{service.caveat}</p>
+          </div>
+
+          {/* Sample output */}
+          <details className="group rounded-md border border-stone-200/70 bg-white">
+            <summary className="cursor-pointer list-none flex items-center gap-3 px-6 py-4 text-[13px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:text-stone-900 select-none">
+              <svg
+                className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-90"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
-              Sample output
+              <span style={{ fontFamily: MONO_FONT }}>Sample output · redacted preview</span>
             </summary>
-            <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 px-4 py-4">
+            <div className="border-t border-stone-200/70 px-6 py-5">
               <SampleOutputPreview
                 type={SERVICE_PREVIEW_MAP[service.slug]}
                 variant="light"
@@ -242,63 +342,94 @@ export default async function ServiceDetailPage({
           </details>
         </section>
 
-        <aside className="rounded-lg border border-gray-200 bg-white p-5">
-          <div className="flex items-center gap-2 rounded-md bg-green-50 px-3 py-2 text-xs font-medium text-green-800">
-            <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm.75 4.25a.75.75 0 0 0-1.5 0v3.5l2 2a.75.75 0 1 0 1.06-1.06l-1.56-1.56V5.25z"/>
-            </svg>
-            {service.deliverySla}
+        {/* RIGHT — order */}
+        <aside className="rounded-md border border-stone-200/70 bg-white p-6 self-start lg:sticky lg:top-6">
+          {/* SLA badge */}
+          <div className="rounded-sm border-l-2 border-emerald-600 bg-emerald-50/40 px-3.5 py-2.5">
+            <div
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700"
+              style={{ fontFamily: MONO_FONT }}
+            >
+              Delivery SLA
+            </div>
+            <p className="mt-0.5 text-[12.5px] leading-snug text-emerald-900">{service.deliverySla}</p>
           </div>
 
-          <h2 className="mt-5 text-base font-semibold text-gray-900">Work context</h2>
+          {/* Work context */}
+          <h2
+            className="mt-6 text-[18px] font-medium text-stone-900"
+            style={{ fontFamily: SERIF_FONT }}
+          >
+            <span
+              className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle"
+              style={{ fontFamily: MONO_FONT }}
+            >
+              03 ·
+            </span>
+            Work context
+          </h2>
           {hasContext ? (
-            <dl className="mt-4 space-y-3 text-sm">
+            <dl className="mt-3.5 space-y-3">
               {context.tender && (
                 <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">Tender</dt>
-                  <dd className="mt-1 text-gray-900">{context.tender}</dd>
+                  <dt
+                    className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+                    style={{ fontFamily: MONO_FONT }}
+                  >
+                    Tender
+                  </dt>
+                  <dd className="mt-0.5 text-[13px] text-stone-900 leading-snug">{context.tender}</dd>
                 </div>
               )}
               {context.agency && (
                 <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">Agency</dt>
-                  <dd className="mt-1 text-gray-900">{context.agency}</dd>
+                  <dt
+                    className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+                    style={{ fontFamily: MONO_FONT }}
+                  >
+                    Agency
+                  </dt>
+                  <dd className="mt-0.5 text-[13px] text-stone-900">{context.agency}</dd>
                 </div>
               )}
               {context.pipelineItemId && (
                 <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">Pipeline item</dt>
-                  <dd className="mt-1 text-gray-900">#{context.pipelineItemId}</dd>
+                  <dt
+                    className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+                    style={{ fontFamily: MONO_FONT }}
+                  >
+                    Pipeline item
+                  </dt>
+                  <dd
+                    className="mt-0.5 text-[13px] text-stone-900"
+                    style={{ fontFamily: MONO_FONT }}
+                  >
+                    #{context.pipelineItemId}
+                  </dd>
                 </div>
               )}
             </dl>
           ) : (
-            <p className="mt-3 text-sm leading-6 text-gray-600">
-              No tender is attached yet. Open a matched tender from the dashboard or pipeline to carry its context into checkout.
+            <p className="mt-3 text-[12.5px] leading-relaxed text-stone-500">
+              No tender attached yet. Open a matched tender from the dashboard or pipeline to carry context into checkout.
             </p>
           )}
 
-          <div className="mt-5 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-900">
+          {/* Intake prompt */}
+          <div className="mt-5 rounded-sm border-l-2 border-stone-700 bg-stone-50/60 px-3.5 py-2.5 text-[12px] leading-relaxed text-stone-700">
             {service.intakePrompt}
           </div>
 
-          <div className="mt-4">
-            <ServiceIntakeForm
-              service={service.slug}
-              plan={service.tierSlug}
-              pipelineItemId={context.pipelineItemId}
-              tenderTitle={context.tender}
-              agency={context.agency}
-              docId={context.docId}
-              label={service.cta}
-            />
-          </div>
-
-          <div className="mt-5 border-t border-gray-100 pt-4">
-            <Link href="/dashboard/services" className="text-xs font-semibold text-gray-500 hover:text-gray-900 underline">
-              View all service paths
-            </Link>
-          </div>
+          {/* Intake form */}
+          <ServiceIntakeForm
+            service={service.slug}
+            plan={service.tierSlug}
+            pipelineItemId={context.pipelineItemId}
+            tenderTitle={context.tender}
+            agency={context.agency}
+            docId={context.docId}
+            label={service.cta}
+          />
         </aside>
       </div>
     </div>
