@@ -32,6 +32,9 @@ interface ProposalPackage {
 
 type Stage = "loading" | "generating" | "ready" | "error";
 
+const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
+const SERIF = "'Fraunces', 'Times New Roman', serif";
+
 function authHeaders(): HeadersInit {
   const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
   return token
@@ -39,23 +42,44 @@ function authHeaders(): HeadersInit {
     : { "content-type": "application/json" };
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  index,
+  title,
+  children,
+}: {
+  index: string;
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">{title}</h3>
+    <div className="rounded-md border border-stone-200/70 bg-white p-6">
+      <div className="flex items-baseline gap-3 mb-4 pb-3 border-b border-stone-100">
+        <span
+          className="text-[10px] font-semibold tabular-nums text-stone-400"
+          style={{ fontFamily: MONO }}
+        >
+          {index}
+        </span>
+        <h3
+          className="text-[18px] font-medium text-stone-900"
+          style={{ fontFamily: SERIF }}
+        >
+          {title}
+        </h3>
+      </div>
       {children}
     </div>
   );
 }
 
 function BulletList({ items }: { items: string[] }) {
-  if (!items?.length) return <p className="text-sm text-gray-400 italic">None identified.</p>;
+  if (!items?.length) return <p className="text-[13px] text-stone-400 italic">None identified.</p>;
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-2.5">
       {items.map((item, i) => (
-        <li key={i} className="flex gap-2 text-sm text-gray-700">
-          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
-          {item}
+        <li key={i} className="flex gap-2.5 text-[13.5px] leading-relaxed text-stone-700">
+          <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-stone-400" />
+          <span>{item}</span>
         </li>
       ))}
     </ul>
@@ -63,15 +87,21 @@ function BulletList({ items }: { items: string[] }) {
 }
 
 function CheckList({ items }: { items: string[] }) {
-  if (!items?.length) return <p className="text-sm text-gray-400 italic">None identified.</p>;
+  if (!items?.length) return <p className="text-[13px] text-stone-400 italic">None identified.</p>;
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-2.5">
       {items.map((item, i) => (
-        <li key={i} className="flex gap-2 text-sm text-gray-700">
-          <svg className="mt-0.5 h-4 w-4 shrink-0 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <li key={i} className="flex gap-2.5 text-[13.5px] leading-relaxed text-stone-700">
+          <svg
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
           </svg>
-          {item}
+          <span>{item}</span>
         </li>
       ))}
     </ul>
@@ -79,15 +109,26 @@ function CheckList({ items }: { items: string[] }) {
 }
 
 function WarningList({ items }: { items: string[] }) {
-  if (!items?.length) return <p className="text-sm text-gray-400 italic">No gaps identified — review manually before submitting.</p>;
+  if (!items?.length)
+    return <p className="text-[13px] text-stone-400 italic">No gaps identified — review manually before submitting.</p>;
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-2.5">
       {items.map((item, i) => (
-        <li key={i} className="flex gap-2 text-sm text-gray-700">
-          <svg className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+        <li key={i} className="flex gap-2.5 text-[13.5px] leading-relaxed text-stone-700">
+          <svg
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+            />
           </svg>
-          {item}
+          <span>{item}</span>
         </li>
       ))}
     </ul>
@@ -95,60 +136,74 @@ function WarningList({ items }: { items: string[] }) {
 }
 
 function TextBlock({ text }: { text: string | undefined }) {
-  if (!text) return <p className="text-sm text-gray-400 italic">Not generated.</p>;
+  if (!text) return <p className="text-[13px] text-stone-400 italic">Not generated.</p>;
   return (
-    <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">{text}</p>
+    <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-stone-800">{text}</p>
+  );
+}
+
+function NumberedList({ items }: { items: string[] }) {
+  if (!items?.length) return <p className="text-[13px] text-stone-400 italic">None.</p>;
+  return (
+    <ol className="space-y-3">
+      {items.map((step, i) => (
+        <li key={i} className="flex gap-3.5 text-[13.5px] leading-relaxed text-stone-700">
+          <span
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-[10px] font-semibold text-stone-700 tabular-nums mt-0.5"
+            style={{ fontFamily: MONO }}
+          >
+            {i + 1}
+          </span>
+          <span className="pt-0.5">{step}</span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
 function ProposalDraftView({ output }: { output: ProposalOutput }) {
   return (
-    <div className="space-y-4">
-      <Section title="Executive Summary">
+    <div className="space-y-5">
+      <Section index="01" title="Executive summary">
         <TextBlock text={output.executive_summary} />
       </Section>
 
-      <Section title="Technical Approach">
+      <Section index="02" title="Technical approach">
         {output.technical_approach?.length ? (
-          <div className="space-y-3">
+          <div className="space-y-3.5">
             {output.technical_approach.map((para, i) => (
-              <p key={i} className="text-sm leading-relaxed text-gray-700">{para}</p>
+              <p key={i} className="text-[14px] leading-relaxed text-stone-800">
+                {para}
+              </p>
             ))}
           </div>
-        ) : <p className="text-sm text-gray-400 italic">Not generated.</p>}
+        ) : (
+          <p className="text-[13px] text-stone-400 italic">Not generated.</p>
+        )}
       </Section>
 
-      <Section title="Compliance Checklist">
+      <Section index="03" title="Compliance checklist">
         <CheckList items={output.compliance_checklist ?? []} />
       </Section>
 
-      <Section title="Required Documents">
+      <Section index="04" title="Required documents">
         <BulletList items={output.required_documents ?? []} />
       </Section>
 
-      <Section title="Cover Letter Draft">
+      <Section index="05" title="Cover letter draft">
         <TextBlock text={output.cover_letter_draft} />
       </Section>
 
-      <Section title="Financial Template Notes">
+      <Section index="06" title="Financial template notes">
         <BulletList items={output.financial_template_notes ?? []} />
       </Section>
 
-      <Section title="Missing Information">
+      <Section index="07" title="Missing information">
         <WarningList items={output.missing_information ?? []} />
       </Section>
 
-      <Section title="Next Steps">
-        <ol className="space-y-2">
-          {(output.next_steps ?? []).map((step, i) => (
-            <li key={i} className="flex gap-3 text-sm text-gray-700">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-900 text-[10px] font-bold text-white">
-                {i + 1}
-              </span>
-              {step}
-            </li>
-          ))}
-        </ol>
+      <Section index="08" title="Next steps">
+        <NumberedList items={output.next_steps ?? []} />
       </Section>
     </div>
   );
@@ -156,46 +211,37 @@ function ProposalDraftView({ output }: { output: ProposalOutput }) {
 
 function RosterPackageView({ output }: { output: ProposalOutput }) {
   return (
-    <div className="space-y-4">
-      <Section title="Registration Checklist">
+    <div className="space-y-5">
+      <Section index="01" title="Registration checklist">
         <CheckList items={output.registration_checklist ?? []} />
       </Section>
 
-      <Section title="Capability Statement">
+      <Section index="02" title="Capability statement">
         <TextBlock text={output.capability_statement_draft} />
       </Section>
 
-      <Section title="Required Documents">
+      <Section index="03" title="Required documents">
         <BulletList items={output.required_documents ?? []} />
       </Section>
 
-      <Section title="Organisation Profile Notes">
+      <Section index="04" title="Organisation profile notes">
         <BulletList items={output.organization_profile_notes ?? []} />
       </Section>
 
-      <Section title="Cover Letter Draft">
+      <Section index="05" title="Cover letter draft">
         <TextBlock text={output.cover_letter_draft} />
       </Section>
 
-      <Section title="Submission Guidance">
+      <Section index="06" title="Submission guidance">
         <BulletList items={output.submission_guidance ?? []} />
       </Section>
 
-      <Section title="Missing Information">
+      <Section index="07" title="Missing information">
         <WarningList items={output.missing_information ?? []} />
       </Section>
 
-      <Section title="Next Steps">
-        <ol className="space-y-2">
-          {(output.next_steps ?? []).map((step, i) => (
-            <li key={i} className="flex gap-3 text-sm text-gray-700">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-900 text-[10px] font-bold text-white">
-                {i + 1}
-              </span>
-              {step}
-            </li>
-          ))}
-        </ol>
+      <Section index="08" title="Next steps">
+        <NumberedList items={output.next_steps ?? []} />
       </Section>
     </div>
   );
@@ -256,7 +302,7 @@ function SupplementaryInfoForm({ workOrderId }: { workOrderId: string }) {
         body: JSON.stringify({ intake }),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as { error?: string };
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
         setError(data.error ?? "Could not save.");
         return;
       }
@@ -272,14 +318,30 @@ function SupplementaryInfoForm({ workOrderId }: { workOrderId: string }) {
   }
 
   return (
-    <div className="mt-6 rounded-xl border border-blue-100 bg-blue-50 p-5">
-      <h3 className="text-sm font-semibold text-blue-900">Add more information</h3>
-      <p className="mt-1 text-xs leading-5 text-blue-700">
-        You can return here any time while the tender window is open to upload additional documents or notes — your support access stays active until the window closes.
+    <div className="mt-6 rounded-md border border-stone-200/70 bg-stone-50/40 p-6">
+      <div className="flex items-baseline gap-3 mb-1.5">
+        <span
+          className="text-[10px] font-semibold tabular-nums text-stone-400"
+          style={{ fontFamily: MONO }}
+        >
+          09
+        </span>
+        <h3
+          className="text-[18px] font-medium text-stone-900"
+          style={{ fontFamily: SERIF }}
+        >
+          Add more information
+        </h3>
+      </div>
+      <p className="text-[12.5px] leading-relaxed text-stone-600 mb-4">
+        Return any time while the tender window is open to upload additional documents or notes — your support access stays active until the window closes.
       </p>
-      <div className="mt-4 space-y-3">
+      <div className="space-y-3">
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-blue-800">
+          <label
+            className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+            style={{ fontFamily: MONO }}
+          >
             Additional notes or context
           </label>
           <textarea
@@ -287,37 +349,69 @@ function SupplementaryInfoForm({ workOrderId }: { workOrderId: string }) {
             onChange={(e) => setNotes(e.target.value)}
             placeholder="New requirements, agency feedback, registration status update…"
             rows={4}
-            className="mt-1 w-full rounded-md border border-blue-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+            className="mt-1.5 w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] text-stone-900 focus:border-stone-700 focus:outline-none resize-none"
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-blue-800">
+          <label
+            className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+            style={{ fontFamily: MONO }}
+          >
             Upload additional document
           </label>
           {uploadedFile ? (
-            <div className="mt-1 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
+            <div
+              className="mt-1.5 flex items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 text-[12px] text-emerald-800"
+              style={{ fontFamily: MONO }}
+            >
               <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z"/>
+                <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
               </svg>
               <span className="flex-1 truncate">{uploadedFile.name}</span>
-              <button type="button" onClick={() => { setUploadedFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }} className="shrink-0 text-green-700 underline hover:text-green-900">Remove</button>
+              <button
+                type="button"
+                onClick={() => {
+                  setUploadedFile(null);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+                className="shrink-0 text-emerald-700 underline underline-offset-2 hover:text-emerald-900"
+              >
+                Remove
+              </button>
             </div>
           ) : (
-            <label className="mt-1 flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-blue-200 bg-white px-3 py-3 text-xs text-blue-600 hover:border-blue-400">
-              <svg className="h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round"/>
+            <label className="mt-1.5 flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-stone-300 bg-white px-3.5 py-3 text-[12px] text-stone-500 hover:border-stone-700 hover:text-stone-700 transition-colors">
+              <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              {uploading ? "Uploading…" : "Choose file — PDF, Word, or Excel up to 10 MB"}
-              <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" className="sr-only" disabled={uploading} onChange={handleFileChange} />
+              <span className="leading-snug flex-1">
+                {uploading ? "Uploading…" : <><span className="font-semibold text-stone-700">Choose file</span> — PDF, Word, or Excel up to 10 MB</>}
+              </span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx,.xls,.xlsx"
+                className="sr-only"
+                disabled={uploading}
+                onChange={handleFileChange}
+              />
             </label>
           )}
         </div>
-        {error && <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
-        {saved && <p className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">Information saved — our team will incorporate it into your support.</p>}
+        {error && (
+          <p className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3.5 py-2.5 text-[12px] text-red-700">
+            {error}
+          </p>
+        )}
+        {saved && (
+          <p className="rounded-sm border-l-2 border-emerald-600 bg-emerald-50/40 px-3.5 py-2.5 text-[12px] text-emerald-800">
+            Information saved — our team will incorporate it into your support.
+          </p>
+        )}
         <button
           onClick={handleSave}
           disabled={saving || uploading || (!notes && !uploadedFile)}
-          className="rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-sm bg-stone-900 px-4 py-2.5 text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
         >
           {saving ? "Saving…" : "Save additional information"}
         </button>
@@ -347,12 +441,18 @@ export default function ProposalPackagePage() {
           stripe_session_id: sessionId,
         }),
       });
-      const data = await res.json().catch(() => ({})) as { package?: ProposalPackage; error?: string; code?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        package?: ProposalPackage;
+        error?: string;
+        code?: string;
+      };
       if (!res.ok || !data.package) {
         const isPaymentPending = res.status === 402;
-        setErrorMsg(isPaymentPending
-          ? "Your payment is still being verified — this can take up to a minute. Click Retry in a moment, or contact support if it persists."
-          : (data.error ?? "Generation failed. Please try again or contact support."));
+        setErrorMsg(
+          isPaymentPending
+            ? "Your payment is still being verified — this can take up to a minute. Click Retry in a moment, or contact support if it persists."
+            : data.error ?? "Generation failed. Please try again or contact support."
+        );
         setStage("error");
         return;
       }
@@ -367,21 +467,19 @@ export default function ProposalPackagePage() {
   useEffect(() => {
     if (!workOrderId) return;
 
-    // First check if already generated
     (async () => {
       try {
         const res = await fetch(`/api/proposals/generate?work_order_id=${workOrderId}`, {
           headers: authHeaders(),
         });
         if (res.ok) {
-          const data = await res.json() as { exists: boolean; package?: ProposalPackage };
+          const data = (await res.json()) as { exists: boolean; package?: ProposalPackage };
           if (data.exists && data.package) {
             setPkg(data.package);
             setStage("ready");
             return;
           }
         }
-        // Not generated yet — trigger generation
         await generate();
       } catch {
         await generate();
@@ -390,24 +488,35 @@ export default function ProposalPackagePage() {
   }, [workOrderId, generate]);
 
   const isProposal = !pkg || pkg.plan !== "roster-fast-track";
-  const title = isProposal ? "Proposal Package" : "Roster / LTA Package";
+  const title = isProposal ? "Proposal package" : "Roster / LTA package";
   const subtitle = pkg?.tender_title
-    ? [pkg.tender_title, pkg.agency].filter(Boolean).join(" — ")
+    ? [pkg.tender_title, pkg.agency].filter(Boolean).join(" · ")
     : null;
 
   if (stage === "loading" || stage === "generating") {
     return (
-      <div className="max-w-3xl">
-        <div className="mb-6">
-          <h1 className="text-xl font-semibold text-gray-900">{title}</h1>
-          {subtitle && <p className="mt-1 text-sm text-gray-500">{subtitle}</p>}
+      <div className="px-8 py-8 max-w-4xl">
+        <div className="mb-7">
+          <div
+            className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+            style={{ fontFamily: MONO }}
+          >
+            Workbench · Proposal output
+          </div>
+          <h1
+            className="mt-1 text-[40px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+            style={{ fontFamily: SERIF }}
+          >
+            {title}
+          </h1>
+          {subtitle && <p className="mt-1 text-[13px] text-stone-500">{subtitle}</p>}
         </div>
-        <div className="rounded-xl border border-amber-100 bg-amber-50 p-6 text-center">
-          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-amber-300 border-t-amber-700" />
-          <p className="text-sm font-medium text-amber-900">
+        <div className="rounded-md border border-stone-200/70 bg-white p-10 text-center">
+          <div className="mx-auto mb-4 h-7 w-7 animate-spin rounded-full border-2 border-stone-300 border-t-stone-900" />
+          <p className="text-[14px] font-medium text-stone-900">
             {stage === "generating" ? "Generating your package — this takes about 30 seconds…" : "Loading…"}
           </p>
-          <p className="mt-1 text-xs text-amber-600">
+          <p className="mt-1 text-[12px] text-stone-500">
             Claude is analysing the tender requirements against your company profile.
           </p>
         </div>
@@ -417,23 +526,33 @@ export default function ProposalPackagePage() {
 
   if (stage === "error") {
     return (
-      <div className="max-w-3xl">
-        <div className="mb-6">
-          <h1 className="text-xl font-semibold text-gray-900">{title}</h1>
+      <div className="px-8 py-8 max-w-4xl">
+        <div className="mb-7">
+          <h1
+            className="text-[40px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+            style={{ fontFamily: SERIF }}
+          >
+            {title}
+          </h1>
         </div>
-        <div className="rounded-xl border border-red-200 bg-red-50 p-6">
-          <p className="text-sm font-medium text-red-900">Generation failed</p>
-          <p className="mt-1 text-sm text-red-700">{errorMsg}</p>
-          <div className="mt-4 flex gap-3">
+        <div className="rounded-md border-l-2 border-red-600 bg-red-50/40 p-6">
+          <div
+            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-red-700 mb-2"
+            style={{ fontFamily: MONO }}
+          >
+            Generation failed
+          </div>
+          <p className="text-[13.5px] text-red-900 leading-relaxed">{errorMsg}</p>
+          <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generate}
-              className="rounded-md bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+              className="rounded-sm bg-stone-900 px-4 py-2.5 text-[12.5px] font-semibold text-white hover:bg-stone-800"
             >
               Retry
             </button>
             <a
               href="mailto:info@tenderpath.me?subject=Proposal package error"
-              className="rounded-md border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:border-red-500"
+              className="rounded-sm border border-stone-300 px-4 py-2.5 text-[12.5px] font-semibold text-stone-700 hover:border-stone-700 hover:text-stone-900"
             >
               Contact support
             </a>
@@ -446,27 +565,62 @@ export default function ProposalPackagePage() {
   if (!pkg) return null;
 
   return (
-    <div className="max-w-3xl">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">{title}</h1>
-          {subtitle && <p className="mt-1 text-sm text-gray-500">{subtitle}</p>}
-          <p className="mt-0.5 text-xs text-gray-400">
-            Generated {new Date(pkg.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-          </p>
+    <div className="px-8 py-8 max-w-4xl">
+      {/* Back link */}
+      <Link
+        href="/dashboard/pipeline"
+        className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-500 hover:text-stone-900 transition-colors"
+        style={{ fontFamily: MONO }}
+      >
+        ← Pipeline
+      </Link>
+
+      {/* Header */}
+      <div className="mt-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between mb-7">
+        <div className="max-w-3xl">
+          <div className="flex items-center gap-3 text-[11px] text-stone-500">
+            <span
+              className="font-semibold uppercase tracking-[0.18em] text-stone-400"
+              style={{ fontFamily: MONO }}
+            >
+              Workbench · Proposal output
+            </span>
+            <span className="text-stone-300">·</span>
+            <span style={{ fontFamily: MONO }}>
+              Generated{" "}
+              {new Date(pkg.created_at).toLocaleDateString("en-GB", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
+            </span>
+          </div>
+          <h1
+            className="mt-1 text-[44px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+            style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
+          >
+            {title}
+          </h1>
+          {subtitle && (
+            <p className="mt-1 text-[14.5px] text-stone-600 leading-relaxed">{subtitle}</p>
+          )}
         </div>
-        <Link
-          href="/dashboard/pipeline"
-          className="shrink-0 rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:border-gray-400"
+      </div>
+
+      {/* Ready banner */}
+      <div className="mb-6 rounded-sm border-l-2 border-emerald-600 bg-emerald-50/40 px-4 py-3">
+        <div
+          className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700"
+          style={{ fontFamily: MONO }}
         >
-          ← Pipeline
-        </Link>
+          Status · ready
+        </div>
+        <p className="mt-0.5 text-[13px] text-emerald-900 leading-relaxed">
+          Your {title.toLowerCase()} is ready. Review each section carefully and fill in any missing information before submission.
+        </p>
       </div>
 
-      <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
-        Your {title.toLowerCase()} is ready. Review each section carefully and fill in any missing information before submission.
-      </div>
-
+      {/* Sections */}
       {isProposal ? (
         <ProposalDraftView output={pkg.output} />
       ) : (
@@ -476,9 +630,9 @@ export default function ProposalPackagePage() {
         </>
       )}
 
-      <div className="mt-6 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500">
-        This package is AI-generated and should be reviewed by your team before submission.
-        TenderPath is not responsible for submission outcomes. Always verify requirements directly with the contracting authority.
+      {/* Footer disclaimer */}
+      <div className="mt-7 rounded-sm border-l-2 border-stone-300 bg-stone-50/60 px-4 py-3 text-[11.5px] leading-relaxed text-stone-500">
+        This package is AI-generated and should be reviewed by your team before submission. TenderPath is not responsible for submission outcomes. Always verify requirements directly with the contracting authority.
       </div>
     </div>
   );
