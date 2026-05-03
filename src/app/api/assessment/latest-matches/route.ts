@@ -18,8 +18,14 @@ export async function GET(request: Request) {
   if (!rows.length) return NextResponse.json(null, { status: 404 });
 
   const row = rows[0];
-  const matchedTenders = Array.isArray(row.matched_tenders) ? row.matched_tenders : [];
+  const rawTenders = Array.isArray(row.matched_tenders) ? row.matched_tenders : [];
   const gaps = Array.isArray(row.gaps) ? row.gaps : [];
+
+  // Map MatchedTender.score → fit_score so seedPipeline uses per-tender scores
+  const matchedTenders = rawTenders.map((t: Record<string, unknown>) => ({
+    ...t,
+    fit_score: (t.fit_score as number | undefined) ?? (t.score as number | undefined),
+  }));
 
   return NextResponse.json({
     assessment_id: row.id,

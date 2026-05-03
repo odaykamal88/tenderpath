@@ -214,6 +214,36 @@ export default function AssessmentPage() {
     return () => { if (msgTimer.current) clearInterval(msgTimer.current); };
   }, [phase]);
 
+  // Write bridge data to localStorage so the dashboard can seed pipeline_items
+  // when the user navigates there after completing an assessment.
+  useEffect(() => {
+    if (phase !== "results" || !results) return;
+    try {
+      const bridge = {
+        assessment_id: results.id,
+        email: results.email,
+        company_name: results.company_name,
+        readiness_score: results.readiness_score,
+        matched_tenders: results.matched_tenders.map((t) => ({
+          id: t.id,
+          title: t.title,
+          agency: t.agency,
+          deadline: t.deadline ?? null,
+          estimated_value:
+            typeof t.estimated_value === "number"
+              ? String(t.estimated_value)
+              : (t.estimated_value ?? null),
+          fit_score: t.score,
+          structured_reasons: t.structured_reasons ?? null,
+        })),
+        gaps: results.gaps.map((g) => ({ gap: g.gap, severity: g.severity })),
+      };
+      localStorage.setItem("tp_bridge", JSON.stringify(bridge));
+    } catch {
+      // Non-critical — dashboard auto-seed fallback will handle it
+    }
+  }, [phase, results]);
+
   const startCrawl = useCallback(async () => {
     if (!entryUrl.trim()) { setPhase("step1"); return; }
     setPhase("crawling");

@@ -4,7 +4,7 @@
  * Usage:
  *   DATABASE_URL=postgres://... node scripts/create-demo-user.mjs
  *
- * Creates demo@tenderpath.me with password TenderDemo2025! and
+ * Creates demo@tenderpath.me with password TenderDemo2026! and
  * activates a pro subscription so the full dashboard is accessible.
  */
 
@@ -21,7 +21,7 @@ if (!url) {
 }
 
 const DEMO_EMAIL = "demo@tenderpath.me";
-const DEMO_PASSWORD = "TenderDemo2025!";
+const DEMO_PASSWORD = "TenderDemo2026!";
 
 async function hashPassword(password) {
   const salt = randomBytes(16).toString("hex");
