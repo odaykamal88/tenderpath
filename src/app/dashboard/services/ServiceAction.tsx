@@ -14,6 +14,8 @@ interface ServiceActionProps {
   label: string;
 }
 
+const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
+
 function authHeaders(): HeadersInit {
   const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
   return token
@@ -36,7 +38,7 @@ export default function ServiceAction({
     return (
       <Link
         href={checkoutHref}
-        className="inline-flex items-center justify-center rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700"
+        className="inline-flex w-full items-center justify-center rounded-sm bg-stone-900 px-4 py-3 text-[13px] font-semibold text-white hover:bg-stone-800 transition-colors"
       >
         {label}
       </Link>
@@ -48,11 +50,11 @@ export default function ServiceAction({
       <div>
         <Link
           href="/dashboard/pipeline"
-          className="inline-flex items-center justify-center rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700"
+          className="inline-flex w-full items-center justify-center rounded-sm bg-stone-900 px-4 py-3 text-[13px] font-semibold text-white hover:bg-stone-800 transition-colors"
         >
-          Select a tender in pipeline
+          Select a tender in pipeline →
         </Link>
-        <p className="mt-2 text-xs text-gray-500">
+        <p className="mt-2 text-[11.5px] leading-relaxed text-stone-500">
           Bid/no-bid analysis needs a pipeline tender so the recommendation can use your saved match evidence.
         </p>
       </div>
@@ -101,12 +103,25 @@ export default function ServiceAction({
         type="button"
         onClick={startBidNoBid}
         disabled={loading}
-        className="inline-flex items-center justify-center rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-50"
+        className="inline-flex w-full items-center justify-center rounded-sm bg-stone-900 px-4 py-3 text-[13px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {loading ? "Checking analysis..." : label}
+        {loading ? (
+          <>
+            <span
+              className="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white"
+              aria-hidden
+            />
+            Checking analysis…
+          </>
+        ) : (
+          label
+        )}
       </button>
       {error && (
-        <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <p
+          className="mt-2 rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3 py-2 text-[11.5px] text-red-700"
+          style={{ fontFamily: MONO }}
+        >
           {error}
         </p>
       )}
