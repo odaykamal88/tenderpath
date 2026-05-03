@@ -14,6 +14,9 @@ interface WorkOrder {
   updated_at: string;
 }
 
+const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
+const SERIF = "'Fraunces', 'Times New Roman', serif";
+
 function authHeaders(): HeadersInit {
   const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
   return token ? { authorization: `Bearer ${token}` } : {};
@@ -26,7 +29,15 @@ function label(value: string): string {
 function formatDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("en-GB", { dateStyle: "medium" });
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function statusDot(status: string): string {
+  const s = status.toLowerCase();
+  if (s.includes("complete") || s.includes("ready") || s.includes("delivered")) return "bg-emerald-500";
+  if (s.includes("cancel") || s.includes("fail")) return "bg-red-500";
+  if (s.includes("progress") || s.includes("active") || s.includes("draft")) return "bg-amber-500";
+  return "bg-stone-400";
 }
 
 export default function RecentWorkOrders() {
@@ -51,38 +62,69 @@ export default function RecentWorkOrders() {
   if (loading || orders.length === 0) return null;
 
   return (
-    <section className="mt-6 rounded-lg border border-gray-200 bg-white p-5">
-      <div className="flex items-center justify-between gap-3">
+    <section className="mt-8 rounded-md border border-stone-200/70 bg-white p-6">
+      <div className="flex items-end justify-between gap-3 mb-4 pb-3 border-b border-stone-100">
         <div>
-          <h2 className="text-base font-semibold text-gray-900">Recent work</h2>
-          <p className="mt-1 text-xs text-gray-500">Follow intake and fulfillment status after checkout.</p>
+          <div
+            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+            style={{ fontFamily: MONO }}
+          >
+            Recent · {orders.length.toString().padStart(2, "0")}
+          </div>
+          <h2
+            className="mt-0.5 text-[20px] font-medium text-stone-900 tracking-tight"
+            style={{ fontFamily: SERIF }}
+          >
+            Recent work
+          </h2>
         </div>
-        <Link href="/dashboard/work-orders" className="text-xs font-semibold text-gray-500 underline hover:text-gray-900">
-          View all
+        <Link
+          href="/dashboard/work-orders"
+          className="text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-500 hover:text-stone-900 transition-colors"
+          style={{ fontFamily: MONO }}
+        >
+          View all →
         </Link>
       </div>
-      <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {orders.map((order) => (
           <Link
             key={order.id}
             href={`/dashboard/work-orders/${order.id}`}
-            className="rounded-md border border-gray-200 bg-gray-50 px-3 py-3 transition hover:border-gray-400"
+            className="group rounded-sm border border-stone-200/70 bg-white px-4 py-3.5 transition-colors hover:border-stone-700"
           >
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-xs font-semibold capitalize text-gray-900">
+            <div className="flex items-baseline justify-between gap-3 mb-2">
+              <span
+                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500 capitalize"
+                style={{ fontFamily: MONO }}
+              >
                 {label(order.service_slug ?? order.plan)}
-              </div>
-              <div className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold capitalize text-gray-600">
-                {label(order.status)}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className={`h-1.5 w-1.5 rounded-full ${statusDot(order.status)}`} />
+                <span
+                  className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-600 capitalize"
+                  style={{ fontFamily: MONO }}
+                >
+                  {label(order.status)}
+                </span>
               </div>
             </div>
-            <div className="mt-2 line-clamp-2 text-sm font-medium text-gray-900">
+            <div
+              className="text-[14px] font-medium leading-snug text-stone-900 line-clamp-2 group-hover:text-stone-700 transition-colors"
+              style={{ fontFamily: SERIF }}
+            >
               {order.tender_title ?? label(order.plan)}
             </div>
-            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
+            <div
+              className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] text-stone-500"
+              style={{ fontFamily: MONO }}
+            >
               {order.agency && <span>{order.agency}</span>}
-              <span>{order.payment_status ?? "pending"}</span>
-              <span>Updated {formatDate(order.updated_at)}</span>
+              {order.agency && <span className="text-stone-300">·</span>}
+              <span className="capitalize">{order.payment_status ?? "pending"}</span>
+              <span className="text-stone-300">·</span>
+              <span>{formatDate(order.updated_at)}</span>
             </div>
           </Link>
         ))}
