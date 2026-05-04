@@ -5,6 +5,7 @@
  * Docs: https://open.gsa.gov/api/get-opportunities-public-api/
  */
 import { type RawTender, type CrawlResult, withRetry, fetchWithTimeout } from "./types";
+import { normalizeSector } from "./sector-map";
 
 const SAM_API = "https://api.sam.gov/opportunities/v2/search";
 const PAGE_SIZE = 100;
@@ -94,15 +95,17 @@ function mapOpp(o: SAMOpportunity): RawTender | null {
   if (!isActive(o) || isExcludedType(o)) return null;
 
   const country = o.placeOfPerformance?.country?.name ?? "United States";
+  const description = o.description ? stripHtml(o.description).slice(0, 3000) : null;
+  const sector = normalizeSector(o.naicsCode ?? o.classificationCode, o.title, description)[0] ?? null;
   return {
     reference_id: `SAM-${ref}`,
     title: o.title.slice(0, 500),
-    description: o.description ? stripHtml(o.description).slice(0, 3000) : null,
+    description,
     agency: o.fullParentPathName?.split(".")[0] ?? "US Government",
     country,
     country_code: o.placeOfPerformance?.country?.code ?? "US",
     region: null,
-    sector: o.naicsCode ?? null,
+    sector,
     deadline: o.responseDeadLine?.slice(0, 10) ?? null,
     estimated_value: o.award?.amount ? `USD ${o.award.amount}` : null,
     source_url: o.uiLink ?? null,

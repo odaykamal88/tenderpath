@@ -180,6 +180,8 @@ export async function initializeDatabase() {
       error TEXT
     )
   `;
+  await sql`ALTER TABLE crawl_logs ADD COLUMN IF NOT EXISTS errors JSONB DEFAULT '[]'`;
+  await sql`ALTER TABLE crawl_logs ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS pipeline_items (

@@ -89,7 +89,7 @@ const SLUG_KEYWORDS: Record<SectorSlug, string[]> = {
     "final evaluation", "external evaluation", "impact evaluation",
     "monitoring and evaluation", "m&e ",
     "assessment service", "feasibility stud", "governance",
-    "public financial management", "institutional support",
+    "public financial management", "public administration", "institutional support",
     "programme management", "project management",
   ],
   food: [
@@ -310,6 +310,60 @@ export function unspscSegmentToSlug(code: string | null | undefined): SectorSlug
   return UNSPSC_SEGMENT_TO_SLUG[digits.slice(0, 2)] ?? null;
 }
 
+const NAICS_PREFIX_TO_SLUG: Array<[RegExp, SectorSlug]> = [
+  [/^11/, "agriculture"],
+  [/^21/, "energy"],
+  [/^22/, "energy"],
+  [/^23/, "construction"],
+  [/^311|^312/, "food"],
+  [/^3254|^3391/, "healthcare"],
+  [/^31|^32|^33/, "engineering"],
+  [/^4234|^446|^621|^622|^623|^624/, "healthcare"],
+  [/^42343|^42344|^5112|^5121|^517|^518|^519|^5415/, "it"],
+  [/^42|^44|^45/, "logistics"],
+  [/^48|^49/, "logistics"],
+  [/^5413/, "engineering"],
+  [/^5417/, "consulting"],
+  [/^54/, "consulting"],
+  [/^5616/, "security"],
+  [/^5617|^562/, "environment"],
+  [/^56/, "consulting"],
+  [/^61/, "education"],
+  [/^72/, "food"],
+  [/^811|^812/, "engineering"],
+];
+
+const CPV_PREFIX_TO_SLUG: Array<[RegExp, SectorSlug]> = [
+  [/^03/, "agriculture"],
+  [/^15/, "food"],
+  [/^30|^32|^48|^72/, "it"],
+  [/^33|^85/, "healthcare"],
+  [/^34|^60|^63/, "logistics"],
+  [/^35/, "security"],
+  [/^38|^42|^50|^71/, "engineering"],
+  [/^41|^65|^90/, "water_sanitation"],
+  [/^44|^45/, "construction"],
+  [/^55/, "food"],
+  [/^64/, "it"],
+  [/^73|^75|^79|^98/, "consulting"],
+  [/^77/, "environment"],
+  [/^80/, "education"],
+];
+
+export function naicsCodeToSlug(code: string | null | undefined): SectorSlug | null {
+  if (!code) return null;
+  const digits = code.replace(/\D/g, "");
+  if (digits.length < 2) return null;
+  return NAICS_PREFIX_TO_SLUG.find(([re]) => re.test(digits))?.[1] ?? null;
+}
+
+export function cpvCodeToSlug(code: string | null | undefined): SectorSlug | null {
+  if (!code) return null;
+  const digits = code.replace(/\D/g, "");
+  if (digits.length < 2) return null;
+  return CPV_PREFIX_TO_SLUG.find(([re]) => re.test(digits))?.[1] ?? null;
+}
+
 /**
  * Classify a tender into zero or more sector slugs based on its raw
  * sector string plus title/description context. Multi-label because a
@@ -333,17 +387,28 @@ export function normalizeSector(
   // "336413" → engineering instead of null.
   if (rawSector) {
     const trimmed = rawSector.trim();
-    // Pure numeric codes (allow separators like "43-21-15-00")
+    // Pure numeric codes (allow separators like "43-21-15-00").
+    // Six digits are usually NAICS (SAM.gov). Eight digits are usually UNSPSC
+    // unless the source labels them as CPV (TED EU).
     if (/^\d[\d\s\-.]*$/.test(trimmed)) {
-      const fromCode = unspscSegmentToSlug(trimmed);
-      if (fromCode) hits.add(fromCode);
+      const digits = trimmed.replace(/\D/g, "");
+      const fromNaics = digits.length === 6 ? naicsCodeToSlug(digits) : null;
+      const fromUnspsc = digits.length !== 6 ? unspscSegmentToSlug(digits) : null;
+      for (const slug of [fromNaics, fromUnspsc]) {
+        if (slug) hits.add(slug);
+      }
     }
     // Multiple codes in a list ("43211500, 81112200")
     const codeMatches = trimmed.match(/\b\d{4,8}\b/g);
     if (codeMatches) {
+      const cpvMarked = /\bcpv\b/i.test(trimmed);
       for (const code of codeMatches) {
-        const s = unspscSegmentToSlug(code);
-        if (s) hits.add(s);
+        const fromNaics = code.length === 6 ? naicsCodeToSlug(code) : null;
+        const fromCpv = cpvMarked && code.length === 8 ? cpvCodeToSlug(code) : null;
+        const fromUnspsc = code.length !== 6 && !cpvMarked ? unspscSegmentToSlug(code) : null;
+        for (const slug of [fromNaics, fromCpv, fromUnspsc]) {
+          if (slug) hits.add(slug);
+        }
       }
     }
   }

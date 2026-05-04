@@ -12,8 +12,9 @@
  * Chromium cold-start, which blew the cron budget for N=15. One batched
  * call totals ~30-40s for all 20 pages.
  *
- * Per-notice detail enrichment (description + UNSPSCs) still disabled —
- * listing rows carry enough signal (title, agency, country, deadline).
+ * Detail enrichment is best-effort and capped so listing coverage remains the
+ * reliability anchor while recent rows get richer matching fields when the
+ * detail HTML is parseable.
  */
 import { normalizeSector } from "./sector-map";
 import { type RawTender, type CrawlResult, withRetry } from "./types";
@@ -145,6 +146,17 @@ function decodeEntities(s: string): string {
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&nbsp;/g, " ");
+}
+
+function cleanHtmlText(raw: string): string {
+  return decodeEntities(raw)
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|div|li|tr|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function parseUngmDate(raw: string): string | null {
@@ -301,6 +313,40 @@ function parseDetailValue(html: string): string | null {
   return null;
 }
 
+function parseDetailDescription(html: string): string | null {
+  const label = "(?:Description|Long\\s+Description|Short\\s+Description|Detailed\\s+Description|Notice\\s+Description)";
+  const patterns = [
+    new RegExp(`<t[dh][^>]*>\\s*${label}\\s*</t[dh]>\\s*<t[dh][^>]*>([\\s\\S]{80,6000}?)</t[dh]>`, "i"),
+    new RegExp(`<label[^>]*>\\s*${label}\\s*</label>[\\s\\S]{0,800}?<div[^>]*>([\\s\\S]{80,6000}?)</div>`, "i"),
+    /<div[^>]*(?:id|class)="[^"]*(?:description|notice-description)[^"]*"[^>]*>([\s\S]{80,6000}?)<\/div>/i,
+  ];
+
+  for (const re of patterns) {
+    const match = html.match(re);
+    if (!match) continue;
+    const text = cleanHtmlText(match[1]);
+    if (
+      text.length >= 120 &&
+      !/^description$/i.test(text) &&
+      !/^(deadline|reference|unspsc|estimated value)\b/i.test(text)
+    ) {
+      return text.slice(0, 3000);
+    }
+  }
+  return null;
+}
+
+function parseDetailSector(html: string, title: string, description: string | null): string | null {
+  const matches = html.match(/\b\d{8}\b/g);
+  const unspscNearby = /UNSPSC/i.test(html);
+  const normalized = normalizeSector(
+    unspscNearby && matches?.length ? matches.slice(0, 8).join(", ") : null,
+    title,
+    description,
+  );
+  return normalized.length ? normalized.join(", ") : null;
+}
+
 export async function crawlUNGM(): Promise<CrawlResult> {
   const start = Date.now();
   if (!workerConfigured()) {
@@ -403,16 +449,31 @@ export async function crawlUNGM(): Promise<CrawlResult> {
           },
         }));
         const detailResults = await workerFetchMany(detailRequests, { waitMs: 1000 });
-        let enriched = 0;
+        let valueEnriched = 0;
+        let descriptionEnriched = 0;
+        let sectorEnriched = 0;
         for (let i = 0; i < detailResults.length; i++) {
           const r = detailResults[i];
           const t = toEnrich[i];
           if (!t || r.status !== 200) continue;
           const val = parseDetailValue(r.body);
-          if (val) { t.estimated_value = val; enriched++; }
+          if (val) { t.estimated_value = val; valueEnriched++; }
+          const description = parseDetailDescription(r.body);
+          if (description && !t.description) {
+            t.description = description;
+            descriptionEnriched++;
+          }
+          const sector = parseDetailSector(r.body, t.title, t.description);
+          if (sector && !t.sector) {
+            t.sector = sector;
+            sectorEnriched++;
+          }
         }
-        if (enriched > 0) {
-          console.log(`[ungm] enriched ${enriched}/${toEnrich.length} notices with estimated_value`);
+        if (valueEnriched > 0 || descriptionEnriched > 0 || sectorEnriched > 0) {
+          console.log(
+            `[ungm] enriched ${toEnrich.length} notices: `
+            + `value=${valueEnriched}, description=${descriptionEnriched}, sector=${sectorEnriched}`,
+          );
         }
       } catch (err) {
         // Enrichment is best-effort — log but don't fail the crawl.

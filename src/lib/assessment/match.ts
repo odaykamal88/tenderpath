@@ -1,6 +1,7 @@
 import { sql } from "@/lib/db";
 import type { MatchedTender, MatchedGrant, AIAnalysis, MatchReason, GeographyMode, OpportunityBucket } from "@/lib/types";
 import { SECTOR_SLUGS, normalizeSector, userSectorSlugs, type SectorSlug } from "@/lib/crawlers/sector-map";
+import { ALL_COUNTRIES } from "@/lib/countries";
 import { computeAdjacentSlugs } from "./sector-adjacency";
 import { shouldSuppressSource } from "./source-rules";
 import { enrichTopMatches } from "./enrich";
@@ -47,6 +48,11 @@ const STOPWORDS = new Set([
   // Generic procurement verbs. "Supply and delivery of laptops" is an IT
   // goods tender, not a logistics-services tender.
   "supply", "delivery", "deliver", "procurement", "provision",
+]);
+
+const GRANT_TOKEN_STOPWORDS = new Set([
+  "security", "development", "capacity", "building", "program", "programme",
+  "grant", "grants", "fund", "funding", "assistance", "regional",
 ]);
 
 function tokenize(text: string): string[] {
@@ -347,8 +353,8 @@ function assignGrantOpportunityBuckets(grants: MatchedGrant[]): MatchedGrant[] {
       };
     })
     .sort((a, b) =>
-      (a.opportunity_bucket_priority ?? 99) - (b.opportunity_bucket_priority ?? 99)
-      || b.score - a.score
+      b.score - a.score
+      || (a.opportunity_bucket_priority ?? 99) - (b.opportunity_bucket_priority ?? 99)
     );
 }
 
@@ -1357,6 +1363,138 @@ function dedupeGrantMatches(grants: MatchedGrant[]): MatchedGrant[] {
   return [...byKey.values()].sort((a, b) => b.score - a.score);
 }
 
+const SECTOR_TO_GRANT_THEME: Record<SectorSlug, string[]> = {
+  it: ["digital", "technology", "innovation", "data", "cybersecurity"],
+  education: ["education", "training", "skills", "youth", "capacity building"],
+  healthcare: ["health", "nutrition", "medical", "public health"],
+  logistics: ["humanitarian response", "supply chain", "resilience", "emergency response"],
+  construction: ["infrastructure", "housing", "resilience", "urban development"],
+  consulting: ["governance", "technical assistance", "capacity building", "evaluation"],
+  food: ["food security", "nutrition", "agriculture", "livelihoods"],
+  security: ["protection", "safety", "peacebuilding", "risk"],
+  language_services: ["inclusion", "communications", "education", "civil society"],
+  engineering: ["infrastructure", "innovation", "industrial development"],
+  environment: ["climate", "environment", "biodiversity", "natural resources"],
+  agriculture: ["agriculture", "food security", "rural development", "livelihoods"],
+  water_sanitation: ["wash", "water", "sanitation", "public health"],
+  energy: ["energy", "renewable energy", "climate", "infrastructure"],
+};
+
+const GRANT_GLOBAL_TERMS = new Set([
+  "global", "international", "worldwide", "multiple", "multi-country",
+  "regional", "all countries", "world", "any country",
+]);
+
+const KNOWN_COUNTRY_NAMES = ALL_COUNTRIES.map((c) => c.country.toLowerCase());
+const COUNTRY_TO_GRANT_REGION = new Map(ALL_COUNTRIES.map((c) => [c.country.toLowerCase(), c.region.toLowerCase()]));
+const US_DOMESTIC_GRANT_AGENCY_RE = /^(HHS|NSF|NASA|DOC|DOL|USDA|DOI|EPA|PAMS|BJA|NIJ|OJJDP|CDC|HRSA|NIH|DOE|DOT|USDOT|HUD|ED|NEH|VA|DHS|DOD|USDOJ|AC|ONDCP|LOC)(?:-|$)/i;
+const INTERNATIONAL_GRANT_RE = /\b(international|global|worldwide|foreign assistance|embassy|consulate|usaid|state department|democracy|humanitarian|developing countries|low- and middle-income|lmics?|africa|middle east|mena|asia|latin america)\b/i;
+
+function normalizeGrantArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+}
+
+function normalizeGrantOrgType(value: string): string {
+  const normalized = value.toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (/\b(sme|company|business|private sector|for profit|commercial|vendor)\b/.test(normalized)) return "company";
+  if (/\b(ngo|non profit|nonprofit|non-government|civil society|charity|foundation|ingo)\b/.test(normalized)) return "ngo";
+  if (/\b(research|university|academic)\b/.test(normalized)) return "research_institution";
+  if (/\b(education|school|college|institution of higher education|ihe)\b/.test(normalized)) return "education_institution";
+  if (/\b(government|public agency|state|local|municipal|tribal)\b/.test(normalized)) return "government_entity";
+  if (/\b(cooperative|co-op)\b/.test(normalized)) return "cooperative";
+  return normalized.replace(/\s+/g, "_");
+}
+
+function orgMatchesGrant(orgType: string | null, eligibleOrgs: string[]): boolean | null {
+  if (!eligibleOrgs.length) return null;
+  if (!orgType) return null;
+  const orgLower = normalizeGrantOrgType(orgType);
+  return eligibleOrgs.some((o) => {
+    const oLower = normalizeGrantOrgType(o);
+    return oLower === orgLower || oLower.includes(orgLower) || orgLower.includes(oLower);
+  });
+}
+
+function grantCountryValues(g: { country?: unknown; region?: unknown; countries?: unknown }): string[] {
+  return [
+    typeof g.country === "string" ? g.country : null,
+    typeof g.region === "string" ? g.region : null,
+    ...normalizeGrantArray(g.countries),
+  ].filter((v): v is string => !!v && !!v.trim()).map((v) => v.trim());
+}
+
+function grantExplicitCountries(g: { country?: unknown; countries?: unknown }): string[] {
+  return [
+    typeof g.country === "string" ? g.country : null,
+    ...normalizeGrantArray(g.countries),
+  ].filter((v): v is string => !!v && !!v.trim()).map((v) => v.trim());
+}
+
+function mentionedKnownCountries(text: string): string[] {
+  const lower = text.toLowerCase();
+  return KNOWN_COUNTRY_NAMES.filter((country) => {
+    const escaped = country.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`\\b${escaped}\\b`, "i").test(lower);
+  });
+}
+
+function evaluateGrantGeography(
+  g: { country?: unknown; region?: unknown; countries?: unknown; title?: unknown; description?: unknown },
+  userCountrySet: Set<string>,
+): { mode: "direct" | "global-open" | "unknown" | "mismatch"; score: number; label: string | null } {
+  if (!userCountrySet.size) return { mode: "unknown", score: 0, label: null };
+
+  const explicitValues = grantCountryValues(g);
+  const explicitLower = explicitValues.map((v) => v.toLowerCase());
+  const global = explicitLower.some((v) => GRANT_GLOBAL_TERMS.has(v));
+  if (explicitLower.some((v) => userCountrySet.has(v))) {
+    return { mode: "direct", score: 25, label: explicitValues.join(", ") };
+  }
+  const userRegions = new Set(
+    [...userCountrySet]
+      .map((country) => COUNTRY_TO_GRANT_REGION.get(country))
+      .filter((region): region is string => !!region),
+  );
+  if (typeof g.region === "string" && userRegions.has(g.region.toLowerCase())) {
+    return { mode: "direct", score: 18, label: g.region };
+  }
+  if (global) return { mode: "global-open", score: 10, label: explicitValues.join(", ") };
+  if (explicitValues.length > 0) return { mode: "mismatch", score: -30, label: explicitValues.join(", ") };
+
+  const textCountries = mentionedKnownCountries(`${String(g.title ?? "")} ${String(g.description ?? "")}`);
+  if (textCountries.length > 0) {
+    const direct = textCountries.some((c) => userCountrySet.has(c));
+    return {
+      mode: direct ? "direct" : "mismatch",
+      score: direct ? 20 : -25,
+      label: textCountries.map((c) => c.replace(/\b\w/g, (m) => m.toUpperCase())).join(", "),
+    };
+  }
+
+  return { mode: "unknown", score: -4, label: null };
+}
+
+function userIncludesUnitedStates(countries: string[]): boolean {
+  const expanded = expandCountrySet(countries);
+  return expanded.has("united states") || expanded.has("usa") || expanded.has("united states of america");
+}
+
+function inferGrantFundingScope(
+  g: { agency?: unknown; country?: unknown; region?: unknown; countries?: unknown; title?: unknown; description?: unknown },
+): "domestic" | "international" | "global" | "unknown" {
+  const explicitValues = grantExplicitCountries(g).map((v) => v.toLowerCase());
+  const region = typeof g.region === "string" ? g.region.toLowerCase() : "";
+  if (explicitValues.some((v) => GRANT_GLOBAL_TERMS.has(v))) return "global";
+  if (region && GRANT_GLOBAL_TERMS.has(region)) return "global";
+  if (explicitValues.some((v) => v && v !== "united states" && v !== "usa" && v !== "u.s.")) return "international";
+
+  const text = `${String(g.agency ?? "")} ${String(g.title ?? "")} ${String(g.description ?? "")}`;
+  if (INTERNATIONAL_GRANT_RE.test(text)) return "international";
+  if (US_DOMESTIC_GRANT_AGENCY_RE.test(String(g.agency ?? ""))) return "domestic";
+  if (/\b(united states|u\.s\.|usa|american communities|states|counties|tribal|domestic)\b/i.test(text)) return "domestic";
+  return "unknown";
+}
+
 /**
  * Match open grants against org type, development themes, and sectors.
  */
@@ -1367,14 +1505,23 @@ export async function matchGrants(
   countries: string[] = []
 ): Promise<MatchedGrant[]> {
   // Normalise user countries for matching
-  const userCountries = countries.map((c) => c.toLowerCase());
-  const globalTerms = ["global", "international", "worldwide", "multiple", "multi-country", "regional", "all countries"];
+  const userCountries = [...expandCountrySet(countries)];
+  const userCountrySet = new Set(userCountries);
+  const userGrantRegions = [
+    ...new Set(
+      userCountries
+        .map((country) => COUNTRY_TO_GRANT_REGION.get(country))
+        .filter((region): region is string => !!region),
+    ),
+  ];
+  const includesUnitedStates = userIncludesUnitedStates(countries);
+  const globalTerms = [...GRANT_GLOBAL_TERMS];
 
   // When no countries provided (legacy calls), skip country filtering so we
   // don't accidentally return zero grants for existing assessments.
   const candidates = userCountries.length
     ? await sql`
-        SELECT id, title, agency, deadline, sector, themes, eligible_org_types,
+        SELECT id, title, agency, deadline, sector, themes, eligible_org_types, countries,
                source_url, description, value_range, country, region
         FROM grants
         WHERE status = 'open'
@@ -1384,12 +1531,17 @@ export async function matchGrants(
             OR country = ''
             OR LOWER(country) = ANY(${globalTerms}::text[])
             OR LOWER(country) = ANY(${userCountries}::text[])
+            OR region IS NULL
+            OR region = ''
+            OR LOWER(region) = ANY(${globalTerms}::text[])
+            OR LOWER(region) = ANY(${userCountries}::text[])
+            OR LOWER(region) = ANY(${userGrantRegions}::text[])
           )
         ORDER BY deadline ASC NULLS LAST
         LIMIT 200
       `
     : await sql`
-        SELECT id, title, agency, deadline, sector, themes, eligible_org_types,
+        SELECT id, title, agency, deadline, sector, themes, eligible_org_types, countries,
                source_url, description, value_range, country, region
         FROM grants
         WHERE status = 'open'
@@ -1401,11 +1553,14 @@ export async function matchGrants(
   if (!candidates.length) return [];
 
   const userSlugs = userSectorSlugs(null, sectors);
-  const themeSet = new Set(devThemes.map((t) => t.toLowerCase()));
+  const themeSet = new Set([
+    ...devThemes.map((t) => t.toLowerCase()),
+    ...[...userSlugs].flatMap((slug) => SECTOR_TO_GRANT_THEME[slug] ?? []),
+  ]);
   const grantUserTokens = new Set<string>([
     ...tokenize(sectors.join(" ")),
     ...tokenize(devThemes.join(" ")),
-  ]);
+  ].filter((token) => !GRANT_TOKEN_STOPWORDS.has(token)));
 
   const scored: MatchedGrant[] = [];
 
@@ -1414,56 +1569,115 @@ export async function matchGrants(
     const gSector = (g.sector as string ?? "");
     const gTitle = (g.title as string ?? "");
     const gDescription = (g.description as string | null) ?? "";
+    const reasons: string[] = [];
 
-    const gSlugs = new Set<SectorSlug>(normalizeSector(gSector, gTitle, null));
+    // Grant descriptions are often long policy/program text and can mention
+    // many adjacent themes. Use the curated/enriched sector and title for the
+    // hard sector gate, then let descriptions contribute only softer keyword
+    // and theme signals below.
+    const gSlugs = new Set<SectorSlug>(normalizeSector(gSector, gTitle, ""));
     let sectorHits = 0;
     for (const s of userSlugs) if (gSlugs.has(s)) sectorHits++;
-    if (sectorHits > 0) score += Math.min(40, sectorHits * 25);
+    if (sectorHits > 0) {
+      score += Math.min(35, sectorHits * 22);
+      reasons.push(`Sector fit: ${[...userSlugs].filter((s) => gSlugs.has(s)).join(", ")}.`);
+    }
 
-    const eligibleOrgs = g.eligible_org_types as string[] | null;
-    if (eligibleOrgs?.length) {
-      if (orgType) {
-        const orgLower = orgType.toLowerCase();
-        const matched = eligibleOrgs.some((o) => {
-          const oLower = o.toLowerCase();
-          return oLower === orgLower || oLower.includes(orgLower) || orgLower.includes(oLower);
-        });
-        if (matched) score += 25;
+    const eligibleOrgs = normalizeGrantArray(g.eligible_org_types);
+    const orgMatch = orgMatchesGrant(orgType, eligibleOrgs);
+    if (eligibleOrgs.length) {
+      if (orgMatch) {
+        score += 20;
+        reasons.push(`Eligibility fit: ${orgType} appears eligible.`);
+      } else if (orgMatch === false) {
+        score -= 25;
+        reasons.push(`Eligibility caveat: listed org types are ${eligibleOrgs.join(", ")}.`);
       } else {
-        score += 5;
+        score += 4;
+        reasons.push(`Eligibility needs review: listed org types are ${eligibleOrgs.join(", ")}.`);
       }
     } else {
-      score += 15;
+      score += 6;
+      reasons.push("Eligibility is not explicit in the grant row.");
     }
 
-    const grantThemes = g.themes as string[] | null;
-    if (grantThemes?.length && themeSet.size) {
-      let themeHits = 0;
-      for (const gt of grantThemes) if (themeSet.has(gt.toLowerCase())) themeHits++;
-      score += Math.min(30, themeHits * 10);
-    } else if (grantThemes?.length) {
-      score += 5;
+    const grantThemes = normalizeGrantArray(g.themes);
+    let themeHits = 0;
+    if (grantThemes.length && themeSet.size) {
+      const matchedThemes: string[] = [];
+      for (const gt of grantThemes) {
+        if (themeSet.has(gt.toLowerCase())) {
+          themeHits++;
+          matchedThemes.push(gt);
+        }
+      }
+      if (themeHits > 0) {
+        score += Math.min(25, themeHits * 10);
+        reasons.push(`Theme fit: ${matchedThemes.slice(0, 3).join(", ")}.`);
+      }
+    } else if (grantThemes.length) {
+      score += 3;
     }
 
+    let tokenHits = 0;
     if (grantUserTokens.size) {
       const grantTokens = new Set<string>([
         ...tokenize(gTitle), ...tokenize(gDescription), ...tokenize(gSector),
       ]);
-      let tokenHits = 0;
       for (const tok of grantUserTokens) if (grantTokens.has(tok)) tokenHits++;
-      score += Math.min(15, tokenHits * 5);
+      if (tokenHits > 0) {
+        score += Math.min(14, tokenHits * 4);
+        reasons.push(`Keyword overlap: ${tokenHits} profile term${tokenHits === 1 ? "" : "s"} found.`);
+      }
     }
+
+    const washFocusedProfile = userSlugs.has("water_sanitation")
+      || devThemes.some((theme) => /\b(wash|water|sanitation|hygiene)\b/i.test(theme));
+    const grantHasWashSignal = gSlugs.has("water_sanitation")
+      || grantThemes.some((theme) => /\b(wash|water|sanitation|hygiene)\b/i.test(theme))
+      || /\b(wash|water|sanitation|hygiene)\b/i.test(`${gTitle} ${gDescription}`);
+    if (washFocusedProfile && !grantHasWashSignal && (gSlugs.has("healthcare") || grantThemes.some((theme) => /health/i.test(theme)))) {
+      score -= 16;
+      reasons.push("Specificity caveat: health-related, but no explicit WASH/water/sanitation signal.");
+    }
+
+    const geography = evaluateGrantGeography(g, userCountrySet);
+    const fundingScope = inferGrantFundingScope(g);
+    score += geography.score;
+    if (geography.mode === "direct") reasons.push(`Geography fit: ${geography.label ?? "selected country"}.`);
+    else if (geography.mode === "global-open") reasons.push("Geography fit: global or regional opportunity.");
+    else if (geography.mode === "mismatch") reasons.push(`Geography caveat: grant appears tied to ${geography.label}.`);
+    else if (userCountrySet.size) reasons.push("Geography caveat: no country eligibility was listed.");
+
+    if (fundingScope === "domestic" && countries.length > 0 && !includesUnitedStates) {
+      score -= 14;
+      reasons.push("Funding-scope caveat: appears likely U.S.-domestic, not clearly international.");
+    } else if (fundingScope === "international" || fundingScope === "global") {
+      score += 6;
+      reasons.push(`Funding scope: ${fundingScope === "global" ? "global" : "international"} opportunity.`);
+    }
+
+    const fitSignals = sectorHits + themeHits + tokenHits;
+
+    // Skip weak grants where geography/org eligibility are the only reasons.
+    // Those rows are useful as raw inventory but feel random in the dashboard.
+    if (fitSignals <= 0) continue;
+    if (sectorHits === 0 && themeHits === 0 && tokenHits <= 1) continue;
 
     // Skip zero-signal grants — the old `score = 8` floor caused identical
     // grants to appear for every company regardless of relevance.
-    if (score === 0) continue;
+    if (score < 28) continue;
 
     const NGO_TERMS = new Set(["ngo", "non-profit", "nonprofit", "civil society", "charity", "foundation", "ingo", "non profit"]);
-    const eligibleOrgsForMismatch = g.eligible_org_types as string[] | null;
-    const isNgoOnly = !!eligibleOrgsForMismatch?.length &&
-      eligibleOrgsForMismatch.every((o) => NGO_TERMS.has(o.toLowerCase()));
-    const NON_NGO_TYPES = new Set(["company", "sole-trader", "government"]);
-    const orgTypeMismatch = isNgoOnly && !!orgType && NON_NGO_TYPES.has(orgType.toLowerCase());
+    const isNgoOnly = eligibleOrgs.length > 0 &&
+      eligibleOrgs.every((o) => NGO_TERMS.has(o.toLowerCase()) || normalizeGrantOrgType(o) === "ngo");
+    const NON_NGO_TYPES = new Set(["company", "sole_trader", "government_entity"]);
+    const orgTypeMismatch = isNgoOnly && !!orgType && NON_NGO_TYPES.has(normalizeGrantOrgType(orgType));
+    if (orgTypeMismatch) score = Math.min(score, 44);
+
+    const cappedScore = geography.mode === "mismatch" || (fundingScope === "domestic" && !includesUnitedStates)
+      ? Math.min(score, 49)
+      : score;
 
     scored.push({
       id: g.id as number,
@@ -1471,13 +1685,21 @@ export async function matchGrants(
       agency: g.agency as string,
       deadline: g.deadline as string,
       sector: g.sector as string,
-      score: Math.min(100, score),
+      score: Math.min(100, Math.max(0, cappedScore)),
       source_url: (g.source_url as string | null) ?? null,
       description: gDescription || null,
       value_range: (g.value_range as string | null) ?? null,
       country: (g.country as string | null) ?? null,
       region: (g.region as string | null) ?? null,
       org_type_mismatch: orgTypeMismatch || undefined,
+      match_reason: reasons[0] ?? null,
+      match_reasons: reasons,
+      geography_alignment: {
+        userCountries: countries,
+        grantCountry: geography.label ?? (g.country as string | null) ?? (g.region as string | null) ?? null,
+        mode: geography.mode,
+      },
+      funding_scope: fundingScope,
     });
   }
 
@@ -1489,7 +1711,7 @@ export async function matchGrants(
   for (const g of scored) {
     const agency = g.agency ?? "";
     const count = agencyCounts.get(agency) ?? 0;
-    if (count >= 3) continue;
+    if (count >= 2) continue;
     agencyCounts.set(agency, count + 1);
     out.push(g);
     if (out.length >= 20) break;

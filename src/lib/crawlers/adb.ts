@@ -17,6 +17,7 @@ import { normalizeSector } from "./sector-map";
 const BASE = process.env.ADB_TENDERS_URL ?? "https://www.adb.org/projects/tenders";
 const MAX_PAGES = 3;
 const PAGE_DELAY_MS = 1500;
+const BROWSER_TIMEOUT_MS = 60000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -41,9 +42,12 @@ async function fetchPage(page: number): Promise<string> {
     waitForSelector: "a[href*='/projects/tenders/']",
     waitAfterNav: 500,
     waitMs: 2000,
-    timeoutMs: 90000,
+    timeoutMs: BROWSER_TIMEOUT_MS,
   });
   if (!resp.ok) throw new Error(`ADB page ${page} ${resp.status}: ${resp.body.slice(0, 200)}`);
+  if (/Just a moment|cf-challenge|Attention Required|Access denied|Cloudflare/i.test(resp.body)) {
+    throw new Error(`ADB page ${page} returned challenge HTML; browser worker did not clear Cloudflare`);
+  }
   return resp.body;
 }
 

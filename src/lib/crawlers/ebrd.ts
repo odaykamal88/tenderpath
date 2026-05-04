@@ -43,6 +43,11 @@ async function fetchPage(page: number): Promise<string> {
     timeoutMs: 120000,
   });
   if (!resp.ok) throw new Error(`EBRD page ${page} ${resp.status}: ${resp.body.slice(0, 200)}`);
+  if (resp.finalUrl?.includes("/cas/login") || /<form[^>]+login|name="username"|cas\/login/i.test(resp.body)) {
+    throw new Error(
+      `EBRD public notice list redirected to login (${resp.finalUrl ?? "unknown final URL"}) — public ECEPP listing access changed`,
+    );
+  }
   return resp.body;
 }
 
@@ -185,7 +190,7 @@ export async function crawlEBRD(): Promise<CrawlResult> {
     const seen = new Set<string>();
     for (let page = 0; page < MAX_PAGES; page++) {
       if (page > 0) await sleep(PAGE_DELAY_MS);
-      const html = await withRetry(() => fetchPage(page));
+      const html = await withRetry(() => fetchPage(page), 1);
       const rows = parseNotices(html);
       if (!rows.length) break;
       let added = 0;

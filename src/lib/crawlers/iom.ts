@@ -6,6 +6,7 @@
  */
 import { normalizeSector, type SectorSlug } from "./sector-map";
 import { type CrawlResult, type RawTender, fetchWithTimeout, withRetry } from "./types";
+import { browserAvailable, fetchViaBrowser } from "./_browser";
 
 const BASE_URL = "https://www.iom.int";
 const LISTING_URL = `${BASE_URL}/procurement-opportunities`;
@@ -148,7 +149,26 @@ function mapRow(row: IomRow): RawTender {
 async function fetchPage(page: number): Promise<string> {
   const url = page === 0 ? LISTING_URL : `${LISTING_URL}?page=${page}`;
   const resp = await fetchWithTimeout(url, { headers: HEADERS }, 25000);
-  if (!resp.ok) throw new Error(`IOM procurement page ${page} HTTP ${resp.status}`);
+  if (!resp.ok) {
+    if ((resp.status === 403 || resp.status === 429) && browserAvailable()) {
+      const rendered = await fetchViaBrowser(url, {
+        headers: HEADERS,
+        warmupUrl: LISTING_URL,
+        mode: "navigate",
+        waitForSelector: "ul.table-row, h2 a[href]",
+        waitAfterNav: 750,
+        waitMs: 1500,
+        timeoutMs: 90000,
+      });
+      if (rendered.ok && !/Access Denied|edgesuite|akamai/i.test(rendered.body)) {
+        return rendered.body;
+      }
+      throw new Error(
+        `IOM procurement page ${page} HTTP ${resp.status}; browser fallback ${rendered.status}: ${rendered.body.slice(0, 160)}`,
+      );
+    }
+    throw new Error(`IOM procurement page ${page} HTTP ${resp.status}`);
+  }
   return resp.text();
 }
 

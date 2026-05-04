@@ -18,6 +18,23 @@ interface CrawlLog {
   tenders_expired: number;
   broken_links: number;
   error: string | null;
+  metadata?: {
+    rawTenders?: number;
+    dedupedSurvivors?: number;
+    liveTenders?: number;
+    droppedBrokenLinks?: number;
+    outputQuality?: {
+      descriptionCompletePct?: number;
+      deadlineCompletePct?: number;
+      sectorCompletePct?: number;
+      sourceUrlCompletePct?: number;
+      estimatedValueCompletePct?: number;
+      thinDescriptions?: number;
+      missingDeadlines?: number;
+      missingSectors?: number;
+      missingSourceUrls?: number;
+    };
+  } | null;
 }
 
 interface SubscriptionRow { tier: string; count: number; }
@@ -115,6 +132,25 @@ function relTime(v: string | null | undefined): string {
   const h = Math.floor(min / 60);
   if (h < 24) return `${h}h ago`;
   return `${Math.floor(h / 24)}d ago`;
+}
+function crawlNote(log: CrawlLog): string {
+  if (log.error) return log.error;
+  const meta = log.metadata;
+  const quality = meta?.outputQuality;
+  if (!meta && !quality) return "—";
+  const pieces = [
+    typeof meta?.liveTenders === "number" && typeof meta.rawTenders === "number"
+      ? `live ${meta.liveTenders}/${meta.rawTenders}`
+      : null,
+    typeof meta?.dedupedSurvivors === "number" ? `deduped kept ${meta.dedupedSurvivors}` : null,
+    typeof quality?.sectorCompletePct === "number" ? `sectors ${quality.sectorCompletePct}%` : null,
+    typeof quality?.descriptionCompletePct === "number" ? `desc ${quality.descriptionCompletePct}%` : null,
+    typeof quality?.deadlineCompletePct === "number" ? `deadlines ${quality.deadlineCompletePct}%` : null,
+    typeof meta?.droppedBrokenLinks === "number" && meta.droppedBrokenLinks > 0
+      ? `${meta.droppedBrokenLinks} broken dropped`
+      : null,
+  ].filter(Boolean);
+  return pieces.length ? pieces.join(" · ") : "—";
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -462,7 +498,7 @@ export default function AdminPage() {
                         <td className={styles.num}>{log.tenders_updated ?? 0}</td>
                         <td className={`${styles.num} ${styles.muteNum}`}>{fmtDur(log.duration_ms)}</td>
                         <td className={styles.signal} style={{ color: log.error ? "var(--color-red)" : undefined }}>
-                          {log.error ?? "—"}
+                          {crawlNote(log)}
                         </td>
                       </tr>
                     ))}

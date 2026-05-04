@@ -10,6 +10,7 @@ import { browserAvailable, fetchViaBrowser } from "./_browser";
 const LISTING_URL = "https://www.afdb.org/en/documents/category/specific-procurement-notices";
 const BASE_URL = "https://www.afdb.org";
 const MAX_PAGES = 2;
+const BROWSER_TIMEOUT_MS = 60000;
 
 interface AfDBItem {
   title: string;
@@ -129,7 +130,7 @@ async function fetchPage(page: number): Promise<string> {
     waitForSelector: "a[href*='procurement'], a[href*='documents']",
     waitAfterNav: 800,
     waitMs: 3000,
-    timeoutMs: 90000,
+    timeoutMs: BROWSER_TIMEOUT_MS,
   });
   if (!resp.ok) throw new Error(`AfDB page ${page} HTTP ${resp.status}: ${resp.body.slice(0, 180)}`);
   if (/Just a moment|cf-challenge|Enable JavaScript and cookies/i.test(resp.body)) {

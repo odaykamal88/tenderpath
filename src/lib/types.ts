@@ -161,6 +161,14 @@ export interface MatchedGrant {
   value_range?: string | null;
   description?: string | null;
   org_type_mismatch?: boolean;
+  match_reason?: string | null;
+  match_reasons?: string[];
+  geography_alignment?: {
+    userCountries?: string[];
+    grantCountry?: string | null;
+    mode: "direct" | "global-open" | "unknown" | "mismatch";
+  };
+  funding_scope?: "domestic" | "international" | "global" | "unknown";
   opportunity_bucket?: OpportunityBucket;
   opportunity_bucket_label?: string;
   opportunity_bucket_reason?: string;
