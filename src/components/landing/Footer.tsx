@@ -1,105 +1,51 @@
-/* Footer — paper-toned, editorial colophon */
+/* CTA — final paper-stamp card on dark ink · mobile-tuned */
 
-export default function Footer() {
-  const product = [
-    { label: "Free assessment", href: "/assessment" },
-    { label: "Weekly digest · $49/mo", href: "/assessment" },
-    { label: "Bid/no-bid analysis · $39", href: "/assessment" },
-    { label: "Proposal draft · $299", href: "/assessment" },
-    { label: "Roster fast-track · $749", href: "/assessment" },
-  ];
-
-  const resources = [
-    { label: "UN procurement guide", href: "#" },
-    { label: "UNGM registration", href: "#" },
-    { label: "Founder note", href: "#builtby" },
-    { label: "FAQ", href: "/faq" },
-  ];
-
-  const company = [
-    { label: "Contact", href: "/contact" },
-    { label: "Disclaimer", href: "/disclaimer" },
-    { label: "Security", href: "/security" },
-  ];
-
-  const legal = [
-    { label: "Privacy Policy", href: "/privacy" },
-    { label: "Terms", href: "/terms" },
-    { label: "Cookie Policy", href: "/cookie-policy" },
-    { label: "Disclaimer", href: "/disclaimer" },
-    { label: "Security", href: "/security" },
-  ];
-
+export default function CTA() {
   return (
-    <footer className="bg-paper-2 border-t border-rule">
-      <div className="mx-auto max-w-7xl px-6 lg:px-8 py-16">
-        {/* Top: editorial colophon */}
-        <div className="grid lg:grid-cols-[1.5fr_1fr_1fr_1fr] gap-10 lg:gap-14 pb-12 border-b border-rule">
-          <div>
-            <a href="/" className="font-serif text-[26px] font-medium tracking-[-0.01em] text-ink">
-              Tender<span className="text-accent">·</span>Path
-            </a>
-            <p className="mt-5 text-[14px] text-ink-2 leading-[1.6] max-w-sm">
-              UN procurement readiness, scored. Decoding the maze for vendors
-              across the global south.
-            </p>
-            <p className="mt-5 font-mono text-[10px] tracking-[0.08em] uppercase text-mute leading-relaxed">
-              Amman · Beirut<br />
-              Built {new Date().getFullYear()}
-            </p>
-          </div>
-
-          <FooterColumn title="Services" links={product} />
-          <FooterColumn title="Resources" links={resources} />
-          <FooterColumn title="Company" links={company} />
-        </div>
-
-        {/* Bottom: legal strip */}
-        <div className="mt-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <p className="font-mono text-[10px] tracking-[0.08em] text-mute">
-            © {new Date().getFullYear()} TenderPath. All rights reserved.
+    <section id="cta" className="bg-ink py-16 sm:py-20 lg:py-28 relative overflow-hidden">
+      <div
+        aria-hidden
+        className="absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle at 20% 30%, #fff 1px, transparent 1px), radial-gradient(circle at 80% 70%, #fff 1px, transparent 1px)",
+          backgroundSize: "32px 32px",
+        }}
+      />
+      <div className="mx-auto max-w-4xl px-5 sm:px-6 lg:px-8 relative">
+        <div className="border border-paper-2/20 p-7 sm:p-10 lg:p-16">
+          <p className="font-mono text-[10px] sm:text-[11px] tracking-[0.16em] sm:tracking-[0.18em] uppercase text-accent-2 mb-5 sm:mb-6">
+            Closing notice
           </p>
-          <div className="flex flex-wrap gap-x-5 gap-y-1">
-            {legal.map((l) => (
-              <a
-                key={l.label}
-                href={l.href}
-                className="font-mono text-[10px] tracking-[0.06em] uppercase text-ink-3 hover:text-ink transition-colors"
-              >
-                {l.label}
-              </a>
-            ))}
+          <h2 className="font-serif text-[32px] sm:text-[44px] lg:text-[56px] font-normal leading-[1.07] sm:leading-[1.05] tracking-[-0.02em] text-paper text-balance mb-5 sm:mb-6">
+            Stop chasing tenders<br />
+            you shouldn&rsquo;t <em className="italic text-accent-2 font-serif">chase</em>.
+          </h2>
+          <p className="text-[14.5px] sm:text-[15px] lg:text-[16px] text-paper-2/70 leading-[1.6] mb-8 sm:mb-10 max-w-xl">
+            Five minutes. The free assessment tells you where you stand, what gaps to fix, and which tenders are worth your week of evenings — before you spend them.
+          </p>
+
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-4 sm:gap-6 pt-5 sm:pt-6 border-t border-paper-2/15">
+            <a
+              href="/assessment"
+              className="inline-flex items-center justify-center sm:justify-start gap-3 bg-paper px-6 sm:px-8 py-4 text-[14px] font-medium text-ink hover:bg-accent-2 hover:text-ink transition-colors"
+            >
+              Run the free assessment
+              <span className="font-mono text-[13px]">→</span>
+            </a>
+            <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-paper-2/50 self-center sm:self-auto">
+              No card · No login · 5 min
+            </span>
           </div>
+
+          <p className="mt-8 sm:mt-10 pt-5 sm:pt-6 border-t border-paper-2/15 font-mono text-[10.5px] sm:text-[11px] text-paper-2/50">
+            Already a member?{" "}
+            <a href="/login" className="text-paper border-b border-paper hover:text-accent-2 hover:border-accent-2">
+              Sign in to your dashboard →
+            </a>
+          </p>
         </div>
       </div>
-    </footer>
-  );
-}
-
-function FooterColumn({
-  title,
-  links,
-}: {
-  title: string;
-  links: Array<{ label: string; href: string }>;
-}) {
-  return (
-    <div>
-      <h4 className="font-mono text-[10px] tracking-[0.16em] uppercase text-accent mb-5">
-        {title}
-      </h4>
-      <ul className="space-y-3">
-        {links.map((link) => (
-          <li key={link.label}>
-            <a
-              href={link.href}
-              className="text-[13px] text-ink-2 hover:text-ink transition-colors"
-            >
-              {link.label}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </div>
+    </section>
   );
 }
