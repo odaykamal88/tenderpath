@@ -488,7 +488,7 @@ function PayPage() {
     <div className="min-h-screen" style={{ backgroundColor: "#fafaf7" }}>
       {/* Nav */}
       <nav className="border-b border-stone-200/70 bg-white/95 backdrop-blur-sm sticky top-0 z-50">
-        <div className="mx-auto max-w-lg px-6 flex h-14 items-center justify-between">
+        <div className="mx-auto max-w-lg px-5 sm:px-6 flex h-14 items-center justify-between">
           <Link
             href="/"
             className="text-[15px] font-semibold text-stone-900"
@@ -506,17 +506,17 @@ function PayPage() {
         </div>
       </nav>
 
-      <div className="mx-auto max-w-lg px-4 py-10 space-y-5">
+      <div className="mx-auto max-w-lg px-4 sm:px-5 py-8 sm:py-10 space-y-5">
         {/* Header */}
         <div className="px-1">
           <div
-            className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+            className="text-[10.5px] sm:text-[11px] font-semibold uppercase tracking-[0.16em] sm:tracking-[0.18em] text-stone-400"
             style={{ fontFamily: MONO }}
           >
             Checkout · payment
           </div>
           <h1
-            className="mt-1 text-[36px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+            className="mt-1 text-[30px] sm:text-[36px] leading-[1.05] font-medium text-stone-900 tracking-tight"
             style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
           >
             Complete your purchase
@@ -529,7 +529,7 @@ function PayPage() {
         <ContextCard context={context} />
 
         {/* Step 1 — plan */}
-        <div className="rounded-md border border-stone-200/70 bg-white p-5">
+        <div className="rounded-md border border-stone-200/70 bg-white p-4 sm:p-5">
           <div className="flex items-baseline gap-2.5 mb-4">
             <span
               className="text-[10px] font-semibold tabular-nums text-stone-400"
@@ -538,7 +538,7 @@ function PayPage() {
               01
             </span>
             <h2
-              className="text-[15px] font-semibold uppercase tracking-[0.15em] text-stone-700"
+              className="text-[13px] sm:text-[15px] font-semibold uppercase tracking-[0.13em] sm:tracking-[0.15em] text-stone-700"
               style={{ fontFamily: MONO }}
             >
               Select your plan
@@ -587,7 +587,7 @@ function PayPage() {
         </div>
 
         {/* Step 2 — method */}
-        <div className="rounded-md border border-stone-200/70 bg-white p-5">
+        <div className="rounded-md border border-stone-200/70 bg-white p-4 sm:p-5">
           <div className="flex items-baseline gap-2.5 mb-4">
             <span
               className="text-[10px] font-semibold tabular-nums text-stone-400"
@@ -596,7 +596,7 @@ function PayPage() {
               02
             </span>
             <h2
-              className="text-[15px] font-semibold uppercase tracking-[0.15em] text-stone-700"
+              className="text-[13px] sm:text-[15px] font-semibold uppercase tracking-[0.13em] sm:tracking-[0.15em] text-stone-700"
               style={{ fontFamily: MONO }}
             >
               Choose how to pay
@@ -609,7 +609,7 @@ function PayPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`rounded-sm py-2 text-[10.5px] font-semibold uppercase tracking-[0.15em] transition-colors ${
+                className={`rounded-sm py-2.5 sm:py-2 text-[10.5px] font-semibold uppercase tracking-[0.13em] sm:tracking-[0.15em] transition-colors ${
                   activeTab === tab.id
                     ? "bg-white text-stone-900 shadow-sm"
                     : "text-stone-500 hover:text-stone-700"
@@ -630,7 +630,7 @@ function PayPage() {
 
         {/* After payment */}
         {activeTab !== "card" && (
-          <div className="rounded-md border border-stone-200/70 bg-white p-5">
+          <div className="rounded-md border border-stone-200/70 bg-white p-4 sm:p-5">
             <div className="flex items-baseline gap-2.5 mb-4">
               <span
                 className="text-[10px] font-semibold tabular-nums text-stone-400"
@@ -639,7 +639,7 @@ function PayPage() {
                 03
               </span>
               <h2
-                className="text-[15px] font-semibold uppercase tracking-[0.15em] text-stone-700"
+                className="text-[13px] sm:text-[15px] font-semibold uppercase tracking-[0.13em] sm:tracking-[0.15em] text-stone-700"
                 style={{ fontFamily: MONO }}
               >
                 After payment
