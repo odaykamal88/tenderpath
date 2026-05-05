@@ -37,6 +37,9 @@ const SLUG_KEYWORDS: Record<SectorSlug, string[]> = {
     "digital", "saas", "cloud", "cyber", "data center", "hardware",
     "computing", "internet service", "web develop", "mobile app",
     "ict", "platform develop", "system integrat", "database", "devops",
+    "it equipment", "ict equipment", "ict hardware", "hardware and software",
+    "computer desktop", "computer desktops", "computer equipment", "laptop",
+    "laptops", "network equipment", "digital media service",
     "technolog",
   ],
   education: [
@@ -364,6 +367,16 @@ export function cpvCodeToSlug(code: string | null | undefined): SectorSlug | nul
   return CPV_PREFIX_TO_SLUG.find(([re]) => re.test(digits))?.[1] ?? null;
 }
 
+function keywordMatches(haystack: string, keyword: string): boolean {
+  // Avoid tiny acronym false positives: "ict" should not match "district".
+  // Longer phrase fragments stay substring-based because many source labels
+  // are irregular ("technological", "programme management", UNSPSC text).
+  if (/^[a-z0-9]{2,3}$/i.test(keyword)) {
+    return new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(haystack);
+  }
+  return haystack.includes(keyword);
+}
+
 /**
  * Classify a tender into zero or more sector slugs based on its raw
  * sector string plus title/description context. Multi-label because a
@@ -416,7 +429,7 @@ export function normalizeSector(
   for (const slug of SECTOR_SLUGS) {
     if (hits.has(slug)) continue;
     for (const kw of SLUG_KEYWORDS[slug]) {
-      if (haystack.includes(kw)) {
+      if (keywordMatches(haystack, kw)) {
         hits.add(slug);
         break;
       }

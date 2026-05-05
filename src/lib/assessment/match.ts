@@ -641,6 +641,7 @@ export async function matchTenders(
   // to surface a handful of highly relevant geo-open opportunities than an
   // empty page because the user's country has no open notices today.
   const countryArr = [...countrySet];
+  const regionalArr = [...regionalSet];
   const strictProbe = await sql`
     SELECT COUNT(*)::int AS n FROM tenders
     WHERE status='open' AND deadline >= CURRENT_DATE
@@ -653,6 +654,9 @@ export async function matchTenders(
   const regtechSignal = detectRegtechSignal(analysis);
   const effectiveUserSlugs = new Set(userSlugs);
   if (regtechSignal && !effectiveUserSlugs.has("it")) effectiveUserSlugs.add("it" as SectorSlug);
+  const primarySlug = (SECTOR_SLUGS as string[]).includes(analysis.detected_industry ?? "")
+    ? analysis.detected_industry as SectorSlug
+    : null;
   const primaryIsLanguageServices = (analysis.detected_industry ?? "").toLowerCase() === "language_services";
   const explicitLanguageServices = (analysis.sectors ?? []).some((sector) => /^(language services|translation|interpretation)$/i.test(sector.trim()));
   const userWantsLanguageServices = primaryIsLanguageServices || explicitLanguageServices;
@@ -680,6 +684,9 @@ export async function matchTenders(
       "document management", "records management", "content management", "ecm", "edms", "dms",
       "document control", "archiving", "enterprise content", "regulatory technology", "regtech",
       "compliance software", "contract management", "procurement software", "workflow automation",
+      "it equipment", "ict equipment", "ict hardware", "hardware and software",
+      "computer desktop", "computer desktops", "computer equipment", "laptop", "laptops",
+      "network equipment", "digital media service",
     ],
     education: ["education", "training", "curriculum", "learning", "teacher", "school"],
     healthcare: [
@@ -804,6 +811,21 @@ export async function matchTenders(
       LIMIT 400
     `;
     for (const r of strictCountryRows) if (!byId.has(r.id as number)) byId.set(r.id as number, r as Row);
+  }
+
+  if (!acceptsGlobal && regionalArr.length) {
+    const regionalCountryRows = await sql`
+      SELECT id, title, description, agency, deadline, country, sector,
+             reference_id, requirements, experience_level, opportunity_type,
+             source_url, submission_language, estimated_value, source_name, created_at, updated_at
+      FROM tenders
+      WHERE status = 'open'
+        AND deadline >= CURRENT_DATE
+        AND LOWER(country) = ANY(${regionalArr}::text[])
+      ORDER BY deadline ASC
+      LIMIT 400
+    `;
+    for (const r of regionalCountryRows) if (!byId.has(r.id as number)) byId.set(r.id as number, r as Row);
   }
 
   // Baseline pool only when the per-slug pass yielded thin results — avoids
@@ -958,6 +980,7 @@ export async function matchTenders(
     // Lower threshold vs before — with canonical sector slugs even a partial
     // match should carry real signal. Token-only matches score ~25-30.
     if (sectorScore === 0 && tokenHits === 0) continue;
+    if (sectorScore > 0 && primarySlug && !tSlugs.has(primarySlug) && tokenHits === 0) continue;
     if (total < 15) continue;
 
     // Flat match_reasons (legacy compat)
@@ -1203,6 +1226,8 @@ export async function matchTenders(
       let tokenHits = 0;
       for (const tok of userTokens) if (tenderTokens.has(tok)) tokenHits++;
       const tokenScore = Math.min(25, tokenHits * 5);
+      const matchedAdjSlugs = [...adjacentSlugs].filter((s) => tSlugs.has(s));
+      const matchedExplicitAdjSlugs = matchedAdjSlugs.filter((s) => explicitAdjacentSlugs.has(s));
 
       const agencyTokens = new Set<string>(tokenize(tAgency));
       let agencyHits = 0;
@@ -1223,11 +1248,10 @@ export async function matchTenders(
       feedbackScore = Math.min(10, feedbackScore);
 
       if (sectorScore === 0 && tokenHits === 0) continue;
+      if (!matchedExplicitAdjSlugs.length && tokenHits === 0) continue;
       const total = Math.round((sectorScore + tokenScore + agencyScore + geoScore + feedbackScore) * 0.6);
       if (total < 10) continue;
 
-      const matchedAdjSlugs = [...adjacentSlugs].filter((s) => tSlugs.has(s));
-      const matchedExplicitAdjSlugs = matchedAdjSlugs.filter((s) => explicitAdjacentSlugs.has(s));
       const adjMatchReasons: string[] = [];
       if (matchedAdjSlugs.length) {
         adjMatchReasons.push(
@@ -1347,9 +1371,9 @@ function stripMeta(s: MatchedTender & { _strict: boolean; _regional: boolean; _g
 
 function finalMatchKey(tender: MatchedTender): string {
   const title = tender.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 120);
-  const agency = (tender.agency ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const country = (tender.country ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const deadline = tender.deadline ? new Date(tender.deadline).toISOString().slice(0, 10) : "";
-  return `${title}|${agency}|${deadline}`;
+  return `${title}|${country}|${deadline}`;
 }
 
 function dedupeFinalMatches(matches: MatchedTender[]): MatchedTender[] {

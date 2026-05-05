@@ -34,6 +34,7 @@ type LaunchProfile = {
   expectedIndustry: string;
   expectedSectors: string[];
   minTenderMatches: number;
+  minSectorAlignedTop5?: number;
   expectedServices: string[];
   includeConsultancies?: boolean;
   analysis: AIAnalysis;
@@ -102,6 +103,16 @@ function actionable(match: MatchedTender): boolean {
     && match.score >= 40
     && reasons.length > 0
     && match.opportunity_bucket,
+  );
+}
+
+function sectorAligned(match: MatchedTender): boolean {
+  const breakdown = match.structured_reasons?.scoreBreakdown;
+  return Boolean(
+    !match.is_adjacent
+    && breakdown
+    && (breakdown.sector ?? 0) >= 40
+    && match.structured_reasons?.matchedSectors?.length,
   );
 }
 
@@ -179,6 +190,8 @@ async function main() {
     });
     const topMatches = matches.slice(0, 5);
     const actionableCount = topMatches.filter(actionable).length;
+    const sectorAlignedCount = topMatches.filter(sectorAligned).length;
+    const minSectorAlignedTop5 = profile.minSectorAlignedTop5 ?? Math.min(2, profile.minTenderMatches);
     const ctaRoutes = Object.fromEntries(profile.expectedServices.map((service) => [service, routeExists(service)]));
 
     profiles.push({
@@ -202,6 +215,9 @@ async function main() {
         ok: matches.length >= profile.minTenderMatches,
         actionableTop5: actionableCount,
         actionableOk: actionableCount >= Math.min(3, topMatches.length),
+        sectorAlignedTop5: sectorAlignedCount,
+        minSectorAlignedTop5,
+        sectorAlignedOk: sectorAlignedCount >= minSectorAlignedTop5,
         top: topMatches.map((match) => ({
           title: match.title,
           agency: match.agency,
@@ -225,6 +241,7 @@ async function main() {
     classificationsOk: profiles.filter((profile) => profile.industry.ok || profile.sectors.ok).length,
     matchCountsOk: profiles.filter((profile) => profile.matches.ok).length,
     actionableOk: profiles.filter((profile) => profile.matches.actionableOk).length,
+    sectorAlignedOk: profiles.filter((profile) => profile.matches.sectorAlignedOk).length,
     ctasOk: profiles.filter((profile) => profile.ctas.ok).length,
     paymentReady: payment.missing.length === 0 && Number(payment.purchaseLogs.duplicate_stripe_sessions) === 0,
     opsReady: Number(payment.workOrders.total ?? 0) > 0,
@@ -234,6 +251,9 @@ async function main() {
     ...profiles
       .filter((profile) => !profile.matches.ok || !profile.matches.actionableOk)
       .map((profile) => `${profile.key}: weak match/actionability signal`),
+    ...profiles
+      .filter((profile) => !profile.matches.sectorAlignedOk)
+      .map((profile) => `${profile.key}: weak top-5 sector alignment`),
     ...payment.missing.map((key) => `payment env missing: ${key}`),
     Number(payment.purchaseLogs.duplicate_stripe_sessions) > 0 ? "purchase_logs has duplicate stripe_session_id rows" : null,
   ].filter(Boolean);
