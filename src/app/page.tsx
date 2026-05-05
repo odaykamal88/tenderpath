@@ -22,14 +22,14 @@ export default function Home() {
 
       {/* Stat bar — editorial, three columns, with sources */}
       <section className="bg-paper-2 border-y border-rule">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8 py-10">
-          <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-mute mb-6">
-            By the numbers · Annual Statistical Report on UN Procurement, 2024
+        <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8 py-8 sm:py-10">
+          <p className="font-mono text-[10px] tracking-[0.14em] sm:tracking-[0.16em] uppercase text-mute mb-5 sm:mb-6 leading-snug">
+            By the numbers · UN Procurement, 2024
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-y-8 gap-x-12">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-y-7 sm:gap-y-8 gap-x-12">
             {STAT_BAR.map((s) => (
-              <div key={s.label} className="border-l border-ink pl-5">
-                <p className="font-serif text-[44px] lg:text-[52px] font-normal leading-none tracking-[-0.02em] text-ink tabular-nums">
+              <div key={s.label} className="border-l border-ink pl-4 sm:pl-5">
+                <p className="font-serif text-[40px] sm:text-[44px] lg:text-[52px] font-normal leading-none tracking-[-0.02em] text-ink tabular-nums">
                   {s.value}
                 </p>
                 <p className="text-[13px] text-ink-2 mt-2 leading-snug">{s.label}</p>
