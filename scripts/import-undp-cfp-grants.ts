@@ -37,6 +37,7 @@ function brief(grant: UndpCfpGrant): Record<string, unknown> {
     sector: grant.sector,
     themes: grant.themes.slice(0, 5),
     orgs: grant.eligible_org_types,
+    desc: grant.description ? `${grant.description.length} chars` : "",
     title: grant.title.slice(0, 90),
   };
 }

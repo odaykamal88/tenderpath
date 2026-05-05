@@ -1,4 +1,5 @@
 /* Footer — paper-toned, editorial colophon */
+import Link from "next/link";
 
 export default function Footer() {
   const product = [
@@ -10,8 +11,8 @@ export default function Footer() {
   ];
 
   const resources = [
-    { label: "UN procurement guide", href: "#" },
-    { label: "UNGM registration", href: "#" },
+    { label: "UN procurement guide", href: "/faq" },
+    { label: "UNGM registration", href: "https://www.ungm.org/Account/Registration" },
     { label: "Founder note", href: "#builtby" },
     { label: "FAQ", href: "/faq" },
   ];
@@ -36,9 +37,9 @@ export default function Footer() {
         {/* Top: editorial colophon */}
         <div className="grid lg:grid-cols-[1.5fr_1fr_1fr_1fr] gap-10 lg:gap-14 pb-12 border-b border-rule">
           <div>
-            <a href="/" className="font-serif text-[26px] font-medium tracking-[-0.01em] text-ink">
+            <Link href="/" className="font-serif text-[26px] font-medium tracking-[-0.01em] text-ink">
               Tender<span className="text-accent">·</span>Path
-            </a>
+            </Link>
             <p className="mt-5 text-[14px] text-ink-2 leading-[1.6] max-w-sm">
               UN procurement readiness, scored. Decoding the maze for vendors
               across the global south.
@@ -61,13 +62,13 @@ export default function Footer() {
           </p>
           <div className="flex flex-wrap gap-x-5 gap-y-1">
             {legal.map((l) => (
-              <a
+              <Link
                 key={l.label}
                 href={l.href}
                 className="font-mono text-[10px] tracking-[0.06em] uppercase text-ink-3 hover:text-ink transition-colors"
               >
                 {l.label}
-              </a>
+              </Link>
             ))}
           </div>
         </div>
@@ -91,12 +92,23 @@ function FooterColumn({
       <ul className="space-y-3">
         {links.map((link) => (
           <li key={link.label}>
-            <a
-              href={link.href}
-              className="text-[13px] text-ink-2 hover:text-ink transition-colors"
-            >
-              {link.label}
-            </a>
+            {link.href.startsWith("http") ? (
+              <a
+                href={link.href}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[13px] text-ink-2 hover:text-ink transition-colors"
+              >
+                {link.label}
+              </a>
+            ) : (
+              <Link
+                href={link.href}
+                className="text-[13px] text-ink-2 hover:text-ink transition-colors"
+              >
+                {link.label}
+              </Link>
+            )}
           </li>
         ))}
       </ul>

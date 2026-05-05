@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { LandingTender } from "@/lib/landing/recent-tenders";
 
 /* ============================================================
    Hero — Direction A · Editorial dossier
@@ -131,16 +132,11 @@ function ReadinessCard() {
   );
 }
 
-const TICKER_ITEMS = [
-  ["WFP-LOG-26-0418", "Cold-chain logistics · Kenya", "$1.2–1.8M"],
-  ["UNHCR-WASH-26-0188", "Borehole drilling · Jordan", "$680K"],
-  ["UNICEF-ICT-26-0291", "School connectivity · Ghana", "$2.1M"],
-  ["UNDP-CONS-26-0117", "Health centre rehab · Uganda", "$950K"],
-  ["WHO-MED-26-0044", "Medical equipment supply · Egypt", "$1.4M"],
-  ["UN-PROC-26-0533", "Office furniture · Nairobi HQ", "$220K"],
-];
+function LiveTicker({ tenders }: { tenders: LandingTender[] }) {
+  const items = tenders.length
+    ? tenders
+    : [{ reference: "LIVE", title: "Recent UN opportunity", agency: "UN", country: "Global", value: null }];
 
-function LiveTicker() {
   return (
     <div
       className="border-y border-rule bg-paper-3 overflow-hidden"
@@ -172,13 +168,17 @@ function LiveTicker() {
             className="flex gap-10 whitespace-nowrap py-2.5 hover:[animation-play-state:paused]"
             style={{ animation: "ticker 40s linear infinite", width: "max-content" }}
           >
-            {[...TICKER_ITEMS, ...TICKER_ITEMS].map(([ref, title, val], i) => (
+            {[...items, ...items].map((item, i) => (
               <span key={i} className="flex items-center gap-3 text-[12px]">
                 <span className="font-mono text-[10px] text-accent tracking-wider">
-                  {ref}
+                  {item.reference}
                 </span>
-                <span className="text-ink-2">{title}</span>
-                <span className="font-mono text-[10px] text-mute">{val}</span>
+                <span className="text-ink-2">
+                  {item.title} · {item.country}
+                </span>
+                <span className="font-mono text-[10px] text-mute">
+                  {item.value ?? item.agency}
+                </span>
               </span>
             ))}
           </div>
@@ -188,10 +188,10 @@ function LiveTicker() {
   );
 }
 
-export default function Hero() {
+export default function Hero({ tenders }: { tenders: LandingTender[] }) {
   return (
     <>
-      <LiveTicker />
+      <LiveTicker tenders={tenders} />
       <section className="relative overflow-hidden bg-paper">
         <div className="mx-auto max-w-7xl px-6 lg:px-8 py-16 lg:py-24">
           <div className="grid lg:grid-cols-[1.1fr_1fr] gap-12 lg:gap-20 items-start">

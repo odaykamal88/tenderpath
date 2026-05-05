@@ -1,5 +1,6 @@
 import { ALL_COUNTRIES } from "@/lib/countries";
 import { normalizeSector, type SectorSlug } from "@/lib/crawlers/sector-map";
+import { fetchWithTimeout, withRetry } from "@/lib/crawlers/types";
 import { crawlUNDP } from "@/lib/crawlers/undp";
 
 export type UndpCfpGrant = {
@@ -36,6 +37,16 @@ const THEME_RULES: Array<[RegExp, string[]]> = [
   [/\b(education|training|capacity building|skills|youth)\b/i, ["education", "training", "capacity building", "youth"]],
 ];
 
+const ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": "\"",
+  "&#039;": "'",
+  "&#39;": "'",
+  "&nbsp;": " ",
+};
+
 function unique(values: Array<string | null | undefined>): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -48,6 +59,28 @@ function unique(values: Array<string | null | undefined>): string[] {
     out.push(trimmed);
   }
   return out;
+}
+
+function decodeEntities(value: string): string {
+  return value
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&[a-zA-Z#0-9]+;/g, (m) => ENTITIES[m] ?? " ");
+}
+
+function stripHtml(value: string | null | undefined): string {
+  if (!value) return "";
+  return decodeEntities(value)
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<\/(?:p|li|div|h\d)>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+\n/g, "\n")
+    .replace(/\n\s+/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function canonicalCountry(raw: string | null | undefined): string | null {
@@ -68,6 +101,42 @@ function valueRange(text: string): string | null {
   const smallGrant = text.match(/\b(?:usd|us\$|\$)\s?([\d,]+(?:\.\d+)?)\s?(?:-|to|–)\s?(?:usd|us\$|\$)?\s?([\d,]+(?:\.\d+)?)/i);
   if (smallGrant) return `$${smallGrant[1]}-$${smallGrant[2]}`;
   return null;
+}
+
+async function fetchDetailHtml(url: string): Promise<string> {
+  const resp = await withRetry(() => fetchWithTimeout(url, {
+    redirect: "follow",
+    headers: {
+      Accept: "text/html,application/xhtml+xml",
+      "Accept-Language": "en-US,en;q=0.9",
+      "User-Agent": "TenderPath/1.0 (+https://www.tenderpath.me)",
+    },
+  }, 30000), 2);
+  if (!resp.ok) throw new Error(`UNDP CFP detail HTTP ${resp.status}`);
+  return resp.text();
+}
+
+function extractIntroduction(html: string): string | null {
+  const intro = /<h2>\s*Introduction\s*<\/h2>([\s\S]*?)(?:<h2>|<section|<footer|$)/i.exec(html)?.[1];
+  const text = stripHtml(intro)
+    .replace(/\bPlease indicate whether you intend to submit a bid[\s\S]*$/i, "")
+    .trim();
+  return text.length >= 80 ? text.slice(0, 1800) : null;
+}
+
+function synthesizeDescription(args: {
+  title: string;
+  agency: string;
+  country: string | null;
+  deadline: string | null;
+  intro: string | null;
+}): string {
+  const pieces = [
+    `${args.agency} call for proposals in ${args.country ?? "Global"}: ${args.title}.`,
+    args.deadline ? `Submission deadline: ${args.deadline.slice(0, 10)}.` : null,
+    args.intro,
+  ];
+  return unique(pieces).join(" ").slice(0, 2200);
 }
 
 function isGrantLike(title: string, opportunityType: string | null | undefined): boolean {
@@ -95,7 +164,16 @@ export async function fetchUndpCfpGrants(limit = 50): Promise<{
 
     const country = canonicalCountry(tender.country);
     const region = country ? COUNTRY_TO_REGION.get(country.toLowerCase()) ?? null : null;
-    const description = tender.description?.trim() || null;
+    const detailHtml = await fetchDetailHtml(tender.source_url).catch(() => "");
+    const intro = detailHtml ? extractIntroduction(detailHtml) : null;
+    const description = tender.description?.trim()
+      || synthesizeDescription({
+        title: tender.title,
+        agency: tender.agency || "UNDP",
+        country,
+        deadline: tender.deadline,
+        intro,
+      });
     const text = `${tender.title} ${description ?? ""}`;
     const sector = normalizeSector("", tender.title, description)[0] ?? null;
 

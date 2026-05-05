@@ -174,7 +174,7 @@ function expandCountrySet(countries: string[]): Set<string> {
 // Pattern is conservative — substrings that only appear in recruitment.
 const INDIVIDUAL_ROLE_RE = /\b(individual contractor|individual consultant|ssa \d|special service agreement|short[- ]term expert|long[- ]term expert|roster of experts?|roster of consultants?|expert(s)? roster|consultant roster|national consultant|international consultant|junior consultant|senior consultant|home[- ]based consultant|un volunteer|unv [a-z]+|request for cv|call for cv|call for experts?|national professional officer)\b|(?:^|[-_/])ic[-_/]/i;
 
-const LANGUAGE_B2B_RE = /\b(translation|interpretation|interpreter|translator|linguistic|language service|locali[sz]ation|proofreading|editing|subtitling|voice[- ]over|dubbing|multilingual)\b/i;
+const LANGUAGE_B2B_RE = /\b(translat(?:e|ed|ing|ion|or)|interpret(?:ation|er|ing)?|linguistic|language service|locali[sz]ation|proofreading|editing|subtitling|voice[- ]over|dubbing|multilingual)\b/i;
 const B2B_TENDER_RE = /\b(call for tenders?|request for proposals?|rfp|rfq|provision of|services?|lta|framework|translation\/revision)\b/i;
 
 function isLanguageB2BTender(userSlugs: Set<SectorSlug>, text: string): boolean {
@@ -653,6 +653,9 @@ export async function matchTenders(
   const regtechSignal = detectRegtechSignal(analysis);
   const effectiveUserSlugs = new Set(userSlugs);
   if (regtechSignal && !effectiveUserSlugs.has("it")) effectiveUserSlugs.add("it" as SectorSlug);
+  const primaryIsLanguageServices = (analysis.detected_industry ?? "").toLowerCase() === "language_services";
+  const explicitLanguageServices = (analysis.sectors ?? []).some((sector) => /^(language services|translation|interpretation)$/i.test(sector.trim()));
+  const userWantsLanguageServices = primaryIsLanguageServices || explicitLanguageServices;
 
   // Consultancy tenders (ReliefWeb jobs feed, UN individual-consultant roster)
   // are individual-recruitment postings, not B2B procurement. Only gate on the
@@ -883,6 +886,16 @@ export async function matchTenders(
       new Set<SectorSlug>(normalizeSector(tSector, tTitle, `${reqs.join(" ")} ${tDescription}`.trim())),
       evidenceText,
     );
+    if (LANGUAGE_B2B_RE.test(evidenceText) && !userWantsLanguageServices) {
+      continue;
+    }
+    if (
+      primaryIsLanguageServices
+      && !tSlugs.has("language_services")
+      && !isLanguageB2BTender(effectiveUserSlugs, evidenceText)
+    ) {
+      continue;
+    }
     const procurement = buildProcurementMetadata({
       title: tTitle,
       rawSector: tSector,
@@ -1158,6 +1171,16 @@ export async function matchTenders(
         new Set<SectorSlug>(normalizeSector(tSector, tTitle, `${reqs.join(" ")} ${tDescription}`.trim())),
         adjEvidenceText,
       );
+      if (LANGUAGE_B2B_RE.test(adjEvidenceText) && !userWantsLanguageServices) {
+        continue;
+      }
+      if (
+        primaryIsLanguageServices
+        && !tSlugs.has("language_services")
+        && !isLanguageB2BTender(effectiveUserSlugs, adjEvidenceText)
+      ) {
+        continue;
+      }
       const procurement = buildProcurementMetadata({
         title: tTitle,
         rawSector: tSector,
