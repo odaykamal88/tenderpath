@@ -54,13 +54,13 @@ export default function AssessmentResults({
   data, onReset,
 }: { data: AssessmentData; onReset: () => void }) {
   const tier = TIER_INFO_BY_SLUG[data.recommended_tier];
-  const dims = data.readiness_dimensions;
+  const dims = data.readiness_dimensions as Partial<ReadinessDimensions> & Record<string, number | undefined>;
   const dimensionEntries = [
-    { label: "Sector fit", score: dims.technical_capability ?? 0 },
-    { label: "Geography", score: dims.geographic_reach ?? 0 },
-    { label: "Compliance", score: dims.compliance_readiness ?? 0 },
-    { label: "Track record", score: dims.experience_relevance ?? 0 },
-    { label: "Documentation", score: dims.financial_stability ?? 0 },
+    { label: "Sector fit", score: dims.sector_fit ?? dims.sector ?? 0 },
+    { label: "Geography", score: dims.geography ?? 0 },
+    { label: "Compliance", score: dims.compliance ?? 0 },
+    { label: "Track record", score: dims.experience ?? 0 },
+    { label: "Documentation", score: dims.documentation ?? 0 },
   ];
 
   return (
@@ -172,14 +172,14 @@ export default function AssessmentResults({
                 </span>
                 <div>
                   <h3 className="font-serif text-[18px] text-ink leading-snug mb-1.5">
-                    {gap.gap}
+                    {gap.title}
                   </h3>
                   <p className="text-[13px] text-ink-2 leading-[1.6]">
-                    {gap.fix}
+                    {gap.description}
                   </p>
-                  {gap.action_steps[0] && (
+                  {gap.action && (
                     <p className="font-mono text-[10px] tracking-[0.04em] text-ink-3 mt-2">
-                      → {gap.action_steps[0]}
+                      → {gap.action}
                     </p>
                   )}
                 </div>
@@ -225,7 +225,7 @@ export default function AssessmentResults({
                   <p className="font-mono text-[10px] tracking-[0.04em] text-ink-3">
                     {t.agency}
                     {t.country ? ` · ${t.country}` : ""}
-                    {t.reference_id ? ` · ${t.reference_id}` : ""}
+                    {t.reference ? ` · ${t.reference}` : ""}
                   </p>
                 </div>
                 <p className="hidden lg:block font-mono text-[10px] tracking-[0.04em] text-ink-3">
@@ -233,15 +233,15 @@ export default function AssessmentResults({
                 </p>
                 <div className="text-right">
                   <p className="font-serif text-[20px] leading-none text-ink tabular-nums">
-                    {t.score ?? "—"}
+                    {t.match_score ?? "—"}
                   </p>
                   <p className="font-mono text-[9px] tracking-[0.08em] uppercase text-mute mt-0.5">
                     Fit
                   </p>
                 </div>
-                {t.source_url && (
+                {t.url && (
                   <a
-                    href={t.source_url}
+                    href={t.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-mono text-[10px] tracking-[0.1em] uppercase text-ink hover:text-accent border-b border-ink hover:border-accent pb-0.5 whitespace-nowrap"
@@ -280,12 +280,12 @@ export default function AssessmentResults({
                 <div>
                   <p className="text-[14px] text-ink mb-1">{g.title}</p>
                   <p className="font-mono text-[10px] tracking-[0.04em] text-ink-3">
-                    {g.agency}{g.sector ? ` · ${g.sector}` : ""}
+                    {g.donor}{g.theme ? ` · ${g.theme}` : ""}
                   </p>
                 </div>
-                {g.source_url && (
+                {g.url && (
                   <a
-                    href={g.source_url}
+                    href={g.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-mono text-[10px] tracking-[0.1em] uppercase text-ink hover:text-accent border-b border-ink hover:border-accent pb-0.5"
