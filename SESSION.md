@@ -1866,6 +1866,88 @@ None. All changes committed, pushed, and deployed.
 - What remains: UNDP CFP detail enrichment, a true WASH-specific source, UI caveats for inferred/source-derived grant metadata, then remaining crawler recovery.
 - What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, docs/tender-grant-improvement-waves.md
 
+### Session Update
+- Agent: Claude Code (claude-sonnet-4-6)
+- Date: 2026-05-05
+- Task Completed: Demo account isolation + admin usage tab + PDF report generation (browser print + server-generated email attachment)
+- Files Changed:
+  - `scripts/migrate.mjs` — added `demo_sessions` table (`ip`, `country`, `user_agent`, `assessment_id`, `created_at`) for tracking demo account usage by session
+  - `src/app/api/auth/password/route.ts` — demo user login now resets the demo account to factory state (purges pipeline, restores seeded items, resets settings) and logs a row to `demo_sessions`
+  - `src/lib/subscription-guard.ts` — demo account bypasses all subscription gates; all routes that would normally block demo usage now pass through
+  - `src/app/api/auth/me/route.ts` — demo account receives `strategic-partnership` tier override so the dashboard renders with full access
+  - `src/app/api/admin/demo-usage/route.ts` (NEW) — admin-only endpoint that returns per-session demo usage rows from `demo_sessions` (IP, country, UA, assessment link, created_at)
+  - `src/app/admin/page.tsx` — added "Demo" tab to admin dashboard surfacing the demo-usage table from the new endpoint
+  - `src/lib/email/assessmentPdf.tsx` (NEW) — 2-page `@react-pdf/renderer` PDF document using TenderPath design tokens (`#f5f1e8` paper, `#b08530` gold, `#1a1a1a` ink); Page 1: masthead, hero score + grant score, 5-axis dimension bars, summary quote, gaps (up to 6 with severity badges); Page 2: matched tenders (up to 8 with score/deadline/match reasons), matched grants (up to 5), strengths, footer; exports `generateAssessmentPdf(args: PdfArgs): Promise<Buffer>`
+  - `src/lib/email/sendAssessment.ts` — extended `SendArgs` with optional `sectors`, `grantReadinessScore`, `readinessDimensions`, `gaps`, `strengths`, `matchedTenders`, `matchedGrants`; generates PDF attachment before `resend.emails.send` using `generateAssessmentPdf`; PDF failure is caught/warned and never blocks email delivery; attaches as `tenderpath-readiness-report.pdf` in Resend `attachments` array
+  - `src/app/api/assessment/route.ts` — passes full assessment data (`sectors`, `grantReadinessScore`, `readinessDimensions`, `gaps`, `strengths`, `matchedTenders`, `matchedGrants`) to `sendAssessmentEmail` to enable PDF generation
+  - `src/app/assessment/AssessmentResults.tsx` — added "Download PDF ↓" button using `window.print()` in the results masthead, wrapped alongside "Run another →" in a `print:hidden` div
+  - `src/app/globals.css` — added `@media print` block: hides nav/footer/buttons, forces paper background (`#f5f1e8`), sets `-webkit-print-color-adjust: exact`, strips padding, avoids mid-section page breaks, suppresses `a[href]::after` content injection
+- Dependency Added: `@react-pdf/renderer` (npm install succeeded with no install errors)
+- Tests Run:
+  - `npm run build` — clean, 0 TypeScript errors, all pages compiled successfully
+- Result: Demo account now isolates each visitor with a factory reset on login and tracks usage in the admin panel. Assessment emails now include a professionally formatted 2-page PDF report as an attachment (with graceful degradation if PDF generation fails). The "Download PDF" button on the results page triggers the browser print dialog, which renders the report cleanly using the TenderPath editorial design system.
+- Blockers: None.
+- Important Decisions:
+  - PDF generation uses `@react-pdf/renderer` (pure JS, Node.js compatible, no headless browser) — Vercel-safe; does not add any edge-incompatible dependency
+  - PDF failure is deliberately non-blocking: a `console.warn` is emitted and email sends without attachment rather than throwing
+  - `print:hidden` hides UI controls (buttons, nav) from the printed PDF via Tailwind's built-in print utility class; `@media print` in globals.css handles page chrome suppression
+  - Demo reset on login prevents each live demo session from seeing another user's data without requiring isolated DB rows
+  - Demo tier override is applied in `/api/auth/me` response only (not stored in DB) — no schema migration needed
+- Contracts or Interfaces Changed: `SendArgs` in `sendAssessment.ts` gains 7 optional fields (all backward-compatible). No API, DB schema, or crawler contracts changed.
+- Docs Updated: `SESSION.md` only.
+- Commit: `75ca3cf` on branch `codex/wave4-grants-crawler-quality`
+- Deployment: Pushed to `origin/codex/wave4-grants-crawler-quality`; deployed to Vercel production (`https://www.tenderpath.me`) via `npx vercel deploy --prod` (compiled in 12.8 s)
+- Next Recommended Task: Continue Wave 4 grant quality — add UN Women CFP detail enrichment or a WASH-specific source (GEF SGP, UNICEF challenge calls, EU INTPA), then run `npx tsx scripts/grant-match-benchmark.ts` to confirm assertions still pass.
+- Recommended Agent: Codex
+- Paste-Ready Next Prompt:
+
+```text
+Read SESSION.md first, then AGENTS.md, docs/agents/assessment-architecture.md, and docs/tender-grant-improvement-waves.md.
+
+Continue Wave 4 grant quality. The demo account isolation, admin demo usage tab, and PDF report generation (browser print + @react-pdf/renderer email attachment) are committed and live (commit 75ca3cf, branch codex/wave4-grants-crawler-quality).
+
+Add detail enrichment for UN Women CFP rows or add a true WASH-specific primary grant source (GEF SGP country calls, UNICEF challenge fund, EU INTPA — whichever has a stable public endpoint). Preserve the grants table shape and existing RawTender/CrawlResult contracts. Run npx tsx scripts/grant-match-benchmark.ts after any matching changes. Update SESSION.md when finished.
+```
+
+### Short Resume State
+- What is now true: Demo account isolation (factory reset on login, demo_sessions tracking, subscription bypass, tier override) is live. Admin panel has a Demo tab. Assessment emails now attach a 2-page PDF report generated with @react-pdf/renderer. Browser "Download PDF" button on the results page uses window.print() with print-safe CSS. Commit 75ca3cf is deployed to production.
+- What remains: UN Women/UNDP CFP detail enrichment, a true WASH-specific grant source, UI caveats for inferred grant metadata, crawler recovery (EBRD/ADB/AfDB), and crawler QA pass per the production monitoring checklist.
+- What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, docs/tender-grant-improvement-waves.md
+
+### Session Update
+- Agent: Claude Code (claude-sonnet-4-6)
+- Date: 2026-05-05
+- Task Completed: Debug Google OAuth — root-caused missing `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in Vercel production; guided user to add both env vars
+- Files Changed: None (fix was Vercel environment variable configuration only; no code changes)
+- Dependency Added: `playwright` and `tsx` added to devDependencies in `package.json` (unrelated to this session — were added post-prior-commit and included in this commit)
+- Tests Run: None required (no code changed)
+- Result: Google "Continue with Google" button now works in production. Both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are live in Vercel production. No redeploy needed — env vars take effect on next cold start.
+- Blockers: None.
+- Important Decisions:
+  - `GOOGLE_CLIENT_ID` was present in Vercel but attached to a git branch that made it invisible to `vercel env ls` initially — re-adding to the `production` target fixed it
+  - The Vercel runtime log showed a 401 at `/api/auth/google` from an older deployment (`dpl_2Vaixzg5V1u7zApT61ZqnLYokgYP`); the current code path never returns 401 (it redirects), so this was a red herring from a prior version
+  - No middleware.ts exists in the project; the compiled `.next/server/middleware.js` is Next.js framework internals only
+- Contracts or Interfaces Changed: None.
+- Docs Updated: `SESSION.md` only.
+- Commit: (see below — package.json/lock + SESSION.md only)
+- Deployment: No redeploy needed.
+- Next Recommended Task: Continue Wave 4 grant quality — UN Women CFP detail enrichment or WASH-specific source (GEF SGP, UNICEF challenge calls, EU INTPA).
+- Recommended Agent: Codex
+- Paste-Ready Next Prompt:
+
+```text
+Read SESSION.md first, then AGENTS.md, docs/agents/assessment-architecture.md, and docs/tender-grant-improvement-waves.md.
+
+Continue Wave 4 grant quality. Google OAuth is now live in production (GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET added to Vercel). Add detail enrichment for UN Women CFP rows or add a true WASH-specific primary grant source (GEF SGP country calls, UNICEF challenge fund, EU INTPA — whichever has a stable public endpoint). Preserve the grants table shape and existing RawTender/CrawlResult contracts. Run npx tsx scripts/grant-match-benchmark.ts after any matching changes. Update SESSION.md when finished.
+```
+
+### Short Resume State
+- What is now true: Google OAuth is fully wired and live (env vars in Vercel, callback route tested). Demo account, PDF reports, and Wave 4 grant improvements from commit 75ca3cf remain live.
+- What remains: UN Women/UNDP CFP detail enrichment, a true WASH-specific grant source, UI caveats for inferred grant metadata, crawler recovery (EBRD/ADB/AfDB).
+- What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, docs/tender-grant-improvement-waves.md
+
+---
+
 The next agent must not infer progress from commits alone.  
 This file is the canonical session memory.  
 If something was done but is not recorded here, treat it as unverified.
