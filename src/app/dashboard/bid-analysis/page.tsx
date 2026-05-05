@@ -94,7 +94,7 @@ export default function BidAnalysisPage() {
       title="Unlock bid analysis"
       description="Preview the decision queue and process flow. A subscription opens the full bid/no-bid workspace so your team can qualify tenders before writing proposals."
     >
-      <div className="px-8 py-8 max-w-[1400px]">
+      <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-[1400px]">
         {/* Sub-tab bar */}
         <div className="flex gap-6 mb-7 border-b border-stone-200/70">
           <Link
@@ -126,7 +126,7 @@ export default function BidAnalysisPage() {
               <span style={{ fontFamily: MONO }}>$39 per analysis</span>
             </div>
             <h1
-              className="mt-1 text-[56px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+              className="mt-1 text-[36px] sm:text-[48px] lg:text-[56px] leading-[1.05] font-medium text-stone-900 tracking-tight"
               style={{ fontFamily: SERIF }}
             >
               Decide <em className="italic text-stone-500">before</em> you write.
