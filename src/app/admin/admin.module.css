@@ -351,6 +351,50 @@
 .woNotify   { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--color-ink-3); }
 .woNotify input { width: 13px; height: 13px; accent-color: var(--color-accent); }
 
+.adminSearch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.adminSearchInput {
+  min-width: min(420px, 100%);
+  flex: 1;
+  height: 36px;
+  border: 1px solid var(--color-rule);
+  border-radius: 4px;
+  background: var(--color-paper-3);
+  color: var(--color-ink);
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+}
+.adminSearchInput:focus {
+  outline: 2px solid rgba(176,133,48,0.18);
+  border-color: var(--color-accent);
+}
+.sessionSubtle {
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-mute, var(--color-ink-3));
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sessionError {
+  margin-top: 5px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-red);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
 .woList { display: flex; flex-direction: column; gap: 14px; }
 .woCard {
   display: grid;

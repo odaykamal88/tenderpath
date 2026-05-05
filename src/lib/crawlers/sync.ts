@@ -76,7 +76,12 @@ const SOURCE_PRIORITY: Record<string, number> = {
 };
 
 function normalizeCountryName(country: string): string {
-  const trimmed = country.trim();
+  const trimmed = country
+    .trim()
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&uuml;/gi, "ü")
+    .replace(/&amp;/gi, "&");
   const key = trimmed.toLowerCase();
   if (["turkiye", "türkiye"].includes(key)) return "Turkey";
   if (key === "syrian arab republic") return "Syria";

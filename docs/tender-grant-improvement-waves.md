@@ -239,3 +239,9 @@ Goal: make weak versus strong matches obvious to users.
 - Show grant caveats near grant cards: country unknown, eligibility unclear, domestic-scope risk, theme inferred from title only.
 - Separate grant cards into strong/direct, strategic/global, and watchlist.
 - Prefer “no strong grants yet” over filling the dashboard with weak rows.
+
+## Admin Dashboard Backlog
+
+- Add a separate admin tab for logged-in assessment sessions.
+- Show the email address entered during assessment, assessment/session timestamp, completion state, and whether matched tenders/grants were generated.
+- Make the view searchable/filterable by email so support can trace a user's assessment-to-dashboard path quickly.
