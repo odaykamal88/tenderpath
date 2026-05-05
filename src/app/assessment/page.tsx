@@ -214,36 +214,6 @@ export default function AssessmentPage() {
     return () => { if (msgTimer.current) clearInterval(msgTimer.current); };
   }, [phase]);
 
-  // Write bridge data to localStorage so the dashboard can seed pipeline_items
-  // when the user navigates there after completing an assessment.
-  useEffect(() => {
-    if (phase !== "results" || !results) return;
-    try {
-      const bridge = {
-        assessment_id: results.id,
-        email: results.email,
-        company_name: results.company_name,
-        readiness_score: results.readiness_score,
-        matched_tenders: results.matched_tenders.map((t) => ({
-          id: t.id,
-          title: t.title,
-          agency: t.agency,
-          deadline: t.deadline ?? null,
-          estimated_value:
-            typeof t.estimated_value === "number"
-              ? String(t.estimated_value)
-              : (t.estimated_value ?? null),
-          fit_score: t.score,
-          structured_reasons: t.structured_reasons ?? null,
-        })),
-        gaps: results.gaps.map((g) => ({ gap: g.gap, severity: g.severity })),
-      };
-      localStorage.setItem("tp_bridge", JSON.stringify(bridge));
-    } catch {
-      // Non-critical — dashboard auto-seed fallback will handle it
-    }
-  }, [phase, results]);
-
   const startCrawl = useCallback(async () => {
     if (!entryUrl.trim()) { setPhase("step1"); return; }
     setPhase("crawling");
@@ -426,7 +396,7 @@ export default function AssessmentPage() {
               <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-accent mb-4">
                 Reading your website
               </p>
-              <h2 className="font-serif text-[40px] font-normal leading-[1.05] tracking-[-0.02em] text-ink mb-3">
+              <h2 className="font-serif text-[28px] sm:text-[32px] lg:text-[40px] font-normal leading-[1.05] tracking-[-0.02em] text-ink mb-3">
                 Detecting your business profile…
               </h2>
               <p className="text-[14px] text-ink-2 mb-10">
@@ -464,7 +434,7 @@ export default function AssessmentPage() {
               <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-accent mb-4">
                 Running your assessment
               </p>
-              <h2 className="font-serif text-[40px] font-normal leading-[1.05] tracking-[-0.02em] text-ink mb-3">
+              <h2 className="font-serif text-[28px] sm:text-[32px] lg:text-[40px] font-normal leading-[1.05] tracking-[-0.02em] text-ink mb-3">
                 Scoring readiness and matching tenders…
               </h2>
               <p className="text-[14px] text-ink-2 mb-10">15–30 seconds.</p>
