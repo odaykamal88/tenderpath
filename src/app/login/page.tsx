@@ -235,14 +235,14 @@ function LoginForm() {
                     style={{ fontFamily: MONO }}
                   >
                     demo@tenderpath.me<br />
-                    TenderDemo2026!
+                    TenderDemo2025!
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
                     setEmail("demo@tenderpath.me");
-                    setPassword("TenderDemo2026!");
+                    setPassword("TenderDemo2025!");
                   }}
                   className="shrink-0 rounded-sm border border-orange-300 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-orange-700 hover:bg-orange-100/60 transition-colors"
                   style={{ fontFamily: MONO }}
@@ -310,7 +310,7 @@ function LoginForm() {
             </div>
             <button
               disabled={busy}
-              className="w-full rounded-sm bg-stone-900 px-4 py-2.5 text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:opacity-50"
+              className="w-full rounded-sm bg-stone-900 px-4 py-3 sm:py-2.5 text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:opacity-50"
             >
               {busy ? "Sending…" : "Send magic link →"}
             </button>
