@@ -1829,6 +1829,43 @@ None. All changes committed, pushed, and deployed.
 - What remains: EU detail enrichment, WASH/climate-specific non-U.S. grant sources, UI caveats for inferred/source-derived grant metadata, then remaining crawler recovery.
 - What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, docs/tender-grant-improvement-waves.md
 
+### Session Update
+- Agent: Codex
+- Date: 2026-05-05
+- Task Completed: Continued grant improvements by adding a conservative UNDP CFP grant importer, importing current future CFP rows, adding a Kenya civil-society benchmark, and improving geography priority for country-specific grants.
+- Files Changed:
+  - `src/lib/grants/undp-cfp.ts` — new helper that reuses the live UNDP procurement-notices source, filters to grant-like CFP/funding rows, normalizes country/region/theme/eligibility metadata, and preserves the existing grants contract.
+  - `scripts/import-undp-cfp-grants.ts` — new dry-run-first importer/upserter for UNDP CFP grants.
+  - `src/lib/assessment/match.ts` — added stronger country-specific geography priority and a cap for region-only matches so exact-country CFPs are not buried by broad regional/global grants.
+  - `scripts/grant-match-benchmark.ts` — added NGO civil-society Kenya scenario with assertions.
+  - `docs/tender-grant-improvement-waves.md` — documented UNDP CFP import, quality numbers, and remaining WASH gap.
+  - Database data change: ran `npx tsx scripts/import-undp-cfp-grants.ts --write --limit=30`, upserting 5 future UNDP CFP rows.
+- Tests Run:
+  - `npx tsx scripts/import-undp-cfp-grants.ts --limit=30` — dry-run mapped 5 future UNDP CFP rows from 565 scanned notices.
+  - `npx tsx scripts/import-undp-cfp-grants.ts --write --limit=30` — upserted 5 rows.
+  - `npx tsx scripts/audit-grant-quality.ts` — after import: 757 total grants, 652 open; UNDP CFP 5 / 5 open; source URLs 100%.
+  - `npx tsx scripts/grant-match-benchmark.ts` — assertions passed, including new Kenya civil-society scenario.
+  - `npx eslint src/lib/assessment/match.ts src/lib/grants/undp-cfp.ts scripts/import-undp-cfp-grants.ts scripts/grant-match-benchmark.ts` — passed.
+  - `npx tsc --noEmit` — passed.
+- Result: Tenderpath now has a third grant source family beyond Grants.gov and EU Funding & Tenders. Country-specific civil-society CFP rows can surface ahead of broad regional/global rows.
+- Blockers:
+  - UNDP CFP rows are list-derived and description-thin; detail-page enrichment remains useful.
+  - A true WASH-specific primary grant source is still needed.
+- Important Decisions:
+  - Keep UNDP CFP import deliberately narrow to avoid converting procurement/service notices into grants.
+  - Exclude grant-accounting, consultant, assessor, video-production, and roster procurements even when titles mention "grant".
+  - Boost exact-country grants and cap region-only matches to improve user trust for country-focused profiles.
+- Contracts or Interfaces Changed: None. Existing table/API shapes preserved; only additive scripts/helper and scoring behavior changed.
+- Docs Updated: `SESSION.md`, `docs/tender-grant-improvement-waves.md`.
+- Next Recommended Task: Add detail enrichment for UNDP CFP or add a true WASH-specific source such as GEF SGP country calls, UNICEF innovation/challenge calls, or EU INTPA calls if a stable source endpoint is found.
+- Recommended Agent: Codex
+- Paste-Ready Next Prompt: "Read SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, and docs/tender-grant-improvement-waves.md. Continue grant Wave 4 by enriching UNDP CFP detail rows or adding a true WASH-specific primary grant source, preserving the grants table shape and updating the benchmark."
+
+### Short Resume State
+- What is now true: Grants.gov, EU Funding & Tenders, and UNDP CFP are represented in grants. UNDP CFP added 5 open country-specific civil-society/funding rows. Grant scoring now gives exact-country grants priority over region-only/global alternatives.
+- What remains: UNDP CFP detail enrichment, a true WASH-specific source, UI caveats for inferred/source-derived grant metadata, then remaining crawler recovery.
+- What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, docs/tender-grant-improvement-waves.md
+
 The next agent must not infer progress from commits alone.  
 This file is the canonical session memory.  
 If something was done but is not recorded here, treat it as unverified.

@@ -1643,11 +1643,18 @@ export async function matchGrants(
 
     const geography = evaluateGrantGeography(g, userCountrySet);
     const fundingScope = inferGrantFundingScope(g);
+    const exactCountryGrant = grantExplicitCountries(g)
+      .map((value) => value.toLowerCase())
+      .some((value) => userCountrySet.has(value));
     score += geography.score;
     if (geography.mode === "direct") reasons.push(`Geography fit: ${geography.label ?? "selected country"}.`);
     else if (geography.mode === "global-open") reasons.push("Geography fit: global or regional opportunity.");
     else if (geography.mode === "mismatch") reasons.push(`Geography caveat: grant appears tied to ${geography.label}.`);
     else if (userCountrySet.size) reasons.push("Geography caveat: no country eligibility was listed.");
+    if (exactCountryGrant) {
+      score += 20;
+      reasons.push("Geography priority: country-specific opportunity.");
+    }
 
     if (fundingScope === "domestic" && countries.length > 0 && !includesUnitedStates) {
       score -= 14;
@@ -1675,9 +1682,14 @@ export async function matchGrants(
     const orgTypeMismatch = isNgoOnly && !!orgType && NON_NGO_TYPES.has(normalizeGrantOrgType(orgType));
     if (orgTypeMismatch) score = Math.min(score, 44);
 
-    const cappedScore = geography.mode === "mismatch" || (fundingScope === "domestic" && !includesUnitedStates)
+    const regionOnlyMatch = geography.mode === "direct" && userCountrySet.size > 0 && !exactCountryGrant;
+
+    let cappedScore = geography.mode === "mismatch" || (fundingScope === "domestic" && !includesUnitedStates)
       ? Math.min(score, 49)
       : score;
+    // Region-level grants are useful, but should not bury a country-specific
+    // CFP/grant with the same thematic fit.
+    if (regionOnlyMatch) cappedScore = Math.min(cappedScore, 84);
 
     scored.push({
       id: g.id as number,

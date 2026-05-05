@@ -54,6 +54,14 @@ const scenarios = [
     countries: ["Egypt"],
     expected: "Prefer global/international climate-energy grants; cap U.S.-domestic grant noise.",
   },
+  {
+    name: "NGO civil society in Kenya",
+    sectors: ["consulting", "education"],
+    orgType: "NGO",
+    devThemes: ["civil society", "capacity building", "gender", "livelihoods"],
+    countries: ["Kenya"],
+    expected: "Prefer country-specific UNDP CFP/civil-society calls over generic global grants.",
+  },
 ];
 
 function assertScenario(name: string, matches: MatchedGrant[]) {
@@ -90,6 +98,13 @@ function assertScenario(name: string, matches: MatchedGrant[]) {
     const topText = `${top.title} ${top.country ?? ""} ${top.region ?? ""} ${top.match_reasons?.join(" ") ?? ""}`.toLowerCase();
     if (!/energy|climate|environment|renewable/.test(text)) fail("missing climate/energy signal");
     if (!/middle east|north africa|iraq|global|energy|climate|environment/.test(topText)) fail("top match is not regionally or thematically credible");
+  }
+
+  if (name.includes("civil society in Kenya")) {
+    if (!matches.length) fail("expected at least one country-specific civil-society grant");
+    if (!/undp/.test(text)) fail("expected UNDP CFP source to appear");
+    if (!/kenya|sub-saharan africa/.test(text)) fail("missing Kenya/Sub-Saharan Africa geography signal");
+    if (!/civil society|capacity building|gender|livelihoods|women/.test(text)) fail("missing civil-society/livelihood rationale");
   }
 }
 

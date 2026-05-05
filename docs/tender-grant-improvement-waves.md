@@ -186,6 +186,40 @@ Remaining:
 - Obvious public EU topic-detail JSON paths returned the Angular app shell or 404 during this session; avoid brittle HTML scraping until a stable endpoint is confirmed.
 - WASH/Africa still lacks a true WASH-specific grant source in the current inventory; generic health grants are now demoted but should be supplemented with UNDP/GEF/SGP, EU INTPA, World Bank trust funds, or foundation calls.
 
+### UNDP CFP continuation — 2026-05-05
+
+Implemented:
+
+- Added `src/lib/grants/undp-cfp.ts` to convert grant-like UNDP procurement-notice rows into grants.
+- Added `scripts/import-undp-cfp-grants.ts`, dry-run-first, with a conservative filter:
+  - includes CFP/call-for-proposals, legal-aid service calls, women-led/SME support, microfinance, civil-society, and community-based grant-like rows;
+  - excludes service procurements that merely mention grants, such as grant-accounting automation, lead consultants, assessors, videos, rosters, and individual consultant calls.
+- Imported 5 future UNDP CFP rows.
+- Added an NGO civil-society Kenya benchmark scenario.
+- Updated grant scoring to give country-specific grant rows a stronger geography priority and cap region-only matches, so directly relevant CFPs are not buried under broader regional/global rows.
+
+Current data quality after UNDP CFP import:
+
+- Total grants: 757.
+- Open grants: 652.
+- Source split: Grants.gov 652 rows / 547 open; EU Funding & Tenders 100 / 100 open; UNDP CFP 5 / 5 open.
+- Themes and eligible org types remain at 91% populated.
+- Source URL remains 100%.
+
+Validation:
+
+- `npx tsx scripts/import-undp-cfp-grants.ts --limit=30`
+- `npx tsx scripts/import-undp-cfp-grants.ts --write --limit=30`
+- `npx tsx scripts/audit-grant-quality.ts`
+- `npx tsx scripts/grant-match-benchmark.ts`
+- `npx eslint src/lib/assessment/match.ts src/lib/grants/undp-cfp.ts scripts/import-undp-cfp-grants.ts scripts/grant-match-benchmark.ts`
+- `npx tsc --noEmit`
+
+Remaining:
+
+- UNDP CFP rows are list-derived and currently thin on descriptions; detail-page enrichment should be added if this source proves valuable.
+- Still need a true WASH-specific primary grant source; this adds civil-society and local-implementer CFP coverage rather than WASH-specific funding.
+
 ## Wave 5 — Benchmark And Regression Tests
 
 Goal: prevent quality drift.
