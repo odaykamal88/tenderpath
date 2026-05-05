@@ -178,7 +178,7 @@ export default function VaultPage() {
       title="Unlock the document vault"
       description="Preview the compliance library and expiry tracking. A subscription lets you store reusable bid documents and connect them to readiness gaps."
     >
-      <div className="px-8 py-8 max-w-[1400px]">
+      <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-[1400px]">
         {/* Header */}
         <header className="flex items-end justify-between gap-6 mb-2">
           <div>
@@ -188,7 +188,7 @@ export default function VaultPage() {
               <span style={{ fontFamily: MONO }}>{loading ? "loading…" : `${docs.length} on file`}</span>
             </div>
             <h1
-              className="mt-1 text-[56px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+              className="mt-1 text-[36px] sm:text-[48px] lg:text-[56px] leading-[1.05] font-medium text-stone-900 tracking-tight"
               style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
             >
               Document <em className="italic text-stone-500">vault</em>
