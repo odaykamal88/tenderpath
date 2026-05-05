@@ -62,6 +62,14 @@ const scenarios = [
     countries: ["Kenya"],
     expected: "Prefer country-specific UNDP CFP/civil-society calls over generic global grants.",
   },
+  {
+    name: "Women's rights NGO in Moldova",
+    sectors: ["consulting", "education"],
+    orgType: "NGO",
+    devThemes: ["gender", "women", "civil society", "livelihoods", "economic empowerment"],
+    countries: ["Moldova"],
+    expected: "Prefer UN Women country-specific CFPs over generic global civil-society grants.",
+  },
 ];
 
 function assertScenario(name: string, matches: MatchedGrant[]) {
@@ -105,6 +113,13 @@ function assertScenario(name: string, matches: MatchedGrant[]) {
     if (!/undp/.test(text)) fail("expected UNDP CFP source to appear");
     if (!/kenya|sub-saharan africa/.test(text)) fail("missing Kenya/Sub-Saharan Africa geography signal");
     if (!/civil society|capacity building|gender|livelihoods|women/.test(text)) fail("missing civil-society/livelihood rationale");
+  }
+
+  if (name.includes("Moldova")) {
+    if (!matches.length) fail("expected at least one Moldova/gender grant");
+    if (!/un women/.test(text)) fail("expected UN Women CFP source to appear");
+    if (!/moldova|eastern europe/.test(text)) fail("missing Moldova/Eastern Europe geography signal");
+    if (!/gender|women|civil society|livelihood|economic empowerment/.test(text)) fail("missing gender/civil-society/livelihood rationale");
   }
 }
 
