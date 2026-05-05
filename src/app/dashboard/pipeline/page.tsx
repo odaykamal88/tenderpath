@@ -262,23 +262,24 @@ export default function PipelinePage() {
       </div>
 
       {/* Header */}
-      <header className="flex items-end justify-between gap-6 mb-2">
-        <div>
-          <div className="flex items-center gap-3 text-[11px] text-stone-500">
-            <span className="font-semibold uppercase tracking-[0.18em] text-stone-400">Workbench</span>
+      <header className="flex flex-wrap items-end justify-between gap-3 sm:gap-6 mb-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 sm:gap-3 text-[10.5px] sm:text-[11px] text-stone-500">
+            <span className="font-semibold uppercase tracking-[0.15em] sm:tracking-[0.18em] text-stone-400">Workbench</span>
             <span className="text-stone-300">·</span>
             <span style={{ fontFamily: MONO }}>
               {refreshedAt ? `Refreshed ${refreshedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Loading…"}
             </span>
           </div>
           <h1
-            className="mt-1 text-[56px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+            className="mt-1 text-[36px] sm:text-[48px] lg:text-[56px] leading-[1.05] font-medium text-stone-900 tracking-tight"
             style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
           >
             Pipeline
           </h1>
-          <p className="mt-1 max-w-2xl text-[15px] leading-relaxed text-stone-600">
-            Drag tenders between stages. Use the buttons on each card to advance — or click <em>Why this match?</em> to see the evidence.
+          <p className="mt-1 max-w-2xl text-[13.5px] sm:text-[15px] leading-relaxed text-stone-600">
+            <span className="hidden sm:inline">Drag tenders between stages. Use the buttons on each card to advance — or click <em>Why this match?</em> to see the evidence.</span>
+            <span className="sm:hidden">Tap a card to expand. Use stage buttons to advance.</span>
           </p>
         </div>
         <button
