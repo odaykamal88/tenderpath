@@ -1,4 +1,4 @@
-/* WhyUs — six reasons, editorial two-column list */
+/* WhyUs — six reasons, editorial two-column list · mobile-tuned */
 
 const reasons = [
   {
@@ -35,40 +35,38 @@ const reasons = [
 
 export default function WhyUs() {
   return (
-    <section id="why-us" className="bg-paper py-20 lg:py-28">
-      <div className="mx-auto max-w-7xl px-6 lg:px-8">
+    <section id="why-us" className="bg-paper py-16 sm:py-20 lg:py-28">
+      <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="grid lg:grid-cols-[1fr_2fr] gap-10 lg:gap-16 mb-16 items-end">
+        <div className="grid lg:grid-cols-[1fr_2fr] gap-6 sm:gap-10 lg:gap-16 mb-12 sm:mb-16 items-end">
           <div>
-            <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-accent mb-5">
+            <p className="font-mono text-[10px] sm:text-[11px] tracking-[0.16em] sm:tracking-[0.18em] uppercase text-accent mb-4 sm:mb-5">
               Why us
             </p>
-            <h2 className="font-serif text-[40px] lg:text-[52px] font-normal leading-[1.0] tracking-[-0.02em] text-ink text-balance">
+            <h2 className="font-serif text-[34px] sm:text-[40px] lg:text-[52px] font-normal leading-[1.05] sm:leading-[1.0] tracking-[-0.02em] text-ink text-balance">
               Built to reduce wasted effort.
             </h2>
           </div>
-          <p className="text-[16px] text-ink-2 leading-[1.6] max-w-lg lg:pb-3">
-            New and emerging vendors get the same intelligence repeat winners
-            use — without the years of accumulated portal experience and
-            relationship capital.
+          <p className="text-[15px] sm:text-[16px] text-ink-2 leading-[1.6] max-w-lg lg:pb-3">
+            New and emerging vendors get the same intelligence repeat winners use — without the years of accumulated portal experience and relationship capital.
           </p>
         </div>
 
-        {/* Two-column reason grid */}
+        {/* Two-column reason grid (1-col on mobile) */}
         <div className="grid md:grid-cols-2 gap-x-12 gap-y-0 border-t border-rule">
           {reasons.map((r) => (
             <article
               key={r.n}
-              className="grid grid-cols-[44px_1fr] gap-5 py-8 border-b border-rule"
+              className="grid grid-cols-[36px_1fr] sm:grid-cols-[44px_1fr] gap-4 sm:gap-5 py-7 sm:py-8 border-b border-rule"
             >
-              <span className="font-serif text-[24px] text-accent leading-none tracking-[-0.01em]">
+              <span className="font-serif text-[20px] sm:text-[24px] text-accent leading-none tracking-[-0.01em]">
                 {r.n}
               </span>
               <div>
-                <h3 className="font-serif text-[20px] text-ink leading-[1.2] tracking-[-0.01em] mb-2">
+                <h3 className="font-serif text-[18px] sm:text-[20px] text-ink leading-[1.2] tracking-[-0.01em] mb-2">
                   {r.title}
                 </h3>
-                <p className="text-[14px] text-ink-2 leading-[1.6]">
+                <p className="text-[13.5px] sm:text-[14px] text-ink-2 leading-[1.6]">
                   {r.body}
                 </p>
               </div>
