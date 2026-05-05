@@ -54,7 +54,7 @@ export default function FAQPage() {
     <div className="min-h-screen" style={{ backgroundColor: "#fafaf7" }}>
       {/* Nav */}
       <nav className="border-b border-stone-200/70 bg-white/95 backdrop-blur-sm sticky top-0 z-50">
-        <div className="mx-auto max-w-5xl px-6 flex h-14 items-center justify-between">
+        <div className="mx-auto max-w-5xl px-5 sm:px-6 flex h-14 items-center justify-between">
           <a
             href="/"
             className="text-[15px] font-semibold text-stone-900"
@@ -64,7 +64,7 @@ export default function FAQPage() {
           </a>
           <a
             href="/"
-            className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-500 hover:text-stone-900 transition-colors"
+            className="text-[10.5px] sm:text-[11px] font-semibold uppercase tracking-[0.16em] sm:tracking-[0.18em] text-stone-500 hover:text-stone-900 transition-colors"
             style={{ fontFamily: MONO }}
           >
             ← Home
@@ -72,22 +72,22 @@ export default function FAQPage() {
         </div>
       </nav>
 
-      <div className="mx-auto max-w-3xl px-6 py-16">
+      <div className="mx-auto max-w-3xl px-5 sm:px-6 py-10 sm:py-16">
         {/* Header */}
-        <div className="mb-12">
+        <div className="mb-10 sm:mb-12">
           <div
-            className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+            className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.16em] sm:tracking-[0.18em] text-stone-400"
             style={{ fontFamily: MONO }}
           >
             Reference · Frequently asked
           </div>
           <h1
-            className="mt-1.5 text-[56px] leading-[1.02] font-medium text-stone-900 tracking-tight"
+            className="mt-2 text-[40px] sm:text-[56px] leading-[1.04] sm:leading-[1.02] font-medium text-stone-900 tracking-tight text-balance"
             style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
           >
             Questions, answered.
           </h1>
-          <p className="mt-3 text-[15px] leading-relaxed text-stone-600 max-w-2xl">
+          <p className="mt-3 text-[14.5px] sm:text-[15px] leading-relaxed text-stone-600 max-w-2xl">
             Everything you need to know about TenderPath and UN procurement. Can&apos;t find your answer?{" "}
             <a
               href="mailto:hello@tenderpath.co"
@@ -102,9 +102,9 @@ export default function FAQPage() {
         {/* FAQ list */}
         <div className="border-t border-stone-200">
           {faqs.map((faq, i) => (
-            <details key={faq.q} className="group border-b border-stone-200 py-5">
-              <summary className="flex cursor-pointer items-baseline justify-between gap-4 list-none">
-                <div className="flex items-baseline gap-4 flex-1">
+            <details key={faq.q} className="group border-b border-stone-200 py-4 sm:py-5">
+              <summary className="flex cursor-pointer items-baseline justify-between gap-3 sm:gap-4 list-none">
+                <div className="flex items-baseline gap-3 sm:gap-4 flex-1 min-w-0">
                   <span
                     className="text-[10px] font-semibold tabular-nums text-stone-400 shrink-0"
                     style={{ fontFamily: MONO }}
@@ -112,7 +112,7 @@ export default function FAQPage() {
                     {(i + 1).toString().padStart(2, "0")}
                   </span>
                   <h2
-                    className="text-[18px] leading-snug font-medium text-stone-900 group-open:text-stone-700 transition-colors"
+                    className="text-[16px] sm:text-[18px] leading-snug font-medium text-stone-900 group-open:text-stone-700 transition-colors"
                     style={{ fontFamily: SERIF }}
                   >
                     {faq.q}
@@ -128,7 +128,7 @@ export default function FAQPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
               </summary>
-              <p className="mt-3 ml-9 text-[14px] leading-relaxed text-stone-600 max-w-2xl">
+              <p className="mt-3 ml-7 sm:ml-9 text-[13.5px] sm:text-[14px] leading-relaxed text-stone-600 max-w-2xl">
                 {faq.a}
               </p>
             </details>
@@ -136,32 +136,32 @@ export default function FAQPage() {
         </div>
 
         {/* Still have questions */}
-        <div className="mt-12 rounded-md border border-stone-200/70 bg-white p-7">
+        <div className="mt-10 sm:mt-12 rounded-md border border-stone-200/70 bg-white p-5 sm:p-7">
           <div
-            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+            className="text-[10px] font-semibold uppercase tracking-[0.16em] sm:tracking-[0.18em] text-stone-400"
             style={{ fontFamily: MONO }}
           >
             Still curious
           </div>
           <h3
-            className="mt-1 text-[24px] font-medium text-stone-900 tracking-tight"
+            className="mt-1.5 text-[20px] sm:text-[24px] leading-snug font-medium text-stone-900 tracking-tight"
             style={{ fontFamily: SERIF }}
           >
             We respond within one business day.
           </h3>
-          <p className="mt-2 text-[13.5px] leading-relaxed text-stone-600">
+          <p className="mt-2 text-[13px] sm:text-[13.5px] leading-relaxed text-stone-600">
             For complex UN procurement questions, book a free 15-minute call with an expert. We can review your shortlist, suggest the right service path, and answer anything specific to your sector.
           </p>
-          <div className="mt-5 flex flex-wrap gap-3">
+          <div className="mt-5 flex flex-col sm:flex-row flex-wrap gap-3">
             <a
               href="mailto:hello@tenderpath.co"
-              className="rounded-sm bg-stone-900 px-4 py-2.5 text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors"
+              className="rounded-sm bg-stone-900 px-4 py-3 sm:py-2.5 text-center sm:text-left text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors"
             >
               Email us
             </a>
             <a
               href="mailto:hello@tenderpath.co?subject=Book a call"
-              className="rounded-sm border border-stone-300 px-4 py-2.5 text-[12.5px] font-semibold text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
+              className="rounded-sm border border-stone-300 px-4 py-3 sm:py-2.5 text-center sm:text-left text-[12.5px] font-semibold text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
             >
               Book a free expert call
             </a>
@@ -169,9 +169,9 @@ export default function FAQPage() {
         </div>
       </div>
 
-      <footer className="border-t border-stone-200 py-7 text-center">
+      <footer className="border-t border-stone-200 py-6 sm:py-7 text-center px-5">
         <p
-          className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+          className="text-[10px] sm:text-[10.5px] font-semibold uppercase tracking-[0.16em] sm:tracking-[0.18em] text-stone-400 leading-relaxed"
           style={{ fontFamily: MONO }}
         >
           © {new Date().getFullYear()} Tender·Path ·{" "}
