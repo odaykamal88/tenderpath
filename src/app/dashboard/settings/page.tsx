@@ -213,7 +213,7 @@ export default function SettingsPage() {
     "w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] focus:outline-none focus:border-stone-700";
 
   return (
-    <div className="px-8 py-8 max-w-[1100px]">
+    <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-[1100px]">
       {/* Header */}
       <header className="mb-2">
         <div className="flex items-center gap-3 text-[11px] text-stone-500">
@@ -222,7 +222,7 @@ export default function SettingsPage() {
           <span style={{ fontFamily: MONO }}>{profile ? sourceLabel(profile.profile_source) : ""}</span>
         </div>
         <h1
-          className="mt-1 text-[56px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+          className="mt-1 text-[36px] sm:text-[48px] lg:text-[56px] leading-[1.05] font-medium text-stone-900 tracking-tight"
           style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
         >
           Business <em className="italic text-stone-500">profile</em>
