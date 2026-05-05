@@ -1,4 +1,4 @@
-/* Challenge — editorial numbered list with quantified callouts */
+/* Challenge — editorial numbered list with quantified callouts · mobile-tuned */
 
 const problems = [
   {
@@ -26,23 +26,21 @@ const problems = [
 
 export default function Challenge() {
   return (
-    <section id="challenge" className="bg-paper py-20 lg:py-28">
-      <div className="mx-auto max-w-7xl px-6 lg:px-8">
+    <section id="challenge" className="bg-paper py-16 sm:py-20 lg:py-28">
+      <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="grid lg:grid-cols-[1fr_2fr] gap-10 lg:gap-16 mb-16 items-end">
+        <div className="grid lg:grid-cols-[1fr_2fr] gap-6 sm:gap-10 lg:gap-16 mb-12 sm:mb-16 items-end">
           <div>
-            <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-accent mb-5">
+            <p className="font-mono text-[10px] sm:text-[11px] tracking-[0.16em] sm:tracking-[0.18em] uppercase text-accent mb-4 sm:mb-5">
               The Challenge
             </p>
-            <h2 className="font-serif text-[40px] lg:text-[52px] font-normal leading-[1.0] tracking-[-0.02em] text-ink text-balance">
+            <h2 className="font-serif text-[34px] sm:text-[40px] lg:text-[52px] font-normal leading-[1.05] sm:leading-[1.0] tracking-[-0.02em] text-ink text-balance">
               UN procurement is real.<br />
               <span className="text-ink-3">Just hard to navigate.</span>
             </h2>
           </div>
-          <p className="text-[16px] text-ink-2 leading-[1.6] max-w-lg lg:pb-3">
-            The contracts exist. The barrier is knowing where you stand and
-            which opportunities are actually worth pursuing — before you spend
-            a week of evenings on a proposal nobody will read.
+          <p className="text-[15px] sm:text-[16px] text-ink-2 leading-[1.6] max-w-lg lg:pb-3">
+            The contracts exist. The barrier is knowing where you stand and which opportunities are actually worth pursuing — before you spend a week of evenings on a proposal nobody will read.
           </p>
         </div>
 
@@ -51,20 +49,34 @@ export default function Challenge() {
           {problems.map((p) => (
             <article
               key={p.n}
-              className="grid lg:grid-cols-[80px_1fr_280px] gap-8 lg:gap-12 py-10 lg:py-12 border-b border-rule"
+              className="grid lg:grid-cols-[80px_1fr_280px] gap-5 sm:gap-8 lg:gap-12 py-9 sm:py-10 lg:py-12 border-b border-rule"
             >
-              <div className="font-serif text-[44px] text-accent leading-none tracking-[-0.02em]">
-                {p.n}
+              {/* Mobile: number + pullquote inline. Desktop: number first column. */}
+              <div className="flex items-baseline justify-between lg:block">
+                <div className="font-serif text-[40px] sm:text-[44px] text-accent leading-none tracking-[-0.02em]">
+                  {p.n}
+                </div>
+                {/* Mobile-only inline pull number */}
+                <div className="lg:hidden border-l border-ink pl-3">
+                  <p className="font-serif text-[28px] leading-none text-ink tabular-nums">
+                    {p.pull}
+                  </p>
+                </div>
               </div>
               <div>
-                <h3 className="font-serif text-[26px] lg:text-[28px] text-ink leading-[1.15] tracking-[-0.01em] mb-3">
+                <h3 className="font-serif text-[22px] sm:text-[26px] lg:text-[28px] text-ink leading-[1.2] sm:leading-[1.15] tracking-[-0.01em] mb-3">
                   {p.title}
                 </h3>
-                <p className="text-[15px] text-ink-2 leading-[1.6] max-w-xl">
+                <p className="text-[14.5px] sm:text-[15px] text-ink-2 leading-[1.6] max-w-xl">
                   {p.body}
                 </p>
+                {/* Mobile-only: pull label sits below body */}
+                <p className="lg:hidden font-mono text-[10px] tracking-[0.06em] text-ink-3 mt-4 pt-3 border-t border-rule leading-relaxed">
+                  {p.pullLabel}
+                </p>
               </div>
-              <aside className="border-l border-ink pl-5 lg:self-center">
+              {/* Desktop pull aside */}
+              <aside className="hidden lg:block border-l border-ink pl-5 lg:self-center">
                 <p className="font-serif text-[36px] lg:text-[40px] leading-none text-ink tabular-nums">
                   {p.pull}
                 </p>
