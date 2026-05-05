@@ -136,7 +136,7 @@ export default function ServicesPage() {
   const service = SERVICES[activeTab];
 
   return (
-    <div className="px-8 py-8 max-w-[1400px]">
+    <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-[1400px]">
       {/* Header */}
       <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between mb-7">
         <div>
@@ -146,7 +146,7 @@ export default function ServicesPage() {
             <span style={{ fontFamily: MONO }}>4 services · pay per outcome</span>
           </div>
           <h1
-            className="mt-1 text-[56px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+            className="mt-1 text-[36px] sm:text-[48px] lg:text-[56px] leading-[1.05] font-medium text-stone-900 tracking-tight"
             style={{ fontFamily: SERIF }}
           >
             Services
