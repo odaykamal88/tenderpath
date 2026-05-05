@@ -49,6 +49,8 @@ const NAV_ICONS: Record<string, string> = {
     "M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z",
   signout:
     "M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75",
+  menu: "M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5",
+  close: "M6 18L18 6M6 6l12 12",
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -56,6 +58,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const [state, setState] = useState<AccessState | null>(null);
   const [loading, setLoading] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Close drawer on route change
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [pathname]);
+
+  // Lock body scroll when drawer is open
+  useEffect(() => {
+    if (drawerOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [drawerOpen]);
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
@@ -112,6 +132,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   ];
   const isPaid = state.user.is_super_admin || state.user.subscription_status === "active";
 
+  // Active page label for the mobile top bar
+  const allItems = [
+    ...workbench,
+    ...tools,
+    { href: "/dashboard/work-orders", label: "Billing & orders" },
+  ];
+  const activeItem =
+    allItems.find((it) => {
+      if (it.href === "/dashboard") return pathname === "/dashboard";
+      const match = "matchPaths" in it ? it.matchPaths : undefined;
+      return (match ?? [it.href]).some((p: string) => pathname?.startsWith(p));
+    }) ?? null;
+
   const renderNavItem = (item: { href: string; label: string; matchPaths?: string[]; requiresPaid?: boolean }) => {
     const active =
       item.href === "/dashboard"
@@ -122,7 +155,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Link
         key={item.href}
         href={item.href}
-        className={`group relative flex items-center justify-between gap-2.5 rounded-sm pl-3 pr-2.5 py-1.5 text-[13px] transition-colors ${
+        className={`group relative flex items-center justify-between gap-2.5 rounded-sm pl-3 pr-2.5 py-2 lg:py-1.5 text-[14px] lg:text-[13px] transition-colors ${
           active
             ? "bg-stone-900 text-white"
             : previewLocked
@@ -150,7 +183,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   };
 
-  // Compact trial pill — editorial style with serif number
+  // Compact trial pill
   const trialPill = (state.isTrialing || state.locked) && (
     <Link
       href="/pay?plan=grants-tenders-matching"
@@ -166,48 +199,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     >
       {state.locked ? (
         <>
-          <div
-            className="text-[9px] font-semibold uppercase tracking-[0.18em] text-red-700"
-            style={{ fontFamily: MONO }}
-          >
+          <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-red-700" style={{ fontFamily: MONO }}>
             Trial · ended
           </div>
-          <div
-            className="mt-1 text-[18px] leading-tight font-medium text-red-900"
-            style={{ fontFamily: SERIF }}
-          >
+          <div className="mt-1 text-[18px] leading-tight font-medium text-red-900" style={{ fontFamily: SERIF }}>
             Subscribe to continue
           </div>
-          <div
-            className="mt-1 text-[10.5px] tracking-wider uppercase text-red-700/80"
-            style={{ fontFamily: MONO }}
-          >
+          <div className="mt-1 text-[10.5px] tracking-wider uppercase text-red-700/80" style={{ fontFamily: MONO }}>
             $49 / mo →
           </div>
         </>
       ) : (
         <>
-          <div
-            className="text-[9px] font-semibold uppercase tracking-[0.18em] text-amber-800"
-            style={{ fontFamily: MONO }}
-          >
+          <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-amber-800" style={{ fontFamily: MONO }}>
             Trial
           </div>
           <div className="mt-1 flex items-baseline gap-1.5">
-            <span
-              className="text-[28px] leading-none font-medium text-stone-900 tabular-nums"
-              style={{ fontFamily: SERIF }}
-            >
+            <span className="text-[28px] leading-none font-medium text-stone-900 tabular-nums" style={{ fontFamily: SERIF }}>
               {state.trialDaysLeft}
             </span>
             <span className="text-[11px] text-stone-600">
               day{state.trialDaysLeft === 1 ? "" : "s"} left
             </span>
           </div>
-          <div
-            className="mt-1.5 text-[10.5px] tracking-wider uppercase text-amber-800 group-hover:text-amber-900"
-            style={{ fontFamily: MONO }}
-          >
+          <div className="mt-1.5 text-[10.5px] tracking-wider uppercase text-amber-800 group-hover:text-amber-900" style={{ fontFamily: MONO }}>
             Subscribe · $49/mo →
           </div>
         </>
@@ -215,129 +230,216 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </Link>
   );
 
+  // Compact trial badge for mobile top bar — single line
+  const trialBadge = (state.isTrialing || state.locked) ? (
+    <Link
+      href="/pay?plan=grants-tenders-matching"
+      target="_blank"
+      rel="noreferrer"
+      className={`hidden xs:flex items-center gap-1.5 rounded-sm border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+        state.locked
+          ? "border-red-300 bg-red-50/60 text-red-700"
+          : state.trialDaysLeft <= 3
+          ? "border-orange-300 bg-orange-50/60 text-orange-700"
+          : "border-amber-300 bg-amber-50/60 text-amber-700"
+      }`}
+      style={{ fontFamily: MONO }}
+    >
+      {state.locked ? (
+        <span>Locked</span>
+      ) : (
+        <>
+          <span className="text-[13px] font-medium tabular-nums" style={{ fontFamily: SERIF }}>
+            {state.trialDaysLeft}d
+          </span>
+          <span>trial</span>
+        </>
+      )}
+    </Link>
+  ) : null;
+
+  // Sidebar contents — shared between desktop aside and mobile drawer
+  const sidebarBody = (
+    <>
+      {/* Logo */}
+      <Link href="/" className="flex items-baseline gap-1 mb-1.5 px-1 group">
+        <span
+          className="text-[24px] leading-none font-medium text-stone-900 group-hover:text-stone-700 transition-colors tracking-tight"
+          style={{ fontFamily: SERIF }}
+        >
+          Tender<span className="text-orange-500">·</span>Path
+        </span>
+      </Link>
+      <div
+        className="px-1 mb-6 lg:mb-7 text-[9px] font-semibold uppercase tracking-[0.22em] text-stone-400"
+        style={{ fontFamily: MONO }}
+      >
+        The vendor workbench
+      </div>
+
+      {/* Workbench */}
+      <div className="mb-1">
+        <div className="px-1 mb-2 flex items-baseline justify-between">
+          <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-stone-400" style={{ fontFamily: MONO }}>
+            Workbench
+          </span>
+          <span className="text-[9px] tabular-nums text-stone-300" style={{ fontFamily: MONO }}>
+            01
+          </span>
+        </div>
+        <nav className="flex flex-col gap-0.5">
+          {workbench.map(renderNavItem)}
+        </nav>
+      </div>
+
+      {/* Tools */}
+      <div className="mt-5">
+        <div className="px-1 mb-2 flex items-baseline justify-between">
+          <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-stone-400" style={{ fontFamily: MONO }}>
+            Tools
+          </span>
+          <span className="text-[9px] tabular-nums text-stone-300" style={{ fontFamily: MONO }}>
+            02
+          </span>
+        </div>
+        <nav className="flex flex-col gap-0.5">
+          {tools.map(renderNavItem)}
+        </nav>
+      </div>
+
+      <div className="flex-1" />
+
+      {trialPill && <div className="mt-6 mb-3">{trialPill}</div>}
+
+      <div className="border-t border-stone-200/70 pt-3 flex flex-col gap-0.5">
+        <Link
+          href="/dashboard/work-orders"
+          className={`flex items-center gap-2.5 pl-3 pr-2.5 py-2 lg:py-1.5 rounded-sm text-[13px] lg:text-[12.5px] transition-colors ${
+            pathname?.startsWith("/dashboard/work-orders")
+              ? "bg-stone-900 text-white"
+              : "text-stone-500 hover:bg-stone-100 hover:text-stone-800"
+          }`}
+        >
+          <NavIcon path={NAV_ICONS["/dashboard/work-orders"]} />
+          <span>Billing &amp; orders</span>
+        </Link>
+        <a
+          href="mailto:info@tenderpath.me?subject=Support Request"
+          className="flex items-center gap-2.5 pl-3 pr-2.5 py-2 lg:py-1.5 rounded-sm text-[13px] lg:text-[12.5px] text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors"
+        >
+          <NavIcon path={NAV_ICONS.help} />
+          <span>Help &amp; support</span>
+        </a>
+        <a
+          href="/faq"
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-2.5 pl-3 pr-2.5 py-2 lg:py-1.5 rounded-sm text-[13px] lg:text-[12.5px] text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors"
+        >
+          <NavIcon path={NAV_ICONS.faq} />
+          <span>FAQ</span>
+        </a>
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-stone-200/70">
+        <div
+          className="px-1 mb-1.5 truncate text-[10.5px] text-stone-400"
+          style={{ fontFamily: MONO }}
+          title={state.user.email}
+        >
+          {state.user.email}
+        </div>
+        <button
+          onClick={() => {
+            localStorage.removeItem("tp_token");
+            router.push("/");
+          }}
+          className="flex items-center gap-2.5 pl-3 pr-2.5 py-2 lg:py-1.5 rounded-sm text-[13px] lg:text-[12.5px] text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors w-full text-left"
+        >
+          <NavIcon path={NAV_ICONS.signout} />
+          <span>Sign out</span>
+        </button>
+      </div>
+    </>
+  );
+
   return (
     <div className="min-h-screen flex bg-stone-50">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-stone-200/70 px-4 py-5 flex flex-col shrink-0">
-        {/* Logo */}
-        <Link href="/" className="flex items-baseline gap-1 mb-1.5 px-1 group">
+      {/* Mobile top bar — sticky */}
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-sm border-b border-stone-200/70 h-14 px-4 flex items-center justify-between gap-3">
+        <Link href="/dashboard" className="flex items-baseline gap-2 min-w-0">
           <span
-            className="text-[24px] leading-none font-medium text-stone-900 group-hover:text-stone-700 transition-colors tracking-tight"
+            className="text-[18px] leading-none font-medium text-stone-900 tracking-tight shrink-0"
             style={{ fontFamily: SERIF }}
           >
             Tender<span className="text-orange-500">·</span>Path
           </span>
+          {activeItem && (
+            <>
+              <span className="text-stone-300 text-[13px] shrink-0" style={{ fontFamily: SERIF }}>
+                /
+              </span>
+              <span
+                className="text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-500 truncate"
+                style={{ fontFamily: MONO }}
+              >
+                {activeItem.label}
+              </span>
+            </>
+          )}
         </Link>
-        <div
-          className="px-1 mb-7 text-[9px] font-semibold uppercase tracking-[0.22em] text-stone-400"
-          style={{ fontFamily: MONO }}
-        >
-          The vendor workbench
-        </div>
-
-        {/* Workbench */}
-        <div className="mb-1">
-          <div className="px-1 mb-2 flex items-baseline justify-between">
-            <span
-              className="text-[9px] font-semibold uppercase tracking-[0.22em] text-stone-400"
-              style={{ fontFamily: MONO }}
-            >
-              Workbench
-            </span>
-            <span
-              className="text-[9px] tabular-nums text-stone-300"
-              style={{ fontFamily: MONO }}
-            >
-              01
-            </span>
-          </div>
-          <nav className="flex flex-col gap-0.5">
-            {workbench.map(renderNavItem)}
-          </nav>
-        </div>
-
-        {/* Tools */}
-        <div className="mt-5">
-          <div className="px-1 mb-2 flex items-baseline justify-between">
-            <span
-              className="text-[9px] font-semibold uppercase tracking-[0.22em] text-stone-400"
-              style={{ fontFamily: MONO }}
-            >
-              Tools
-            </span>
-            <span
-              className="text-[9px] tabular-nums text-stone-300"
-              style={{ fontFamily: MONO }}
-            >
-              02
-            </span>
-          </div>
-          <nav className="flex flex-col gap-0.5">
-            {tools.map(renderNavItem)}
-          </nav>
-        </div>
-
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* Trial status */}
-        {trialPill && <div className="mb-3">{trialPill}</div>}
-
-        {/* Utility links */}
-        <div className="border-t border-stone-200/70 pt-3 flex flex-col gap-0.5">
-          <Link
-            href="/dashboard/work-orders"
-            className={`flex items-center gap-2.5 pl-3 pr-2.5 py-1.5 rounded-sm text-[12.5px] transition-colors ${
-              pathname?.startsWith("/dashboard/work-orders")
-                ? "bg-stone-900 text-white"
-                : "text-stone-500 hover:bg-stone-100 hover:text-stone-800"
-            }`}
-          >
-            <NavIcon path={NAV_ICONS["/dashboard/work-orders"]} />
-            <span>Billing &amp; orders</span>
-          </Link>
-          <a
-            href="mailto:info@tenderpath.me?subject=Support Request"
-            className="flex items-center gap-2.5 pl-3 pr-2.5 py-1.5 rounded-sm text-[12.5px] text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors"
-          >
-            <NavIcon path={NAV_ICONS.help} />
-            <span>Help &amp; support</span>
-          </a>
-          <a
-            href="/faq"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-2.5 pl-3 pr-2.5 py-1.5 rounded-sm text-[12.5px] text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors"
-          >
-            <NavIcon path={NAV_ICONS.faq} />
-            <span>FAQ</span>
-          </a>
-        </div>
-
-        {/* User footer */}
-        <div className="mt-3 pt-3 border-t border-stone-200/70">
-          <div
-            className="px-1 mb-1.5 truncate text-[10.5px] text-stone-400"
-            style={{ fontFamily: MONO }}
-            title={state.user.email}
-          >
-            {state.user.email}
-          </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {trialBadge}
           <button
-            onClick={() => {
-              localStorage.removeItem("tp_token");
-              router.push("/");
-            }}
-            className="flex items-center gap-2.5 pl-3 pr-2.5 py-1.5 rounded-sm text-[12.5px] text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors w-full text-left"
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Open menu"
+            className="p-2 -mr-2 text-stone-700 hover:text-stone-900"
           >
-            <NavIcon path={NAV_ICONS.signout} />
-            <span>Sign out</span>
+            <NavIcon path={NAV_ICONS.menu} />
           </button>
         </div>
+      </header>
+
+      {/* Mobile drawer + scrim */}
+      {drawerOpen && (
+        <>
+          <div
+            className="lg:hidden fixed inset-0 z-40 bg-stone-900/40 backdrop-blur-[1px]"
+            onClick={() => setDrawerOpen(false)}
+            aria-hidden
+          />
+          <aside
+            className="lg:hidden fixed top-0 bottom-0 right-0 z-50 w-[300px] max-w-[85vw] bg-white border-l border-stone-200/70 px-4 py-4 flex flex-col overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-stone-200/70">
+              <span
+                className="text-[10px] font-semibold uppercase tracking-[0.22em] text-stone-400"
+                style={{ fontFamily: MONO }}
+              >
+                Menu
+              </span>
+              <button
+                onClick={() => setDrawerOpen(false)}
+                aria-label="Close menu"
+                className="p-1.5 -mr-1.5 text-stone-500 hover:text-stone-900"
+              >
+                <NavIcon path={NAV_ICONS.close} />
+              </button>
+            </div>
+            {sidebarBody}
+          </aside>
+        </>
+      )}
+
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex w-64 bg-white border-r border-stone-200/70 px-4 py-5 flex-col shrink-0">
+        {sidebarBody}
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 min-w-0">
+      <main className="flex-1 min-w-0 pt-14 lg:pt-0">
         {children}
       </main>
     </div>
