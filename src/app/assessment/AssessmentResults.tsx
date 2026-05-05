@@ -71,12 +71,20 @@ export default function AssessmentResults({
           <p className="font-mono text-[10px] tracking-[0.18em] uppercase text-accent">
             Vendor readiness report · No. {String(data.id).padStart(4, "0")}
           </p>
-          <button
-            onClick={onReset}
-            className="font-mono text-[10px] tracking-[0.1em] uppercase text-ink-3 hover:text-ink border-b border-rule hover:border-ink pb-0.5"
-          >
-            Run another →
-          </button>
+          <div className="flex items-baseline gap-5 print:hidden">
+            <button
+              onClick={() => window.print()}
+              className="font-mono text-[10px] tracking-[0.1em] uppercase text-ink-3 hover:text-ink border-b border-rule hover:border-ink pb-0.5"
+            >
+              Download PDF ↓
+            </button>
+            <button
+              onClick={onReset}
+              className="font-mono text-[10px] tracking-[0.1em] uppercase text-ink-3 hover:text-ink border-b border-rule hover:border-ink pb-0.5"
+            >
+              Run another →
+            </button>
+          </div>
         </div>
         <h1 className="font-serif text-[40px] lg:text-[48px] font-normal leading-[1.0] tracking-[-0.02em] text-ink mb-3">
           {data.company_name}

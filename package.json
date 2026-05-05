@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.88.0",
     "@hello-pangea/dnd": "^18.0.1",
     "@neondatabase/serverless": "^1.0.2",
+    "@react-pdf/renderer": "^4.5.1",
     "@vercel/blob": "^2.3.3",
     "https-proxy-agent": "^9.0.0",
     "jose": "^6.2.2",

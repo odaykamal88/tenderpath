@@ -249,6 +249,17 @@ CREATE TABLE IF NOT EXISTS weekly_digest_logs (
 );
 CREATE INDEX IF NOT EXISTS weekly_digest_logs_user_id ON weekly_digest_logs (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS weekly_digest_logs_status ON weekly_digest_logs (status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS demo_sessions (
+  id SERIAL PRIMARY KEY,
+  email TEXT NOT NULL,
+  ip_address TEXT,
+  country TEXT,
+  user_agent TEXT,
+  logged_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS demo_sessions_email_idx ON demo_sessions (email, logged_at DESC);
+CREATE INDEX IF NOT EXISTS demo_sessions_logged_at_idx ON demo_sessions (logged_at DESC);
 `;
 
 async function migrate() {

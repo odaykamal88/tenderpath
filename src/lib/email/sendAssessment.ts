@@ -1,7 +1,8 @@
 import { Resend } from "resend";
 import { sql } from "@/lib/db";
-import type { TierSlug } from "@/lib/types";
+import type { TierSlug, Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
 import { notifyAdmin } from "@/lib/email/notifyAdmin";
+import { generateAssessmentPdf } from "@/lib/email/assessmentPdf";
 
 interface TopTender {
   title: string;
@@ -21,6 +22,14 @@ interface SendArgs {
   tenderCount: number;
   grantCount: number;
   topTenders?: TopTender[];
+  // Extended fields for PDF generation
+  sectors?: string[];
+  grantReadinessScore?: number;
+  readinessDimensions?: ReadinessDimensions;
+  gaps?: Gap[];
+  strengths?: string[];
+  matchedTenders?: MatchedTender[];
+  matchedGrants?: MatchedGrant[];
 }
 
 const TIER_COPY: Record<TierSlug, { name: string; price: string; pitch: string }> = {
@@ -67,6 +76,31 @@ export async function sendAssessmentEmail(args: SendArgs): Promise<void> {
   const html = renderHtml({ ...args, tier, resultsUrl, ctaUrl });
   const text = renderText({ ...args, tier, resultsUrl, ctaUrl });
 
+  // Generate PDF attachment when full assessment data is available
+  let pdfAttachment: { filename: string; content: Buffer } | null = null;
+  if (args.gaps && args.matchedTenders && args.matchedGrants && args.readinessDimensions) {
+    try {
+      const pdfBuffer = await generateAssessmentPdf({
+        id: args.assessmentId,
+        companyName: args.companyName,
+        email: args.email,
+        sectors: args.sectors ?? [],
+        readinessScore: args.readinessScore,
+        grantReadinessScore: args.grantReadinessScore ?? 0,
+        summary: args.summary,
+        recommendedTier: args.recommendedTier,
+        readinessDimensions: args.readinessDimensions,
+        gaps: args.gaps,
+        strengths: args.strengths ?? [],
+        matchedTenders: args.matchedTenders,
+        matchedGrants: args.matchedGrants,
+      });
+      pdfAttachment = { filename: "tenderpath-readiness-report.pdf", content: pdfBuffer };
+    } catch (pdfErr) {
+      console.warn("[tp:email:pdf-failed]", { assessmentId: args.assessmentId, error: pdfErr instanceof Error ? pdfErr.message : String(pdfErr) });
+    }
+  }
+
   const resend = new Resend(apiKey);
   let sendError: string | null = null;
   try {
@@ -76,6 +110,7 @@ export async function sendAssessmentEmail(args: SendArgs): Promise<void> {
       subject: `Your TenderPath Readiness Score: ${args.readinessScore}/100`,
       html,
       text,
+      ...(pdfAttachment ? { attachments: [pdfAttachment] } : {}),
     });
     if (error) sendError = error.message;
   } catch (err) {

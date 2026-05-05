@@ -150,6 +150,13 @@ export async function POST(request: Request) {
           country: t.country,
           match_reasons: t.match_reasons ?? [],
         })),
+        sectors: classification.sectors,
+        grantReadinessScore: grantScore,
+        readinessDimensions: analysis.readiness_dimensions,
+        gaps: analysis.gaps,
+        strengths: analysis.strengths ?? [],
+        matchedTenders,
+        matchedGrants,
       });
     } catch (emailErr) {
       console.error("Assessment email failed:", emailErr);

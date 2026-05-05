@@ -3,6 +3,8 @@ import { createToken } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { verifyPassword } from "@/lib/password";
 
+const DEMO_EMAIL = "demo@tenderpath.me";
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
@@ -30,6 +32,24 @@ export async function POST(request: Request) {
       { error: "Invalid email or password" },
       { status: 401 },
     );
+  }
+
+  // Demo account: reset state and log session
+  if (email === DEMO_EMAIL) {
+    const ip =
+      request.headers.get("cf-connecting-ip") ??
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      null;
+    const country = request.headers.get("cf-ipcountry") ?? null;
+    const ua = request.headers.get("user-agent") ?? null;
+
+    await Promise.all([
+      sql`DELETE FROM assessments WHERE lower(email) = ${DEMO_EMAIL}`,
+      sql`
+        INSERT INTO demo_sessions (email, ip_address, country, user_agent)
+        VALUES (${DEMO_EMAIL}, ${ip}, ${country}, ${ua})
+      `.catch(() => null),
+    ]);
   }
 
   const jwt = await createToken(user.id as number, user.email as string, {

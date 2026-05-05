@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getUserFromRequest } from "./auth";
 import type { TierSlug, User } from "./types";
 
+const DEMO_EMAIL = "demo@tenderpath.me";
+
 const TIER_HIERARCHY: Record<TierSlug, number> = {
   "tender-intelligence": 1,
   "submission-package": 2,
@@ -46,8 +48,8 @@ export async function requireSubscription(
     };
   }
 
-  // Super admins bypass all gating
-  if (user.is_super_admin) {
+  // Super admins and demo account bypass all gating
+  if (user.is_super_admin || user.email.toLowerCase() === DEMO_EMAIL) {
     return { authorized: true, user };
   }
 

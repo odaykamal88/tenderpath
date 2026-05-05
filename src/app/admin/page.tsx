@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import styles from "./admin.module.css";
 import { StatusTag, StatusDot, Sparkbar } from "./_components/StatusTag";
 
+type TabId = "overview" | "demo";
+
 // ─────────────────────────────────────────────────────────────────────
 // Types — mirror /api/admin/stats response
 // ─────────────────────────────────────────────────────────────────────
@@ -92,6 +94,41 @@ interface Stats {
   };
 }
 
+interface DemoSession {
+  ip_address: string | null;
+  country: string | null;
+  user_agent: string | null;
+  logged_at: string;
+  email: string;
+}
+interface DemoAssessmentCount {
+  email: string;
+  total: string;
+  last_at: string;
+}
+interface DemoRecentAssessment {
+  id: number;
+  company_name: string;
+  email: string;
+  readiness_score: number;
+  created_at: string;
+}
+interface IpSummary {
+  ip: string | null;
+  country: string | null;
+  sessions: number;
+  last_seen: string;
+  emails: string[];
+}
+interface DemoUsage {
+  sessions: DemoSession[];
+  assessmentCounts: DemoAssessmentCount[];
+  recentAssessments: DemoRecentAssessment[];
+  ipSummary: IpSummary[];
+  totalSessions: number;
+  uniqueIps: number;
+}
+
 const TIER_LABELS: Record<string, string> = {
   "tender-intelligence":    "Grants + Tenders Matching",
   "submission-package":     "Proposal Draft",
@@ -157,7 +194,9 @@ function crawlNote(log: CrawlLog): string {
 // Page
 // ─────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
+  const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [stats, setStats] = useState<Stats | null>(null);
+  const [demoUsage, setDemoUsage] = useState<DemoUsage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ ok: boolean; message?: string } | null>(null);
@@ -178,7 +217,19 @@ export default function AdminPage() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  const loadDemo = useCallback(async () => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+    if (!token) return;
+    try {
+      const res = await fetch("/api/admin/demo-usage", { headers: { authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      setDemoUsage(await res.json());
+    } catch {
+      // non-fatal; tab shows empty state
+    }
+  }, []);
+
+  useEffect(() => { load(); loadDemo(); }, [load, loadDemo]);
 
   const triggerSync = async () => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
@@ -218,12 +269,39 @@ export default function AdminPage() {
               Refreshed {relTime(lastRefreshed.toISOString())}
             </div>
           )}
-          <button type="button" className={styles.btnGhost} onClick={load}>Refresh</button>
+          <button type="button" className={styles.btnGhost} onClick={() => { load(); loadDemo(); }}>Refresh</button>
           <button type="button" className={styles.btnPrimary} onClick={triggerSync} disabled={syncing}>
             {syncing ? "Syncing…" : "Sync sources"}
           </button>
         </div>
       </header>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--color-rule)", marginBottom: 28 }}>
+        {(["overview", "demo"] as TabId[]).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setActiveTab(tab)}
+            style={{
+              padding: "9px 20px",
+              fontSize: 11,
+              fontFamily: "var(--font-mono)",
+              fontWeight: 600,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              background: "none",
+              border: "none",
+              borderBottom: activeTab === tab ? "2px solid var(--color-ink)" : "2px solid transparent",
+              color: activeTab === tab ? "var(--color-ink)" : "var(--color-ink-3)",
+              cursor: "pointer",
+              marginBottom: -1,
+            }}
+          >
+            {tab === "overview" ? "Overview" : "Demo activity"}
+          </button>
+        ))}
+      </div>
 
       {/* Toast */}
       {syncResult && (
@@ -235,7 +313,9 @@ export default function AdminPage() {
         <div className={`${styles.toast} ${styles.toastErr}`}>{error}</div>
       )}
 
-      {stats ? (
+      {activeTab === "demo" ? (
+        <DemoActivityPanel data={demoUsage} onRefresh={loadDemo} />
+      ) : stats ? (
         <>
           {/* Hero stats */}
           <section className={styles.heroRow}>
@@ -511,6 +591,148 @@ export default function AdminPage() {
       ) : !error ? (
         <LoadingSkeleton />
       ) : null}
+    </>
+  );
+}
+
+function DemoActivityPanel({ data, onRefresh }: { data: DemoUsage | null; onRefresh: () => void }) {
+  if (!data) {
+    return (
+      <section className={styles.panel}>
+        <header className={styles.panelHead}>
+          <h2 className={styles.panelTitle}>Demo activity</h2>
+          <button type="button" className={styles.btnGhost} onClick={onRefresh}>Refresh</button>
+        </header>
+        <div className={styles.woEmpty}>Loading…</div>
+      </section>
+    );
+  }
+
+  return (
+    <>
+      {/* Summary row */}
+      <section className={styles.heroRow} style={{ marginBottom: 24 }}>
+        <div className={styles.heroStat}>
+          <div className={styles.heroStatLabel}>Total sessions</div>
+          <div className={styles.heroStatValue}>{fmtNum(data.totalSessions)}</div>
+        </div>
+        <div className={styles.heroStat}>
+          <div className={styles.heroStatLabel}>Unique IPs</div>
+          <div className={styles.heroStatValue}>{fmtNum(data.uniqueIps)}</div>
+        </div>
+        <div className={styles.heroStat}>
+          <div className={styles.heroStatLabel}>Assessments run</div>
+          <div className={styles.heroStatValue}>
+            {fmtNum(data.assessmentCounts.reduce((s, r) => s + Number(r.total), 0))}
+          </div>
+        </div>
+      </section>
+
+      {/* IP summary */}
+      <section className={styles.panel} style={{ marginBottom: 24 }}>
+        <header className={styles.panelHead}>
+          <h2 className={styles.panelTitle}>Sessions by IP</h2>
+          <span className={styles.panelMeta}>{data.uniqueIps} unique IPs</span>
+        </header>
+        {data.ipSummary.length === 0 ? (
+          <div className={styles.woEmpty}>No sessions yet.</div>
+        ) : (
+          <div className={styles.tableWrap}>
+            <table className={styles.dossierTable}>
+              <thead>
+                <tr>
+                  <th>IP address</th>
+                  <th>Country</th>
+                  <th className={styles.num}>Sessions</th>
+                  <th>Last seen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.ipSummary.map((row, i) => (
+                  <tr key={i}>
+                    <td className={styles.mono}>{row.ip ?? "—"}</td>
+                    <td>{row.country ?? "—"}</td>
+                    <td className={styles.num}>{row.sessions}</td>
+                    <td className={styles.mono}>{relTime(row.last_seen)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Recent sessions */}
+      <section className={styles.panel} style={{ marginBottom: 24 }}>
+        <header className={styles.panelHead}>
+          <h2 className={styles.panelTitle}>Recent sessions</h2>
+          <span className={styles.panelMeta}>Last 100</span>
+        </header>
+        {data.sessions.length === 0 ? (
+          <div className={styles.woEmpty}>No sessions yet.</div>
+        ) : (
+          <div className={styles.tableWrap}>
+            <table className={styles.dossierTable}>
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Email</th>
+                  <th>IP</th>
+                  <th>Country</th>
+                  <th>User agent</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.sessions.map((s, i) => (
+                  <tr key={i}>
+                    <td className={styles.mono}>{fmtDate(s.logged_at)}</td>
+                    <td className={styles.mono}>{s.email}</td>
+                    <td className={styles.mono}>{s.ip_address ?? "—"}</td>
+                    <td>{s.country ?? "—"}</td>
+                    <td
+                      className={`${styles.mono} ${styles.trunc}`}
+                      style={{ maxWidth: 240, fontSize: 10 }}
+                      title={s.user_agent ?? ""}
+                    >
+                      {s.user_agent ?? "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Recent assessments */}
+      {data.recentAssessments.length > 0 && (
+        <section className={styles.panel}>
+          <header className={styles.panelHead}>
+            <h2 className={styles.panelTitle}>Demo assessments run</h2>
+            <span className={styles.panelMeta}>{data.recentAssessments.length} recent</span>
+          </header>
+          <div className={styles.tableWrap}>
+            <table className={styles.dossierTable}>
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Company</th>
+                  <th className={styles.num}>Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.recentAssessments.map((a) => (
+                  <tr key={a.id}>
+                    <td className={styles.mono}>{fmtDate(a.created_at)}</td>
+                    <td>{a.company_name}</td>
+                    <td className={styles.num}>{a.readiness_score}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </>
   );
 }
