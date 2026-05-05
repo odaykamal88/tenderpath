@@ -268,23 +268,23 @@ function SectionHeader({
   rightSlot?: React.ReactNode;
 }) {
   return (
-    <div className="mb-5 flex items-end justify-between gap-6 border-b border-stone-300/70 pb-3">
-      <div className="flex items-baseline gap-4 min-w-0">
+    <div className="mb-4 sm:mb-5 flex items-end justify-between gap-3 sm:gap-6 border-b border-stone-300/70 pb-3">
+      <div className="flex items-baseline gap-3 sm:gap-4 min-w-0">
         <span
-          className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-400 tabular-nums"
+          className="shrink-0 text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.18em] sm:tracking-[0.22em] text-stone-400 tabular-nums"
           style={{ fontFamily: MONO }}
         >
           §&nbsp;{index}
         </span>
         <h2
-          className="text-[26px] leading-tight font-medium text-stone-900 tracking-tight truncate"
+          className="text-[20px] sm:text-[26px] leading-tight font-medium text-stone-900 tracking-tight truncate"
           style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
         >
           {title}
         </h2>
         {count != null && (
           <span
-            className="shrink-0 text-[11px] font-semibold uppercase tracking-wider text-stone-400 tabular-nums"
+            className="shrink-0 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-stone-400 tabular-nums"
             style={{ fontFamily: MONO }}
           >
             ({String(count).padStart(2, "0")})
@@ -318,10 +318,10 @@ function ReadinessHero({ score, tier }: { score: number | null; tier: string | n
   const dash = (pct / 100) * circ;
 
   return (
-    <div className="flex items-center gap-6">
+    <div className="flex items-center gap-4 sm:gap-6">
       {/* SVG ring */}
-      <div className="relative shrink-0">
-        <svg width="148" height="148" viewBox="0 0 148 148" className="block">
+      <div className="relative shrink-0 w-[112px] h-[112px] sm:w-[148px] sm:h-[148px]">
+        <svg viewBox="0 0 148 148" className="block w-full h-full">
           <circle cx="74" cy="74" r={radius} fill="none" stroke="rgba(120,113,108,0.18)" strokeWidth="1.5" />
           <circle
             cx="74"
@@ -346,13 +346,13 @@ function ReadinessHero({ score, tier }: { score: number | null; tier: string | n
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span
-            className="text-[44px] leading-none font-medium text-stone-900 tracking-tight"
+            className="text-[34px] sm:text-[44px] leading-none font-medium text-stone-900 tracking-tight"
             style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
           >
             {display}
           </span>
           <span
-            className="mt-0.5 text-[10px] uppercase tracking-[0.2em] text-stone-400"
+            className="mt-0.5 text-[9px] sm:text-[10px] uppercase tracking-[0.2em] text-stone-400"
             style={{ fontFamily: MONO }}
           >
             / 100
@@ -368,7 +368,7 @@ function ReadinessHero({ score, tier }: { score: number | null; tier: string | n
           Readiness
         </div>
         <div
-          className="mt-1 text-[22px] leading-snug font-medium text-stone-900"
+          className="mt-1 text-[18px] sm:text-[22px] leading-snug font-medium text-stone-900"
           style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
         >
           {verdict}
@@ -401,29 +401,29 @@ function PipelineFunnel({
   return (
     <div className="grid grid-cols-5 border-t border-b border-stone-300/70 divide-x divide-stone-200/80">
       {stages.map((s, i) => (
-        <div key={s.label} className="px-4 py-4">
-          <div className="flex items-baseline gap-2">
+        <div key={s.label} className="px-2 sm:px-4 py-3 sm:py-4">
+          <div className="flex items-baseline gap-1.5 sm:gap-2">
             <span
-              className="text-[10px] font-semibold text-stone-400 tabular-nums"
+              className="text-[9px] sm:text-[10px] font-semibold text-stone-400 tabular-nums"
               style={{ fontFamily: MONO }}
             >
               {String(i + 1).padStart(2, "0")}
             </span>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500">{s.label}</span>
+            <span className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.14em] sm:tracking-[0.18em] text-stone-500 truncate">{s.label}</span>
           </div>
           <div
-            className="mt-3 text-[40px] leading-none font-medium text-stone-900 tabular-nums"
+            className="mt-2 sm:mt-3 text-[26px] sm:text-[40px] leading-none font-medium text-stone-900 tabular-nums"
             style={{ fontFamily: SERIF, fontFeatureSettings: "'tnum','ss01'" }}
           >
             {stats == null ? "—" : s.value}
           </div>
-          <div className="mt-3 h-px w-full bg-stone-200">
+          <div className="mt-2 sm:mt-3 h-px w-full bg-stone-200">
             <div
               className="h-px bg-stone-900"
               style={{ width: stats == null ? "0%" : `${(s.value / max) * 100}%` }}
             />
           </div>
-          <div className="mt-2 text-[11px] text-stone-500">{s.sub}</div>
+          <div className="mt-1.5 sm:mt-2 text-[11px] text-stone-500 hidden sm:block">{s.sub}</div>
         </div>
       ))}
     </div>
@@ -717,34 +717,40 @@ export default function DashboardOverview() {
     return (
       <div key={t.id} className="border-b border-stone-200/80 last:border-b-0">
         <button
-          className="w-full text-left px-6 py-4 flex items-center gap-5 hover:bg-stone-50 transition-colors group"
+          className="w-full text-left px-4 sm:px-6 py-3.5 sm:py-4 flex flex-wrap sm:flex-nowrap items-start sm:items-center gap-x-3 sm:gap-x-5 gap-y-2 hover:bg-stone-50 transition-colors group"
           onClick={() => setExpandedTenderId(isExpanded ? null : t.id)}
         >
           {/* Bucket dot */}
-          <span className={`shrink-0 h-1.5 w-1.5 rounded-full ${dotColor}`} aria-hidden />
-
-          {/* Ref id (mono) */}
-          <span
-            className="shrink-0 text-[11px] tracking-[0.05em] text-stone-400 hidden md:block w-[68px]"
-            style={{ fontFamily: MONO }}
-          >
-            {tenderRef(t.id)}
-          </span>
+          <span className={`shrink-0 mt-2 sm:mt-0 h-1.5 w-1.5 rounded-full ${dotColor}`} aria-hidden />
 
           {/* Title + agency */}
-          <span className="flex-1 min-w-0 flex flex-col">
-            <span
-              className="text-[15.5px] leading-snug text-stone-900 truncate"
-              style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
-            >
-              {t.tender_title}
+          <span className="flex-1 min-w-0 order-2 sm:order-none flex flex-col w-full sm:w-auto">
+            <span className="flex items-baseline gap-2">
+              <span
+                className="shrink-0 text-[10px] tracking-[0.05em] text-stone-400 sm:hidden"
+                style={{ fontFamily: MONO }}
+              >
+                {tenderRef(t.id)}
+              </span>
+              <span
+                className="hidden md:block shrink-0 text-[11px] tracking-[0.05em] text-stone-400 w-[68px]"
+                style={{ fontFamily: MONO }}
+              >
+                {tenderRef(t.id)}
+              </span>
+              <span
+                className="text-[14.5px] sm:text-[15.5px] leading-snug text-stone-900 truncate"
+                style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
+              >
+                {t.tender_title}
+              </span>
             </span>
-            <span className="mt-0.5 flex items-center gap-2 text-[11px] text-stone-500">
-              {t.tender_agency && <span className="truncate">{t.tender_agency}</span>}
+            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-stone-500">
+              {t.tender_agency && <span className="truncate max-w-full">{t.tender_agency}</span>}
               {procurementLabel(t) && (
                 <>
-                  <span className="text-stone-300">·</span>
-                  <span className="truncate">{procurementLabel(t)}</span>
+                  <span className="text-stone-300 hidden sm:inline">·</span>
+                  <span className="truncate hidden sm:inline">{procurementLabel(t)}</span>
                 </>
               )}
               {bucketLabel && (
@@ -764,7 +770,26 @@ export default function DashboardOverview() {
             </span>
           </span>
 
-          {/* Value */}
+          {/* Mobile-only: Fit + Deadline strip aligned right */}
+          <span className="sm:hidden order-3 w-full flex items-center justify-between gap-3 pl-3.5 pt-1">
+            <span
+              className="text-[12px] font-medium tabular-nums"
+              style={{
+                fontFamily: MONO,
+                color: t.fit_score >= 70 ? "#0f766e" : t.fit_score >= 50 ? "#a16207" : "#78716c",
+              }}
+            >
+              {t.fit_score > 0 ? `${t.fit_score}% fit` : "— fit"}
+            </span>
+            <span
+              className={`text-[11.5px] tabular-nums ${urgent ? "font-semibold text-red-700" : "text-stone-500"}`}
+              style={{ fontFamily: MONO }}
+            >
+              {deadlineLabel(t.tender_deadline)}
+            </span>
+          </span>
+
+          {/* Value (lg+ only) */}
           <span
             className="shrink-0 text-[12px] text-stone-500 tabular-nums hidden lg:block w-[120px] text-right"
             style={{ fontFamily: MONO }}
@@ -776,9 +801,9 @@ export default function DashboardOverview() {
               ?? "—"}
           </span>
 
-          {/* Fit % */}
+          {/* Fit % (sm+) */}
           <span
-            className="shrink-0 text-[14px] font-medium tabular-nums w-[58px] text-right"
+            className="hidden sm:block shrink-0 text-[14px] font-medium tabular-nums w-[58px] text-right"
             style={{
               fontFamily: MONO,
               color: t.fit_score >= 70 ? "#0f766e" : t.fit_score >= 50 ? "#a16207" : "#78716c",
@@ -787,9 +812,9 @@ export default function DashboardOverview() {
             {t.fit_score > 0 ? `${t.fit_score}%` : "—"}
           </span>
 
-          {/* Deadline */}
+          {/* Deadline (sm+) */}
           <span
-            className={`shrink-0 text-[12px] tabular-nums w-[90px] text-right ${
+            className={`hidden sm:block shrink-0 text-[12px] tabular-nums w-[90px] text-right ${
               urgent ? "font-semibold text-red-700" : "text-stone-500"
             }`}
             style={{ fontFamily: MONO }}
@@ -799,7 +824,7 @@ export default function DashboardOverview() {
 
           {/* Caret */}
           <svg
-            className={`shrink-0 h-3.5 w-3.5 text-stone-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+            className={`shrink-0 mt-1 sm:mt-0 h-3.5 w-3.5 text-stone-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -810,7 +835,7 @@ export default function DashboardOverview() {
         </button>
 
         {isExpanded && (
-          <div className="px-6 pb-6 pt-3 bg-stone-50/70 border-t border-stone-200/70">
+          <div className="px-4 sm:px-6 pb-5 sm:pb-6 pt-3 bg-stone-50/70 border-t border-stone-200/70">
             {/* Why matched */}
             <div className="mb-4 max-w-3xl">
               <div
@@ -946,21 +971,21 @@ export default function DashboardOverview() {
 
   // Compact stage row for active/submitted/won/lost (no expand)
   const renderStageRow = (t: PipelineTender, options: Array<{ label: string; nextStage: string }>) => (
-    <div key={t.id} className="border-b border-stone-200/80 last:border-b-0 px-6 py-3.5 flex items-center gap-5 hover:bg-stone-50 transition-colors">
+    <div key={t.id} className="border-b border-stone-200/80 last:border-b-0 px-4 sm:px-6 py-3 sm:py-3.5 flex flex-wrap sm:flex-nowrap items-start sm:items-center gap-x-3 sm:gap-x-5 gap-y-2 hover:bg-stone-50 transition-colors">
       <span
         className="shrink-0 text-[11px] tracking-[0.05em] text-stone-400 hidden md:block w-[68px]"
         style={{ fontFamily: MONO }}
       >
         {tenderRef(t.id)}
       </span>
-      <span className="flex-1 min-w-0">
+      <span className="flex-1 min-w-0 w-full sm:w-auto">
         <span
-          className="block text-[14.5px] text-stone-900 truncate"
+          className="block text-[14px] sm:text-[14.5px] text-stone-900 truncate"
           style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
         >
           {t.tender_title}
         </span>
-        {t.tender_agency && <span className="text-[11px] text-stone-500">{t.tender_agency}</span>}
+        {t.tender_agency && <span className="text-[11px] text-stone-500 truncate block">{t.tender_agency}</span>}
       </span>
       {t.tender_deadline && (
         <span
@@ -974,19 +999,30 @@ export default function DashboardOverview() {
       )}
       {t.fit_score > 0 && (
         <span
-          className="shrink-0 text-[12px] font-medium text-stone-700 tabular-nums w-[44px] text-right"
+          className="shrink-0 text-[12px] font-medium text-stone-700 tabular-nums hidden sm:block w-[44px] text-right"
           style={{ fontFamily: MONO }}
         >
           {t.fit_score}%
         </span>
       )}
-      <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex flex-wrap items-center gap-1.5 shrink-0 w-full sm:w-auto">
+        {/* Mobile-only meta strip */}
+        <span className="sm:hidden flex items-center gap-3 mr-auto text-[11px] tabular-nums" style={{ fontFamily: MONO }}>
+          {t.fit_score > 0 && (
+            <span className="text-stone-600 font-medium">{t.fit_score}%</span>
+          )}
+          {t.tender_deadline && (
+            <span className={isDeadlineSoon(t.tender_deadline) ? "font-semibold text-red-700" : "text-stone-500"}>
+              {shortDate(t.tender_deadline)}
+            </span>
+          )}
+        </span>
         {options.map((opt) => (
           <button
             key={opt.nextStage}
             onClick={() => moveItemStage(t.id, opt.nextStage)}
             disabled={stageSavingId === t.id}
-            className="border border-stone-300 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-600 hover:border-stone-700 hover:text-stone-900 disabled:opacity-50"
+            className="border border-stone-300 bg-white px-2.5 py-1.5 sm:py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-600 hover:border-stone-700 hover:text-stone-900 disabled:opacity-50"
             style={{ fontFamily: MONO }}
           >
             → {opt.label}
@@ -999,7 +1035,7 @@ export default function DashboardOverview() {
   // ──────────────────────────────────────────────────────────────────────
   return (
     <div
-      className="px-10 py-10 max-w-[1280px]"
+      className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 lg:py-10 max-w-[1280px]"
       style={{
         backgroundColor: "var(--color-paper)",
         backgroundImage:
@@ -1029,14 +1065,14 @@ export default function DashboardOverview() {
         </div>
         <div className="mt-1 h-px bg-stone-300/80" />
         <h1
-          className="mt-5 text-[68px] leading-[0.96] font-medium text-stone-900 tracking-[-0.015em]"
+          className="mt-4 sm:mt-5 text-[40px] sm:text-[54px] lg:text-[68px] leading-[0.96] font-medium text-stone-900 tracking-[-0.015em] break-words"
           style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
         >
           {companyName}
         </h1>
         <div className="mt-3 flex items-baseline justify-between gap-6">
           <p
-            className="max-w-2xl text-[16px] leading-relaxed text-stone-700"
+            className="max-w-2xl text-[14px] sm:text-[16px] leading-relaxed text-stone-700"
             style={{ fontFamily: SERIF }}
           >
             {urgentCount > 0 ? (
@@ -1103,17 +1139,17 @@ export default function DashboardOverview() {
       {/* ───── §00 · STATE OF READINESS ─────
           Two-column hero: readiness ring + pipeline funnel.
       */}
-      <section className="mt-10">
-        <div className="flex items-baseline justify-between gap-4 mb-6">
-          <div className="flex items-baseline gap-4">
+      <section className="mt-8 sm:mt-10">
+        <div className="flex items-baseline justify-between gap-4 mb-4 sm:mb-6">
+          <div className="flex items-baseline gap-3 sm:gap-4">
             <span
-              className="text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-400"
+              className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.18em] sm:tracking-[0.22em] text-stone-400"
               style={{ fontFamily: MONO }}
             >
               §&nbsp;00
             </span>
             <h2
-              className="text-[15px] font-semibold uppercase tracking-[0.22em] text-stone-700"
+              className="text-[12px] sm:text-[15px] font-semibold uppercase tracking-[0.18em] sm:tracking-[0.22em] text-stone-700"
               style={{ fontFamily: MONO }}
             >
               State of the Pipeline
@@ -1121,7 +1157,7 @@ export default function DashboardOverview() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,420px)_1fr] gap-10 items-start">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,420px)_1fr] gap-8 xl:gap-10 items-start">
           {/* Left: readiness */}
           <div className="border-r-0 xl:border-r xl:pr-10 xl:border-stone-300/70">
             <ReadinessHero score={readiness?.readiness_score ?? null} tier={readiness?.recommended_tier ?? null} />
@@ -1176,7 +1212,7 @@ export default function DashboardOverview() {
 
       {/* ───── §01 · WHAT TO DO THIS WEEK ───── */}
       {(activeOrderCount != null || (readiness?.action_plan?.length ?? 0) > 0 || urgentCount > 0) && (
-        <section className="mt-14">
+        <section className="mt-10 sm:mt-14">
           <SectionHeader index="01" title="This week" hint="Three things to act on" />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-stone-200/80 border border-stone-200/80">
             {/* Active services */}
@@ -1303,7 +1339,7 @@ export default function DashboardOverview() {
 
       {/* ───── §02 · MATCHED TENDERS ───── */}
       {matchedTenders.length > 0 && (
-        <section className="mt-14">
+        <section className="mt-10 sm:mt-14">
           <SectionHeader
             index="02"
             title="Matched tenders"
@@ -1371,7 +1407,7 @@ export default function DashboardOverview() {
 
       {/* ───── §03 · READINESS GAPS ───── */}
       {readiness && readiness.action_plan.length > 0 && (
-        <section className="mt-14">
+        <section className="mt-10 sm:mt-14">
           <SectionHeader
             index="03"
             title="Readiness gaps"
@@ -1391,17 +1427,17 @@ export default function DashboardOverview() {
                 <div key={key} className="border-b border-stone-200/80 last:border-b-0">
                   <button
                     onClick={() => setExpandedGapKey(isOpen ? null : key)}
-                    className="w-full flex items-center gap-4 px-6 py-4 text-left hover:bg-stone-50 transition-colors"
+                    className="w-full flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3.5 sm:py-4 text-left hover:bg-stone-50 transition-colors"
                   >
                     <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${sevDot}`} />
                     <span
-                      className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 w-16 shrink-0"
+                      className="text-[10px] font-semibold uppercase tracking-[0.16em] sm:tracking-[0.18em] text-stone-400 w-12 sm:w-16 shrink-0"
                       style={{ fontFamily: MONO }}
                     >
                       {action.severity}
                     </span>
                     <span
-                      className={`flex-1 text-[15px] leading-snug ${complete ? "line-through text-stone-400" : "text-stone-900"}`}
+                      className={`flex-1 text-[14px] sm:text-[15px] leading-snug ${complete ? "line-through text-stone-400" : "text-stone-900"}`}
                       style={{ fontFamily: SERIF }}
                     >
                       {action.gap}
@@ -1426,7 +1462,7 @@ export default function DashboardOverview() {
                   </button>
 
                   {isOpen && (
-                    <div className="px-6 pb-5 pt-2 bg-stone-50/70 border-t border-stone-200/70 space-y-3">
+                    <div className="px-4 sm:px-6 pb-5 pt-2 bg-stone-50/70 border-t border-stone-200/70 space-y-3">
                       <p
                         className="text-[14px] leading-relaxed text-stone-800 max-w-3xl"
                         style={{ fontFamily: SERIF }}
@@ -1474,7 +1510,7 @@ export default function DashboardOverview() {
 
       {/* ───── §04 · ACTIVE WORK ───── */}
       {evaluatingItems.length > 0 && (
-        <section className="mt-14">
+        <section className="mt-10 sm:mt-14">
           <SectionHeader index="04" title="Active work" count={evaluatingItems.length} hint="Evaluating or preparing" />
           <div className="border border-stone-300/70 bg-white">
             {evaluatingItems.map((t) =>
@@ -1489,7 +1525,7 @@ export default function DashboardOverview() {
 
       {/* ───── §05 · SUBMITTED ───── */}
       {submittedItems.length > 0 && (
-        <section className="mt-14">
+        <section className="mt-10 sm:mt-14">
           <SectionHeader index="05" title="Submitted" count={submittedItems.length} hint="Awaiting outcome" />
           <div className="border border-stone-300/70 bg-white">
             {submittedItems.map((t) =>
@@ -1504,7 +1540,7 @@ export default function DashboardOverview() {
 
       {/* ───── §06 · WON ───── */}
       {wonItems.length > 0 && (
-        <section className="mt-14">
+        <section className="mt-10 sm:mt-14">
           <SectionHeader index="06" title="Won" count={wonItems.length} />
           <div className="border border-stone-300/70 bg-white">
             {wonItems.map((t) => renderStageRow(t, []))}
@@ -1514,7 +1550,7 @@ export default function DashboardOverview() {
 
       {/* ───── §07 · LOST ───── */}
       {lostItems.length > 0 && (
-        <section className="mt-14 mb-10">
+        <section className="mt-10 sm:mt-14 mb-10">
           <SectionHeader index="07" title="Lost" count={lostItems.length} hint="Archived" />
           <div className="border border-stone-300/70 bg-white">
             {lostItems.map((t) => renderStageRow(t, []))}
