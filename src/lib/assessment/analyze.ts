@@ -205,6 +205,9 @@ function applyBroadProfileGuards(
   const hasConcreteTrade = hasAnySignal(contextText, concreteTradeSignals);
   const hasDirectSecurity = hasAnySignal(contextText, directSecuritySignals);
   const hasManyProgramAreas = (devThemes?.length ?? 0) >= 3 || classification.sectors.length >= 4;
+  const hasEducationDelivery = hasAnyPattern(text, [
+    /\b(education programme|education program|school|teacher|curriculum|e-learning|learning platform|vocational training|skills training provider|training provider)\b/i,
+  ]);
   const coreConsulting = hasAnySignal(text, [
     "consulting firm", "consultancy firm", "development consulting",
     "boutique consulting", "advisory services", "evaluation center",
@@ -224,7 +227,7 @@ function applyBroadProfileGuards(
 
   const sectors = addUnique(baseSectors, [
     ...(coreConsulting || !isNgo ? ["Consulting Services", "Research & Evaluation", "Technical Assistance"] : []),
-    ...(hasAnySignal(text, ["capacity building", "training"]) ? ["Education & Training"] : []),
+    ...((isNgo || hasEducationDelivery) && hasAnySignal(text, ["capacity building", "training"]) ? ["Education & Training"] : []),
     ...(hasAnySignal(text, ["livelihood", "livelihoods", "enterprise development", "private sector development", "access to finance"]) ? ["Economic Development"] : []),
     ...(hasAnySignal(text, ["food security"]) ? ["Food Security"] : []),
     ...(hasAnySignal(text, ["protection", "cccm", "camp coordination", "humanitarian"]) ? ["Humanitarian Response"] : []),

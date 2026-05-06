@@ -1628,6 +1628,17 @@ export async function matchGrants(
   if (!candidates.length) return [];
 
   const userSlugs = userSectorSlugs(null, sectors);
+  const explicitEducationTheme = devThemes.some((theme) =>
+    /\b(education|training|skills|youth|teacher|school|curriculum|learning)\b/i.test(theme)
+  );
+  if (
+    userSlugs.has("it")
+    && userSlugs.has("education")
+    && normalizeGrantOrgType(orgType ?? "") !== "ngo"
+    && !explicitEducationTheme
+  ) {
+    userSlugs.delete("education");
+  }
   const themeSet = new Set([
     ...devThemes.map((t) => t.toLowerCase()),
     ...[...userSlugs].flatMap((slug) => SECTOR_TO_GRANT_THEME[slug] ?? []),
