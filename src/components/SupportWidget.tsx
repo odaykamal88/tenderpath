@@ -43,8 +43,8 @@ export default function SupportWidget() {
                   </svg>
                 ),
                 label: "Book a Free Call",
-                sub: "15-min expert consultation",
-                href: "mailto:info@tenderpath.me?subject=Book a call",
+                sub: "30-min founder consultation",
+                href: "https://calendly.com/oday-kamal-9ya/30min",
               },
               {
                 icon: (
@@ -64,7 +64,7 @@ export default function SupportWidget() {
                 ),
                 label: "Telegram",
                 sub: "Message us on Telegram",
-                href: "https://t.me/tenderpath_bot",
+                href: "https://t.me/Tenderpathbot",
               },
             ].map((item) => (
               <a

@@ -42,7 +42,7 @@ const faqs = [
   },
   {
     q: "How do I get support?",
-    a: "Email us at hello@tenderpath.co and we'll respond within one business day. For urgent questions, use the live chat on our website. You can also book a free 15-minute expert call — just email us with 'Book a call' in the subject line.",
+    a: "Email us at info@tenderpath.me and we'll respond within one business day. You can also message @Tenderpathbot on Telegram for quick questions, or book a free 30-minute founder call at calendly.com/oday-kamal-9ya/30min.",
   },
 ];
 
@@ -150,7 +150,7 @@ export default function FAQPage() {
             We respond within one business day.
           </h3>
           <p className="mt-2 text-[13px] sm:text-[13.5px] leading-relaxed text-stone-600">
-            For complex UN procurement questions, book a free 15-minute call with an expert. We can review your shortlist, suggest the right service path, and answer anything specific to your sector.
+            For complex UN procurement questions, book a free 30-minute call with the founder. We can review your shortlist, suggest the right service path, and answer anything specific to your sector.
           </p>
           <div className="mt-5 flex flex-col sm:flex-row flex-wrap gap-3">
             <a
@@ -160,10 +160,12 @@ export default function FAQPage() {
               Email us
             </a>
             <a
-              href="mailto:hello@tenderpath.co?subject=Book a call"
+              href="https://calendly.com/oday-kamal-9ya/30min"
+              target="_blank"
+              rel="noreferrer"
               className="rounded-sm border border-stone-300 px-4 py-3 sm:py-2.5 text-center sm:text-left text-[12.5px] font-semibold text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
             >
-              Book a free expert call
+              Book a free 30-min call
             </a>
           </div>
         </div>
