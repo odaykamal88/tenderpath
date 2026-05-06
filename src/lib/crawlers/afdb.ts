@@ -7,7 +7,7 @@ import { normalizeSector } from "./sector-map";
 import { type CrawlResult, type RawTender, withRetry } from "./types";
 import { browserAvailable, fetchViaBrowser } from "./_browser";
 
-const LISTING_URL = "https://www.afdb.org/en/documents/category/specific-procurement-notices";
+const LISTING_URL = "https://www.afdb.org/en/documents/project-related-procurement/procurement-notices/specific-procurement-notices";
 const BASE_URL = "https://www.afdb.org";
 const MAX_PAGES = 2;
 const BROWSER_TIMEOUT_MS = 60000;
@@ -113,6 +113,27 @@ function parseItems(html: string): AfDBItem[] {
       country: inferCountry(title),
       sector,
     });
+  }
+
+  if (!items.length) {
+    const linkRe = /href="([^"]+)"[^>]*>\s*((?:SPN|EOI|GPN|REOI)\s*-\s*[\s\S]*?)<\/a>/gi;
+    let match: RegExpExecArray | null;
+    while ((match = linkRe.exec(html)) !== null) {
+      const title = cleanText(match[2]);
+      if (!title || title.length < 10) continue;
+      const url = absoluteUrl(decodeEntities(match[1]));
+      if (seen.has(url)) continue;
+      seen.add(url);
+      const nearby = html.slice(Math.max(0, match.index - 500), match.index + match[0].length + 200);
+      const publishedRaw = cleanText(nearby.match(/Publication Date:\s*([\s\S]{1,80}?)(?:<|$)/i)?.[1]);
+      items.push({
+        title,
+        url,
+        published: toISO(publishedRaw),
+        country: inferCountry(title),
+        sector: null,
+      });
+    }
   }
   return items;
 }

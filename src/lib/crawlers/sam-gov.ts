@@ -95,7 +95,17 @@ function mapOpp(o: SAMOpportunity): RawTender | null {
   if (!isActive(o) || isExcludedType(o)) return null;
 
   const country = o.placeOfPerformance?.country?.name ?? "United States";
-  const description = o.description ? stripHtml(o.description).slice(0, 3000) : null;
+  const strippedDescription = o.description ? stripHtml(o.description).slice(0, 3000) : "";
+  const rawDescription = /^https?:\/\//i.test(strippedDescription) ? "" : strippedDescription;
+  const description = [
+    rawDescription || null,
+    o.fullParentPathName ? `Agency path: ${o.fullParentPathName}.` : null,
+    o.naicsCode ? `NAICS: ${o.naicsCode}.` : null,
+    o.classificationCode ? `Classification: ${o.classificationCode}.` : null,
+    o.type ?? o.baseType ? `Notice type: ${o.type ?? o.baseType}.` : null,
+    country ? `Place of performance: ${country}.` : null,
+    o.responseDeadLine ? `Response deadline: ${o.responseDeadLine}.` : null,
+  ].filter(Boolean).join(" ") || null;
   const sector = normalizeSector(o.naicsCode ?? o.classificationCode, o.title, description)[0] ?? null;
   return {
     reference_id: `SAM-${ref}`,

@@ -76,7 +76,14 @@ function mapNotice(n: WBNotice): RawTender | null {
   const refRaw = n.bid_reference_no || n.notice_no || n.id;
   const title = n.project_name || n.bid_description;
   if (!refRaw || !title) return null;
-  const description = n.bid_description ?? null;
+  const description = [
+    n.bid_description ?? null,
+    n.project_id ? `Project ID: ${n.project_id}.` : null,
+    n.procurement_method_name ? `Procurement method: ${n.procurement_method_name}.` : null,
+    n.notice_type ? `Notice type: ${n.notice_type}.` : null,
+    n.borrower ? `Borrower: ${n.borrower}.` : null,
+    n.country_name ?? n.project_ctry_name ? `Geography: ${n.country_name ?? n.project_ctry_name}.` : null,
+  ].filter(Boolean).join(" ") || null;
   const rawSector = sectorText(n.major_sector) ?? sectorText(n.sector);
   const sector = normalizeSector(rawSector, title, description)[0] ?? null;
 

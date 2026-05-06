@@ -203,6 +203,20 @@ ALTER TABLE pipeline_items ADD COLUMN IF NOT EXISTS assessment_id INTEGER REFERE
 ALTER TABLE pipeline_items ADD COLUMN IF NOT EXISTS match_reasons JSONB;
 ALTER TABLE user_tender_feedback ADD COLUMN IF NOT EXISTS reason TEXT;
 ALTER TABLE user_tender_feedback ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE user_tender_feedback ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+CREATE TABLE IF NOT EXISTS user_grant_feedback (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  assessment_id INTEGER REFERENCES assessments(id) ON DELETE SET NULL,
+  grant_id INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  reason TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (user_id, grant_id)
+);
+CREATE INDEX IF NOT EXISTS user_grant_feedback_user_status_idx ON user_grant_feedback (user_id, status);
 
 CREATE TABLE IF NOT EXISTS work_orders (
   id SERIAL PRIMARY KEY,

@@ -498,6 +498,8 @@ export default function DashboardOverview() {
   const [matchedTenders, setMatchedTenders] = useState<PipelineTender[]>([]);
   const [matchedGrants, setMatchedGrants] = useState<GrantMatch[]>([]);
   const [feedbackSavingId, setFeedbackSavingId] = useState<number | null>(null);
+  const [grantFeedbackSavingId, setGrantFeedbackSavingId] = useState<number | null>(null);
+  const [refreshingMatches, setRefreshingMatches] = useState(false);
   const [readiness, setReadiness] = useState<ReadinessData | null>(null);
   const [completedGapKeys, setCompletedGapKeys] = useState<Set<string>>(new Set());
   const [expandedTenderId, setExpandedTenderId] = useState<number | null>(null);
@@ -557,9 +559,18 @@ export default function DashboardOverview() {
         if (!r.ok) throw new Error(`Latest matches GET failed: ${r.status}`);
         return r.json();
       }),
-    ]).then(([pipelineBody, feedbackBody, readinessBody, latestMatchesBody]) => {
+      fetch("/api/dashboard/grant-feedback?status=not_relevant", {
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      }).then((r) => {
+        if (!r.ok) throw new Error(`Grant feedback GET failed: ${r.status}`);
+        return r.json();
+      }),
+    ]).then(([pipelineBody, feedbackBody, readinessBody, latestMatchesBody, grantFeedbackBody]) => {
       const dismissed = new Set<number>(
         (feedbackBody?.feedback ?? []).map((f: { tender_id: number }) => f.tender_id)
+      );
+      const dismissedGrantIds = new Set<number>(
+        (grantFeedbackBody?.feedback ?? []).map((f: { grant_id: number }) => f.grant_id)
       );
 
       if (pipelineBody?.items) {
@@ -589,6 +600,7 @@ export default function DashboardOverview() {
 
       if (latestMatchesBody?.matched_grants) {
         setMatchedGrants((latestMatchesBody.matched_grants as GrantMatch[])
+          .filter((grant) => !dismissedGrantIds.has(grant.id))
           .sort((a, b) => (a.opportunity_bucket_priority ?? 99) - (b.opportunity_bucket_priority ?? 99) || b.score - a.score)
           .slice(0, 12));
       }
@@ -716,6 +728,56 @@ export default function DashboardOverview() {
       setWorkflowError("We could not save that tender preference. Please try again.");
     } finally {
       setFeedbackSavingId(null);
+    }
+  }
+
+  async function handleGrantFeedback(grant: GrantMatch, status: "saved" | "not_relevant" | "pursuing") {
+    setGrantFeedbackSavingId(grant.id);
+    setWorkflowError(null);
+    try {
+      const res = await fetch("/api/dashboard/grant-feedback", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          grant_id: grant.id,
+          assessment_id: readiness?.id ?? null,
+          status,
+          reason: status === "not_relevant"
+            ? "Dismissed from dashboard workbench"
+            : status === "pursuing"
+            ? "Marked as pursuing from dashboard workbench"
+            : "Saved from dashboard workbench",
+        }),
+      });
+      if (!res.ok) throw new Error(`Grant feedback POST failed: ${res.status}`);
+      if (status === "not_relevant") {
+        setMatchedGrants((prev) => prev.filter((g) => g.id !== grant.id));
+      }
+    } catch (err) {
+      console.error("[tp:dashboard:grant_feedback_failed]", err);
+      setWorkflowError("We could not save that grant preference. Please try again.");
+    } finally {
+      setGrantFeedbackSavingId(null);
+    }
+  }
+
+  async function refreshLatestMatches() {
+    setRefreshingMatches(true);
+    setWorkflowError(null);
+    try {
+      const res = await fetch("/api/assessment/latest-matches", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ seed_pipeline: true }),
+      });
+      if (!res.ok) throw new Error(`Latest matches refresh failed: ${res.status}`);
+      await loadDashboard();
+      setSeeded(true);
+    } catch (err) {
+      console.error("[tp:dashboard:refresh_matches_failed]", err);
+      setWorkflowError("We could not refresh your latest matches. Please try again.");
+    } finally {
+      setRefreshingMatches(false);
     }
   }
 
@@ -1146,6 +1208,17 @@ export default function DashboardOverview() {
             {today}
           </span>
         </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={refreshLatestMatches}
+            disabled={refreshingMatches}
+            className="border border-stone-400 bg-white px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-700 hover:border-stone-900 disabled:opacity-50"
+            style={{ fontFamily: MONO }}
+          >
+            {refreshingMatches ? "Refreshing..." : "Refresh matches"}
+          </button>
+        </div>
       </header>
 
       {/* Welcome banner — shown after fresh assessment seed */}
@@ -1529,6 +1602,32 @@ export default function DashboardOverview() {
                             ) : (
                               <span className="text-[11px] text-stone-400">No source URL</span>
                             )}
+                            <div className="mt-3 flex flex-wrap justify-start gap-2 lg:justify-end">
+                              <button
+                                type="button"
+                                onClick={() => handleGrantFeedback(grant, "saved")}
+                                disabled={grantFeedbackSavingId === grant.id}
+                                className="text-[11px] text-stone-500 hover:text-stone-900 disabled:opacity-50 underline-offset-4 hover:underline"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleGrantFeedback(grant, "pursuing")}
+                                disabled={grantFeedbackSavingId === grant.id}
+                                className="text-[11px] text-stone-500 hover:text-stone-900 disabled:opacity-50 underline-offset-4 hover:underline"
+                              >
+                                Pursuing
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleGrantFeedback(grant, "not_relevant")}
+                                disabled={grantFeedbackSavingId === grant.id}
+                                className="text-[11px] text-stone-400 hover:text-red-700 disabled:opacity-50 underline-offset-4 hover:underline"
+                              >
+                                Dismiss
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </article>
