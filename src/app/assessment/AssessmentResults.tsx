@@ -180,14 +180,14 @@ export default function AssessmentResults({
                 </span>
                 <div>
                   <h3 className="font-serif text-[18px] text-ink leading-snug mb-1.5">
-                    {gap.title}
+                    {gap.gap}
                   </h3>
                   <p className="text-[13px] text-ink-2 leading-[1.6]">
-                    {gap.description}
+                    {gap.fix}
                   </p>
-                  {gap.action && (
+                  {gap.action_steps?.[0] && (
                     <p className="font-mono text-[10px] tracking-[0.04em] text-ink-3 mt-2">
-                      → {gap.action}
+                      → {gap.action_steps[0]}
                     </p>
                   )}
                 </div>
