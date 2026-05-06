@@ -119,6 +119,7 @@ interface BridgeData {
   assessment_id: number;
   email?: string;
   readiness_score: number;
+  grant_readiness_score?: number;
   company_name: string;
   matched_tenders: Array<{
     id?: number;
@@ -129,7 +130,35 @@ interface BridgeData {
     fit_score?: number;
     structured_reasons?: MatchReason | null;
   }>;
+  matched_grants?: GrantMatch[];
   gaps: Array<{ gap: string; severity: string }>;
+}
+
+interface GrantMatch {
+  id: number;
+  title: string;
+  agency: string;
+  deadline: string | null;
+  sector: string | null;
+  score: number;
+  source_url?: string | null;
+  country?: string | null;
+  region?: string | null;
+  value_range?: string | null;
+  description?: string | null;
+  org_type_mismatch?: boolean;
+  match_reason?: string | null;
+  match_reasons?: string[];
+  geography_alignment?: {
+    userCountries?: string[];
+    grantCountry?: string | null;
+    mode: "direct" | "global-open" | "unknown" | "mismatch";
+  };
+  funding_scope?: "domestic" | "international" | "global" | "unknown";
+  opportunity_bucket?: string;
+  opportunity_bucket_label?: string;
+  opportunity_bucket_reason?: string;
+  opportunity_bucket_priority?: number;
 }
 
 interface ReadinessData {
@@ -247,6 +276,26 @@ function nextActionFor(item: PipelineTender): {
 
 function gapKey(action: ReadinessAction): string {
   return `${action.severity}:${action.gap}`;
+}
+
+function grantGroupKey(grant: GrantMatch): "strong" | "strategic" | "watchlist" {
+  if (grant.opportunity_bucket === "act_now" || grant.opportunity_bucket === "strong_fit" || grant.score >= 70) return "strong";
+  if (grant.opportunity_bucket === "strategic" || grant.score >= 55) return "strategic";
+  return "watchlist";
+}
+
+function grantGeoLabel(grant: GrantMatch): string {
+  return grant.country ?? grant.region ?? grant.geography_alignment?.grantCountry ?? "Geography not listed";
+}
+
+function grantCaveats(grant: GrantMatch): string[] {
+  const caveats: string[] = [];
+  if (grant.org_type_mismatch) caveats.push("Eligibility mismatch risk");
+  if (!grant.country && !grant.region) caveats.push("Country eligibility unclear");
+  if (grant.geography_alignment?.mode === "mismatch") caveats.push(`Geography caveat: ${grant.geography_alignment.grantCountry ?? "different geography"}`);
+  if (grant.funding_scope === "domestic") caveats.push("Likely domestic-scope funding");
+  if (!grant.match_reasons?.some((reason) => /eligibility fit/i.test(reason))) caveats.push("Eligibility needs review");
+  return caveats.slice(0, 3);
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -447,7 +496,10 @@ export default function DashboardOverview() {
     strong: number;
   } | null>(null);
   const [matchedTenders, setMatchedTenders] = useState<PipelineTender[]>([]);
+  const [matchedGrants, setMatchedGrants] = useState<GrantMatch[]>([]);
   const [feedbackSavingId, setFeedbackSavingId] = useState<number | null>(null);
+  const [grantFeedbackSavingId, setGrantFeedbackSavingId] = useState<number | null>(null);
+  const [refreshingMatches, setRefreshingMatches] = useState(false);
   const [readiness, setReadiness] = useState<ReadinessData | null>(null);
   const [completedGapKeys, setCompletedGapKeys] = useState<Set<string>>(new Set());
   const [expandedTenderId, setExpandedTenderId] = useState<number | null>(null);
@@ -500,9 +552,25 @@ export default function DashboardOverview() {
         if (!r.ok) throw new Error(`Readiness GET failed: ${r.status}`);
         return r.json();
       }),
-    ]).then(([pipelineBody, feedbackBody, readinessBody]) => {
+      fetch("/api/assessment/latest-matches", {
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      }).then((r) => {
+        if (r.status === 404) return null;
+        if (!r.ok) throw new Error(`Latest matches GET failed: ${r.status}`);
+        return r.json();
+      }),
+      fetch("/api/dashboard/grant-feedback?status=not_relevant", {
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      }).then((r) => {
+        if (!r.ok) throw new Error(`Grant feedback GET failed: ${r.status}`);
+        return r.json();
+      }),
+    ]).then(([pipelineBody, feedbackBody, readinessBody, latestMatchesBody, grantFeedbackBody]) => {
       const dismissed = new Set<number>(
         (feedbackBody?.feedback ?? []).map((f: { tender_id: number }) => f.tender_id)
+      );
+      const dismissedGrantIds = new Set<number>(
+        (grantFeedbackBody?.feedback ?? []).map((f: { grant_id: number }) => f.grant_id)
       );
 
       if (pipelineBody?.items) {
@@ -528,6 +596,13 @@ export default function DashboardOverview() {
 
       if (readinessBody?.assessment) {
         setReadiness(readinessBody.assessment as ReadinessData);
+      }
+
+      if (latestMatchesBody?.matched_grants) {
+        setMatchedGrants((latestMatchesBody.matched_grants as GrantMatch[])
+          .filter((grant) => !dismissedGrantIds.has(grant.id))
+          .sort((a, b) => (a.opportunity_bucket_priority ?? 99) - (b.opportunity_bucket_priority ?? 99) || b.score - a.score)
+          .slice(0, 12));
       }
     }).catch((err) => {
       console.error("[tp:dashboard:load_failed]", err);
@@ -584,6 +659,7 @@ export default function DashboardOverview() {
     try {
       const data: BridgeData = JSON.parse(raw);
       setBridge(data);
+      setMatchedGrants(data.matched_grants ?? []);
       seedPipeline(data);
     } catch (err) {
       console.error("[tp:bridge:parse_failed]", err);
@@ -655,6 +731,56 @@ export default function DashboardOverview() {
     }
   }
 
+  async function handleGrantFeedback(grant: GrantMatch, status: "saved" | "not_relevant" | "pursuing") {
+    setGrantFeedbackSavingId(grant.id);
+    setWorkflowError(null);
+    try {
+      const res = await fetch("/api/dashboard/grant-feedback", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          grant_id: grant.id,
+          assessment_id: readiness?.id ?? null,
+          status,
+          reason: status === "not_relevant"
+            ? "Dismissed from dashboard workbench"
+            : status === "pursuing"
+            ? "Marked as pursuing from dashboard workbench"
+            : "Saved from dashboard workbench",
+        }),
+      });
+      if (!res.ok) throw new Error(`Grant feedback POST failed: ${res.status}`);
+      if (status === "not_relevant") {
+        setMatchedGrants((prev) => prev.filter((g) => g.id !== grant.id));
+      }
+    } catch (err) {
+      console.error("[tp:dashboard:grant_feedback_failed]", err);
+      setWorkflowError("We could not save that grant preference. Please try again.");
+    } finally {
+      setGrantFeedbackSavingId(null);
+    }
+  }
+
+  async function refreshLatestMatches() {
+    setRefreshingMatches(true);
+    setWorkflowError(null);
+    try {
+      const res = await fetch("/api/assessment/latest-matches", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ seed_pipeline: true }),
+      });
+      if (!res.ok) throw new Error(`Latest matches refresh failed: ${res.status}`);
+      await loadDashboard();
+      setSeeded(true);
+    } catch (err) {
+      console.error("[tp:dashboard:refresh_matches_failed]", err);
+      setWorkflowError("We could not refresh your latest matches. Please try again.");
+    } finally {
+      setRefreshingMatches(false);
+    }
+  }
+
   function isRosterAgency(agency: string | null): boolean {
     if (!agency) return false;
     return /\b(UNDP|UNICEF|WFP|UNHCR|UNOPS|IOM|ILO|FAO|WHO|UNFPA)\b/i.test(agency);
@@ -704,6 +830,26 @@ export default function DashboardOverview() {
   const issueDate = new Date().toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
   const urgentCount = matchedTenders.filter((t) => isDeadlineSoon(t.tender_deadline)).length;
   const topGap = readiness?.action_plan?.find((a) => a.severity === "high" && !a.covered_by_vault);
+  const grantGroups = [
+    {
+      key: "strong",
+      title: "Strong fit",
+      hint: "Best alignment on theme, eligibility, and geography",
+      grants: matchedGrants.filter((grant) => grantGroupKey(grant) === "strong"),
+    },
+    {
+      key: "strategic",
+      title: "Strategic",
+      hint: "Relevant but likely needs eligibility or geography review",
+      grants: matchedGrants.filter((grant) => grantGroupKey(grant) === "strategic"),
+    },
+    {
+      key: "watchlist",
+      title: "Watchlist",
+      hint: "Possible fit; verify before spending time",
+      grants: matchedGrants.filter((grant) => grantGroupKey(grant) === "watchlist"),
+    },
+  ].filter((group) => group.grants.length > 0);
 
   // ───────── Tender table row ─────────
   const renderTenderRow = (t: PipelineTender, opts: { showStage?: boolean } = {}) => {
@@ -1098,6 +1244,17 @@ export default function DashboardOverview() {
             {today}
           </span>
         </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={refreshLatestMatches}
+            disabled={refreshingMatches}
+            className="border border-stone-400 bg-white px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-700 hover:border-stone-900 disabled:opacity-50"
+            style={{ fontFamily: MONO }}
+          >
+            {refreshingMatches ? "Refreshing..." : "Refresh matches"}
+          </button>
+        </div>
       </header>
 
       {/* Welcome banner — shown after fresh assessment seed */}
@@ -1371,6 +1528,157 @@ export default function DashboardOverview() {
         </section>
       )}
 
+      {/* ───── §03 · MATCHED GRANTS ───── */}
+      {matchedGrants.length > 0 && (
+        <section className="mt-14">
+          <SectionHeader
+            index="03"
+            title="Matched grants"
+            count={matchedGrants.length}
+            hint="Grouped by grant fit and review risk"
+          />
+          <div className="space-y-5">
+            {grantGroups.map((group) => (
+              <div key={group.key} className="border border-stone-300/70 bg-white">
+                <div className="flex items-baseline justify-between gap-4 border-b border-stone-200/80 px-5 py-3">
+                  <div>
+                    <div
+                      className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+                      style={{ fontFamily: MONO }}
+                    >
+                      {group.title}
+                    </div>
+                    <div className="mt-1 text-[12px] text-stone-500">{group.hint}</div>
+                  </div>
+                  <div
+                    className="text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-400 tabular-nums"
+                    style={{ fontFamily: MONO }}
+                  >
+                    {group.grants.length}
+                  </div>
+                </div>
+                <div className="divide-y divide-stone-200/80">
+                  {group.grants.slice(0, 4).map((grant) => {
+                    const caveats = grantCaveats(grant);
+                    return (
+                      <article key={`${group.key}:${grant.id}`} className="px-5 py-4">
+                        <div className="grid grid-cols-1 lg:grid-cols-[1fr_110px_96px] gap-4 lg:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                              <span
+                                className="text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-400"
+                                style={{ fontFamily: MONO }}
+                              >
+                                {grant.agency}
+                              </span>
+                              <span className="text-stone-300">·</span>
+                              <span className="text-[11px] text-stone-500">{grantGeoLabel(grant)}</span>
+                              {grant.funding_scope && (
+                                <>
+                                  <span className="text-stone-300">·</span>
+                                  <span className="text-[11px] text-stone-500 capitalize">{grant.funding_scope}</span>
+                                </>
+                              )}
+                            </div>
+                            <h3
+                              className="text-[15.5px] leading-snug text-stone-900"
+                              style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
+                            >
+                              {grant.title}
+                            </h3>
+                            <p className="mt-2 text-[13px] leading-relaxed text-stone-600">
+                              {grant.match_reason
+                                ?? grant.match_reasons?.[0]
+                                ?? grant.opportunity_bucket_reason
+                                ?? "Matched against your latest assessment profile."}
+                            </p>
+                            {(grant.match_reasons ?? []).length > 1 && (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {(grant.match_reasons ?? []).slice(1, 4).map((reason) => (
+                                  <span
+                                    key={reason}
+                                    className="border border-stone-300/80 bg-stone-50 px-2 py-0.5 text-[10px] text-stone-600"
+                                  >
+                                    {reason.replace(/\.$/, "")}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {caveats.length > 0 && (
+                              <div className="mt-2 text-[11px] text-amber-800">
+                                Caveats: {caveats.join(" · ")}
+                              </div>
+                            )}
+                          </div>
+                          <div className="lg:text-right">
+                            <div
+                              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+                              style={{ fontFamily: MONO }}
+                            >
+                              Fit
+                            </div>
+                            <div
+                              className="mt-1 text-[28px] leading-none text-stone-900 tabular-nums"
+                              style={{ fontFamily: SERIF, fontFeatureSettings: "'tnum'" }}
+                            >
+                              {Math.round(grant.score)}%
+                            </div>
+                            <div className="mt-1 text-[11px] text-stone-500">{deadlineLabel(grant.deadline)}</div>
+                          </div>
+                          <div className="lg:text-right">
+                            {grant.source_url ? (
+                              <a
+                                href={grant.source_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-block border border-stone-400 bg-white px-3 py-2 text-[12px] font-medium text-stone-800 hover:border-stone-900 transition-colors"
+                              >
+                                Source →
+                              </a>
+                            ) : (
+                              <span className="text-[11px] text-stone-400">No source URL</span>
+                            )}
+                            <div className="mt-3 flex flex-wrap justify-start gap-2 lg:justify-end">
+                              <button
+                                type="button"
+                                onClick={() => handleGrantFeedback(grant, "saved")}
+                                disabled={grantFeedbackSavingId === grant.id}
+                                className="text-[11px] text-stone-500 hover:text-stone-900 disabled:opacity-50 underline-offset-4 hover:underline"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleGrantFeedback(grant, "pursuing")}
+                                disabled={grantFeedbackSavingId === grant.id}
+                                className="text-[11px] text-stone-500 hover:text-stone-900 disabled:opacity-50 underline-offset-4 hover:underline"
+                              >
+                                Pursuing
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleGrantFeedback(grant, "not_relevant")}
+                                disabled={grantFeedbackSavingId === grant.id}
+                                className="text-[11px] text-stone-400 hover:text-red-700 disabled:opacity-50 underline-offset-4 hover:underline"
+                              >
+                                Dismiss
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-[12px] text-stone-500" style={{ fontFamily: SERIF }}>
+            Strong grants are worth reviewing first. Strategic and watchlist grants stay visible, but their caveats should be checked before application planning.
+          </p>
+        </section>
+      )}
+
       {/* Empty state */}
       {matchedTenders.length === 0 && (pipelineStats === null || pipelineStats.total === 0) && (
         <section className="mt-14">
@@ -1405,11 +1713,11 @@ export default function DashboardOverview() {
         </section>
       )}
 
-      {/* ───── §03 · READINESS GAPS ───── */}
+      {/* ───── §04 · READINESS GAPS ───── */}
       {readiness && readiness.action_plan.length > 0 && (
         <section className="mt-10 sm:mt-14">
           <SectionHeader
-            index="03"
+            index="04"
             title="Readiness gaps"
             count={readiness.action_plan.length}
             hint={`${readiness.vault_coverage.covered_gaps} of ${readiness.vault_coverage.total_gaps} covered by vault`}

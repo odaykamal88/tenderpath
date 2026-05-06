@@ -4,6 +4,7 @@
  * Free, no API key. Docs: https://docs.ted.europa.eu/api/
  */
 import { type RawTender, type CrawlResult, withRetry, fetchWithTimeout } from "./types";
+import { normalizeSector } from "./sector-map";
 
 const TED_API = "https://api.ted.europa.eu/v3/notices/search";
 const PAGE_SIZE = 100;
@@ -18,9 +19,11 @@ interface TEDNotice {
   "publication-number"?: string;
   "notice-type"?: string;
   "BT-21-Lot"?: Record<string, string[]>;        // multilingual title
+  "BT-24-Lot"?: Record<string, string[]>;        // multilingual description
   "BT-5141-Lot"?: string[];                       // ISO country
   "deadline-receipt-tender-date-lot"?: string[];  // ISO datetime
   "organisation-name-buyer"?: Record<string, string[]>;
+  "classification-cpv"?: string[];
   // Estimated value of the lot(s). TED v3 returns either a single object or
   // an array when multiple lots are present; we take the first entry.
   "BT-27-Lot"?: TEDLotValue | TEDLotValue[];
@@ -39,8 +42,8 @@ async function searchPage(page: number): Promise<TEDNotice[]> {
   const body = {
     query: `publication-date>=${since} AND (notice-type=cn-standard OR notice-type=cn-social OR notice-type=cn-desg)`,
     fields: [
-      "publication-number", "notice-type", "BT-21-Lot", "BT-5141-Lot",
-      "deadline-receipt-tender-date-lot", "organisation-name-buyer", "BT-27-Lot", "links",
+      "publication-number", "notice-type", "BT-21-Lot", "BT-24-Lot", "BT-5141-Lot",
+      "deadline-receipt-tender-date-lot", "organisation-name-buyer", "BT-27-Lot", "classification-cpv", "links",
     ],
     page,
     limit: PAGE_SIZE,
@@ -95,6 +98,8 @@ function mapNotice(n: TEDNotice): RawTender | null {
   if (!ref || !titlePick) return null;
 
   const country = n["BT-5141-Lot"]?.[0] ?? "EU";
+  const descriptionPick = pickML(n["BT-24-Lot"]);
+  const description = descriptionPick?.value?.slice(0, 3000) ?? null;
   const buyerPick = pickML(n["organisation-name-buyer"]);
   const buyer = buyerPick?.value ?? "EU Buyer";
   const deadline = n["deadline-receipt-tender-date-lot"]?.[0]?.slice(0, 10) ?? null;
@@ -105,16 +110,19 @@ function mapNotice(n: TEDNotice): RawTender | null {
   const estimated_value = valueObj?.amount != null
     ? `${valueObj.currency ?? "EUR"} ${valueObj.amount.toLocaleString()}`
     : null;
+  const cpv = n["classification-cpv"]?.filter(Boolean).join(", ") ?? null;
+  const cpvSector = cpv ? `CPV ${cpv}` : null;
+  const sector = normalizeSector(cpvSector, titlePick.value, description)[0] ?? null;
 
   return {
     reference_id: `TED-${ref}`,
     title: titlePick.value.slice(0, 500),
-    description: null,
+    description,
     agency: buyer.slice(0, 200),
     country,
     country_code: country.length === 2 ? country : null,
     region: "Europe",
-    sector: null,
+    sector,
     deadline,
     estimated_value,
     source_url: url,

@@ -127,3 +127,30 @@ html {
     scroll-behavior: auto !important;
   }
 }
+
+@media print {
+  /* Hide everything except the report content */
+  nav, header:not(.report-masthead), footer, .print\:hidden { display: none !important; }
+
+  body { background: #f5f1e8 !important; color: #1a1a1a !important; font-size: 12px; }
+
+  /* Force page background */
+  html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* Remove padding added by the wizard wrapper */
+  main, [class*="min-h-screen"], [class*="px-"], [class*="py-"] {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Score bars should print filled */
+  [style*="width:"] { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* Avoid breaking sections mid-page */
+  section { page-break-inside: avoid; }
+
+  /* Keep bottom CTA off the last printout page */
+  section:last-of-type { page-break-before: auto; }
+
+  a[href]::after { content: none !important; }
+}

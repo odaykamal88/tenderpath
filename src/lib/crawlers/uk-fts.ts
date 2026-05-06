@@ -46,10 +46,10 @@ export async function crawlUKFTS(): Promise<CrawlResult> {
       url = pkg.links?.next;
     }
 
-    return { platform: "UK FTS", status: "success", tenders, durationMs: Date.now() - start };
+    return { platform: "UK Find a Tender", status: "success", tenders, durationMs: Date.now() - start };
   } catch (err) {
     return {
-      platform: "UK FTS", status: "failure", tenders: [], durationMs: Date.now() - start,
+      platform: "UK Find a Tender", status: "failure", tenders: [], durationMs: Date.now() - start,
       error: err instanceof Error ? err.message : String(err),
     };
   }

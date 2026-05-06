@@ -7,9 +7,11 @@ import { normalizeSector } from "./sector-map";
 import { type CrawlResult, type RawTender, withRetry } from "./types";
 import { browserAvailable, fetchViaBrowser } from "./_browser";
 
-const LISTING_URL = "https://www.afdb.org/en/documents/category/specific-procurement-notices";
+const LISTING_URL = "https://www.afdb.org/en/documents/project-related-procurement/procurement-notices";
 const BASE_URL = "https://www.afdb.org";
 const MAX_PAGES = 2;
+const BROWSER_TIMEOUT_MS = 60000;
+const NOTICE_PREFIX_RE = "(?:SPN|EOI|GPN|REOI|AMI|AOI|AAO|PPM|AGPM|Contract Awards|Attribution de contrat)";
 
 interface AfDBItem {
   title: string;
@@ -63,16 +65,20 @@ function toISO(raw: string | null): string | null {
 }
 
 function inferCountry(title: string): string | null {
-  const match = title.match(/^(?:SPN|EOI|GPN|REOI)\s*-\s*([^-]+?)\s*-/i);
+  const match = title.match(new RegExp(`^${NOTICE_PREFIX_RE}\\s*-\\s*([^-]+?)(?:\\s*-|$)`, "i"));
   const country = match?.[1]?.trim();
   return country || null;
 }
 
 function inferType(title: string): string {
-  const prefix = title.match(/^([A-Z]{2,5})\s*-/)?.[1]?.toUpperCase();
+  const prefix = title.match(new RegExp(`^(${NOTICE_PREFIX_RE})\\s*-`, "i"))?.[1]?.toUpperCase();
   if (prefix === "EOI" || prefix === "REOI") return "EOI";
   if (prefix === "GPN") return "General Procurement Notice";
   if (prefix === "SPN") return "Specific Procurement Notice";
+  if (prefix === "PPM" || prefix === "AGPM") return "Procurement Plan";
+  if (prefix === "AMI") return "EOI";
+  if (prefix === "AOI" || prefix === "AAO") return "Invitation to Bid";
+  if (prefix === "CONTRACT AWARDS" || prefix === "ATTRIBUTION DE CONTRAT") return "Contract Award";
   return "Procurement Notice";
 }
 
@@ -113,6 +119,55 @@ function parseItems(html: string): AfDBItem[] {
       sector,
     });
   }
+
+  if (!items.length) {
+    const noticePrefix = NOTICE_PREFIX_RE;
+    const linkRe = new RegExp(
+      `href="([^"]+)"[^>]*>\\s*(${noticePrefix}\\s*-\\s*[\\s\\S]*?)<\\/a>`,
+      "gi",
+    );
+    let match: RegExpExecArray | null;
+    while ((match = linkRe.exec(html)) !== null) {
+      const title = cleanText(match[2]);
+      if (!title || title.length < 10) continue;
+      const url = absoluteUrl(decodeEntities(match[1]));
+      if (seen.has(url)) continue;
+      seen.add(url);
+      const nearby = html.slice(Math.max(0, match.index - 500), match.index + match[0].length + 200);
+      const publishedRaw = cleanText(nearby.match(/Publication Date:\s*([\s\S]{1,80}?)(?:<|$)/i)?.[1]);
+      items.push({
+        title,
+        url,
+        published: toISO(publishedRaw),
+        country: inferCountry(title),
+        sector: null,
+      });
+    }
+  }
+  if (!items.length) {
+    const noticePrefix = NOTICE_PREFIX_RE;
+    const markdownLinkRe = new RegExp(
+      `\\[(${noticePrefix}\\s*-?\\s*[^\\]]{10,600})\\]\\((https:\\/\\/www\\.afdb\\.org\\/en\\/documents\\/[^)]+)\\)`,
+      "gi",
+    );
+    let match: RegExpExecArray | null;
+    while ((match = markdownLinkRe.exec(html)) !== null) {
+      const title = cleanText(match[1]);
+      if (!title) continue;
+      const url = decodeEntities(match[2]);
+      if (seen.has(url)) continue;
+      seen.add(url);
+      const nearby = html.slice(Math.max(0, match.index - 120), match.index);
+      const publishedRaw = cleanText(nearby.match(/(\d{1,2}-[A-Za-z]{3}-\d{4}|\d{1,2}\s+[A-Za-z]+\s+\d{4}|\d{4}-\d{2}-\d{2})/i)?.[1]);
+      items.push({
+        title,
+        url,
+        published: toISO(publishedRaw),
+        country: inferCountry(title),
+        sector: null,
+      });
+    }
+  }
   return items;
 }
 
@@ -129,7 +184,7 @@ async function fetchPage(page: number): Promise<string> {
     waitForSelector: "a[href*='procurement'], a[href*='documents']",
     waitAfterNav: 800,
     waitMs: 3000,
-    timeoutMs: 90000,
+    timeoutMs: BROWSER_TIMEOUT_MS,
   });
   if (!resp.ok) throw new Error(`AfDB page ${page} HTTP ${resp.status}: ${resp.body.slice(0, 180)}`);
   if (/Just a moment|cf-challenge|Enable JavaScript and cookies/i.test(resp.body)) {

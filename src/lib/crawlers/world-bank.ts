@@ -4,6 +4,7 @@
  * Docs: https://search.worldbank.org/api/v2/procnotices
  */
 import { type RawTender, type CrawlResult, withRetry, fetchWithTimeout } from "./types";
+import { normalizeSector } from "./sector-map";
 
 const WB_API = "https://search.worldbank.org/api/v2/procnotices";
 const PAGE_SIZE = 200;
@@ -24,8 +25,8 @@ interface WBNotice {
   noticedate?: string;
   country_code?: string;
   region?: string;
-  sector?: string;
-  major_sector?: string;
+  sector?: string | Array<{ sector_code?: string; sector_description?: string }>;
+  major_sector?: string | Array<{ sector_code?: string; sector_description?: string }>;
   borrower?: string;
   agency?: string;
   notice_status?: string;
@@ -75,16 +76,26 @@ function mapNotice(n: WBNotice): RawTender | null {
   const refRaw = n.bid_reference_no || n.notice_no || n.id;
   const title = n.project_name || n.bid_description;
   if (!refRaw || !title) return null;
+  const description = [
+    n.bid_description ?? null,
+    n.project_id ? `Project ID: ${n.project_id}.` : null,
+    n.procurement_method_name ? `Procurement method: ${n.procurement_method_name}.` : null,
+    n.notice_type ? `Notice type: ${n.notice_type}.` : null,
+    n.borrower ? `Borrower: ${n.borrower}.` : null,
+    n.country_name ?? n.project_ctry_name ? `Geography: ${n.country_name ?? n.project_ctry_name}.` : null,
+  ].filter(Boolean).join(" ") || null;
+  const rawSector = sectorText(n.major_sector) ?? sectorText(n.sector);
+  const sector = normalizeSector(rawSector, title, description)[0] ?? null;
 
   return {
     reference_id: `WB-${refRaw}`,
     title: title.slice(0, 500),
-    description: n.bid_description ?? null,
+    description,
     agency: n.agency ?? n.borrower ?? "World Bank",
     country: n.country_name ?? n.project_ctry_name ?? "Global",
     country_code: n.country_code ?? null,
     region: n.region ?? null,
-    sector: n.major_sector ?? n.sector ?? null,
+    sector,
     deadline: n.submission_deadline_date?.slice(0, 10) ?? null,
     estimated_value: formatWBValue(n),
     source_url: n.url ?? (n.id ? `https://projects.worldbank.org/en/projects-operations/procurement-detail/${n.id}` : null),
@@ -95,6 +106,16 @@ function mapNotice(n: WBNotice): RawTender | null {
     source_tier: 1,
     source_name: "World Bank",
   };
+}
+
+function sectorText(value: WBNotice["sector"]): string | null {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  const text = value
+    .map((item) => item.sector_description ?? item.sector_code)
+    .filter(Boolean)
+    .join("; ");
+  return text || null;
 }
 
 function mapType(notice?: string, method?: string): string {

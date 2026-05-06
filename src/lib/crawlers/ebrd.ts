@@ -1,9 +1,9 @@
 /**
  * EBRD — European Bank for Reconstruction and Development.
  * Procurement notices live on ECEPP (Electronic Contract Opportunities Portal):
- *   https://ecepp.ebrd.com/delta/viewNoticesPublic.html
+ *   https://ecepp.ebrd.com/delta/noticeSearchResults.html
  * Public search results render to HTML; each notice link is:
- *   /delta/viewNotice.html?displayId=<id>
+ *   /delta/viewNotice.html?displayNoticeId=<id>
  *
  * Volume: ~1–2k open notices, focus on Central/Eastern Europe, Central Asia,
  * North Africa, Eastern Mediterranean — the EBRD's 38 countries of operations.
@@ -11,39 +11,27 @@
  * Override `EBRD_NOTICES_URL` to point at a mirror if ECEPP is blocked.
  */
 import { type RawTender, type CrawlResult, withRetry } from "./types";
-import { fetchViaBrowser, browserAvailable } from "./_browser";
+import { normalizeSector } from "./sector-map";
 
-const BASE = process.env.EBRD_NOTICES_URL ?? "https://ecepp.ebrd.com/delta/viewNoticesPublic.html";
-const MAX_PAGES = 3;
-const PAGE_DELAY_MS = 1500;
+const BASE = process.env.EBRD_NOTICES_URL ?? "https://ecepp.ebrd.com/delta/noticeSearchResults.html";
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-// ECEPP returns an empty body (0 bytes) to plain fetch — the notice list is
-// rendered client-side by a Delta/JSF framework after JS execution. Only a
-// real browser fills the listing. Route through the worker like UNGM/GIZ and
-// give it a generous waitMs so the Ajax list call has time to complete.
-async function fetchPage(page: number): Promise<string> {
-  const url = page === 0 ? BASE : `${BASE}?pageIndex=${page}`;
-  const resp = await fetchViaBrowser(url, {
-    method: "GET",
+async function fetchList(): Promise<string> {
+  const res = await fetch(BASE, {
     headers: {
       Accept: "text/html,application/xhtml+xml",
       "Accept-Language": "en-US,en;q=0.9",
-      Referer: BASE,
+      "User-Agent": "TenderPathBot/1.0 (+https://www.tenderpath.me)",
+      Referer: "https://ecepp.ebrd.com/",
     },
-    warmupUrl: BASE,
-    // ECEPP is a Delta/JSF SPA — plain DOM fetch returns an empty shell.
-    // Use navigate mode so Chromium actually loads the page, runs the JSF
-    // init, and waits for the notice table to populate before we snapshot.
-    mode: "navigate",
-    waitForSelector: "a[href*='viewNotice.html?displayId=']",
-    waitAfterNav: 1500,
-    waitMs: 2000,
-    timeoutMs: 120000,
   });
-  if (!resp.ok) throw new Error(`EBRD page ${page} ${resp.status}: ${resp.body.slice(0, 200)}`);
-  return resp.body;
+  const body = await res.text();
+  if (!res.ok) throw new Error(`EBRD search results ${res.status}: ${body.slice(0, 200)}`);
+  if (res.url.includes("/cas/login") || /<form[^>]+login|name="username"|cas\/login/i.test(body)) {
+    throw new Error(
+      `EBRD public notice search redirected to login (${res.url}) — public ECEPP search access changed`,
+    );
+  }
+  return body;
 }
 
 interface ParsedNotice {
@@ -51,7 +39,13 @@ interface ParsedNotice {
   title: string;
   country: string;
   noticeType: string;
+  procurementTitle: string;
+  published: string | null;
   deadline: string | null;
+  status: string;
+  description: string;
+  sector: string | null;
+  procurementCategory: string;
 }
 
 const ENTITIES: Record<string, string> = {
@@ -68,17 +62,19 @@ function cleanText(s: string): string {
     .trim();
 }
 
-// ECEPP renders each notice inside a result card or row; every card contains
-// a link matching viewNotice.html?displayId=NNNNN. Anchor on that link.
+// ECEPP renders a public table. Visible cells contain title/type/dates/status;
+// the final hidden cell contains searchable metadata such as project, country,
+// client, department/sector, and procurement method.
 function parseNotices(html: string): ParsedNotice[] {
   const out: ParsedNotice[] = [];
   const seen = new Set<string>();
-  const rowRe = /<(tr|div|li)\b[^>]*>([\s\S]*?)<\/\1>/gi;
-  const linkRe = /href="[^"]*viewNotice\.html\?displayId=(\d+)"[^>]*>([\s\S]*?)<\/a>/i;
+  const rowRe = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
+  const linkRe = /href="[^"]*viewNotice\.html\?displayNoticeId=(\d+)"[^>]*>([\s\S]*?)<\/a>/i;
+  const cellRe = /<td\b[^>]*>([\s\S]*?)<\/td>/gi;
 
   let m: RegExpExecArray | null;
   while ((m = rowRe.exec(html)) !== null) {
-    const inner = m[2];
+    const inner = m[1];
     const link = linkRe.exec(inner);
     if (!link) continue;
     const id = link[1];
@@ -88,39 +84,95 @@ function parseNotices(html: string): ParsedNotice[] {
     if (!title) continue;
     seen.add(id);
 
-    // Grab nearby text labelled Country / Deadline / Notice Type. ECEPP uses
-    // <span class="label">Country:</span> <span>…</span> patterns fairly
-    // consistently; we tolerate either labelled spans or raw colon phrases.
-    const country = pickField(inner, /Country[^<>]{0,20}<\/[^>]+>\s*<[^>]+>([^<]+)</i)
-      ?? pickField(inner, /Country\s*:\s*([^<|\n]+?)(?:\s*[|<])/i)
-      ?? "";
-    const noticeType = pickField(inner, /Notice\s*Type[^<>]{0,20}<\/[^>]+>\s*<[^>]+>([^<]+)</i)
-      ?? pickField(inner, /Notice\s*Type\s*:\s*([^<|\n]+?)(?:\s*[|<])/i)
-      ?? "";
-    const deadlineRaw = pickField(inner, /(?:Closing\s*Date|Deadline)[^<>]{0,20}<\/[^>]+>\s*<[^>]+>([^<]+)</i)
-      ?? pickField(inner, /(?:Closing\s*Date|Deadline)\s*:\s*([^<|\n]+?)(?:\s*[|<])/i)
-      ?? "";
+    const cells: string[] = [];
+    cellRe.lastIndex = 0;
+    let c: RegExpExecArray | null;
+    while ((c = cellRe.exec(inner)) !== null) cells.push(cleanText(c[1]));
+
+    const metadata = parseMetadata(cells[cells.length - 1] ?? "");
+    const noticeType = cells[1] || metadata.noticeType || "";
+    const procurementTitle = cells[2] || metadata.procurementTitle || title;
+    const deadlineRaw = cells[4] || "";
+    const publishedRaw = cells[3] || "";
+    const status = cells[5] || "";
+    const country = metadata.country || countryFromTitle(title) || "EBRD Region";
+    const description = [
+      "EBRD ECEPP procurement notice.",
+      metadata.project ? `Project: ${metadata.project}.` : null,
+      metadata.client ? `Client: ${metadata.client}.` : null,
+      metadata.procurementCategory ? `Category: ${metadata.procurementCategory}.` : null,
+      metadata.procurementMethod ? `Method: ${metadata.procurementMethod}.` : null,
+      metadata.sector ? `Sector: ${metadata.sector}.` : null,
+      status ? `Status: ${status}.` : null,
+    ].filter(Boolean).join(" ");
+    const sectors = normalizeSector(metadata.sector || metadata.procurementCategory, title, description);
 
     out.push({
       id,
       title,
-      country: country || "EBRD Region",
+      country,
       noticeType,
+      procurementTitle,
+      published: toISO(publishedRaw),
       deadline: toISO(deadlineRaw),
+      status,
+      description,
+      sector: sectors[0] ?? null,
+      procurementCategory: metadata.procurementCategory,
     });
   }
   return out;
 }
 
-function pickField(html: string, re: RegExp): string | null {
-  const m = re.exec(html);
-  if (!m) return null;
-  return cleanText(m[1]);
+function parseMetadata(raw: string): {
+  project: string;
+  projectId: string;
+  country: string;
+  procurementTitle: string;
+  noticeId: string;
+  procurementCategory: string;
+  procurementMethod: string;
+  client: string;
+  sector: string;
+  noticeType: string;
+} {
+  const stripped = raw.replace(/^\[/, "").replace(/\]$/, "");
+  const parts = stripped.split(",").map((p) => p.trim()).filter(Boolean);
+  const noticeType = parts.at(-1) ?? "";
+  const sector = parts.at(-2) ?? "";
+  const client = parts.at(-3) ?? "";
+  const hasExerciseId = /^\d+$/.test(parts[4] ?? "");
+  const procurementTitle = hasExerciseId ? (parts[3] ?? "") : "";
+  const noticeId = hasExerciseId ? (parts[4] ?? "") : "";
+  const procurementCategory = hasExerciseId
+    ? (parts[5] ?? "")
+    : parts.slice(3, Math.max(3, parts.length - 3)).join(", ");
+  const procurementMethod = hasExerciseId
+    ? parts.slice(6, Math.max(6, parts.length - 3)).join(", ")
+    : "";
+  return {
+    project: parts[0] ?? "",
+    projectId: parts[1] ?? "",
+    country: parts[2] ?? "",
+    procurementTitle,
+    noticeId,
+    procurementCategory,
+    procurementMethod,
+    client,
+    sector,
+    noticeType,
+  };
+}
+
+function countryFromTitle(title: string): string | null {
+  const m = /^([^:]{2,80}):/.exec(title);
+  return m ? m[1].trim() : null;
 }
 
 // ECEPP deadlines are "31-Dec-2026" or "31/12/2026 14:00" — cover both.
 function toISO(raw: string): string | null {
   if (!raw) return null;
+  raw = raw.replace(/\bUK Time\b/i, "").trim();
   const MONTHS: Record<string, string> = {
     jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
     jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
@@ -151,18 +203,18 @@ function mapNotice(n: ParsedNotice): RawTender {
   return {
     reference_id: `EBRD-${n.id}`,
     title: n.title.slice(0, 500),
-    description: null,
+    description: n.description || null,
     agency: "European Bank for Reconstruction and Development",
     country: n.country || "EBRD Region",
     country_code: null,
     region: null,
-    sector: null,
+    sector: n.sector,
     deadline: n.deadline,
     // ECEPP listing rows don't include contract value; it appears only on
     // individual notice detail pages (JSF SPA, requires a separate browser
     // render per notice). Not fetched here to avoid multiplying worker calls.
     estimated_value: null,
-    source_url: `https://ecepp.ebrd.com/delta/viewNotice.html?displayId=${n.id}`,
+    source_url: `https://ecepp.ebrd.com/delta/viewNotice.html?displayNoticeId=${n.id}`,
     opportunity_type: mapType(n.noticeType),
     eligibility_summary: null,
     experience_level: null,
@@ -174,33 +226,15 @@ function mapNotice(n: ParsedNotice): RawTender {
 
 export async function crawlEBRD(): Promise<CrawlResult> {
   const start = Date.now();
-  if (!browserAvailable()) {
-    return {
-      platform: "EBRD", status: "failure", tenders: [], durationMs: 0,
-      error: "CRAWLER_WORKER_URL / CRAWLER_WORKER_KEY not set — ECEPP list renders client-side",
-    };
-  }
   try {
-    const tenders: RawTender[] = [];
-    const seen = new Set<string>();
-    for (let page = 0; page < MAX_PAGES; page++) {
-      if (page > 0) await sleep(PAGE_DELAY_MS);
-      const html = await withRetry(() => fetchPage(page));
-      const rows = parseNotices(html);
-      if (!rows.length) break;
-      let added = 0;
-      for (const r of rows) {
-        if (seen.has(r.id)) continue;
-        seen.add(r.id);
-        tenders.push(mapNotice(r));
-        added++;
-      }
-      if (added === 0) break;
-    }
+    const html = await withRetry(fetchList, 2);
+    const tenders = parseNotices(html)
+      .filter((notice) => !/^closed$/i.test(notice.status))
+      .map(mapNotice);
     if (!tenders.length) {
       return {
         platform: "EBRD", status: "failure", tenders: [], durationMs: Date.now() - start,
-        error: "EBRD page parsed but yielded 0 rows — ECEPP markup likely changed",
+        error: "EBRD public search results parsed but yielded 0 rows — ECEPP markup likely changed",
       };
     }
     return { platform: "EBRD", status: "success", tenders, durationMs: Date.now() - start };

@@ -1595,6 +1595,359 @@ None. All changes committed, pushed, and deployed.
 
 ## Handoff Notes
 
+### Session Update
+- Agent: Codex
+- Date: 2026-05-03
+- Task Completed: Prepared tender/grant improvement waves and started Wave 1. Added truthful source coverage/health observability, recovered IOM via browser-worker fallback, re-enabled UK Find a Tender in scheduled sync, improved blocked-source diagnostics for EBRD/KfW, and tightened grant matching so weak/domestic grant rows do not masquerade as strong international matches.
+- Files Changed:
+  - `docs/tender-grant-improvement-waves.md` — phased Wave 1–6 plan for tender and grant quality work.
+  - `docs/crawler-grant-debug-2026-05-03.md` — source-by-source triage report and validation notes.
+  - `src/lib/crawlers/source-coverage.ts` — source coverage matrix and canonical source alias helper.
+  - `src/lib/crawlers/sync.ts` — added `success_empty` status and crawl metadata logging; UK FTS wired into sync.
+  - `src/lib/crawlers/iom.ts` — browser-worker fallback for Akamai 403/429.
+  - `src/lib/crawlers/ebrd.ts` — explicit CAS login redirect diagnosis and no retry loop on structural login redirect.
+  - `src/lib/crawlers/kfw.ts` — preserved listing failure reason in crawl error.
+  - `src/app/api/admin/stats/route.ts` — source alias rollups, `success_empty` health handling, source coverage in admin response, crawl metadata read support.
+  - `src/lib/assessment/match.ts` — sector-to-grant-theme expansion, geography/eligibility/funding-scope scoring, domestic-grant guard, match reasons.
+  - `src/lib/types.ts` — additive grant explanation/funding-scope fields.
+  - `src/lib/db.ts` and `scripts/migrate.mjs` — additive `crawl_logs.metadata` support.
+- Tests Run:
+  - `npx eslint src/lib/crawlers/source-coverage.ts src/lib/crawlers/sync.ts src/lib/db.ts scripts/migrate.mjs src/app/api/admin/stats/route.ts src/lib/assessment/match.ts src/lib/types.ts` — passed.
+  - `npx tsc --noEmit` — passed.
+  - Live crawler smoke: `crawlIOM()` — success, 21 tenders.
+  - Live crawler smoke: `crawlUKFTS()` — success, 36 tenders.
+  - Live crawler smoke: `crawlEBRD()` — failure as expected with explicit CAS login redirect diagnosis.
+  - Synthetic grant smoke: non-U.S. sparse/domestic grants are suppressed or watchlisted; U.S. research profile still receives relevant Watchlist rows with caveats.
+- Result: Wave 1 is underway and the most misleading health/matching cases are now more diagnosable. IOM is recovered; UK FTS/FCDO coverage is scheduled; admin source health can explain consolidated aliases; grants now favor trust over filler.
+- Blockers: ADB, AfDB, EBRD, and KfW remain blocked/source-structure issues. Grant quality is still limited by sparse grant data; Wave 4 enrichment/backfill is the real fix.
+- Important Decisions:
+  - `success_empty` is additive and keeps `RawTender` / `CrawlResult` unchanged.
+  - Source aliases are normalized in admin health rather than rewriting historical tender rows.
+  - Non-U.S. users should receive zero strong grant matches rather than noisy domestic U.S. grants with false confidence.
+- Contracts or Interfaces Changed: Additive only. `PlatformSyncResult.status` can now be `success_empty`; `crawl_logs.metadata` is added; `MatchedGrant` has optional explanation/funding-scope fields. `RawTender` and `CrawlResult` are unchanged.
+- Docs Updated: `SESSION.md`, `docs/tender-grant-improvement-waves.md`, `docs/crawler-grant-debug-2026-05-03.md`.
+- Next Recommended Task: Wave 2 tender field completeness: normalize NAICS/CPV/UNSPSC sector codes and enrich newest UNGM/TED/World Bank/SAM.gov rows with description/sector signal.
+- Recommended Agent: Codex
+- Paste-Ready Next Prompt: "Read SESSION.md, AGENTS.md, docs/agents/crawler-architecture.md, and docs/tender-grant-improvement-waves.md. Continue Wave 2: improve tender field completeness by normalizing source sector codes and enriching newest/high-impact UNGM, TED EU, World Bank, and SAM.gov rows without changing RawTender/CrawlResult contracts. Add targeted validation and update SESSION.md."
+
+### Short Resume State
+- What is now true: Tender/grant improvement waves are documented; Wave 1 source health/observability is implemented; IOM and UK FTS are live-smoke successful; grant matching now adds caveats and suppresses weak domestic grants for non-U.S. profiles.
+- What remains: Wave 2 field completeness, Wave 3 blocked source recovery, Wave 4 grant enrichment/backfill, Wave 5 benchmarks, Wave 6 dashboard trust polish.
+- What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/crawler-architecture.md, docs/agents/assessment-architecture.md, docs/tender-grant-improvement-waves.md
+
+### Session Update
+- Agent: Codex
+- Date: 2026-05-04
+- Task Completed: Started Wave 2 and Wave 3. Improved tender field completeness for SAM.gov, TED EU, World Bank, and UNGM by normalizing source codes/sectors into Tenderpath sector slugs, adding TED descriptions, and reusing UNGM detail pages for best-effort recent description/sector enrichment. Added a dry-run-first backfill script for existing tender sectors. Added per-run crawl output quality metadata and admin visibility. Tightened ADB/AfDB blocked-source behavior by capping browser-worker attempts and documenting anti-bot status. Revalidated KfW as live-smoke successful.
+- Files Changed:
+  - `src/lib/crawlers/sector-map.ts` — added NAICS and CPV prefix normalization helpers while preserving existing sector slug contract.
+  - `src/lib/crawlers/sam-gov.ts` — normalizes `naicsCode` / `classificationCode` into Tenderpath sector slugs.
+  - `src/lib/crawlers/ted-eu.ts` — requests TED lot descriptions and CPV classifications, then stores normalized `description` and `sector`.
+  - `src/lib/crawlers/world-bank.ts` — handles live API sector arrays and normalizes sector descriptions/codes.
+  - `src/lib/crawlers/ungm.ts` — best-effort recent detail enrichment now fills description and sector when detail HTML is parseable.
+  - `scripts/backfill-tender-sectors.ts` — new dry-run-first operational script to backfill open tender sectors.
+  - `src/lib/crawlers/sync.ts` — stores per-run output quality metrics in `crawl_logs.metadata.outputQuality`.
+  - `src/app/admin/page.tsx` — shows crawl metadata quality in recent crawl log notes.
+  - `src/app/api/admin/stats/route.ts` — applies source-specific quality thresholds for field completeness status.
+  - `src/lib/crawlers/adb.ts` — capped browser-worker timeout and added explicit challenge-page diagnosis.
+  - `src/lib/crawlers/afdb.ts` — capped browser-worker timeout.
+  - `src/lib/crawlers/source-coverage.ts` — updated ADB/AfDB blocked-source notes and KfW direct-crawler status.
+  - `docs/tender-grant-improvement-waves.md` — marked Wave 2/3 started and recorded validation.
+  - `docs/crawler-grant-debug-2026-05-03.md` — added Wave 2/3 addendum and validation notes.
+- Tests Run:
+  - `npx eslint src/lib/crawlers/sector-map.ts src/lib/crawlers/sam-gov.ts src/lib/crawlers/ted-eu.ts src/lib/crawlers/world-bank.ts src/lib/crawlers/adb.ts src/lib/crawlers/afdb.ts scripts/backfill-tender-sectors.ts src/lib/crawlers/source-coverage.ts` — passed.
+  - `npx eslint src/lib/crawlers/ungm.ts src/lib/crawlers/sync.ts src/app/api/admin/stats/route.ts src/app/admin/page.tsx` — passed.
+  - `npx tsc --noEmit` — passed.
+  - `npx tsx scripts/backfill-tender-sectors.ts --limit=200` — dry-run found 50 sector updates from 200 inspected open rows.
+  - `npx tsx scripts/backfill-tender-sectors.ts --limit=50` — dry-run found 0 sector updates from 50 inspected newest open rows.
+  - TED EU live smoke — success, 300 tenders with description and sector enrichment.
+  - World Bank live smoke — success, 600 tenders with sector enrichment.
+  - UNGM live smoke — success, 305 tenders in ~88s; best-effort detail enrichment filled 6 descriptions and 7 sectors across 25 recent detail pages.
+  - KfW live smoke — success, 1 tender with deadline, sector, description, and source URL.
+  - SAM.gov live smoke — API returned 429 Too Many Requests during repeated testing.
+  - ADB/AfDB live smokes — both failed after bounded 60 second browser budget, confirming current anti-bot blockage remains.
+  - EBRD live smoke — failed with explicit CAS login redirect diagnosis.
+- Result: Wave 2 now materially improves downstream tender matching for high-volume sources by replacing raw numeric/generic sector values with normalized sector slugs and by making per-run field quality visible in crawl logs. Wave 3 now has clearer, cheaper blocked-source failures for ADB/AfDB; KfW is live-smoke successful again.
+- Blockers: ADB and AfDB remain Cloudflare-protected. SAM.gov live validation was rate-limited. EBRD still redirects public ECEPP listing access to CAS login.
+- Important Decisions:
+  - Keep sector normalization inside crawler mapping/backfill; do not change `RawTender` or `CrawlResult`.
+  - Treat ADB/AfDB as blocked by anti-bot protection until a stable public endpoint or stronger browser navigation strategy is found.
+  - Backfill script defaults to dry-run and only writes with `--write`.
+- Contracts or Interfaces Changed: None. `RawTender` and `CrawlResult` remain unchanged.
+- Docs Updated: `SESSION.md`, `docs/tender-grant-improvement-waves.md`, `docs/crawler-grant-debug-2026-05-03.md`.
+- Next Recommended Task: Continue Wave 2 by adding field-completeness quality metrics to health/admin output and checking UNGM detail enrichment; continue Wave 3 with EBRD/KfW endpoint recovery or alternate source decisions.
+- Recommended Agent: Codex
+- Paste-Ready Next Prompt: "Read SESSION.md, AGENTS.md, docs/agents/crawler-architecture.md, and docs/tender-grant-improvement-waves.md. Continue Wave 2 by adding crawler field-completeness quality metrics and UNGM enrichment validation, then continue Wave 3 recovery for EBRD/KfW or document explicit blocked-source decisions."
+
+### Short Resume State
+- What is now true: Wave 2 is started; SAM.gov/TED EU/World Bank/UNGM now produce better normalized sector/description data where source data allows, crawl logs include per-run output quality, admin recent crawls surface that quality, and there is a dry-run-first sector backfill. Wave 3 is started; ADB/AfDB failures are bounded and better documented, KfW is live-smoke successful, and EBRD is explicitly blocked by CAS login redirect.
+- What remains: EBRD recovery, ADB/AfDB alternate endpoints, broader field-completeness regression tests, grant ingestion enrichment, regression benchmarks, dashboard trust polish.
+- What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/crawler-architecture.md, docs/agents/assessment-architecture.md, docs/tender-grant-improvement-waves.md
+
+### Session Update
+- Agent: Codex
+- Date: 2026-05-04
+- Task Completed: Stabilized Wave 1–3 before Wave 4. Applied the tender sector backfill, browser-checked the admin health page, and expanded UNGM agency monitoring/backlog based on live DB evidence.
+- Files Changed:
+  - `src/app/api/admin/stats/route.ts` — added explicit UNGM-family agency tracking for FAO, UNFPA, UNESCO, UN-Women, UNIDO, and IAEA in addition to the prior tracked agencies.
+  - `src/lib/crawlers/source-coverage.ts` — added source coverage entries for FAO, UNOPS, UNHCR, ILO, UNFPA, UNESCO, UN-Women, UNIDO, and IAEA as covered-by-UNGM.
+  - `docs/tender-grant-improvement-waves.md` — added UN agency coverage backlog and guidance before Wave 4.
+  - `docs/crawler-grant-debug-2026-05-03.md` — added UN agency backlog notes.
+  - Database data change: ran `npx tsx scripts/backfill-tender-sectors.ts --write --limit=2000`, applying 771 sector updates across 2,000 inspected open tender rows.
+- Tests Run:
+  - `npx tsx scripts/backfill-tender-sectors.ts --limit=2000` — post-write dry-run found 0 remaining updates in the inspected 2,000 rows.
+  - `npx eslint src/app/api/admin/stats/route.ts src/lib/crawlers/source-coverage.ts && npx tsc --noEmit` — passed.
+  - Browser DOM check on `http://localhost:3000/admin` — admin page loaded with Source health, Source data quality, Recent crawl logs, and field-completeness text visible. Screenshot capture timed out, but DOM verification passed.
+- Result: Wave 1–3 code/data are stable enough to start Wave 4. Recent open tender sectors are normalized in DB, and UN agency monitoring now reflects actual UNGM agency volume rather than only the original UNICEF/WFP/WHO set.
+- Blockers: Browser console showed pre-existing React style warnings about mixed `animation` / `animationDelay` from app rendering; not caused by the admin quality changes. Recent crawl log metadata notes will only show live/sector/description markers after a new crawl writes `metadata.outputQuality`.
+- Important Decisions:
+  - Do not add direct crawlers for FAO, UNOPS, UNHCR, ILO, UNFPA, UNESCO, UN-Women, UNIDO, or IAEA yet; current DB evidence shows they are already present through UNGM.
+  - Keep UNDP / UNDP Atlas, IOM, and UNRWA distinct because they already have source-specific crawler identities or rows.
+- Contracts or Interfaces Changed: None.
+- Docs Updated: `SESSION.md`, `docs/tender-grant-improvement-waves.md`, `docs/crawler-grant-debug-2026-05-03.md`.
+- Next Recommended Task: Start Wave 4 grant ingestion enrichment: audit grant rows, backfill themes/geography/eligibility/description where possible, and add benchmark fixtures before changing scoring again.
+- Recommended Agent: Codex
+- Paste-Ready Next Prompt: "Read SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, and docs/tender-grant-improvement-waves.md. Start Wave 4 grant ingestion enrichment: audit current grants data quality, design a dry-run-first grant enrichment/backfill, preserve assessment table compatibility, and add benchmark scenarios for SME MENA agriculture, NGO WASH Africa, research digital/IT, and SME climate/energy."
+
+### Short Resume State
+- What is now true: Tender sector backfill was applied to 2,000 open rows and verified clean on rerun. Admin health page renders locally. UNGM agency monitoring/backlog now includes FAO, UNOPS, UNHCR, ILO, UNFPA, UNESCO, UN-Women, UNIDO, and IAEA, with low-volume UN agencies tracked as watchlist.
+- What remains: Wave 4 grant ingestion enrichment, EBRD recovery, ADB/AfDB alternate endpoints, crawler/assessment regression benchmarks, dashboard trust polish.
+- What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, docs/tender-grant-improvement-waves.md
+
+### Session Update
+- Agent: Codex
+- Date: 2026-05-04
+- Task Completed: Kicked off Wave 4 grant quality work by auditing sparse Grants.gov rows, adding a conservative enrichment/backfill path, applying grant metadata backfill, and tightening grant matching around org eligibility, geography, funding scope, and filler suppression.
+- Files Changed:
+  - `src/lib/grants/enrichment.ts` — new reusable grant metadata inference module for title/agency-derived sector, themes, eligible org types, geography, and small-grant value range.
+  - `scripts/audit-grant-quality.ts` — new grant completeness audit.
+  - `scripts/backfill-grant-metadata.ts` — new dry-run-first metadata backfill script.
+  - `scripts/grant-match-benchmark.ts` — new synthetic benchmark for four grant matching scenarios.
+  - `src/lib/assessment/match.ts` — improved grant org-type normalization, region-aware grant matching, domestic/international funding scope inference, and a minimum sector/theme/keyword fit-signal guard.
+  - `docs/tender-grant-improvement-waves.md` — recorded Wave 4 implementation status, validation, and remaining work.
+  - `docs/crawler-grant-debug-2026-05-03.md` — added Wave 4 grant addendum.
+  - Database data change: ran `npx tsx scripts/backfill-grant-metadata.ts --write --limit=1000`, applying metadata patches to 589 open grant rows, then reran with expanded U.S.-domestic agency prefixes and wrote 588 mostly no-op/prefix-fill patches.
+- Tests Run:
+  - `npx tsx scripts/audit-grant-quality.ts` — after backfill: themes 411/652, eligible org types 555/652, country 539/652, region 537/652, countries 539/652, sector 273/652, value range 124/652, descriptions still 0 rich by design.
+  - `npx tsx scripts/grant-match-benchmark.ts` — four scenarios executed. MENA agriculture/food returns no weak filler; NGO WASH Africa returns one international health fit; U.S. research digital returns NSF/NASA/DOE/DOC-style research grants; MENA climate/energy returns an international regional energy fit.
+  - `npx eslint src/lib/assessment/match.ts src/lib/grants/enrichment.ts scripts/audit-grant-quality.ts scripts/backfill-grant-metadata.ts scripts/grant-match-benchmark.ts` — passed.
+  - `npx tsc --noEmit` — passed.
+  - `npm run lint` — failed on pre-existing unrelated app/worktree lint issues, including `.claude/worktrees/...`, Link-vs-anchor warnings, React effect lint, and unrelated `prefer-const`.
+- Result: Grant matching now has real metadata signal on most open Grants.gov rows, better explanations, less U.S.-domestic leakage for non-U.S. profiles, and fewer filler grants when no credible match exists.
+- Blockers:
+  - Current grant source coverage remains Grants.gov-only; international grant UX still needs EU/EuropeAid, UNDP/GEF, World Bank trust funds, ADB/AfDB windows, embassy calls outside Grants.gov, and foundation sources.
+  - Current local Grants.gov rows do not include reliable long descriptions, so no descriptions were synthesized or backfilled.
+  - Backfill script still scans rows that are missing any field even if a specific run has no new value for that missing field; it is safe but slower/noisier than ideal.
+- Important Decisions:
+  - Prefer “no strong grants yet” over filling dashboards with org/geography-only weak rows.
+  - Do not add a `funding_scope` schema column yet; keep it inferred in `matchGrants()` until the behavior stabilizes.
+  - Do not synthesize grant descriptions from titles.
+- Contracts or Interfaces Changed: No breaking changes. `MatchedGrant` additive fields from earlier work remain compatible; assessment table shape unchanged.
+- Docs Updated: `SESSION.md`, `docs/tender-grant-improvement-waves.md`, `docs/crawler-grant-debug-2026-05-03.md`.
+- Next Recommended Task: Continue Wave 4 by adding real non-Grants.gov international grant sources and/or discovering the Grants.gov detail API so descriptions and precise eligibility can be ingested directly.
+- Recommended Agent: Codex
+- Paste-Ready Next Prompt: "Read SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, and docs/tender-grant-improvement-waves.md. Continue Wave 4 by adding one high-quality international grant source or discovering the Grants.gov detail endpoint, preserving existing grant schema compatibility and adding benchmark coverage for the new source."
+
+### Short Resume State
+- What is now true: Grants.gov rows are enriched with conservative metadata in existing columns, grant matching normalizes org types, handles region and funding scope better, suppresses org/geography-only filler, and has a repeatable benchmark script.
+- What remains: Add true international grant sources, ingest real grant descriptions/eligibility when available, add UI caveats for inferred grant metadata, improve backfill script no-op detection, then continue EBRD/ADB/AfDB crawler recovery.
+- What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, docs/tender-grant-improvement-waves.md
+
+### Session Update
+- Agent: Codex
+- Date: 2026-05-04
+- Task Completed: Continued Wave 4 by discovering the live Grants.gov detail endpoint, adding a safe detail-enrichment script, enriching existing Grants.gov rows with real descriptions/eligibility/funding metadata, and tightening matching to avoid long-description sector noise.
+- Files Changed:
+  - `src/lib/grants/grants-gov-detail.ts` — new Grants.gov detail fetch/parse helper for synopsis/forecast descriptions, applicant eligibility, themes, value range, deadline, and AEIF public-diplomacy classification.
+  - `scripts/enrich-grants-gov-details.ts` — new dry-run-first detail enrichment script using `POST https://apply07.grants.gov/grantsws/rest/opportunity/details`.
+  - `src/lib/grants/enrichment.ts` — added AEIF/alumni public-diplomacy normalization so those rows classify as education/civil-society rather than IT.
+  - `src/lib/assessment/match.ts` — changed grant hard sector matching to use enriched sector/title instead of the entire long description; added a guard against single-token-only grant matches.
+  - `docs/tender-grant-improvement-waves.md` — recorded Grants.gov detail endpoint and enrichment outcomes.
+  - `docs/crawler-grant-debug-2026-05-03.md` — added Grants.gov detail addendum.
+  - Database data change: ran `npx tsx scripts/enrich-grants-gov-details.ts --write --limit=700`, writing 577 detail patches, then reran after AEIF normalization and wrote 59 classification repair patches.
+- Tests Run:
+  - `npx tsx scripts/audit-grant-quality.ts` — after detail enrichment: rich descriptions 572/652 (88%), themes 593/652 (91%), eligible org types 587/652 (90%), country 539/652 (83%), region 537/652 (82%), sector 563/652 (86%), value range 504/652 (77%).
+  - `npx tsx scripts/grant-match-benchmark.ts` — four scenarios passed behavioral expectations: no weak MENA agriculture filler; WASH Africa shows the international health fit only; research/IT is led by NASA/DOE/NSF plus relevant international digital calls; climate/energy keeps the MENA energy fit.
+  - `npx eslint src/lib/assessment/match.ts src/lib/grants/grants-gov-detail.ts src/lib/grants/enrichment.ts scripts/enrich-grants-gov-details.ts scripts/backfill-grant-metadata.ts scripts/grant-match-benchmark.ts scripts/audit-grant-quality.ts` — passed.
+  - `npx tsc --noEmit` — passed.
+- Result: Grants.gov rows now contain real, source-derived descriptions and substantially better eligibility/funding metadata. Grant matching is less noisy with richer descriptions because description text no longer controls hard sector fit.
+- Blockers:
+  - Grants.gov still leaves many international-development needs uncovered; MENA agriculture/food correctly returns no filler because a credible current source row is not present.
+  - Some Grants.gov rows have now-past response dates while still marked `open`; a cleanup/expiry pass should reconcile `status` with `deadline`.
+- Important Decisions:
+  - Use official Grants.gov detail endpoint for metadata enrichment rather than scraping rendered HTML.
+  - Treat AEIF/alumni rows as education/civil-society/public-diplomacy grants, not broad IT/innovation grants.
+  - Keep hard sector matching anchored to curated/enriched sector fields to avoid long-description false positives.
+- Contracts or Interfaces Changed: None. Existing `grants` columns only; assessment table shape unchanged.
+- Docs Updated: `SESSION.md`, `docs/tender-grant-improvement-waves.md`, `docs/crawler-grant-debug-2026-05-03.md`.
+- Next Recommended Task: Add one high-signal non-Grants.gov international grant source, with priority on EU Funding & Tenders / EuropeAid or UNDP-GEF/SGP calls, then add a grant expiry cleanup script.
+- Recommended Agent: Codex
+- Paste-Ready Next Prompt: "Read SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, and docs/tender-grant-improvement-waves.md. Continue Wave 4 by adding one primary non-Grants.gov international grant source and a safe grant expiry cleanup, preserving the grants table shape and updating grant benchmarks."
+
+### Short Resume State
+- What is now true: Grants.gov detail enrichment is implemented and applied. Grant rows now have real source descriptions and much better eligibility/value metadata. AEIF rows are normalized as education/civil-society. Grant matching uses enriched sector/title for hard sector fit and avoids single-keyword filler.
+- What remains: Add real international grant sources beyond Grants.gov, reconcile expired/open grant statuses, add UI caveats for inferred vs source-derived grant metadata, then continue blocked crawler recovery.
+- What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, docs/tender-grant-improvement-waves.md
+
+### Session Update
+- Agent: Codex
+- Date: 2026-05-04
+- Task Completed: Continued Wave 4 by adding the first non-Grants.gov international grant source, importing EU Funding & Tenders calls, adding safe grant expiry cleanup, and tightening grant ranking/caveats after benchmark review.
+- Files Changed:
+  - `src/lib/grants/eu-funding-tenders.ts` — new European Commission SEDIA search API helper that maps open/forthcoming calls into the existing grants contract.
+  - `scripts/import-eu-funding-grants.ts` — new dry-run-first importer/upserter for EU Funding & Tenders grants.
+  - `scripts/expire-grants.ts` — new dry-run-first script to mark past-deadline open grants as expired.
+  - `src/lib/assessment/match.ts` — grant results now cap each agency at two cards, sort by score before bucket priority, and demote generic health-only matches for WASH-focused profiles.
+  - `docs/tender-grant-improvement-waves.md` and `docs/crawler-grant-debug-2026-05-03.md` — documented the EU import, expiry pass, and validation.
+  - `scripts/grant-match-benchmark.ts` — added assertions so the benchmark now fails on domestic grant noise, AEIF filler, missing sector rationale, or implausible top climate/energy matches.
+  - Database data change: ran `npx tsx scripts/import-eu-funding-grants.ts --write --limit=100 --pages=3` and `npx tsx scripts/expire-grants.ts --write`.
+- Tests Run:
+  - `npx tsx scripts/import-eu-funding-grants.ts --limit=40 --pages=2` — dry-run verified EU mapping before writes.
+  - `npx tsx scripts/import-eu-funding-grants.ts --write --limit=100 --pages=3` — upserted 100 EU Funding & Tenders rows.
+  - `npx tsx scripts/expire-grants.ts` and `npx tsx scripts/expire-grants.ts --write` — expired 46 past-deadline Grants.gov rows.
+  - `npx tsx scripts/audit-grant-quality.ts` — after import/expiry: 752 total grants, 647 open, Grants.gov 652/547 open, EU Funding & Tenders 100/100 open, source URLs 100%.
+  - `npx tsx scripts/grant-match-benchmark.ts` — scenarios still return relevant current grants, with WASH-adjacent generic health grants demoted and MENA climate/energy showing the regional fit first; assertions passed.
+  - `npx eslint src/lib/assessment/match.ts src/lib/grants/eu-funding-tenders.ts scripts/import-eu-funding-grants.ts scripts/expire-grants.ts scripts/audit-grant-quality.ts scripts/grant-match-benchmark.ts` — passed.
+  - `npx tsc --noEmit` — passed.
+- Result: Grant inventory is no longer Grants.gov-only. EU Funding & Tenders is now represented as a primary international source, expired rows are cleaned up, and grant card ordering is less likely to be dominated by one global agency or urgent-but-weaker cards.
+- Blockers:
+  - EU SEDIA list rows still need deeper detail enrichment for exact budgets, destinations, and eligibility.
+  - WASH/Africa still needs true WASH-specific grant inventory; current rows are adjacent health/global opportunities, now correctly caveated/demoted.
+- Important Decisions:
+  - Preserve the existing `grants` schema and use `reference_id = EU_FT:<identifier>` for idempotent EU upserts.
+  - Treat SEDIA internal numeric taxonomy ids as non-sector codes so they do not get misread as UNSPSC/CPV.
+  - Prefer score-first grant ordering after bucketing so high-fit regional opportunities are not buried under merely urgent global calls.
+  - Do not add brittle EU portal HTML scraping before deploy; obvious public JSON topic-detail paths returned app shell/404, so deeper EU detail enrichment remains a follow-up.
+- Contracts or Interfaces Changed: None. Existing table/API shapes preserved; only additive scripts/helper and scoring behavior changed.
+- Docs Updated: `SESSION.md`, `docs/tender-grant-improvement-waves.md`, `docs/crawler-grant-debug-2026-05-03.md`.
+- Next Recommended Task: Add detail enrichment for EU Funding & Tenders rows, then add one WASH/climate-friendly international source such as UNDP/GEF/SGP, EU INTPA, World Bank trust funds, or selected foundation calls.
+- Recommended Agent: Codex
+- Paste-Ready Next Prompt: "Read SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, and docs/tender-grant-improvement-waves.md. Continue Wave 4 by enriching EU Funding & Tenders grant details and adding one WASH/climate-relevant international grant source, preserving the grants table shape and updating the grant benchmark."
+
+### Short Resume State
+- What is now true: Grants.gov detail enrichment is applied, EU Funding & Tenders has 100 imported open rows, 46 expired Grants.gov rows were marked expired, and grant matching now has stronger agency caps, score-first ordering, and WASH specificity caveats.
+- What remains: EU detail enrichment, WASH/climate-specific non-U.S. grant sources, UI caveats for inferred/source-derived grant metadata, then remaining crawler recovery.
+- What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, docs/tender-grant-improvement-waves.md
+
+### Session Update
+- Agent: Codex
+- Date: 2026-05-05
+- Task Completed: Continued grant improvements by adding a conservative UNDP CFP grant importer, importing current future CFP rows, adding a Kenya civil-society benchmark, and improving geography priority for country-specific grants.
+- Files Changed:
+  - `src/lib/grants/undp-cfp.ts` — new helper that reuses the live UNDP procurement-notices source, filters to grant-like CFP/funding rows, normalizes country/region/theme/eligibility metadata, and preserves the existing grants contract.
+  - `scripts/import-undp-cfp-grants.ts` — new dry-run-first importer/upserter for UNDP CFP grants.
+  - `src/lib/assessment/match.ts` — added stronger country-specific geography priority and a cap for region-only matches so exact-country CFPs are not buried by broad regional/global grants.
+  - `scripts/grant-match-benchmark.ts` — added NGO civil-society Kenya scenario with assertions.
+  - `docs/tender-grant-improvement-waves.md` — documented UNDP CFP import, quality numbers, and remaining WASH gap.
+  - Database data change: ran `npx tsx scripts/import-undp-cfp-grants.ts --write --limit=30`, upserting 5 future UNDP CFP rows.
+- Tests Run:
+  - `npx tsx scripts/import-undp-cfp-grants.ts --limit=30` — dry-run mapped 5 future UNDP CFP rows from 565 scanned notices.
+  - `npx tsx scripts/import-undp-cfp-grants.ts --write --limit=30` — upserted 5 rows.
+  - `npx tsx scripts/audit-grant-quality.ts` — after import: 757 total grants, 652 open; UNDP CFP 5 / 5 open; source URLs 100%.
+  - `npx tsx scripts/grant-match-benchmark.ts` — assertions passed, including new Kenya civil-society scenario.
+  - `npx eslint src/lib/assessment/match.ts src/lib/grants/undp-cfp.ts scripts/import-undp-cfp-grants.ts scripts/grant-match-benchmark.ts` — passed.
+  - `npx tsc --noEmit` — passed.
+- Result: Tenderpath now has a third grant source family beyond Grants.gov and EU Funding & Tenders. Country-specific civil-society CFP rows can surface ahead of broad regional/global rows.
+- Blockers:
+  - UNDP CFP rows are list-derived and description-thin; detail-page enrichment remains useful.
+  - A true WASH-specific primary grant source is still needed.
+- Important Decisions:
+  - Keep UNDP CFP import deliberately narrow to avoid converting procurement/service notices into grants.
+  - Exclude grant-accounting, consultant, assessor, video-production, and roster procurements even when titles mention "grant".
+  - Boost exact-country grants and cap region-only matches to improve user trust for country-focused profiles.
+- Contracts or Interfaces Changed: None. Existing table/API shapes preserved; only additive scripts/helper and scoring behavior changed.
+- Docs Updated: `SESSION.md`, `docs/tender-grant-improvement-waves.md`.
+- Next Recommended Task: Add detail enrichment for UNDP CFP or add a true WASH-specific source such as GEF SGP country calls, UNICEF innovation/challenge calls, or EU INTPA calls if a stable source endpoint is found.
+- Recommended Agent: Codex
+- Paste-Ready Next Prompt: "Read SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, and docs/tender-grant-improvement-waves.md. Continue grant Wave 4 by enriching UNDP CFP detail rows or adding a true WASH-specific primary grant source, preserving the grants table shape and updating the benchmark."
+
+### Short Resume State
+- What is now true: Grants.gov, EU Funding & Tenders, and UNDP CFP are represented in grants. UNDP CFP added 5 open country-specific civil-society/funding rows. Grant scoring now gives exact-country grants priority over region-only/global alternatives.
+- What remains: UNDP CFP detail enrichment, a true WASH-specific source, UI caveats for inferred/source-derived grant metadata, then remaining crawler recovery.
+- What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, docs/tender-grant-improvement-waves.md
+
+### Session Update
+- Agent: Claude Code (claude-sonnet-4-6)
+- Date: 2026-05-05
+- Task Completed: Demo account isolation + admin usage tab + PDF report generation (browser print + server-generated email attachment)
+- Files Changed:
+  - `scripts/migrate.mjs` — added `demo_sessions` table (`ip`, `country`, `user_agent`, `assessment_id`, `created_at`) for tracking demo account usage by session
+  - `src/app/api/auth/password/route.ts` — demo user login now resets the demo account to factory state (purges pipeline, restores seeded items, resets settings) and logs a row to `demo_sessions`
+  - `src/lib/subscription-guard.ts` — demo account bypasses all subscription gates; all routes that would normally block demo usage now pass through
+  - `src/app/api/auth/me/route.ts` — demo account receives `strategic-partnership` tier override so the dashboard renders with full access
+  - `src/app/api/admin/demo-usage/route.ts` (NEW) — admin-only endpoint that returns per-session demo usage rows from `demo_sessions` (IP, country, UA, assessment link, created_at)
+  - `src/app/admin/page.tsx` — added "Demo" tab to admin dashboard surfacing the demo-usage table from the new endpoint
+  - `src/lib/email/assessmentPdf.tsx` (NEW) — 2-page `@react-pdf/renderer` PDF document using TenderPath design tokens (`#f5f1e8` paper, `#b08530` gold, `#1a1a1a` ink); Page 1: masthead, hero score + grant score, 5-axis dimension bars, summary quote, gaps (up to 6 with severity badges); Page 2: matched tenders (up to 8 with score/deadline/match reasons), matched grants (up to 5), strengths, footer; exports `generateAssessmentPdf(args: PdfArgs): Promise<Buffer>`
+  - `src/lib/email/sendAssessment.ts` — extended `SendArgs` with optional `sectors`, `grantReadinessScore`, `readinessDimensions`, `gaps`, `strengths`, `matchedTenders`, `matchedGrants`; generates PDF attachment before `resend.emails.send` using `generateAssessmentPdf`; PDF failure is caught/warned and never blocks email delivery; attaches as `tenderpath-readiness-report.pdf` in Resend `attachments` array
+  - `src/app/api/assessment/route.ts` — passes full assessment data (`sectors`, `grantReadinessScore`, `readinessDimensions`, `gaps`, `strengths`, `matchedTenders`, `matchedGrants`) to `sendAssessmentEmail` to enable PDF generation
+  - `src/app/assessment/AssessmentResults.tsx` — added "Download PDF ↓" button using `window.print()` in the results masthead, wrapped alongside "Run another →" in a `print:hidden` div
+  - `src/app/globals.css` — added `@media print` block: hides nav/footer/buttons, forces paper background (`#f5f1e8`), sets `-webkit-print-color-adjust: exact`, strips padding, avoids mid-section page breaks, suppresses `a[href]::after` content injection
+- Dependency Added: `@react-pdf/renderer` (npm install succeeded with no install errors)
+- Tests Run:
+  - `npm run build` — clean, 0 TypeScript errors, all pages compiled successfully
+- Result: Demo account now isolates each visitor with a factory reset on login and tracks usage in the admin panel. Assessment emails now include a professionally formatted 2-page PDF report as an attachment (with graceful degradation if PDF generation fails). The "Download PDF" button on the results page triggers the browser print dialog, which renders the report cleanly using the TenderPath editorial design system.
+- Blockers: None.
+- Important Decisions:
+  - PDF generation uses `@react-pdf/renderer` (pure JS, Node.js compatible, no headless browser) — Vercel-safe; does not add any edge-incompatible dependency
+  - PDF failure is deliberately non-blocking: a `console.warn` is emitted and email sends without attachment rather than throwing
+  - `print:hidden` hides UI controls (buttons, nav) from the printed PDF via Tailwind's built-in print utility class; `@media print` in globals.css handles page chrome suppression
+  - Demo reset on login prevents each live demo session from seeing another user's data without requiring isolated DB rows
+  - Demo tier override is applied in `/api/auth/me` response only (not stored in DB) — no schema migration needed
+- Contracts or Interfaces Changed: `SendArgs` in `sendAssessment.ts` gains 7 optional fields (all backward-compatible). No API, DB schema, or crawler contracts changed.
+- Docs Updated: `SESSION.md` only.
+- Commit: `75ca3cf` on branch `codex/wave4-grants-crawler-quality`
+- Deployment: Pushed to `origin/codex/wave4-grants-crawler-quality`; deployed to Vercel production (`https://www.tenderpath.me`) via `npx vercel deploy --prod` (compiled in 12.8 s)
+- Next Recommended Task: Continue Wave 4 grant quality — add UN Women CFP detail enrichment or a WASH-specific source (GEF SGP, UNICEF challenge calls, EU INTPA), then run `npx tsx scripts/grant-match-benchmark.ts` to confirm assertions still pass.
+- Recommended Agent: Codex
+- Paste-Ready Next Prompt:
+
+```text
+Read SESSION.md first, then AGENTS.md, docs/agents/assessment-architecture.md, and docs/tender-grant-improvement-waves.md.
+
+Continue Wave 4 grant quality. The demo account isolation, admin demo usage tab, and PDF report generation (browser print + @react-pdf/renderer email attachment) are committed and live (commit 75ca3cf, branch codex/wave4-grants-crawler-quality).
+
+Add detail enrichment for UN Women CFP rows or add a true WASH-specific primary grant source (GEF SGP country calls, UNICEF challenge fund, EU INTPA — whichever has a stable public endpoint). Preserve the grants table shape and existing RawTender/CrawlResult contracts. Run npx tsx scripts/grant-match-benchmark.ts after any matching changes. Update SESSION.md when finished.
+```
+
+### Short Resume State
+- What is now true: Demo account isolation (factory reset on login, demo_sessions tracking, subscription bypass, tier override) is live. Admin panel has a Demo tab. Assessment emails now attach a 2-page PDF report generated with @react-pdf/renderer. Browser "Download PDF" button on the results page uses window.print() with print-safe CSS. Commit 75ca3cf is deployed to production.
+- What remains: UN Women/UNDP CFP detail enrichment, a true WASH-specific grant source, UI caveats for inferred grant metadata, crawler recovery (EBRD/ADB/AfDB), and crawler QA pass per the production monitoring checklist.
+- What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, docs/tender-grant-improvement-waves.md
+
+### Session Update
+- Agent: Claude Code (claude-sonnet-4-6)
+- Date: 2026-05-05
+- Task Completed: Debug Google OAuth — root-caused missing `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in Vercel production; guided user to add both env vars
+- Files Changed: None (fix was Vercel environment variable configuration only; no code changes)
+- Dependency Added: `playwright` and `tsx` added to devDependencies in `package.json` (unrelated to this session — were added post-prior-commit and included in this commit)
+- Tests Run: None required (no code changed)
+- Result: Google "Continue with Google" button now works in production. Both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are live in Vercel production. No redeploy needed — env vars take effect on next cold start.
+- Blockers: None.
+- Important Decisions:
+  - `GOOGLE_CLIENT_ID` was present in Vercel but attached to a git branch that made it invisible to `vercel env ls` initially — re-adding to the `production` target fixed it
+  - The Vercel runtime log showed a 401 at `/api/auth/google` from an older deployment (`dpl_2Vaixzg5V1u7zApT61ZqnLYokgYP`); the current code path never returns 401 (it redirects), so this was a red herring from a prior version
+  - No middleware.ts exists in the project; the compiled `.next/server/middleware.js` is Next.js framework internals only
+- Contracts or Interfaces Changed: None.
+- Docs Updated: `SESSION.md` only.
+- Commit: (see below — package.json/lock + SESSION.md only)
+- Deployment: No redeploy needed.
+- Next Recommended Task: Continue Wave 4 grant quality — UN Women CFP detail enrichment or WASH-specific source (GEF SGP, UNICEF challenge calls, EU INTPA).
+- Recommended Agent: Codex
+- Paste-Ready Next Prompt:
+
+```text
+Read SESSION.md first, then AGENTS.md, docs/agents/assessment-architecture.md, and docs/tender-grant-improvement-waves.md.
+
+Continue Wave 4 grant quality. Google OAuth is now live in production (GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET added to Vercel). Add detail enrichment for UN Women CFP rows or add a true WASH-specific primary grant source (GEF SGP country calls, UNICEF challenge fund, EU INTPA — whichever has a stable public endpoint). Preserve the grants table shape and existing RawTender/CrawlResult contracts. Run npx tsx scripts/grant-match-benchmark.ts after any matching changes. Update SESSION.md when finished.
+```
+
+### Short Resume State
+- What is now true: Google OAuth is fully wired and live (env vars in Vercel, callback route tested). Demo account, PDF reports, and Wave 4 grant improvements from commit 75ca3cf remain live.
+- What remains: UN Women/UNDP CFP detail enrichment, a true WASH-specific grant source, UI caveats for inferred grant metadata, crawler recovery (EBRD/ADB/AfDB).
+- What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, docs/tender-grant-improvement-waves.md
+
+---
+
 The next agent must not infer progress from commits alone.  
 This file is the canonical session memory.  
 If something was done but is not recorded here, treat it as unverified.

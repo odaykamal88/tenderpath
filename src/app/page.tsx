@@ -7,6 +7,9 @@ import WhyUs from "@/components/landing/WhyUs";
 import CTA from "@/components/landing/CTA";
 import Testimonials from "@/components/landing/Testimonials";
 import Footer from "@/components/landing/Footer";
+import { getLandingTenders } from "@/lib/landing/recent-tenders";
+
+export const dynamic = "force-dynamic";
 
 const STAT_BAR = [
   { value: "$25.7B", label: "UN procurement spend, 2024", source: "UN ASR" },
@@ -14,11 +17,13 @@ const STAT_BAR = [
   { value: "32", label: "active UN agencies buying", source: "UN ASR" },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const tenders = await getLandingTenders();
+
   return (
     <>
       <Navbar />
-      <Hero />
+      <Hero tenders={tenders} />
 
       {/* Stat bar — editorial, three columns, with sources */}
       <section className="bg-paper-2 border-y border-rule">

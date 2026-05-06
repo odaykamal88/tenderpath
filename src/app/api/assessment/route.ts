@@ -13,6 +13,14 @@ import { sendAssessmentEmail } from "@/lib/email/sendAssessment";
 import type { AssessmentInput } from "@/lib/types";
 
 export async function POST(request: Request) {
+  const startedAt = Date.now();
+  let lastMark = startedAt;
+  const timings: Record<string, number> = {};
+  const mark = (stage: string) => {
+    const now = Date.now();
+    timings[stage] = now - lastMark;
+    lastMark = now;
+  };
   // Gate behind authentication
   const authResult = await requireAuth(request);
   if (!authResult.authorized) return authResult.response!;
@@ -41,6 +49,7 @@ export async function POST(request: Request) {
     const crawledData = body.website
       ? await crawlWebsite(body.website)
       : null;
+    mark("crawl");
 
     const analysisDescription = [
       body.description,
@@ -63,6 +72,7 @@ export async function POST(request: Request) {
       body.orgType,
       body.devThemes
     );
+    mark("classify");
 
     // Stage 3: Full analysis with Claude Haiku 3.5
     const analysis = await fullAnalysis(
@@ -73,6 +83,7 @@ export async function POST(request: Request) {
       body.orgType,
       body.devThemes
     );
+    mark("analysis");
 
     // Compute scores & tier
     const recommendedTier = determineRecommendedTier(
@@ -101,6 +112,7 @@ export async function POST(request: Request) {
         body.countries ?? []
       ),
     ]);
+    mark("matching");
 
     // Save assessment to DB
     const rows = await sql`
@@ -123,7 +135,16 @@ export async function POST(request: Request) {
     `;
 
     const assessmentId = rows[0].id;
-    console.log("[tp:assessment:complete]", { assessmentId, email: body.email, tenderCount: matchedTenders.length, grantCount: matchedGrants.length });
+    mark("persist");
+    const durationMs = Date.now() - startedAt;
+    console.log("[tp:assessment:complete]", {
+      assessmentId,
+      email: body.email,
+      tenderCount: matchedTenders.length,
+      grantCount: matchedGrants.length,
+      durationMs,
+      timings,
+    });
 
     // Queue results email (kept for audit trail)
     await sql`
@@ -150,6 +171,13 @@ export async function POST(request: Request) {
           country: t.country,
           match_reasons: t.match_reasons ?? [],
         })),
+        sectors: classification.sectors,
+        grantReadinessScore: grantScore,
+        readinessDimensions: analysis.readiness_dimensions,
+        gaps: analysis.gaps,
+        strengths: analysis.strengths ?? [],
+        matchedTenders,
+        matchedGrants,
       });
     } catch (emailErr) {
       console.error("Assessment email failed:", emailErr);
@@ -165,6 +193,7 @@ export async function POST(request: Request) {
       matched_tenders: matchedTenders.length,
       matched_grants: matchedGrants.length,
       sectors: classification.sectors,
+      assessment_duration_ms: durationMs,
     });
   } catch (err) {
     const message =

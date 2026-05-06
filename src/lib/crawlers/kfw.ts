@@ -123,12 +123,14 @@ export async function crawlKfW(): Promise<CrawlResult> {
   const start = Date.now();
   try {
     const allLinks: Array<{ path: string; title: string; deadline: string | null; country: string | null; category: string | null; description: string | null }> = [];
+    let listingFailure: string | null = null;
 
     for (let page = 0; page < MAX_PAGES; page++) {
       let html: string;
       try {
         html = await withRetry(() => fetchListingPage(page));
-      } catch {
+      } catch (err) {
+        listingFailure = err instanceof Error ? err.message : String(err);
         break;
       }
       const links = parseListingLinks(html);
@@ -141,7 +143,9 @@ export async function crawlKfW(): Promise<CrawlResult> {
       return {
         platform: "KfW", status: "failure", tenders: [],
         durationMs: Date.now() - start,
-        error: "KfW/GTAI listing returned no tender links",
+        error: listingFailure
+          ? `KfW/GTAI listing unavailable: ${listingFailure}`
+          : "KfW/GTAI listing returned no tender links",
       };
     }
 

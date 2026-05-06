@@ -180,6 +180,8 @@ export async function initializeDatabase() {
       error TEXT
     )
   `;
+  await sql`ALTER TABLE crawl_logs ADD COLUMN IF NOT EXISTS errors JSONB DEFAULT '[]'`;
+  await sql`ALTER TABLE crawl_logs ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS pipeline_items (
@@ -246,6 +248,27 @@ export async function initializeDatabase() {
       updated_at TIMESTAMPTZ DEFAULT NOW(),
       UNIQUE (user_id, tender_id)
     )
+  `;
+  await sql`ALTER TABLE user_tender_feedback ADD COLUMN IF NOT EXISTS reason TEXT`;
+  await sql`ALTER TABLE user_tender_feedback ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()`;
+  await sql`ALTER TABLE user_tender_feedback ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS user_grant_feedback (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      assessment_id INTEGER REFERENCES assessments(id) ON DELETE SET NULL,
+      grant_id INTEGER NOT NULL,
+      status VARCHAR(32) NOT NULL,
+      reason TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (user_id, grant_id)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS user_grant_feedback_user_status_idx
+    ON user_grant_feedback (user_id, status)
   `;
 
   await sql`

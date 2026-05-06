@@ -155,6 +155,7 @@ ALTER TABLE purchase_logs ALTER COLUMN tier DROP NOT NULL;
 ALTER TABLE crawl_logs ADD COLUMN IF NOT EXISTS status TEXT;
 ALTER TABLE crawl_logs ADD COLUMN IF NOT EXISTS duration_ms INTEGER;
 ALTER TABLE crawl_logs ADD COLUMN IF NOT EXISTS broken_links INTEGER DEFAULT 0;
+ALTER TABLE crawl_logs ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
 
 ALTER TABLE tenders ADD COLUMN IF NOT EXISTS last_link_check TIMESTAMPTZ;
 ALTER TABLE tenders ADD COLUMN IF NOT EXISTS has_broken_link BOOLEAN DEFAULT false;
@@ -202,6 +203,20 @@ ALTER TABLE pipeline_items ADD COLUMN IF NOT EXISTS assessment_id INTEGER REFERE
 ALTER TABLE pipeline_items ADD COLUMN IF NOT EXISTS match_reasons JSONB;
 ALTER TABLE user_tender_feedback ADD COLUMN IF NOT EXISTS reason TEXT;
 ALTER TABLE user_tender_feedback ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE user_tender_feedback ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+CREATE TABLE IF NOT EXISTS user_grant_feedback (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  assessment_id INTEGER REFERENCES assessments(id) ON DELETE SET NULL,
+  grant_id INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  reason TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (user_id, grant_id)
+);
+CREATE INDEX IF NOT EXISTS user_grant_feedback_user_status_idx ON user_grant_feedback (user_id, status);
 
 CREATE TABLE IF NOT EXISTS work_orders (
   id SERIAL PRIMARY KEY,
@@ -248,6 +263,17 @@ CREATE TABLE IF NOT EXISTS weekly_digest_logs (
 );
 CREATE INDEX IF NOT EXISTS weekly_digest_logs_user_id ON weekly_digest_logs (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS weekly_digest_logs_status ON weekly_digest_logs (status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS demo_sessions (
+  id SERIAL PRIMARY KEY,
+  email TEXT NOT NULL,
+  ip_address TEXT,
+  country TEXT,
+  user_agent TEXT,
+  logged_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS demo_sessions_email_idx ON demo_sessions (email, logged_at DESC);
+CREATE INDEX IF NOT EXISTS demo_sessions_logged_at_idx ON demo_sessions (logged_at DESC);
 `;
 
 async function migrate() {

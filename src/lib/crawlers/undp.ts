@@ -5,6 +5,7 @@
  * Static HTML scrape; no API.
  */
 import { type RawTender, type CrawlResult, withRetry, fetchWithTimeout } from "./types";
+import { normalizeSector } from "./sector-map";
 
 const UNDP_URL = "https://procurement-notices.undp.org/";
 
@@ -72,15 +73,25 @@ function parseHTML(html: string): RawTender[] {
       ? countryRaw.charAt(0) + countryRaw.slice(1).toLowerCase()
       : "Global";
 
+    const process = cells["Process"] ?? "";
+    const description = [
+      "UNDP procurement notice.",
+      process ? `Process: ${process}.` : null,
+      cells["Ref No"] ? `Reference: ${cells["Ref No"]}.` : null,
+      office ? `Office/country: ${office}.` : null,
+      cells["Deadline"] ? `Deadline: ${cells["Deadline"]}.` : null,
+    ].filter(Boolean).join(" ");
+    const sectors = normalizeSector(process, title, description);
+
     tenders.push({
       reference_id: `UNDP-${cells["Ref No"] ?? id}`,
       title: title.slice(0, 500),
-      description: null,
+      description,
       agency: office.split("/")[0]?.trim() || "UNDP",
       country,
       country_code: null,
       region: null,
-      sector: null,
+      sector: sectors[0] ?? null,
       deadline: parseDate(cells["Deadline"] ?? ""),
       estimated_value: null,
       source_url: `https://procurement-notices.undp.org/${href}`,
