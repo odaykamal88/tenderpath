@@ -5,7 +5,7 @@ import Link from "next/link";
 import styles from "../admin.module.css";
 import { StatusTag } from "../_components/StatusTag";
 
-type SessionFilter = "all" | "logged_in" | "no_matches" | "email_attention" | "no_dashboard";
+type SessionFilter = "all" | "logged_in" | "no_matches" | "email_attention" | "no_dashboard" | "weak_evidence";
 
 interface AssessmentSession {
   id: number;
@@ -26,6 +26,9 @@ interface AssessmentSession {
   email_error: string | null;
   email_updated_at: string | null;
   pipeline_items: number;
+  crawl_render_method: string | null;
+  crawl_thin: boolean | null;
+  crawl_final_url: string | null;
   completion_state: "matched" | "completed_no_matches";
 }
 
@@ -37,6 +40,7 @@ interface AssessmentSessionsResponse {
     no_matches: number;
     email_attention: number;
     no_dashboard: number;
+    weak_evidence: number;
     logged_in: number;
   };
   totals: {
@@ -53,6 +57,7 @@ const FILTERS: Array<{ key: SessionFilter; label: string }> = [
   { key: "no_matches", label: "No matches" },
   { key: "email_attention", label: "Email attention" },
   { key: "no_dashboard", label: "No dashboard handoff" },
+  { key: "weak_evidence", label: "Weak website evidence" },
 ];
 
 function authHeaders(): HeadersInit {
@@ -154,7 +159,8 @@ export default function AdminAssessmentsPage() {
   );
   const attentionTotal = (data?.attention.no_matches ?? 0)
     + (data?.attention.email_attention ?? 0)
-    + (data?.attention.no_dashboard ?? 0);
+    + (data?.attention.no_dashboard ?? 0)
+    + (data?.attention.weak_evidence ?? 0);
 
   return (
     <>
@@ -222,6 +228,11 @@ export default function AdminAssessmentsPage() {
             <span className={styles.attentionLabel}>Logged-in sessions</span>
             <span className={styles.attentionValue}>{fmtNum(data?.attention.logged_in ?? 0)}</span>
             <span className={styles.attentionHint}>Trace assessment-to-dashboard continuity by user.</span>
+          </Link>
+          <Link href={filterHref("weak_evidence", appliedQuery)} className={styles.attentionTile}>
+            <span className={styles.attentionLabel}>Weak website evidence</span>
+            <span className={styles.attentionValue}>{fmtNum(data?.attention.weak_evidence ?? 0)}</span>
+            <span className={styles.attentionHint}>Website crawl was thin, failed, parked, or missing.</span>
           </Link>
         </div>
       </section>
@@ -311,6 +322,9 @@ export default function AdminAssessmentsPage() {
                       <div className={styles.cellName}>{row.company_name ?? "-"}</div>
                       <div className={styles.sessionSubtle}>
                         {label(row.org_type)} · {row.countries.slice(0, 3).join(", ") || "-"}
+                      </div>
+                      <div className={styles.sessionSubtle} title={row.crawl_final_url ?? undefined}>
+                        crawl: {row.crawl_render_method ?? "missing"}{row.crawl_thin ? " · thin" : ""}
                       </div>
                     </td>
                     <td><StatusTag status={matchState(row)} /></td>

@@ -29,6 +29,9 @@ type SourceHealth = {
   platform: string;
   role: "primary" | "supplement" | "observed";
   status: PlatformStatus;
+  issue_class: "none" | "job_not_running" | "crawler_failure" | "empty_output" | "stale_success" | "low_inventory";
+  likely_cause: string;
+  next_action: string;
   last_run: string | null;
   last_success: string | null;
   added_24h: number;
@@ -245,34 +248,61 @@ function buildSourceHealth(
 
     let status: PlatformStatus = "healthy";
     let message = "Recent successful crawl.";
+    let issueClass: SourceHealth["issue_class"] = "none";
+    let likelyCause = "Crawler is producing usable records inside the expected freshness window.";
+    let nextAction = "Keep monitoring source freshness and output quality.";
 
     if (!lastRun) {
       status = "never_run";
       message = expected ? "Expected source has no crawl log yet." : "Observed source has tenders but no crawl log.";
+      issueClass = "job_not_running";
+      likelyCause = expected ? "Crawler is implemented or expected but not being scheduled/logged." : "Tenders exist from another path, but this source name is not mapped to a crawl log.";
+      nextAction = expected ? "Check syncAllTenders schedule and source inclusion." : "Map this observed source to its canonical crawler or document it as aggregator/derived coverage.";
     } else if (!lastSuccess && lastEmptySuccess) {
       status = "degraded";
       message = "Crawler runs, but the latest successful pass produced no useful tender records.";
+      issueClass = "empty_output";
+      likelyCause = "Crawler completed with zero usable records; selector, pagination, URL, or filtering may be too strict.";
+      nextAction = "Run the source crawler directly and inspect metadata/outputQuality in crawl_logs.";
     } else if (!lastSuccess) {
       status = "down";
       message = "No successful crawl recorded.";
+      issueClass = "crawler_failure";
+      likelyCause = failures > 0 ? "Recent runs are failing before producing usable records." : "Crawler has run, but no run has been marked successful.";
+      nextAction = "Open recent crawl log error/metadata and smoke-test the source-specific crawler.";
     } else if (failures > 0) {
       status = "degraded";
       message = `${failures} failure${failures === 1 ? "" : "s"} in the last 24h.`;
+      issueClass = "crawler_failure";
+      likelyCause = "Intermittent source or parsing failure in the last day.";
+      nextAction = "Review recent crawl_logs.metadata/errors and add retry or selector fix if repeated.";
     } else if (emptySuccesses > 0) {
       status = "degraded";
       message = `${emptySuccesses} crawl${emptySuccesses === 1 ? "" : "s"} in the last 24h produced no useful tender records.`;
+      issueClass = "empty_output";
+      likelyCause = "Source fetch succeeded but parse/dedupe/filter yielded no records.";
+      nextAction = "Check whether source HTML/API changed or whether filters dropped valid records.";
     } else if (staleHours != null && expected && staleHours > expected.staleAfterHours) {
       status = "degraded";
       message = `Last success is ${Math.round(staleHours)}h old; threshold is ${expected.staleAfterHours}h.`;
+      issueClass = "stale_success";
+      likelyCause = "The scheduled job has not produced a recent success.";
+      nextAction = "Check cron execution, source timeout, and whether the freshness threshold is still appropriate.";
     } else if (openTenders < minOpen) {
       status = "degraded";
       message = `Only ${openTenders} open tender${openTenders === 1 ? "" : "s"}; expected at least ${minOpen}.`;
+      issueClass = "low_inventory";
+      likelyCause = "Crawler is healthy but current useful inventory is below launch expectations.";
+      nextAction = "Verify source query coverage and whether recent opportunities moved to another portal.";
     }
 
     return {
       platform,
       role: expected?.role ?? ("observed" as const),
       status,
+      issue_class: issueClass,
+      likely_cause: likelyCause,
+      next_action: nextAction,
       last_run: lastRun,
       last_success: lastSuccess,
       added_24h: Number(log?.added_24h ?? 0),

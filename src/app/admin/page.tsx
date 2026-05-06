@@ -45,6 +45,9 @@ interface PlatformHealth {
   platform: string;
   role: "primary" | "supplement" | "observed";
   status: "healthy" | "degraded" | "down" | "never_run";
+  issue_class: "none" | "job_not_running" | "crawler_failure" | "empty_output" | "stale_success" | "low_inventory";
+  likely_cause: string;
+  next_action: string;
   last_run: string | null;
   last_success: string | null;
   added_24h: number;
@@ -429,7 +432,7 @@ export default function AdminPage() {
                     <StatusDot status={p.status} />
                     <div>
                       <span className={styles.alertPlatform}>{p.platform}</span>
-                      <span className={styles.alertMsg}> — {p.message}</span>
+                      <span className={styles.alertMsg}> — {p.issue_class.replace(/_/g, " ")} · {p.message}</span>
                     </div>
                     <span className={styles.alertMeta}>{relTime(p.last_success)}</span>
                   </div>
@@ -451,7 +454,8 @@ export default function AdminPage() {
                       <th className={styles.num}>Open</th>
                       <th className={styles.num}>+24h</th>
                       <th className={styles.num}>Fails</th>
-                      <th>Signal</th>
+                      <th>Diagnosis</th>
+                      <th>Next action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -468,7 +472,11 @@ export default function AdminPage() {
                         <td className={`${styles.num} ${p.failures_24h > 0 ? styles.negNum : styles.muteNum}`}>
                           {p.failures_24h}
                         </td>
-                        <td className={styles.signal}>{p.message}</td>
+                        <td className={styles.signal}>
+                          <div className={styles.cellName}>{p.issue_class.replace(/_/g, " ")}</div>
+                          <div className={styles.sessionSubtle}>{p.likely_cause}</div>
+                        </td>
+                        <td className={styles.signal}>{p.next_action}</td>
                       </tr>
                     ))}
                   </tbody>

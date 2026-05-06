@@ -23,16 +23,20 @@ type AssessmentSessionRow = {
   email_error: string | null;
   email_updated_at: string | null;
   pipeline_items: number | string | null;
+  crawl_render_method: string | null;
+  crawl_thin: boolean | null;
+  crawl_final_url: string | null;
 };
 
 type AttentionCounts = {
   no_matches: number | string | null;
   email_attention: number | string | null;
   no_dashboard: number | string | null;
+  weak_evidence: number | string | null;
   logged_in: number | string | null;
 };
 
-const SESSION_FILTERS = new Set(["all", "logged_in", "no_matches", "email_attention", "no_dashboard"]);
+const SESSION_FILTERS = new Set(["all", "logged_in", "no_matches", "email_attention", "no_dashboard", "weak_evidence"]);
 
 function toInt(value: number | string | null | undefined): number {
   return Number(value ?? 0);
@@ -65,6 +69,9 @@ function normalizeRow(row: AssessmentSessionRow) {
     email_error: row.email_error,
     email_updated_at: row.email_updated_at,
     pipeline_items: toInt(row.pipeline_items),
+    crawl_render_method: row.crawl_render_method,
+    crawl_thin: row.crawl_thin,
+    crawl_final_url: row.crawl_final_url,
     completion_state: tenderCount > 0 || grantCount > 0 ? "matched" : "completed_no_matches",
   };
 }
@@ -110,7 +117,10 @@ export async function GET(request: Request) {
         eq.status AS email_status,
         eq.error AS email_error,
         eq.updated_at AS email_updated_at,
-        COALESCE(pi.pipeline_items, 0) AS pipeline_items
+        COALESCE(pi.pipeline_items, 0) AS pipeline_items,
+        a.crawled_data->>'renderMethod' AS crawl_render_method,
+        CASE WHEN a.crawled_data IS NULL THEN true ELSE COALESCE((a.crawled_data->>'isThinContent')::boolean, true) END AS crawl_thin,
+        a.crawled_data->>'finalUrl' AS crawl_final_url
       FROM assessments a
       LEFT JOIN users u ON lower(u.email) = lower(a.email)
       LEFT JOIN LATERAL (
@@ -141,6 +151,7 @@ export async function GET(request: Request) {
         OR (${filter} = 'no_matches' AND tender_count = 0 AND grant_count = 0)
         OR (${filter} = 'email_attention' AND (email_status IS NULL OR email_status NOT IN ('sent', 'delivered')))
         OR (${filter} = 'no_dashboard' AND user_id IS NOT NULL AND pipeline_items = 0)
+        OR (${filter} = 'weak_evidence' AND (crawl_thin IS TRUE OR crawl_render_method IN ('failed', 'parked') OR crawl_render_method IS NULL))
       )
       ORDER BY created_at DESC
       LIMIT ${limit}
@@ -162,7 +173,9 @@ export async function GET(request: Request) {
         END AS grant_count,
         u.id AS user_id,
         eq.status AS email_status,
-        COALESCE(pi.pipeline_items, 0) AS pipeline_items
+        COALESCE(pi.pipeline_items, 0) AS pipeline_items,
+        a.crawled_data->>'renderMethod' AS crawl_render_method,
+        CASE WHEN a.crawled_data IS NULL THEN true ELSE COALESCE((a.crawled_data->>'isThinContent')::boolean, true) END AS crawl_thin
       FROM assessments a
       LEFT JOIN users u ON lower(u.email) = lower(a.email)
       LEFT JOIN LATERAL (
@@ -182,6 +195,7 @@ export async function GET(request: Request) {
       COUNT(*) FILTER (WHERE tender_count = 0 AND grant_count = 0)::int AS no_matches,
       COUNT(*) FILTER (WHERE email_status IS NULL OR email_status NOT IN ('sent', 'delivered'))::int AS email_attention,
       COUNT(*) FILTER (WHERE user_id IS NOT NULL AND pipeline_items = 0)::int AS no_dashboard,
+      COUNT(*) FILTER (WHERE crawl_thin IS TRUE OR crawl_render_method IN ('failed', 'parked') OR crawl_render_method IS NULL)::int AS weak_evidence,
       COUNT(*) FILTER (WHERE user_id IS NOT NULL)::int AS logged_in
     FROM session_rows
     WHERE
@@ -210,6 +224,7 @@ export async function GET(request: Request) {
       no_matches: toInt(attention.no_matches),
       email_attention: toInt(attention.email_attention),
       no_dashboard: toInt(attention.no_dashboard),
+      weak_evidence: toInt(attention.weak_evidence),
       logged_in: toInt(attention.logged_in),
     },
     totals,
