@@ -302,11 +302,27 @@ function grantOpportunityBucket(grant: MatchedGrant): { key: OpportunityBucket; 
   const urgent = days != null && days >= 0 && days <= 30;
   const location = (grant.country ?? grant.region ?? "").toLowerCase();
   const globalOrRegional = !location || /global|international|worldwide|multiple|regional|multi-country/.test(location);
+  const weakGeography = grant.geography_alignment?.mode === "global-open" || grant.geography_alignment?.mode === "unknown";
+  const userCountrySet = new Set((grant.geography_alignment?.userCountries ?? []).map((country) => country.toLowerCase()));
+  const grantCountry = (grant.country ?? "").toLowerCase();
+  const regionOnlyCountry = !!grantCountry
+    && !GRANT_GLOBAL_TERMS.has(grantCountry)
+    && userCountrySet.size > 0
+    && !userCountrySet.has(grantCountry);
 
   if (grant.org_type_mismatch) {
     return {
       key: "watchlist",
       reason: "Eligibility may not match your organization type; verify before applying.",
+    };
+  }
+
+  if (grant.score >= 45 && (weakGeography || globalOrRegional || regionOnlyCountry)) {
+    return {
+      key: "strategic",
+      reason: regionOnlyCountry
+        ? "Relevant regional funder opportunity; verify country eligibility before prioritizing."
+        : "Relevant regional or global funder opportunity worth monitoring.",
     };
   }
 
@@ -353,8 +369,9 @@ function assignGrantOpportunityBuckets(grants: MatchedGrant[]): MatchedGrant[] {
       };
     })
     .sort((a, b) =>
-      b.score - a.score
-      || (a.opportunity_bucket_priority ?? 99) - (b.opportunity_bucket_priority ?? 99)
+      (a.opportunity_bucket_priority ?? 99) - (b.opportunity_bucket_priority ?? 99)
+      || Number(b.geography_alignment?.mode === "direct") - Number(a.geography_alignment?.mode === "direct")
+      || b.score - a.score
     );
 }
 
@@ -1427,6 +1444,17 @@ const SECTOR_TO_GRANT_THEME: Record<SectorSlug, string[]> = {
   energy: ["energy", "renewable energy", "climate", "infrastructure"],
 };
 
+const BROAD_GRANT_THEMES = new Set([
+  "innovation",
+  "capacity building",
+  "resilience",
+  "technical assistance",
+  "infrastructure",
+  "urban development",
+  "emergency response",
+  "governance",
+]);
+
 const GRANT_GLOBAL_TERMS = new Set([
   "global", "international", "worldwide", "multiple", "multi-country",
   "regional", "all countries", "world", "any country",
@@ -1617,6 +1645,7 @@ export async function matchGrants(
     const gTitle = (g.title as string ?? "");
     const gDescription = (g.description as string | null) ?? "";
     const reasons: string[] = [];
+    const matchedThemes: string[] = [];
 
     // Grant descriptions are often long policy/program text and can mention
     // many adjacent themes. Use the curated/enriched sector and title for the
@@ -1651,7 +1680,6 @@ export async function matchGrants(
     const grantThemes = normalizeGrantArray(g.themes);
     let themeHits = 0;
     if (grantThemes.length && themeSet.size) {
-      const matchedThemes: string[] = [];
       for (const gt of grantThemes) {
         if (themeSet.has(gt.toLowerCase())) {
           themeHits++;
@@ -1712,15 +1740,28 @@ export async function matchGrants(
     }
 
     const fitSignals = sectorHits + themeHits + tokenHits;
+    const hasSpecificThemeHit = matchedThemes.some((theme) => !BROAD_GRANT_THEMES.has(theme.toLowerCase()));
+    const geographyIsStrong = geography.mode === "direct";
+    const geographyIsWeak = geography.mode === "global-open" || geography.mode === "unknown";
+    const broadGlobalOnly = geographyIsWeak && sectorHits === 0 && !hasSpecificThemeHit && tokenHits < 3;
 
     // Skip weak grants where geography/org eligibility are the only reasons.
     // Those rows are useful as raw inventory but feel random in the dashboard.
     if (fitSignals <= 0) continue;
     if (sectorHits === 0 && themeHits === 0 && tokenHits <= 1) continue;
+    if (broadGlobalOnly) continue;
+
+    // For companies, a grant should have a real programmatic fit signal. A
+    // broad theme plus generic company eligibility is not enough to earn a
+    // dashboard card, especially for global/EU calls.
+    if (normalizeGrantOrgType(orgType ?? "") === "company" && !geographyIsStrong) {
+      if (sectorHits === 0 && !hasSpecificThemeHit && tokenHits < 4) continue;
+      if (fundingScope === "unknown" && geography.mode === "unknown" && sectorHits === 0) continue;
+    }
 
     // Skip zero-signal grants — the old `score = 8` floor caused identical
     // grants to appear for every company regardless of relevance.
-    if (score < 28) continue;
+    if (score < 38) continue;
 
     const NGO_TERMS = new Set(["ngo", "non-profit", "nonprofit", "civil society", "charity", "foundation", "ingo", "non profit"]);
     const isNgoOnly = eligibleOrgs.length > 0 &&
@@ -1737,6 +1778,8 @@ export async function matchGrants(
     // Region-level grants are useful, but should not bury a country-specific
     // CFP/grant with the same thematic fit.
     if (regionOnlyMatch) cappedScore = Math.min(cappedScore, 84);
+    if (geographyIsWeak && sectorHits === 0) cappedScore = Math.min(cappedScore, 54);
+    if (geographyIsWeak && sectorHits === 0 && !hasSpecificThemeHit) cappedScore = Math.min(cappedScore, 44);
 
     scored.push({
       id: g.id as number,

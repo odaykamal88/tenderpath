@@ -39,6 +39,14 @@ function enrichDescription(
  * Returns full assessment data for immediate rendering.
  */
 export async function POST(request: Request) {
+  const startedAt = Date.now();
+  let lastMark = startedAt;
+  const timings: Record<string, number> = {};
+  const mark = (stage: string) => {
+    const now = Date.now();
+    timings[stage] = now - lastMark;
+    lastMark = now;
+  };
   const body = (await request.json()) as Partial<AssessmentInput>;
 
   if (!body.companyName || !body.email || !body.countries?.length) {
@@ -64,6 +72,7 @@ export async function POST(request: Request) {
     const crawledData = body.website
       ? await crawlWebsite(body.website)
       : null;
+    mark("crawl");
 
     // If user skipped description, synthesize one from the crawl
     const baseDescription = body.description?.trim() || synthesizeDescription(crawledData);
@@ -83,6 +92,7 @@ export async function POST(request: Request) {
       body.orgType,
       body.devThemes
     );
+    mark("classify");
 
     // Stage 3: Full analysis
     const analysis = await fullAnalysis(
@@ -93,6 +103,7 @@ export async function POST(request: Request) {
       body.orgType,
       body.devThemes
     );
+    mark("analysis");
 
     // Compute scores & tier
     const recommendedTier = determineRecommendedTier(
@@ -121,6 +132,7 @@ export async function POST(request: Request) {
         body.countries ?? []
       ),
     ]);
+    mark("matching");
 
     // Save assessment to DB
     const rows = await sql`
@@ -143,7 +155,16 @@ export async function POST(request: Request) {
     `;
 
     const assessmentId = rows[0].id;
-    console.log("[tp:assessment:complete]", { assessmentId, email: body.email, tenderCount: matchedTenders.length, grantCount: matchedGrants.length });
+    mark("persist");
+    const durationMs = Date.now() - startedAt;
+    console.log("[tp:assessment:complete]", {
+      assessmentId,
+      email: body.email,
+      tenderCount: matchedTenders.length,
+      grantCount: matchedGrants.length,
+      durationMs,
+      timings,
+    });
 
     // Queue + send results email after response; failures update email_queue for ops visibility.
     await sql`
@@ -193,6 +214,7 @@ export async function POST(request: Request) {
       gaps: analysis.gaps,
       matched_tenders: matchedTenders,
       matched_grants: matchedGrants,
+      assessment_duration_ms: durationMs,
     });
   } catch (err) {
     const message =

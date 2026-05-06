@@ -70,6 +70,10 @@ function hasAnySignal(text: string, signals: string[]): boolean {
   return signals.some((signal) => text.includes(signal));
 }
 
+function hasAnyPattern(text: string, patterns: RegExp[]): boolean {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
 function addUnique(items: string[], additions: string[]): string[] {
   const seen = new Set(items.map((item) => item.toLowerCase()));
   const out = [...items];
@@ -101,9 +105,19 @@ function applyConcreteIndustryGuards(
   ].join(" ").toLowerCase();
 
   const logisticsSignals = [
-    "warehouse", "warehousing", "storage", "supply chain", "logistics",
-    "freight", "transport", "distribution", "last-mile", "last mile",
+    "warehouse", "warehousing", "supply chain", "logistics",
+    "freight", "transport services", "transportation services",
+    "distribution services", "last-mile", "last mile",
     "cargo", "fleet", "food packaging", "food distribution",
+  ];
+  const itSignals = [
+    /\b(information technology|ict|it services?|software|saas|platform|systems integration|network solutions?|cybersecurity|data systems?|digital transformation|erp|cloud|managed services?|telecom|telecommunications)\b/i,
+  ];
+  const researchConsultingSignals = [
+    /\b(monitoring and evaluation|monitoring, evaluation|m&e|research consultants?|research and consultancy|policy research|impact evaluation|survey research|data collection|analytics|development consulting|technical assistance|capacity building)\b/i,
+  ];
+  const engineeringSignals = [
+    /\b(engineering|civil engineering|design supervision|construction supervision|geoscience|laboratory services|water engineering|power engineering)\b/i,
   ];
   const securitySignals = [
     "security service", "security services", "guard", "guarding",
@@ -115,22 +129,31 @@ function applyConcreteIndustryGuards(
     "cleaning service", "catering",
   ];
 
+  const hasIt = hasAnyPattern(text, itSignals);
+  const hasResearchConsulting = hasAnyPattern(text, researchConsultingSignals);
+  const hasEngineering = hasAnyPattern(text, engineeringSignals);
   const hasLogistics = hasAnySignal(text, logisticsSignals);
   const hasSecurity = hasAnySignal(text, securitySignals);
   const hasFacility = hasAnySignal(text, facilitySignals);
 
-  if (!hasLogistics && !hasSecurity && !hasFacility) return classification;
+  if (!hasIt && !hasResearchConsulting && !hasEngineering && !hasLogistics && !hasSecurity && !hasFacility) return classification;
 
   const sectors = addUnique(classification.sectors, [
+    ...(hasIt ? ["Information Technology"] : []),
+    ...(hasResearchConsulting ? ["Consulting Services", "Research & Evaluation", "Technical Assistance"] : []),
+    ...(hasEngineering ? ["Engineering Services"] : []),
     ...(hasLogistics ? ["Logistics & Supply Chain", "Warehousing & Distribution"] : []),
     ...(hasSecurity ? ["Security Services"] : []),
     ...(hasFacility ? ["Facility Management"] : []),
   ]);
 
   const detected_industry =
-    hasLogistics ? "logistics"
+    hasIt ? "it"
+    : hasResearchConsulting ? "consulting"
+    : hasEngineering ? "engineering"
+    : hasLogistics ? "logistics"
     : hasSecurity ? "security"
-    : classification.detected_industry === "consulting" ? "logistics"
+    : hasFacility ? "facilities"
     : classification.detected_industry;
 
   return {
