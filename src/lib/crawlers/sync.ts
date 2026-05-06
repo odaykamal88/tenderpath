@@ -1,11 +1,10 @@
 import { sql } from "../db";
 import { type CrawlResult, type RawTender, dedupKey, verifyLink } from "./types";
 import { crawlUNGM } from "./ungm";
-import { crawlIOM } from "./iom";
 import { crawlUNDP } from "./undp";
 import { crawlUNDPAtlas } from "./undp-atlas";
 // UN agencies consolidated into ungm.ts via residential proxy
-// Covers: UNICEF, WFP, WHO, UNHCR, IOM, UNDP, and 50+ other UN bodies
+// Covers: UNICEF, WFP, WHO, UNHCR, IOM, UNRWA, UNDP, and 50+ other UN bodies
 // import { crawlWFP } from "./wfp"; // disabled — posts to UNGM
 import { crawlReliefWeb } from "./reliefweb";
 import { crawlTED } from "./ted-eu";
@@ -16,7 +15,6 @@ import { crawlGIZ } from "./giz";
 import { crawlDevelopmentAidNPO } from "./developmentaid-npo";
 import { crawlADB } from "./adb";
 import { crawlEBRD } from "./ebrd";
-import { crawlUNRWA } from "./unrwa";
 import { crawlAfDB } from "./afdb";
 import { crawlIDB } from "./idb";
 import { crawlNRC } from "./nrc";
@@ -142,10 +140,25 @@ async function filterLiveLinks(tenders: RawTender[], concurrency = 10): Promise<
   const live: RawTender[] = [];
   let dropped = 0;
   let idx = 0;
-  const sourceVerifiedNoticeLink = (t: RawTender) =>
-    t.source_name === "UNGM" &&
-    /^UNGM-/.test(t.reference_id) &&
-    (t.source_url?.startsWith("https://www.ungm.org/Public/Notice/") ?? false);
+  const sourceVerifiedNoticeLink = (t: RawTender) => {
+    const url = t.source_url ?? "";
+    if (
+      t.source_name === "UNGM" &&
+      /^UNGM-/.test(t.reference_id) &&
+      url.startsWith("https://www.ungm.org/Public/Notice/")
+    ) {
+      return true;
+    }
+
+    // UK FTS notice pages often return 403 to server-side HEAD/GET checks,
+    // even though the OCDS API release is valid and browser-accessible. Trust
+    // the official API-derived notice URL so the source is not marked empty.
+    return (
+      t.source_name === "UK Find a Tender" &&
+      /^UKFTS-/.test(t.reference_id) &&
+      url.startsWith("https://www.find-tender.service.gov.uk/Notice/")
+    );
+  };
 
   async function worker() {
     while (idx < tenders.length) {
@@ -269,10 +282,9 @@ async function logCrawl(r: PlatformSyncResult): Promise<void> {
 export async function syncAllTenders(): Promise<SyncSummary> {
   // Tier-1 free APIs first; legacy HTML scrapers kept as fallback fillers.
   // UN agencies consolidated into ungm.ts via residential proxy —
-  // covers UNICEF, WFP, WHO, UNHCR, IOM, UNDP, and 50+ other UN bodies.
+  // covers UNICEF, WFP, WHO, UNHCR, IOM, UNRWA, UNDP, and 50+ other UN bodies.
   const crawls = await Promise.allSettled([
     crawlUNGM(),
-    crawlIOM(),
     crawlReliefWeb(),
     crawlTED(),
     crawlUKFTS(),
@@ -285,7 +297,6 @@ export async function syncAllTenders(): Promise<SyncSummary> {
     crawlAfDB(),
     crawlIDB(),
     crawlEBRD(),
-    crawlUNRWA(),
     crawlDevelopmentAidNPO(),
     crawlNRC(),
     crawlKfW(),
@@ -293,6 +304,8 @@ export async function syncAllTenders(): Promise<SyncSummary> {
     crawlJICA(),
     crawlADA(),
     // crawlWFP(),    — disabled, posts to UNGM
+    // crawlIOM(),    — disabled, notices are covered by UNGM and the direct page is bot-blocked
+    // crawlUNRWA(),  — disabled, official UNRWA guidance points suppliers to UNGM notices
     // crawlUNOPS()  — disabled: already covered by UNGM (UNOPS posts to UNGM by mandate)
   ]);
 

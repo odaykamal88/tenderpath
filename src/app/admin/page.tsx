@@ -70,6 +70,33 @@ interface SourceQuality {
   message: string;
 }
 
+interface SourceDetail {
+  platform: string;
+  quality: {
+    open_tenders: number | string | null;
+    description_complete_pct: number | string | null;
+    deadline_complete_pct: number | string | null;
+    sector_complete_pct: number | string | null;
+    source_url_complete_pct: number | string | null;
+    broken_link_pct: number | string | null;
+    thin_descriptions: number | string | null;
+  } | null;
+  recentLogs: CrawlLog[];
+  recentTenders: Array<{
+    id: number;
+    reference_id: string;
+    title: string;
+    agency: string | null;
+    country: string | null;
+    sector: string | null;
+    deadline: string | null;
+    source_url: string | null;
+    has_broken_link: boolean | null;
+    updated_at: string | null;
+  }>;
+  topAgencies: Array<{ agency: string; open_tenders: number | string }>;
+}
+
 interface Stats {
   totalUsers: number;
   totalAssessments: number;
@@ -204,6 +231,9 @@ export default function AdminPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ ok: boolean; message?: string } | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [sourceDetail, setSourceDetail] = useState<SourceDetail | null>(null);
+  const [sourceDetailLoading, setSourceDetailLoading] = useState<string | null>(null);
+  const [sourceDetailError, setSourceDetailError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
@@ -248,6 +278,24 @@ export default function AdminPage() {
       setSyncResult({ ok: false, message: "Network error — sync not triggered." });
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const loadSourceDetail = async (platform: string) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+    if (!token) return;
+    setSourceDetailLoading(platform);
+    setSourceDetailError(null);
+    try {
+      const res = await fetch(`/api/admin/source-health?platform=${encodeURIComponent(platform)}`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      setSourceDetail(await res.json());
+    } catch (e) {
+      setSourceDetailError(e instanceof Error ? e.message : "Failed to load source detail");
+    } finally {
+      setSourceDetailLoading(null);
     }
   };
 
@@ -456,6 +504,7 @@ export default function AdminPage() {
                       <th className={styles.num}>Fails</th>
                       <th>Diagnosis</th>
                       <th>Next action</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -477,11 +526,37 @@ export default function AdminPage() {
                           <div className={styles.sessionSubtle}>{p.likely_cause}</div>
                         </td>
                         <td className={styles.signal}>{p.next_action}</td>
+                        <td className={styles.num}>
+                          <button
+                            type="button"
+                            className={styles.btnGhost}
+                            style={{ padding: "5px 9px", fontSize: 11 }}
+                            onClick={() => loadSourceDetail(p.platform)}
+                            disabled={sourceDetailLoading === p.platform}
+                          >
+                            {sourceDetailLoading === p.platform ? "Loading" : "Details"}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+            )}
+
+            {sourceDetailError && (
+              <div className={`${styles.toast} ${styles.toastErr}`} style={{ margin: 22 }}>
+                {sourceDetailError}
+              </div>
+            )}
+            {sourceDetail && (
+              <SourceDetailPanel
+                detail={sourceDetail}
+                onClose={() => {
+                  setSourceDetail(null);
+                  setSourceDetailError(null);
+                }}
+              />
             )}
           </section>
 
@@ -742,6 +817,117 @@ function DemoActivityPanel({ data, onRefresh }: { data: DemoUsage | null; onRefr
         </section>
       )}
     </>
+  );
+}
+
+function SourceDetailPanel({ detail, onClose }: { detail: SourceDetail; onClose: () => void }) {
+  const quality = detail.quality;
+  const pctValue = (v: number | string | null | undefined) => Math.round(Number(v ?? 0));
+
+  return (
+    <div className={styles.sourceDetail}>
+      <header className={styles.sourceDetailHead}>
+        <div>
+          <h3 className={styles.sourceDetailTitle}>{detail.platform}</h3>
+          <p className={styles.panelSub}>Recent logs, output quality, and latest open tenders for this source.</p>
+        </div>
+        <button type="button" className={styles.btnGhost} onClick={onClose}>Close</button>
+      </header>
+
+      <div className={styles.sourceDetailGrid}>
+        <div>
+          <div className={styles.sourceDetailLabel}>Open tenders</div>
+          <div className={styles.sourceDetailValue}>{fmtNum(Number(quality?.open_tenders ?? 0))}</div>
+        </div>
+        <div>
+          <div className={styles.sourceDetailLabel}>Descriptions</div>
+          <div className={styles.sourceDetailValue}>{pctValue(quality?.description_complete_pct)}%</div>
+        </div>
+        <div>
+          <div className={styles.sourceDetailLabel}>Deadlines</div>
+          <div className={styles.sourceDetailValue}>{pctValue(quality?.deadline_complete_pct)}%</div>
+        </div>
+        <div>
+          <div className={styles.sourceDetailLabel}>Sectors</div>
+          <div className={styles.sourceDetailValue}>{pctValue(quality?.sector_complete_pct)}%</div>
+        </div>
+      </div>
+
+      {detail.topAgencies.length > 0 && (
+        <div className={styles.sourceAgencyRow}>
+          {detail.topAgencies.slice(0, 8).map((a) => (
+            <span key={a.agency} className={styles.sourceAgency}>
+              {a.agency} · {fmtNum(a.open_tenders)}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className={styles.sourceDetailTables}>
+        <div>
+          <div className={styles.sourceDetailLabel}>Latest crawl logs</div>
+          <table className={styles.dossierTable}>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Status</th>
+                <th className={styles.num}>Rows</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detail.recentLogs.map((log) => (
+                <tr key={log.id}>
+                  <td className={styles.mono}>{fmtDate(log.started_at)}</td>
+                  <td><StatusTag status={log.status} /></td>
+                  <td className={styles.num}>{fmtNum((log.tenders_added ?? 0) + (log.tenders_updated ?? 0))}</td>
+                  <td className={styles.signal} style={{ color: log.error ? "var(--color-red)" : undefined }}>
+                    {crawlNote(log)}
+                  </td>
+                </tr>
+              ))}
+              {detail.recentLogs.length === 0 && (
+                <tr><td colSpan={4} className={styles.mute}>No crawl logs for this source.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div>
+          <div className={styles.sourceDetailLabel}>Latest open tenders</div>
+          <table className={styles.dossierTable}>
+            <thead>
+              <tr>
+                <th>Tender</th>
+                <th>Agency</th>
+                <th>Deadline</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detail.recentTenders.map((t) => (
+                <tr key={t.id}>
+                  <td>
+                    {t.source_url ? (
+                      <a className={styles.tableLink} href={t.source_url} target="_blank" rel="noreferrer">
+                        {t.title}
+                      </a>
+                    ) : (
+                      <span className={styles.cellName}>{t.title}</span>
+                    )}
+                    <div className={styles.sessionSubtle}>{[t.country, t.sector].filter(Boolean).join(" · ") || t.reference_id}</div>
+                  </td>
+                  <td>{t.agency ?? "—"}</td>
+                  <td className={styles.mono}>{t.deadline ?? "—"}</td>
+                </tr>
+              ))}
+              {detail.recentTenders.length === 0 && (
+                <tr><td colSpan={3} className={styles.mute}>No open tenders for this source.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -78,7 +78,6 @@ type UngmFamilyHealth = {
 
 const EXPECTED_PLATFORMS: ExpectedPlatform[] = [
   { platform: "UNGM", role: "primary", staleAfterHours: 26, minOpenTenders: 20 },
-  { platform: "IOM", role: "primary", staleAfterHours: 48 },
   { platform: "World Bank", role: "primary", staleAfterHours: 36, minOpenTenders: 5 },
   { platform: "TED EU", role: "primary", staleAfterHours: 36, minOpenTenders: 5 },
   { platform: "UK Find a Tender", role: "primary", staleAfterHours: 48 },
@@ -88,7 +87,6 @@ const EXPECTED_PLATFORMS: ExpectedPlatform[] = [
   { platform: "AfDB", role: "primary", staleAfterHours: 72 },
   { platform: "IDB", role: "primary", staleAfterHours: 48 },
   { platform: "EBRD", role: "primary", staleAfterHours: 48 },
-  { platform: "UNRWA", role: "primary", staleAfterHours: 48 },
   { platform: "ReliefWeb", role: "supplement", staleAfterHours: 48 },
   { platform: "DevelopmentAid NPO", role: "supplement", staleAfterHours: 72 },
   { platform: "NRC", role: "supplement", staleAfterHours: 72 },
@@ -114,6 +112,7 @@ const UNGM_FAMILY_AGENCIES = [
   { agency: "UN-Women", patterns: ["UN-Women", "UN Women", "United Nations Entity for Gender Equality"] },
   { agency: "UNIDO", patterns: ["UNIDO", "United Nations Industrial Development Organization"] },
   { agency: "IAEA", patterns: ["IAEA", "International Atomic Energy Agency"] },
+  { agency: "UNRWA", patterns: ["UNRWA", "United Nations Relief and Works Agency"] },
 ];
 
 const DEFAULT_QUALITY_THRESHOLDS: SourceQualityThresholds = {
@@ -140,6 +139,8 @@ const SOURCE_QUALITY_THRESHOLDS: Record<string, Partial<SourceQualityThresholds>
   ReliefWeb: { sectorMin: 45, criticalSectorMin: 20 },
   "DevelopmentAid NPO": { descriptionMin: 50, criticalDescriptionMin: 25, sectorMin: 55 },
 };
+
+const UNGM_COVERED_LEGACY_LOG_PLATFORMS = new Set(["IOM", "UNRWA"]);
 
 function qualityThresholds(platform: string): SourceQualityThresholds {
   return { ...DEFAULT_QUALITY_THRESHOLDS, ...(SOURCE_QUALITY_THRESHOLDS[platform] ?? {}) };
@@ -230,7 +231,7 @@ function buildSourceHealth(
   const openByPlatform = new Map(openRows.map((r) => [r.platform, Number(r.open_tenders ?? 0)]));
   const allPlatforms = new Set([
     ...EXPECTED_PLATFORMS.map((p) => p.platform),
-    ...logRows.map((r) => r.platform),
+    ...logRows.map((r) => r.platform).filter((platform) => !UNGM_COVERED_LEGACY_LOG_PLATFORMS.has(platform)),
     ...openRows.map((r) => r.platform),
   ]);
 
@@ -459,7 +460,7 @@ export async function GET(request: Request) {
     // Lets ops answer "was UNGM healthy in the last 24 hours?" at a glance.
     sql`
       SELECT
-        platform,
+        CASE WHEN platform = 'UK FTS' THEN 'UK Find a Tender' ELSE platform END AS platform,
         MAX(created_at) AS last_run,
         MAX(CASE WHEN status = 'success' THEN created_at END) AS last_success,
         MAX(CASE WHEN status = 'success_empty' THEN created_at END) AS last_empty_success,
@@ -468,7 +469,7 @@ export async function GET(request: Request) {
         COUNT(CASE WHEN status = 'failure' AND created_at > NOW() - INTERVAL '24 hours' THEN 1 END) AS failures_24h,
         COUNT(CASE WHEN status = 'success_empty' AND created_at > NOW() - INTERVAL '24 hours' THEN 1 END) AS empty_successes_24h
       FROM crawl_logs
-      GROUP BY platform
+      GROUP BY CASE WHEN platform = 'UK FTS' THEN 'UK Find a Tender' ELSE platform END
       ORDER BY platform
     `,
     sql`
