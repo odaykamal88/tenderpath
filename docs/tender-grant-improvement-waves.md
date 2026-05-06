@@ -68,6 +68,39 @@ Remaining:
 - Find alternate public APIs/search endpoints for ADB and AfDB, or add a stronger worker navigation strategy if those portals must remain browser-rendered.
 - EBRD still redirects public ECEPP listing access to CAS login and needs alternate endpoint/source recovery.
 
+### Wave 3/4 crawler repair continuation — 2026-05-06
+
+Implemented:
+
+- Repaired EBRD by replacing the retired/login-gated ECEPP list URL with the current public `noticeSearchResults.html` table.
+- Updated EBRD parsing for `displayNoticeId` links, visible notice columns, hidden metadata, non-closed status filtering, deadline normalization, descriptions, and sector normalization.
+- Recovered ADB partially through the official ADB Consultant Management System CSRN page when the primary `www.adb.org/projects/tenders` page is Cloudflare-blocked.
+- ADB CMS fallback returns current consulting opportunities with title, project URL, expertise, consultant type, engagement period, published date, deadline, country code where present, and normalized sector.
+- Improved UNDP and GIZ source quality by adding lightweight descriptions and sector normalization from list-level fields.
+
+Current source state:
+
+- EBRD: repaired against current official public ECEPP search results.
+- ADB: partially recovered. The primary ADB project-tenders page still returns Cloudflare block/challenge responses in this environment and should remain on the backlog for deeper browser/proxy work. The new fallback covers official ADB CMS consulting opportunities, not the full project procurement tender universe.
+- UNDP: quality improved, though some generic/individual-consultant rows still naturally lack precise sectors from list text alone.
+- GIZ: quality improved, though some German procurement titles still need richer detail-page text for precise sector assignment.
+
+Validation:
+
+- EBRD live smoke returned 2,291 non-closed ECEPP rows with descriptions, deadlines where present, source URLs, and normalized sectors.
+- ADB live smoke returned 25 current CMS consulting opportunities with normalized deadlines and sectors.
+- UNDP live smoke returned 577 rows with descriptions and some normalized sectors.
+- GIZ live smoke returned 17 rows with descriptions and some normalized sectors.
+- `npx eslint src/lib/crawlers/adb.ts src/lib/crawlers/ebrd.ts src/lib/crawlers/undp.ts src/lib/crawlers/giz.ts`
+- `npx tsc --noEmit`
+
+Remaining:
+
+- ADB full project procurement: find a stable official data/API/search path or improve browser-worker handling for Cloudflare-protected `projects/tenders`.
+- AfDB: still needs the same deeper current-source/browser investigation.
+- ADB CMS pagination: current fallback captures the first 25 opportunities; extend only after confirming Oracle/OAF pagination can be automated without brittle session state.
+- UNDP/GIZ: add detail-page enrichment if these become high-priority matching sources.
+
 ## UN Agency Coverage Backlog
 
 Current UNGM data already contains useful coverage beyond the first tracked UNICEF/WFP/WHO set. Keep these as explicit monitored agencies rather than new standalone crawlers unless UNGM coverage drops:

@@ -9,6 +9,7 @@
  */
 import { type RawTender, type CrawlResult, withRetry } from "./types";
 import { fetchViaBrowser, browserAvailable } from "./_browser";
+import { normalizeSector } from "./sector-map";
 
 const BASE = "https://ausschreibungen.giz.de/Satellite/company/welcome.do";
 const SORT = "&method=showTable&fromSearch=1&tableSortPROJECT_RESULT=1&tableSortAttributePROJECT_RESULT=publicationDate";
@@ -120,15 +121,23 @@ function mapRow(r: ParsedRow): RawTender | null {
   if (!r.titleRaw) return null;
   const { ref, title } = splitRef(r.titleRaw);
   const deadline = toISO(r.deadline);
+  const description = [
+    "GIZ eVergabe procurement notice.",
+    r.type ? `Procedure type: ${r.type}.` : null,
+    r.published ? `Published: ${r.published}.` : null,
+    r.deadline ? `Deadline: ${r.deadline}.` : null,
+    r.agency ? `Contracting authority: ${r.agency}.` : null,
+  ].filter(Boolean).join(" ");
+  const sectors = normalizeSector(r.type, title, description);
   return {
     reference_id: `GIZ-${ref ?? r.pid}`,
     title: title.slice(0, 500),
-    description: null,
+    description,
     agency: r.agency,
     country: "Germany",
     country_code: "DE",
     region: null,
-    sector: null,
+    sector: sectors[0] ?? null,
     deadline,
     estimated_value: null,
     source_url: `https://ausschreibungen.giz.de/Satellite/public/company/projectForwarding.do?pid=${r.pid}`,
