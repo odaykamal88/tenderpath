@@ -9,6 +9,8 @@ export interface Session {
   email?: string;
 }
 
+const SESSION_TTL_MINUTES = 30;
+
 let tableReady = false;
 
 async function ensureTable(): Promise<void> {
@@ -27,10 +29,17 @@ async function ensureTable(): Promise<void> {
 export async function getSession(chatId: number): Promise<Session> {
   await ensureTable();
   const rows = await sql`
-    SELECT state, data FROM telegram_sessions WHERE chat_id = ${chatId}
+    SELECT state, data, updated_at FROM telegram_sessions WHERE chat_id = ${chatId}
   `;
   if (!rows[0]) return { state: "idle" };
-  const row = rows[0] as { state: SessionState; data: Omit<Session, "state"> };
+  const row = rows[0] as { state: SessionState; data: Omit<Session, "state">; updated_at: string };
+
+  const ageMinutes = (Date.now() - new Date(row.updated_at).getTime()) / 60000;
+  if (ageMinutes > SESSION_TTL_MINUTES) {
+    await clearSession(chatId);
+    return { state: "idle" };
+  }
+
   return { state: row.state, ...row.data };
 }
 

@@ -20,7 +20,10 @@ export const LOGIN_MENU: InlineButton[][] = [
     { text: "I use Google", callback_data: "login_google" },
     { text: "I use email / magic link", callback_data: "login_magic" },
   ],
-  [{ text: "← Back", callback_data: "back_menu" }],
+  [
+    { text: "💬 Talk to Team", callback_data: "menu_escalate" },
+    { text: "← Back", callback_data: "back_menu" },
+  ],
 ];
 
 export const FAQ_MENU: InlineButton[][] = [
@@ -40,20 +43,31 @@ export const FAQ_MENU: InlineButton[][] = [
     { text: "Cancel subscription", callback_data: "faq_cancel" },
     { text: "Arabic support", callback_data: "faq_arabic" },
   ],
-  [{ text: "← Back", callback_data: "back_menu" }],
+  [
+    { text: "💬 Talk to Team", callback_data: "menu_escalate" },
+    { text: "← Back", callback_data: "back_menu" },
+  ],
 ];
 
 export const FAQ_BACK: InlineButton[][] = [
   [
     { text: "← FAQ list", callback_data: "menu_faq" },
+    { text: "💬 Talk to Team", callback_data: "menu_escalate" },
+    { text: "⌂ Menu", callback_data: "back_menu" },
+  ],
+];
+
+export const ESCALATE_BACK: InlineButton[][] = [
+  [
+    { text: "💬 Talk to Team", callback_data: "menu_escalate" },
     { text: "⌂ Main menu", callback_data: "back_menu" },
   ],
 ];
 
 export const WELCOME =
-  `Welcome to <b>TenderPath</b>.\n\n` +
-  `I can help with your assessment results, tender matches, and account questions.\n\n` +
-  `What do you need?`;
+  `Hey! I'm the TenderPath assistant.\n\n` +
+  `I can pull up your assessment results, check your tender matches, or help with account stuff.\n\n` +
+  `What's up?`;
 
 export const FAQ_ANSWERS: Record<string, string> = {
   faq_what_is:
@@ -102,7 +116,7 @@ export const FAQ_ANSWERS: Record<string, string> = {
     `<b>Cancelling your subscription</b>\n\n` +
     `Yes, anytime — no long-term commitment.\n\n` +
     `Cancel from your account settings. You keep access until the end of your billing period.\n\n` +
-    `If you're having trouble cancelling, message this chat and we'll handle it immediately.`,
+    `Still having trouble? Hit "Talk to Team" and we'll sort it immediately.`,
 
   faq_arabic:
     `<b>Arabic support</b>\n\n` +

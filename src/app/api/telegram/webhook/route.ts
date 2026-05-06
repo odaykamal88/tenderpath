@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { sendMessage, answerCallbackQuery } from "@/lib/telegram/api";
 import { getSession, setSession, clearSession } from "@/lib/telegram/sessions";
-import { MAIN_MENU, LOGIN_MENU, FAQ_MENU, FAQ_BACK, WELCOME, FAQ_ANSWERS } from "@/lib/telegram/content";
+import { MAIN_MENU, LOGIN_MENU, FAQ_MENU, FAQ_BACK, ESCALATE_BACK, WELCOME, FAQ_ANSWERS } from "@/lib/telegram/content";
 
 const ADMIN_CHAT_ID = Number(process.env.TELEGRAM_ADMIN_CHAT_ID ?? "5825303923");
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.tenderpath.me";
@@ -52,7 +52,7 @@ async function handleCallback(cq: TgCallbackQuery): Promise<void> {
   }
 
   if (data === "menu_faq") {
-    return sendMessage(chatId, "Choose a topic:", FAQ_MENU);
+    return sendMessage(chatId, "What do you want to know?", FAQ_MENU);
   }
 
   if (data.startsWith("faq_")) {
@@ -62,52 +62,47 @@ async function handleCallback(cq: TgCallbackQuery): Promise<void> {
   }
 
   if (data === "menu_login") {
-    return sendMessage(
-      chatId,
-      "Which sign-in method are you using?",
-      LOGIN_MENU
-    );
+    return sendMessage(chatId, "How do you normally sign in?", LOGIN_MENU);
   }
 
   if (data === "login_google") {
     return sendMessage(
       chatId,
-      `<b>Google login help</b>\n\n` +
-      `1. Go to <a href="${APP_URL}/login">${APP_URL}/login</a>\n` +
-      `2. Click <b>Continue with Google</b>\n` +
-      `3. Select the Google account you used to sign up\n\n` +
-      `If you see "Account not found", your account may be registered under a different email. ` +
-      `Reply with that email and we'll check.`,
-      [[{ text: "← Back", callback_data: "menu_login" }]]
+      `Here's how to get back in with Google:\n\n` +
+      `1. Head to <a href="${APP_URL}/login">${APP_URL}/login</a>\n` +
+      `2. Hit <b>Continue with Google</b>\n` +
+      `3. Pick the Google account you signed up with\n\n` +
+      `Seeing "Account not found"? Your account might be under a different email — tap "Talk to Team" and I'll pass it to the team to check.`,
+      [[{ text: "💬 Talk to Team", callback_data: "menu_escalate" }, { text: "← Back", callback_data: "menu_login" }]]
     );
   }
 
   if (data === "login_magic") {
     return sendMessage(
       chatId,
-      `<b>Email / magic link help</b>\n\n` +
+      `Magic link not working? Here's the drill:\n\n` +
       `1. Go to <a href="${APP_URL}/login">${APP_URL}/login</a>\n` +
-      `2. Enter your email address and click <b>Send magic link</b>\n` +
-      `3. Check your inbox (and spam folder) for an email from TenderPath\n` +
-      `4. Click the link — it expires after one use\n\n` +
-      `Link not arriving? Reply here with your email and we'll investigate.`,
-      [[{ text: "← Back", callback_data: "menu_login" }]]
+      `2. Enter your email and hit <b>Send magic link</b>\n` +
+      `3. Check your inbox — and spam, just in case\n` +
+      `4. Click the link (it's single-use, so don't open it twice)\n\n` +
+      `Still nothing? Tap "Talk to Team" and we'll dig into it.`,
+      [[{ text: "💬 Talk to Team", callback_data: "menu_escalate" }, { text: "← Back", callback_data: "menu_login" }]]
     );
   }
 
   if (data === "menu_assessment") {
     await setSession(chatId, { state: "awaiting_email", intent: "assessment" });
-    return sendMessage(chatId, "What's the email address you used to run your assessment?");
+    return sendMessage(chatId, "Which email did you use for your assessment?");
   }
 
   if (data === "menu_matches") {
     await setSession(chatId, { state: "awaiting_email", intent: "matches" });
-    return sendMessage(chatId, "What's your registered email address?");
+    return sendMessage(chatId, "Which email is your account under?");
   }
 
   if (data === "menu_escalate") {
     await setSession(chatId, { state: "awaiting_email", intent: "escalate" });
-    return sendMessage(chatId, "What's your registered email address?");
+    return sendMessage(chatId, "What's your email so I can pass it along?");
   }
 }
 
@@ -116,9 +111,9 @@ async function handleAssessmentResult(chatId: number, email: string): Promise<vo
   if (!row) {
     await sendMessage(
       chatId,
-      `No assessment found for <code>${email}</code>.\n\n` +
-      `Double-check the address or run a free assessment at <a href="${APP_URL}">${APP_URL}</a>.`,
-      [[{ text: "⌂ Main menu", callback_data: "back_menu" }]]
+      `Hmm, nothing came up for <code>${email}</code>.\n\n` +
+      `Worth double-checking the address — if it's right and you haven't run one yet, you can do it free here: <a href="${APP_URL}">${APP_URL}</a>`,
+      ESCALATE_BACK
     );
     return;
   }
@@ -144,9 +139,9 @@ async function handleMatchesResult(chatId: number, email: string): Promise<void>
   if (!row || !Array.isArray(row.matched_tenders) || row.matched_tenders.length === 0) {
     await sendMessage(
       chatId,
-      `No matches found for <code>${email}</code>. ` +
-      `If your assessment is recent, try your dashboard: <a href="${APP_URL}/dashboard">${APP_URL}/dashboard</a>`,
-      [[{ text: "⌂ Main menu", callback_data: "back_menu" }]]
+      `No matches on file for <code>${email}</code> yet.\n\n` +
+      `If your assessment just finished, give it a minute and check your dashboard: <a href="${APP_URL}/dashboard">${APP_URL}/dashboard</a>`,
+      ESCALATE_BACK
     );
     return;
   }
@@ -167,7 +162,7 @@ async function handleMatchesResult(chatId: number, email: string): Promise<void>
 async function handleEscalation(chatId: number, email: string, from?: TgUser): Promise<void> {
   await setSession(chatId, { state: "awaiting_message", intent: "escalate", email });
   const name = from?.first_name ?? "there";
-  await sendMessage(chatId, `Thanks ${name}. Briefly describe what you need help with:`);
+  await sendMessage(chatId, `Got it, ${name}. What's going on? Give me a quick summary:`);
 }
 
 async function finalizeEscalation(chatId: number, email: string, message: string, from?: TgUser): Promise<void> {
@@ -175,7 +170,7 @@ async function finalizeEscalation(chatId: number, email: string, message: string
   const name = from?.first_name ?? "Unknown";
   await sendMessage(
     chatId,
-    `Got it — Oday will get back to you within 1 business day.\n\nFor urgent issues, email <a href="mailto:info@tenderpath.me">info@tenderpath.me</a>.`,
+    `All good — we'll be in touch shortly, typically within one business day.\n\nIf it's urgent, drop a line at <a href="mailto:info@tenderpath.me">info@tenderpath.me</a>.`,
     [[{ text: "⌂ Main menu", callback_data: "back_menu" }]]
   );
   await sendMessage(
@@ -203,7 +198,7 @@ async function handleMessage(msg: TgMessage): Promise<void> {
     const email = text.toLowerCase();
     const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     if (!emailOk) {
-      return sendMessage(chatId, "That doesn't look like a valid email. Please try again:");
+      return sendMessage(chatId, "That doesn't look quite right — want to try again?");
     }
     await clearSession(chatId);
     if (session.intent === "assessment") return handleAssessmentResult(chatId, email);
@@ -216,8 +211,8 @@ async function handleMessage(msg: TgMessage): Promise<void> {
     return finalizeEscalation(chatId, session.email, text, msg.from);
   }
 
-  // Unrecognised input — show menu
-  await sendMainMenu(chatId);
+  // Unrecognised input — acknowledge and show menu
+  await sendMessage(chatId, "Not sure I caught that one. Here's what I can help with:", MAIN_MENU);
 }
 
 export async function POST(request: Request): Promise<Response> {
