@@ -71,12 +71,22 @@ export default function AssessmentResults({
           <p className="font-mono text-[10px] tracking-[0.18em] uppercase text-accent">
             Vendor readiness report · No. {String(data.id).padStart(4, "0")}
           </p>
-          <button
-            onClick={onReset}
-            className="font-mono text-[10px] tracking-[0.1em] uppercase text-ink-3 hover:text-ink border-b border-rule hover:border-ink pb-0.5"
-          >
-            Run another →
-          </button>
+          <div className="flex items-center gap-4">
+            <a
+              href={`/api/assessment/${data.id}/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-[10px] tracking-[0.1em] uppercase text-accent hover:text-ink border-b border-accent hover:border-ink pb-0.5"
+            >
+              Download PDF →
+            </a>
+            <button
+              onClick={onReset}
+              className="font-mono text-[10px] tracking-[0.1em] uppercase text-ink-3 hover:text-ink border-b border-rule hover:border-ink pb-0.5"
+            >
+              Run another →
+            </button>
+          </div>
         </div>
         <h1 className="font-serif text-[40px] lg:text-[48px] font-normal leading-[1.0] tracking-[-0.02em] text-ink mb-3">
           {data.company_name}
@@ -352,7 +362,7 @@ export default function AssessmentResults({
       )}
 
       <p className="font-mono text-[10px] tracking-[0.06em] text-mute mt-10 text-center">
-        A full PDF copy of this report has been emailed to {data.email}.
+        Your results have been emailed to {data.email}.
       </p>
     </div>
   );

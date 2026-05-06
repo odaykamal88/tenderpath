@@ -1,51 +1,100 @@
-/* CTA — final paper-stamp card on dark ink · mobile-tuned */
+/* Footer — editorial footnote with columns */
 
-export default function CTA() {
+const RESOURCES = [
+  { label: "FAQ", href: "/faq" },
+  { label: "Pricing", href: "/#services" },
+  { label: "Assessment", href: "/assessment" },
+];
+
+const LEGAL = [
+  { label: "Privacy Policy", href: "/privacy" },
+  { label: "Terms", href: "/terms" },
+  { label: "Disclaimer", href: "/disclaimer" },
+  { label: "Cookie Policy", href: "/cookie-policy" },
+];
+
+const PLATFORM = [
+  { label: "Dashboard", href: "/dashboard" },
+  { label: "Services", href: "/dashboard/services" },
+  { label: "Sign in", href: "/login" },
+];
+
+export default function Footer() {
   return (
-    <section id="cta" className="bg-ink py-16 sm:py-20 lg:py-28 relative overflow-hidden">
-      <div
-        aria-hidden
-        className="absolute inset-0 opacity-[0.03]"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at 20% 30%, #fff 1px, transparent 1px), radial-gradient(circle at 80% 70%, #fff 1px, transparent 1px)",
-          backgroundSize: "32px 32px",
-        }}
-      />
-      <div className="mx-auto max-w-4xl px-5 sm:px-6 lg:px-8 relative">
-        <div className="border border-paper-2/20 p-7 sm:p-10 lg:p-16">
-          <p className="font-mono text-[10px] sm:text-[11px] tracking-[0.16em] sm:tracking-[0.18em] uppercase text-accent-2 mb-5 sm:mb-6">
-            Closing notice
-          </p>
-          <h2 className="font-serif text-[32px] sm:text-[44px] lg:text-[56px] font-normal leading-[1.07] sm:leading-[1.05] tracking-[-0.02em] text-paper text-balance mb-5 sm:mb-6">
-            Stop chasing tenders<br />
-            you shouldn&rsquo;t <em className="italic text-accent-2 font-serif">chase</em>.
-          </h2>
-          <p className="text-[14.5px] sm:text-[15px] lg:text-[16px] text-paper-2/70 leading-[1.6] mb-8 sm:mb-10 max-w-xl">
-            Five minutes. The free assessment tells you where you stand, what gaps to fix, and which tenders are worth your week of evenings — before you spend them.
-          </p>
+    <footer className="bg-paper border-t border-rule">
+      <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8 py-14 sm:py-16 lg:py-20">
 
-          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-4 sm:gap-6 pt-5 sm:pt-6 border-t border-paper-2/15">
-            <a
-              href="/assessment"
-              className="inline-flex items-center justify-center sm:justify-start gap-3 bg-paper px-6 sm:px-8 py-4 text-[14px] font-medium text-ink hover:bg-accent-2 hover:text-ink transition-colors"
-            >
-              Run the free assessment
-              <span className="font-mono text-[13px]">→</span>
+        {/* Top row — brand + columns */}
+        <div className="grid grid-cols-2 sm:grid-cols-[1fr_auto_auto_auto] gap-10 sm:gap-12 lg:gap-16 pb-12 border-b border-rule">
+
+          {/* Brand blurb */}
+          <div className="col-span-2 sm:col-span-1">
+            <a href="/" className="inline-flex items-baseline gap-0 mb-5">
+              <span className="font-serif text-[22px] font-medium tracking-[-0.01em] text-ink">
+                Tender<span className="text-accent">·</span>Path
+              </span>
             </a>
-            <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-paper-2/50 self-center sm:self-auto">
-              No card · No login · 5 min
-            </span>
+            <p className="font-serif text-[14px] leading-[1.65] text-ink-2 max-w-[260px]">
+              UN procurement readiness, scored.
+              <br />
+              Decoding the maze for vendors.
+            </p>
           </div>
 
-          <p className="mt-8 sm:mt-10 pt-5 sm:pt-6 border-t border-paper-2/15 font-mono text-[10.5px] sm:text-[11px] text-paper-2/50">
-            Already a member?{" "}
-            <a href="/login" className="text-paper border-b border-paper hover:text-accent-2 hover:border-accent-2">
-              Sign in to your dashboard →
-            </a>
+          {/* Platform */}
+          <div>
+            <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-mute mb-5">Platform</p>
+            <ul className="space-y-3">
+              {PLATFORM.map((l) => (
+                <li key={l.href}>
+                  <a href={l.href} className="font-mono text-[11px] tracking-[0.06em] text-ink-3 hover:text-ink transition-colors">
+                    {l.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Resources */}
+          <div>
+            <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-mute mb-5">Resources</p>
+            <ul className="space-y-3">
+              {RESOURCES.map((l) => (
+                <li key={l.href}>
+                  <a href={l.href} className="font-mono text-[11px] tracking-[0.06em] text-ink-3 hover:text-ink transition-colors">
+                    {l.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Legal */}
+          <div>
+            <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-mute mb-5">Legal</p>
+            <ul className="space-y-3">
+              {LEGAL.map((l) => (
+                <li key={l.href}>
+                  <a href={l.href} className="font-mono text-[11px] tracking-[0.06em] text-ink-3 hover:text-ink transition-colors">
+                    {l.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* Bottom row — copyright + location */}
+        <div className="pt-6 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-3">
+          <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-mute">
+            © 2026 TenderPath · All rights reserved
+          </p>
+          <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-mute">
+            Built in Cairo, Egypt 2026
           </p>
         </div>
+
       </div>
-    </section>
+    </footer>
   );
 }

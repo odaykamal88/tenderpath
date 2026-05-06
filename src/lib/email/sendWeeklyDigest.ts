@@ -75,40 +75,47 @@ function renderText(args: SendWeeklyDigestArgs): string {
 function renderHtml(args: SendWeeklyDigestArgs): string {
   const tenderCards = args.tenders.length
     ? args.tenders.map((tender) => `
-      <div style="border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin-bottom:10px;">
-        <div style="font-size:14px;font-weight:700;color:#111827;">${escapeHtml(tender.title)}</div>
-        <div style="font-size:12px;color:#6b7280;margin-top:4px;">${escapeHtml(tender.agency)} · ${escapeHtml(tender.country || "Country not listed")} · ${escapeHtml(deadlineLabel(tender.deadline))} · ${tender.score}% fit</div>
-        <p style="font-size:12px;color:#4b5563;line-height:1.5;margin:8px 0 0;">${escapeHtml(tenderReason(tender))}</p>
-        ${tender.source_url ? `<a href="${tender.source_url}" style="display:inline-block;margin-top:8px;font-size:12px;color:#4f46e5;">Open source</a>` : ""}
+      <div style="border-bottom:1px solid #d8d0bd;padding:14px 0;">
+        <div style="font-size:14px;font-weight:600;color:#1a1a1a;margin-bottom:3px;">${escapeHtml(tender.title)}</div>
+        <div style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:11px;color:#8a8377;margin-bottom:6px;">${escapeHtml(tender.agency)} · ${escapeHtml(tender.country || "Country not listed")} · ${escapeHtml(deadlineLabel(tender.deadline))} · <span style="color:#b08530;">${tender.score}% fit</span></div>
+        <p style="font-size:12px;color:#4a4a4a;line-height:1.55;margin:0 0 6px;">${escapeHtml(tenderReason(tender))}</p>
+        ${tender.source_url ? `<a href="${tender.source_url}" style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#b08530;text-decoration:none;">View source →</a>` : ""}
       </div>
     `).join("")
-    : `<p style="font-size:13px;color:#6b7280;">No strong tender matches this week.</p>`;
+    : `<p style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:12px;color:#8a8377;padding:10px 0;">No strong tender matches this week.</p>`;
 
   const grantCards = args.grants.length
     ? args.grants.map((grant) => `
-      <div style="border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin-bottom:10px;">
-        <div style="font-size:14px;font-weight:700;color:#111827;">${escapeHtml(grant.title)}</div>
-        <div style="font-size:12px;color:#6b7280;margin-top:4px;">${escapeHtml(grant.agency)} · ${escapeHtml(grant.country ?? grant.region ?? "Geography not listed")} · ${escapeHtml(deadlineLabel(grant.deadline))} · ${grant.score}% fit</div>
-        ${grant.source_url ? `<a href="${grant.source_url}" style="display:inline-block;margin-top:8px;font-size:12px;color:#4f46e5;">Open source</a>` : ""}
+      <div style="border-bottom:1px solid #d8d0bd;padding:14px 0;">
+        <div style="font-size:14px;font-weight:600;color:#1a1a1a;margin-bottom:3px;">${escapeHtml(grant.title)}</div>
+        <div style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:11px;color:#8a8377;margin-bottom:6px;">${escapeHtml(grant.agency)} · ${escapeHtml(grant.country ?? grant.region ?? "Geography not listed")} · ${escapeHtml(deadlineLabel(grant.deadline))} · <span style="color:#2d8a4e;">${grant.score}% fit</span></div>
+        ${grant.source_url ? `<a href="${grant.source_url}" style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#b08530;text-decoration:none;">View source →</a>` : ""}
       </div>
     `).join("")
-    : `<p style="font-size:13px;color:#6b7280;">No strong grant matches this week.</p>`;
+    : `<p style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:12px;color:#8a8377;padding:10px 0;">No strong grant matches this week.</p>`;
 
   return `<!DOCTYPE html>
-<html><body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#111827;">
-  <div style="max-width:620px;margin:0 auto;padding:28px 18px;">
-    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;">
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#6b7280;">Weekly matched digest</div>
-      <h1 style="font-size:22px;line-height:1.2;margin:8px 0 6px;color:#111827;">${escapeHtml(args.companyName)}</h1>
-      <p style="font-size:14px;line-height:1.5;color:#4b5563;margin:0 0 20px;">These opportunities were scored against your latest Tenderpath assessment profile.</p>
-      <h2 style="font-size:15px;margin:0 0 10px;color:#111827;">Top tenders</h2>
-      ${tenderCards}
-      <h2 style="font-size:15px;margin:22px 0 10px;color:#111827;">Top grants</h2>
-      ${grantCards}
-      <div style="margin-top:24px;">
-        <a href="${args.dashboardUrl}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;padding:11px 18px;border-radius:8px;font-weight:700;font-size:13px;">Review dashboard</a>
-      </div>
+<html><body style="margin:0;padding:0;background:#f5f1e8;font-family:Georgia,serif;color:#1a1a1a;">
+  <div style="max-width:600px;margin:0 auto;padding:36px 24px;">
+    <div style="border-bottom:1px solid #1a1a1a;padding-bottom:18px;margin-bottom:24px;">
+      <p style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.16em;color:#b08530;margin:0 0 6px;">Weekly matched digest</p>
+      <h1 style="font-family:Georgia,serif;font-size:26px;font-weight:400;margin:0 0 4px;line-height:1.1;">${escapeHtml(args.companyName)}</h1>
+      <p style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:12px;color:#8a8377;margin:0;">Opportunities scored against your Tenderpath assessment profile.</p>
     </div>
+
+    <h2 style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#8a8377;margin:0 0 2px;font-weight:600;">Top tenders</h2>
+    ${tenderCards}
+
+    <h2 style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#8a8377;margin:24px 0 2px;font-weight:600;">Top grants</h2>
+    ${grantCards}
+
+    <div style="margin-top:28px;padding-top:20px;border-top:1px solid #d8d0bd;">
+      <a href="${args.dashboardUrl}" style="display:inline-block;background:#1a1a1a;color:#f5f1e8;text-decoration:none;padding:12px 24px;font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.14em;font-weight:600;">Review dashboard →</a>
+    </div>
+
+    <p style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:11px;color:#8a8377;margin:24px 0 0;border-top:1px solid #d8d0bd;padding-top:16px;">
+      Tenderpath · You're receiving this as a subscribed member.
+    </p>
   </div>
 </body></html>`;
 }

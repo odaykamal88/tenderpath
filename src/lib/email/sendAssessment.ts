@@ -44,7 +44,7 @@ const TIER_COPY: Record<TierSlug, { name: string; price: string; pitch: string }
 export async function sendAssessmentEmail(args: SendArgs): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? "TenderPath <no-reply@tenderpath.me>";
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://tenderpath.me";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.tenderpath.me";
 
   if (!apiKey) {
     const error = "RESEND_API_KEY missing";
@@ -156,59 +156,64 @@ function renderHtml(d: SendArgs & { tier: { name: string; price: string; pitch: 
 
   const tierCards = allTiers.map(({ slug, name, price, pitch }) => {
     const isRec = slug === d.recommendedTier;
-    const border = isRec ? "2px solid #fbbf24" : "1px solid rgba(255,255,255,0.08)";
+    const border = isRec ? "2px solid #b08530" : "1px solid #d8d0bd";
     const badge = isRec
-      ? `<div style="font-size:10px;color:#fbbf24;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:6px;">★ Best Fit for ${escapeHtml(d.companyName)}</div>`
+      ? `<div style="font-size:10px;color:#b08530;text-transform:uppercase;letter-spacing:0.1em;font-weight:600;margin-bottom:6px;">★ Best fit for ${escapeHtml(d.companyName)}</div>`
       : "";
-    const btnBg = isRec ? "#fbbf24" : "transparent";
-    const btnColor = isRec ? "#0f172a" : "#fbbf24";
-    const btnBorder = isRec ? "none" : "1px solid #fbbf24";
-    return `<div style="background:#1e293b;border:${border};border-radius:12px;padding:20px;margin-bottom:12px;">
+    const btnBg = isRec ? "#1a1a1a" : "transparent";
+    const btnColor = isRec ? "#f5f1e8" : "#1a1a1a";
+    const btnBorder = isRec ? "none" : "1px solid #1a1a1a";
+    return `<div style="background:#faf7ee;border:${border};padding:18px 20px;margin-bottom:10px;">
       ${badge}
-      <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:4px;">${escapeHtml(name)} <span style="color:#fbbf24;">${escapeHtml(price)}</span></div>
-      <p style="font-size:13px;color:#cbd5e1;line-height:1.5;margin:0 0 16px;">${escapeHtml(pitch)}</p>
-      <a href="${d.ctaUrl}" style="display:inline-block;background:${btnBg};color:${btnColor};border:${btnBorder};text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600;font-size:13px;">Get ${escapeHtml(name)} →</a>
+      <div style="font-size:16px;font-weight:600;color:#1a1a1a;margin-bottom:4px;">${escapeHtml(name)} <span style="color:#b08530;">${escapeHtml(price)}</span></div>
+      <p style="font-size:13px;color:#4a4a4a;line-height:1.55;margin:0 0 14px;">${escapeHtml(pitch)}</p>
+      <a href="${d.ctaUrl}" style="display:inline-block;background:${btnBg};color:${btnColor};border:${btnBorder};text-decoration:none;padding:9px 18px;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;font-weight:600;">Get started →</a>
     </div>`;
   }).join("\n");
 
   return `<!DOCTYPE html>
-<html><body style="margin:0;padding:0;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#e2e8f0;">
-  <div style="max-width:560px;margin:0 auto;padding:32px 24px;">
-    <h1 style="font-size:22px;margin:0 0 8px;color:#fff;">Your TenderPath Readiness Report</h1>
-    <p style="margin:0 0 24px;color:#94a3b8;font-size:14px;">${escapeHtml(d.companyName)}</p>
+<html><body style="margin:0;padding:0;background:#f5f1e8;font-family:Georgia,serif;color:#1a1a1a;">
+  <div style="max-width:560px;margin:0 auto;padding:40px 28px;">
 
-    <div style="background:#1e293b;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:24px;margin-bottom:24px;">
-      <div style="font-size:42px;font-weight:700;color:#fff;line-height:1;">${d.readinessScore}<span style="font-size:18px;color:#64748b;">/100</span></div>
-      <div style="font-size:12px;color:#94a3b8;margin-top:4px;text-transform:uppercase;letter-spacing:0.05em;">Readiness Score</div>
-      <div style="margin-top:16px;font-size:13px;color:#cbd5e1;">
-        <span><strong style="color:#fbbf24;">${d.tenderCount}</strong> matched tenders &nbsp;·&nbsp; <strong style="color:#2dd4bf;">${d.grantCount}</strong> matched grants</span>
+    <div style="border-bottom:1px solid #1a1a1a;padding-bottom:20px;margin-bottom:28px;">
+      <p style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.16em;color:#b08530;margin:0 0 6px;">Vendor readiness report · No. ${String(d.assessmentId).padStart(4, "0")}</p>
+      <h1 style="font-family:Georgia,serif;font-size:28px;font-weight:400;margin:0 0 4px;line-height:1.1;letter-spacing:-0.01em;">${escapeHtml(d.companyName)}</h1>
+    </div>
+
+    <div style="background:#ebe5d3;border:1px solid #d8d0bd;padding:24px;margin-bottom:24px;">
+      <div style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8a8377;margin-bottom:8px;">Overall readiness</div>
+      <div style="font-family:Georgia,serif;font-size:56px;font-weight:400;line-height:1;letter-spacing:-0.03em;color:#1a1a1a;">${d.readinessScore}<span style="font-size:22px;color:#8a8377;">/100</span></div>
+      <div style="margin-top:14px;font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:12px;color:#4a4a4a;border-top:1px solid #d8d0bd;padding-top:12px;">
+        <strong style="color:#b08530;">${d.tenderCount}</strong> matched tenders &nbsp;·&nbsp; <strong style="color:#2d8a4e;">${d.grantCount}</strong> matched grants
       </div>
     </div>
 
-    <p style="font-size:14px;line-height:1.6;color:#cbd5e1;margin:0 0 20px;">${escapeHtml(d.summary)}</p>
+    <p style="font-family:Georgia,serif;font-size:15px;line-height:1.65;color:#4a4a4a;margin:0 0 22px;font-style:italic;">&ldquo;${escapeHtml(d.summary)}&rdquo;</p>
 
-    ${d.topGap ? `<div style="background:rgba(239,68,68,0.1);border-left:3px solid #ef4444;padding:12px 16px;margin-bottom:24px;font-size:13px;color:#fca5a5;">
-      <strong style="display:block;margin-bottom:4px;color:#fff;">Top gap to close</strong>${escapeHtml(d.topGap)}
+    ${d.topGap ? `<div style="border-left:3px solid #b8463f;background:#faf7ee;padding:12px 16px;margin-bottom:24px;">
+      <div style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:#b8463f;margin-bottom:4px;">Top gap to close</div>
+      <p style="font-size:13px;color:#4a4a4a;margin:0;line-height:1.5;">${escapeHtml(d.topGap)}</p>
     </div>` : ``}
 
     ${d.topTenders?.length ? `
-    <div style="margin-bottom:24px;">
-      <div style="font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:12px;">Top Matched Tenders</div>
+    <div style="margin-bottom:28px;">
+      <div style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:#8a8377;font-weight:600;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #d8d0bd;">Top matched tenders</div>
       ${d.topTenders.map((t) => `
-      <div style="background:#1e293b;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:14px 16px;margin-bottom:8px;">
-        <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:4px;">${escapeHtml(t.title)}</div>
-        <div style="font-size:12px;color:#94a3b8;margin-bottom:${t.match_reasons?.length ? "8px" : "0"};">${escapeHtml(t.agency)} · ${escapeHtml(t.country)}</div>
-        ${t.match_reasons?.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${t.match_reasons.slice(0, 3).map((r) => `<span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:2px 8px;font-size:11px;color:#94a3b8;">${escapeHtml(r)}</span>`).join("")}</div>` : ""}
+      <div style="border-bottom:1px solid #d8d0bd;padding:12px 0;">
+        <div style="font-size:13px;font-weight:600;color:#1a1a1a;margin-bottom:3px;">${escapeHtml(t.title)}</div>
+        <div style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:11px;color:#8a8377;margin-bottom:${t.match_reasons?.length ? "6px" : "0"};">${escapeHtml(t.agency)} · ${escapeHtml(t.country)}</div>
+        ${t.match_reasons?.length ? `<div style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:11px;color:#b08530;">${t.match_reasons.slice(0, 2).join(" · ")}</div>` : ""}
       </div>`).join("")}
     </div>` : ""}
-    <div style="font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:12px;">Your Recommended Services</div>
+
+    <div style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:#8a8377;font-weight:600;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #d8d0bd;">Recommended services</div>
     ${tierCards}
 
-    <div style="text-align:center;margin:32px 0;">
-      <a href="${d.resultsUrl}" style="color:#94a3b8;font-size:13px;text-decoration:underline;">View your full report online</a>
+    <div style="text-align:center;margin:32px 0 24px;">
+      <a href="${d.resultsUrl}" style="display:inline-block;background:#1a1a1a;color:#f5f1e8;text-decoration:none;padding:12px 28px;font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.14em;font-weight:600;">View full report →</a>
     </div>
 
-    <p style="font-size:11px;color:#64748b;text-align:center;margin:32px 0 0;border-top:1px solid rgba(255,255,255,0.05);padding-top:16px;">
+    <p style="font-family:-apple-system,BlinkMacSystemFont,monospace;font-size:11px;color:#8a8377;text-align:center;margin:24px 0 0;border-top:1px solid #d8d0bd;padding-top:16px;">
       You received this because you ran a free assessment at TenderPath.
     </p>
   </div>
