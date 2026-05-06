@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   const user = guard.user!;
 
   const rows = await sql`
-    SELECT id, company_name, readiness_score, matched_tenders, gaps
+    SELECT id, company_name, readiness_score, grant_readiness_score, matched_tenders, matched_grants, gaps
     FROM assessments
     WHERE email = ${user.email}
     ORDER BY created_at DESC
@@ -19,6 +19,7 @@ export async function GET(request: Request) {
 
   const row = rows[0];
   const rawTenders = Array.isArray(row.matched_tenders) ? row.matched_tenders : [];
+  const matchedGrants = Array.isArray(row.matched_grants) ? row.matched_grants : [];
   const gaps = Array.isArray(row.gaps) ? row.gaps : [];
 
   // Map MatchedTender.score → fit_score so seedPipeline uses per-tender scores
@@ -31,7 +32,9 @@ export async function GET(request: Request) {
     assessment_id: row.id,
     company_name: row.company_name ?? "",
     readiness_score: row.readiness_score ?? 0,
+    grant_readiness_score: row.grant_readiness_score ?? 0,
     matched_tenders: matchedTenders,
+    matched_grants: matchedGrants,
     gaps,
   });
 }

@@ -25,6 +25,13 @@ type AssessmentSessionRow = {
   pipeline_items: number | string | null;
 };
 
+type AttentionCounts = {
+  no_matches: number | string | null;
+  email_attention: number | string | null;
+  no_dashboard: number | string | null;
+  logged_in: number | string | null;
+};
+
 const SESSION_FILTERS = new Set(["all", "logged_in", "no_matches", "email_attention", "no_dashboard"]);
 
 function toInt(value: number | string | null | undefined): number {
@@ -139,7 +146,53 @@ export async function GET(request: Request) {
       LIMIT ${limit}
     ` as AssessmentSessionRow[];
 
+  const attentionRows = await sql`
+    WITH session_rows AS (
+      SELECT
+        a.email,
+        a.company_name,
+        a.website,
+        CASE WHEN jsonb_typeof(COALESCE(a.matched_tenders, '[]'::jsonb)) = 'array'
+          THEN jsonb_array_length(COALESCE(a.matched_tenders, '[]'::jsonb))
+          ELSE 0
+        END AS tender_count,
+        CASE WHEN jsonb_typeof(COALESCE(a.matched_grants, '[]'::jsonb)) = 'array'
+          THEN jsonb_array_length(COALESCE(a.matched_grants, '[]'::jsonb))
+          ELSE 0
+        END AS grant_count,
+        u.id AS user_id,
+        eq.status AS email_status,
+        COALESCE(pi.pipeline_items, 0) AS pipeline_items
+      FROM assessments a
+      LEFT JOIN users u ON lower(u.email) = lower(a.email)
+      LEFT JOIN LATERAL (
+        SELECT status
+        FROM email_queue
+        WHERE assessment_id = a.id
+        ORDER BY id DESC
+        LIMIT 1
+      ) eq ON true
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS pipeline_items
+        FROM pipeline_items
+        WHERE assessment_id = a.id
+      ) pi ON true
+    )
+    SELECT
+      COUNT(*) FILTER (WHERE tender_count = 0 AND grant_count = 0)::int AS no_matches,
+      COUNT(*) FILTER (WHERE email_status IS NULL OR email_status NOT IN ('sent', 'delivered'))::int AS email_attention,
+      COUNT(*) FILTER (WHERE user_id IS NOT NULL AND pipeline_items = 0)::int AS no_dashboard,
+      COUNT(*) FILTER (WHERE user_id IS NOT NULL)::int AS logged_in
+    FROM session_rows
+    WHERE
+      ${query} = ''
+      OR email ILIKE ${`%${query}%`}
+      OR company_name ILIKE ${`%${query}%`}
+      OR website ILIKE ${`%${query}%`}
+  ` as AttentionCounts[];
+
   const sessions = rows.map(normalizeRow);
+  const attention = attentionRows[0] ?? { no_matches: 0, email_attention: 0, no_dashboard: 0, logged_in: 0 };
   const totals = sessions.reduce((acc, row) => {
     acc.tenders += row.tender_count;
     acc.grants += row.grant_count;
@@ -153,6 +206,12 @@ export async function GET(request: Request) {
     total: sessions.length,
     query,
     filter,
+    attention: {
+      no_matches: toInt(attention.no_matches),
+      email_attention: toInt(attention.email_attention),
+      no_dashboard: toInt(attention.no_dashboard),
+      logged_in: toInt(attention.logged_in),
+    },
     totals,
   });
 }

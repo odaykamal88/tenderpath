@@ -33,6 +33,12 @@ interface AssessmentSessionsResponse {
   sessions: AssessmentSession[];
   total: number;
   filter: SessionFilter;
+  attention: {
+    no_matches: number;
+    email_attention: number;
+    no_dashboard: number;
+    logged_in: number;
+  };
   totals: {
     tenders: number;
     grants: number;
@@ -146,6 +152,9 @@ export default function AdminAssessmentsPage() {
     () => data?.sessions.filter((row) => row.tender_count > 0 || row.grant_count > 0).length ?? 0,
     [data]
   );
+  const attentionTotal = (data?.attention.no_matches ?? 0)
+    + (data?.attention.email_attention ?? 0)
+    + (data?.attention.no_dashboard ?? 0);
 
   return (
     <>
@@ -180,6 +189,40 @@ export default function AdminAssessmentsPage() {
         <div className={styles.heroStat}>
           <div className={styles.heroStatLabel}>Dashboard handoff</div>
           <div className={styles.heroStatValue}>{fmtNum(data?.totals.withPipeline ?? 0)}</div>
+        </div>
+      </section>
+
+      <section className={styles.panel}>
+        <header className={styles.panelHead}>
+          <div>
+            <h2 className={styles.panelTitle}>Needs attention</h2>
+            <p className={styles.panelSub}>
+              Assessment sessions where activation may have stalled.
+            </p>
+          </div>
+          <span className={styles.panelMeta}>{fmtNum(attentionTotal)} signals</span>
+        </header>
+        <div className={styles.attentionGrid}>
+          <Link href={filterHref("no_matches", appliedQuery)} className={styles.attentionTile}>
+            <span className={styles.attentionLabel}>No matches</span>
+            <span className={styles.attentionValue}>{fmtNum(data?.attention.no_matches ?? 0)}</span>
+            <span className={styles.attentionHint}>Assessment completed but produced no tenders or grants.</span>
+          </Link>
+          <Link href={filterHref("email_attention", appliedQuery)} className={styles.attentionTile}>
+            <span className={styles.attentionLabel}>Email attention</span>
+            <span className={styles.attentionValue}>{fmtNum(data?.attention.email_attention ?? 0)}</span>
+            <span className={styles.attentionHint}>Email not queued, pending, or failed delivery.</span>
+          </Link>
+          <Link href={filterHref("no_dashboard", appliedQuery)} className={styles.attentionTile}>
+            <span className={styles.attentionLabel}>No dashboard handoff</span>
+            <span className={styles.attentionValue}>{fmtNum(data?.attention.no_dashboard ?? 0)}</span>
+            <span className={styles.attentionHint}>Logged-in assessment exists, but pipeline has no items.</span>
+          </Link>
+          <Link href={filterHref("logged_in", appliedQuery)} className={styles.attentionTile}>
+            <span className={styles.attentionLabel}>Logged-in sessions</span>
+            <span className={styles.attentionValue}>{fmtNum(data?.attention.logged_in ?? 0)}</span>
+            <span className={styles.attentionHint}>Trace assessment-to-dashboard continuity by user.</span>
+          </Link>
         </div>
       </section>
 

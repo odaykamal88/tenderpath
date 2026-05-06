@@ -394,6 +394,44 @@
   font-family: var(--font-mono);
   font-size: 10px;
 }
+.attentionGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--color-rule);
+}
+.attentionTile {
+  display: flex;
+  min-height: 128px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 20px;
+  border-right: 1px solid var(--color-rule);
+  color: var(--color-ink);
+  text-decoration: none;
+  background: var(--color-paper-3);
+}
+.attentionTile:last-child { border-right: 0; }
+.attentionTile:hover { background: rgba(176,133,48,0.06); }
+.attentionLabel {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-mute, var(--color-ink-3));
+}
+.attentionValue {
+  font-family: var(--font-serif);
+  font-size: 38px;
+  line-height: 1;
+  color: var(--color-ink);
+}
+.attentionHint {
+  margin-top: auto;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--color-ink-3);
+}
 
 .woList { display: flex; flex-direction: column; gap: 14px; }
 .woCard {
@@ -470,6 +508,8 @@
 @media (max-width: 1100px) {
   .grid2  { grid-template-columns: 1fr; }
   .heroRow { grid-template-columns: repeat(2, 1fr); }
+  .attentionGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .attentionTile:nth-child(2n) { border-right: 0; }
   .heroStat { border-right: 0; border-bottom: 1px solid var(--color-rule); }
   .heroStat:nth-child(2n) { border-right: 0; }
   .woGrid { grid-template-columns: 1fr; gap: 14px; }
@@ -483,5 +523,7 @@
   .main { padding: 24px 18px 32px; }
   .pageTitle { font-size: 30px; }
   .heroRow { grid-template-columns: 1fr; }
+  .attentionGrid { grid-template-columns: 1fr; }
+  .attentionTile { border-right: 0; border-bottom: 1px solid var(--color-rule); }
   .heroStat { border-right: 0; }
 }
