@@ -76,12 +76,16 @@ Implemented:
 - Updated EBRD parsing for `displayNoticeId` links, visible notice columns, hidden metadata, non-closed status filtering, deadline normalization, descriptions, and sector normalization.
 - Recovered ADB partially through the official ADB Consultant Management System CSRN page when the primary `www.adb.org/projects/tenders` page is Cloudflare-blocked.
 - ADB CMS fallback returns current consulting opportunities with title, project URL, expertise, consultant type, engagement period, published date, deadline, country code where present, and normalized sector.
+- Updated the full ADB project-tenders parser for the current card layout (`adb.org/node/<id>` links plus Status, Deadline, Country/Economy, Sector, Posting Date, and Notice Type labels). This is used when the browser worker successfully clears Cloudflare on `projects/tenders`.
+- Updated AfDB to the current canonical official listing at `/project-related-procurement/procurement-notices` instead of the stale `/specific-procurement-notices` path.
+- Broadened AfDB parsing for current notice prefixes (`SPN`, `EOI`, `GPN`, `AMI`, `AOI`, `PPM`, `Contract Awards`, and French variants) and date/title listing layouts.
 - Improved UNDP and GIZ source quality by adding lightweight descriptions and sector normalization from list-level fields.
 
 Current source state:
 
 - EBRD: repaired against current official public ECEPP search results.
-- ADB: partially recovered. The primary ADB project-tenders page still returns Cloudflare block/challenge responses in this environment and should remain on the backlog for deeper browser/proxy work. The new fallback covers official ADB CMS consulting opportunities, not the full project procurement tender universe.
+- ADB: partially recovered. The primary ADB project-tenders page still returns Cloudflare block/challenge responses in this environment, but the parser now matches the current full-page layout for production/browser-worker runs. The CMS fallback covers official ADB consulting opportunities if full project tenders remain blocked.
+- AfDB: canonical URL and parser repaired, but local validation is limited because static HTTP receives Cloudflare challenge HTML and this shell does not have `CRAWLER_WORKER_URL` / `CRAWLER_WORKER_KEY`.
 - UNDP: quality improved, though some generic/individual-consultant rows still naturally lack precise sectors from list text alone.
 - GIZ: quality improved, though some German procurement titles still need richer detail-page text for precise sector assignment.
 
@@ -89,6 +93,7 @@ Validation:
 
 - EBRD live smoke returned 2,291 non-closed ECEPP rows with descriptions, deadlines where present, source URLs, and normalized sectors.
 - ADB live smoke returned 25 current CMS consulting opportunities with normalized deadlines and sectors.
+- AfDB static probe confirmed the current official listing exists but is Cloudflare-challenged outside the browser worker.
 - UNDP live smoke returned 577 rows with descriptions and some normalized sectors.
 - GIZ live smoke returned 17 rows with descriptions and some normalized sectors.
 - `npx eslint src/lib/crawlers/adb.ts src/lib/crawlers/ebrd.ts src/lib/crawlers/undp.ts src/lib/crawlers/giz.ts`
@@ -96,8 +101,8 @@ Validation:
 
 Remaining:
 
-- ADB full project procurement: find a stable official data/API/search path or improve browser-worker handling for Cloudflare-protected `projects/tenders`.
-- AfDB: still needs the same deeper current-source/browser investigation.
+- ADB full project procurement: validate through the deployed browser worker and, if it still fails, find a stable official data/API/search path or improve worker handling for Cloudflare-protected `projects/tenders`.
+- AfDB: validate through the deployed browser worker and capture `crawl_logs.metadata`/errors after the canonical URL repair.
 - ADB CMS pagination: current fallback captures the first 25 opportunities; extend only after confirming Oracle/OAF pagination can be automated without brittle session state.
 - UNDP/GIZ: add detail-page enrichment if these become high-priority matching sources.
 

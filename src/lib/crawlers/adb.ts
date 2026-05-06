@@ -58,6 +58,7 @@ interface ParsedRow {
   title: string;
   country: string;
   noticeType: string;
+  sector: string | null;
   deadline: string | null;
 }
 
@@ -119,9 +120,46 @@ function parseRows(html: string): ParsedRow[] {
     const deadline = toISO(deadlineRaw);
 
     if (!title) continue;
-    rows.push({ id, slug, title, country, noticeType, deadline });
+    rows.push({ id, slug, title, country, noticeType, sector: null, deadline });
+  }
+
+  if (!rows.length) {
+    const cardLinkRe = /href="(?:https:\/\/www\.adb\.org)?(\/node\/(\d+))"[^>]*>([\s\S]{10,900}?)<\/a>/gi;
+    let link: RegExpExecArray | null;
+    while ((link = cardLinkRe.exec(html)) !== null) {
+      const slug = link[1];
+      const id = link[2];
+      if (seen.has(id)) continue;
+      const title = cleanText(link[3]);
+      if (!title || !/^\d{4,6}-\d{3}:|Loan|Grant|Consulting|Procurement|Project/i.test(title)) continue;
+
+      const nearby = cleanText(html.slice(Math.max(0, link.index - 900), link.index + link[0].length + 1600));
+      const deadlineRaw = pickText(nearby, /Deadline:\s*([^:]+?)(?:Country\/Economy:|Sector:|Posting Date:|Notice Type:|Status:|$)/i);
+      const country = pickText(nearby, /Country\/Economy:\s*([^:]+?)(?:Sector:|Posting Date:|Notice Type:|Approval Number:|Status:|Deadline:|$)/i)
+        ?? "Asia-Pacific";
+      const sector = pickText(nearby, /Sector:\s*([^:]+?)(?:Posting Date:|Notice Type:|Approval Number:|Status:|Deadline:|Country\/Economy:|$)/i);
+      const noticeType = pickText(nearby, /Notice Type:\s*([^:]+?)(?:Approval Number:|Status:|Deadline:|Country\/Economy:|Sector:|Posting Date:|$)/i)
+        ?? "";
+
+      seen.add(id);
+      rows.push({
+        id,
+        slug,
+        title,
+        country: country === "Regional" ? "Asia-Pacific" : country,
+        noticeType,
+        sector,
+        deadline: toISO(deadlineRaw ?? ""),
+      });
+    }
   }
   return rows;
+}
+
+function pickText(text: string | null, re: RegExp): string | null {
+  if (!text) return null;
+  const match = re.exec(text);
+  return match ? cleanText(match[1]) : null;
 }
 
 async function fetchCms(): Promise<string> {
@@ -253,8 +291,9 @@ function mapRow(r: ParsedRow): RawTender {
     "Asian Development Bank procurement notice.",
     r.noticeType ? `Notice type: ${r.noticeType}.` : null,
     r.country ? `Geography: ${r.country}.` : null,
+    r.sector ? `Sector: ${r.sector}.` : null,
   ].filter(Boolean).join(" ");
-  const sectors = normalizeSector(null, r.title, description);
+  const sectors = normalizeSector(r.sector, r.title, description);
 
   return {
     reference_id: `ADB-${r.id}`,
