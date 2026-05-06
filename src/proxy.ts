@@ -15,6 +15,7 @@ const PUBLIC_PATHS = new Set([
   "/api/assessment/public",
   "/api/assessment/preview",
   "/api/pay/checkout",
+  "/api/telegram/webhook",
 ]);
 
 function isPublicPath(pathname: string): boolean {
