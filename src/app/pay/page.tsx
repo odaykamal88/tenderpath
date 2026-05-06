@@ -166,6 +166,27 @@ function CardTab({ plan, context }: { plan: string | null; context: PayContext }
 function UsdtTab({ plan, context }: { plan: string | null; context: PayContext }) {
   const tier = TIERS.find((t) => t.slug === plan);
   const address = CONFIG.usdt.trc20;
+  const [txid, setTxid] = useState("");
+  const [email, setEmail] = useState("");
+  const [verifyStatus, setVerifyStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [verifyMsg, setVerifyMsg] = useState("");
+
+  async function handleVerify(e: React.FormEvent) {
+    e.preventDefault();
+    if (!context.workOrderId) { setVerifyMsg("No work order ID — please refresh and try again."); setVerifyStatus("error"); return; }
+    setVerifyStatus("loading");
+    setVerifyMsg("");
+    try {
+      const res = await fetch("/api/pay/verify-usdt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ txid: txid.trim(), plan, work_order_id: context.workOrderId, email: email.trim() || undefined }),
+      });
+      const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
+      if (data.ok) { setVerifyStatus("done"); setVerifyMsg(data.message ?? "Verified!"); }
+      else { setVerifyStatus("error"); setVerifyMsg(data.error ?? "Verification failed."); }
+    } catch { setVerifyStatus("error"); setVerifyMsg("Network error. Please try again."); }
+  }
 
   return (
     <div className="space-y-4">
@@ -261,7 +282,65 @@ function UsdtTab({ plan, context }: { plan: string | null; context: PayContext }
         </div>
       </div>
 
-      <NotifyButton plan={plan ?? "unknown plan"} context={context} />
+      {/* TXID auto-verify */}
+      {verifyStatus === "done" ? (
+        <div className="rounded-sm border-l-2 border-emerald-600 bg-emerald-50/40 px-3.5 py-3 text-[12px] text-emerald-800 leading-relaxed">
+          <strong>Payment received.</strong> {verifyMsg}
+        </div>
+      ) : (
+        <form onSubmit={handleVerify} className="rounded-md border border-stone-200/70 bg-stone-50/40 p-4 space-y-3">
+          <div
+            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+            style={{ fontFamily: MONO }}
+          >
+            Confirm your payment automatically
+          </div>
+          <div>
+            <label className="block text-[11px] text-stone-600 mb-1" style={{ fontFamily: MONO }}>
+              Your email address
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2 text-[12px] text-stone-900 focus:border-stone-700 focus:outline-none"
+              style={{ fontFamily: MONO }}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] text-stone-600 mb-1" style={{ fontFamily: MONO }}>
+              Transaction ID (TXID) from TronScan
+            </label>
+            <input
+              type="text"
+              value={txid}
+              onChange={(e) => setTxid(e.target.value)}
+              placeholder="64-character hex hash"
+              className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2 text-[11.5px] text-stone-900 focus:border-stone-700 focus:outline-none"
+              style={{ fontFamily: MONO }}
+            />
+          </div>
+          {verifyStatus === "error" && (
+            <p className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3 py-2 text-[11.5px] text-red-700">
+              {verifyMsg}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={verifyStatus === "loading" || !txid.trim()}
+            className="w-full rounded-sm bg-stone-900 px-4 py-2.5 text-[12px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {verifyStatus === "loading" ? "Verifying…" : "Verify transaction →"}
+          </button>
+          <p className="text-center text-[10.5px] text-stone-400" style={{ fontFamily: MONO }}>
+            Or email your receipt to{" "}
+            <a href={`mailto:${CONFIG.supportEmail}`} className="underline underline-offset-2 hover:text-stone-700">
+              {CONFIG.supportEmail}
+            </a>
+          </p>
+        </form>
+      )}
     </div>
   );
 }
@@ -270,7 +349,7 @@ function UsdtTab({ plan, context }: { plan: string | null; context: PayContext }
 
 function WireTab({ plan, context }: { plan: string | null; context: PayContext }) {
   const w = CONFIG.wire;
-  const rows: [string, string][] = (
+  const wireRows: [string, string][] = (
     [
       ["Bank", w.bankName],
       ["Account name", w.accountName],
@@ -279,10 +358,34 @@ function WireTab({ plan, context }: { plan: string | null; context: PayContext }
     ] as [string, string][]
   ).filter(([, v]) => Boolean(v));
 
+  const [email, setEmail] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [uploadMsg, setUploadMsg] = useState("");
+
+  async function handleUpload(e: React.FormEvent) {
+    e.preventDefault();
+    if (!file) return;
+    if (!context.workOrderId) { setUploadMsg("No work order ID — please refresh and try again."); setUploadStatus("error"); return; }
+    setUploadStatus("loading");
+    setUploadMsg("");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("work_order_id", context.workOrderId);
+      if (email.trim()) fd.append("email", email.trim());
+      if (plan) fd.append("plan", plan);
+      const res = await fetch("/api/pay/wire-proof", { method: "POST", body: fd });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (data.ok) { setUploadStatus("done"); setUploadMsg("Receipt uploaded. We'll verify and activate your order within 1–3 business days."); }
+      else { setUploadStatus("error"); setUploadMsg(data.error ?? "Upload failed. Please try again."); }
+    } catch { setUploadStatus("error"); setUploadMsg("Network error. Please try again."); }
+  }
+
   return (
     <div className="space-y-4">
       <div className="rounded-md border border-stone-200/70 overflow-hidden">
-        {rows.map(([label, value]) => (
+        {wireRows.map(([label, value]) => (
           <div
             key={label}
             className="flex items-center gap-3 px-4 py-3 border-b border-stone-100 last:border-0"
@@ -306,7 +409,76 @@ function WireTab({ plan, context }: { plan: string | null; context: PayContext }
       <p className="text-[12px] leading-relaxed text-stone-600">
         Use your <strong className="text-stone-900">email address</strong> as the payment reference so we can match your transfer. Wire transfers are reflected within 1–3 business days.
       </p>
-      <NotifyButton plan={plan ?? "unknown plan"} context={context} />
+
+      {/* Screenshot upload */}
+      {uploadStatus === "done" ? (
+        <div className="rounded-sm border-l-2 border-emerald-600 bg-emerald-50/40 px-3.5 py-3 text-[12px] text-emerald-800 leading-relaxed">
+          <strong>Receipt received.</strong> {uploadMsg}
+        </div>
+      ) : (
+        <form onSubmit={handleUpload} className="rounded-md border border-stone-200/70 bg-stone-50/40 p-4 space-y-3">
+          <div
+            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+            style={{ fontFamily: MONO }}
+          >
+            Upload your payment receipt
+          </div>
+          <div>
+            <label className="block text-[11px] text-stone-600 mb-1" style={{ fontFamily: MONO }}>
+              Your email address
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2 text-[12px] text-stone-900 focus:border-stone-700 focus:outline-none"
+              style={{ fontFamily: MONO }}
+            />
+          </div>
+          <div>
+            {file ? (
+              <div className="flex items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-[11.5px] text-emerald-800" style={{ fontFamily: MONO }}>
+                <span className="flex-1 truncate">{file.name}</span>
+                <button type="button" onClick={() => setFile(null)} className="shrink-0 underline underline-offset-2 hover:text-emerald-900">Remove</button>
+              </div>
+            ) : (
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-stone-300 px-3.5 py-3 text-[11.5px] text-stone-500 hover:border-stone-700 hover:text-stone-700 transition-colors">
+                <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="leading-snug flex-1" style={{ fontFamily: MONO }}>
+                  <span className="font-semibold text-stone-700">Choose file</span> — screenshot or PDF of bank transfer receipt
+                </span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  className="sr-only"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                />
+              </label>
+            )}
+          </div>
+          {uploadStatus === "error" && (
+            <p className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3 py-2 text-[11.5px] text-red-700">
+              {uploadMsg}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={uploadStatus === "loading" || !file}
+            className="w-full rounded-sm bg-stone-900 px-4 py-2.5 text-[12px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {uploadStatus === "loading" ? "Uploading…" : "Upload receipt →"}
+          </button>
+          <p className="text-center text-[10.5px] text-stone-400" style={{ fontFamily: MONO }}>
+            Or email your receipt to{" "}
+            <a href={`mailto:${CONFIG.supportEmail}`} className="underline underline-offset-2 hover:text-stone-700">
+              {CONFIG.supportEmail}
+            </a>
+          </p>
+        </form>
+      )}
     </div>
   );
 }
