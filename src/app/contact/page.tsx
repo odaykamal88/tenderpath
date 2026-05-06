@@ -46,8 +46,8 @@ export default function ContactPage() {
                   </svg>
                 ),
                 label: "Book a Call",
-                value: "Free 15-min expert consultation",
-                href: "mailto:info@tenderpath.me?subject=Book a call",
+                value: "Free 30-min founder consultation",
+                href: "https://calendly.com/oday-kamal-9ya/30min",
                 note: "Available Mon–Fri, 9am–5pm GMT",
               },
               {
@@ -58,7 +58,7 @@ export default function ContactPage() {
                 ),
                 label: "Telegram",
                 value: "Message us on Telegram",
-                href: "https://t.me/tenderpath_bot",
+                href: "https://t.me/Tenderpathbot",
                 note: "For quick questions via Telegram",
               },
             ].map((contact) => (
