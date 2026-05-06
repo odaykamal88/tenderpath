@@ -233,7 +233,7 @@ export default function AssessmentResults({
                   <p className="font-mono text-[10px] tracking-[0.04em] text-ink-3">
                     {t.agency}
                     {t.country ? ` · ${t.country}` : ""}
-                    {t.reference ? ` · ${t.reference}` : ""}
+                    {t.reference_id ? ` · ${t.reference_id}` : ""}
                   </p>
                 </div>
                 <p className="hidden lg:block font-mono text-[10px] tracking-[0.04em] text-ink-3">
@@ -241,15 +241,15 @@ export default function AssessmentResults({
                 </p>
                 <div className="text-right">
                   <p className="font-serif text-[20px] leading-none text-ink tabular-nums">
-                    {t.match_score ?? "—"}
+                    {t.score ?? "—"}
                   </p>
                   <p className="font-mono text-[9px] tracking-[0.08em] uppercase text-mute mt-0.5">
                     Fit
                   </p>
                 </div>
-                {t.url && (
+                {t.source_url && (
                   <a
-                    href={t.url}
+                    href={t.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-mono text-[10px] tracking-[0.1em] uppercase text-ink hover:text-accent border-b border-ink hover:border-accent pb-0.5 whitespace-nowrap"
@@ -288,12 +288,12 @@ export default function AssessmentResults({
                 <div>
                   <p className="text-[14px] text-ink mb-1">{g.title}</p>
                   <p className="font-mono text-[10px] tracking-[0.04em] text-ink-3">
-                    {g.donor}{g.theme ? ` · ${g.theme}` : ""}
+                    {g.agency}{g.sector ? ` · ${g.sector}` : ""}
                   </p>
                 </div>
-                {g.url && (
+                {g.source_url && (
                   <a
-                    href={g.url}
+                    href={g.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-mono text-[10px] tracking-[0.1em] uppercase text-ink hover:text-accent border-b border-ink hover:border-accent pb-0.5"
