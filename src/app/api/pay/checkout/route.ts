@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     if (workOrderId) returnParams.set("work_order_id", workOrderId);
 
     const session = await stripe.checkout.sessions.create({
-      ui_mode: "embedded",
+      ui_mode: "embedded_page",
       mode: SUBSCRIPTION_PLANS.has(plan) ? "subscription" : "payment",
       line_items: [{ price: priceId, quantity: 1 }],
       return_url: `${origin}/pay/success?${returnParams.toString()}`,
