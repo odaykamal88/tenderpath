@@ -244,6 +244,8 @@ CREATE INDEX IF NOT EXISTS work_orders_user_id ON work_orders (user_id);
 ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS service_slug TEXT;
 ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS tender_url TEXT;
 ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS intake JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS usdt_txid TEXT;
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS payment_proof_url TEXT;
 
 CREATE TABLE IF NOT EXISTS weekly_digest_logs (
   id SERIAL PRIMARY KEY,

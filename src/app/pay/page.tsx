@@ -1,8 +1,13 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { loadStripe } from "@stripe/stripe-js";
+
+const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+  : null;
 import { TIERS } from "@/lib/pricing";
 
 const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
@@ -14,8 +19,6 @@ const CONFIG = {
       process.env.NEXT_PUBLIC_USDT_TRC20_ADDRESS ||
       "TKh1rcVFrbLX6mTKw9gJcZYoJZR4VSuCWF",
   },
-  whish: process.env.NEXT_PUBLIC_WHISH_LINK || "",
-  omt: process.env.NEXT_PUBLIC_OMT_LINK || "",
   wire: {
     bankName:
       process.env.NEXT_PUBLIC_WIRE_EG_BANK_NAME ||
@@ -30,7 +33,7 @@ const CONFIG = {
   supportEmail: "info@tenderpath.me",
 };
 
-type Tab = "card" | "usdt" | "whish" | "wire";
+type Tab = "card" | "usdt" | "wire";
 
 interface PayContext {
   tender: string | null;
@@ -85,17 +88,19 @@ function NotifyButton({ plan, context }: { plan: string; context: PayContext }) 
 /* ── Card / Stripe ─────────────────────────────────────────────────────── */
 
 function CardTab({ plan, context }: { plan: string | null; context: PayContext }) {
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<"idle" | "loading" | "mounted" | "error">("idle");
   const [error, setError] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const checkoutRef = useRef<{ destroy(): void } | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!plan) {
-      setError("Please select a plan first.");
-      return;
-    }
-    setLoading(true);
+  useEffect(() => {
+    return () => { checkoutRef.current?.destroy(); };
+  }, []);
+
+  async function startCheckout() {
+    if (!plan) { setError("Select a plan first."); return; }
+    if (!stripePromise) { setError("Stripe is not configured."); return; }
+    setStatus("loading");
     setError("");
     try {
       const res = await fetch("/api/pay/checkout", {
@@ -103,64 +108,56 @@ function CardTab({ plan, context }: { plan: string | null; context: PayContext }
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           plan,
-          email,
           tender: context.tender,
           agency: context.agency,
           pipeline_item_id: context.pipelineItemId,
           work_order_id: context.workOrderId,
         }),
       });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
+      const data = (await res.json()) as { clientSecret?: string; error?: string };
+      if (!data.clientSecret) {
         setError(data.error ?? "Something went wrong. Please try another payment method.");
+        setStatus("error");
+        return;
       }
+      const stripe = await stripePromise;
+      if (!stripe) { setError("Stripe failed to load."); setStatus("error"); return; }
+      const checkout = await stripe.initEmbeddedCheckout({ clientSecret: data.clientSecret });
+      checkout.mount(containerRef.current!);
+      checkoutRef.current = checkout;
+      setStatus("mounted");
     } catch {
       setError("Network error. Please try again.");
-    } finally {
-      setLoading(false);
+      setStatus("error");
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
-      <div>
-        <label
-          className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
-          style={{ fontFamily: MONO }}
-        >
-          Email
-        </label>
-        <input
-          type="email"
-          required
-          autoComplete="email"
-          placeholder="you@company.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] text-stone-900 placeholder-stone-400 focus:border-stone-700 focus:outline-none"
-        />
-      </div>
-      {error && (
-        <p className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3 py-2 text-[11.5px] text-red-700">
-          {error}
-        </p>
+    <div>
+      <div ref={containerRef} className={status === "mounted" ? "" : "hidden"} />
+      {status !== "mounted" && (
+        <div className="space-y-3">
+          {error && (
+            <p className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3 py-2 text-[11.5px] text-red-700">
+              {error}
+            </p>
+          )}
+          <button
+            onClick={startCheckout}
+            disabled={status === "loading" || !plan}
+            className="w-full rounded-sm bg-stone-900 px-4 py-3 text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {status === "loading" ? "Loading secure checkout…" : "Pay with card →"}
+          </button>
+          <p
+            className="flex items-center justify-center gap-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+            style={{ fontFamily: MONO }}
+          >
+            Secured by Stripe · Visa · Mastercard · Amex
+          </p>
+        </div>
       )}
-      <button
-        type="submit"
-        disabled={loading || !plan}
-        className="w-full rounded-sm bg-stone-900 px-4 py-3 text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {loading ? "Redirecting…" : "Continue to secure checkout →"}
-      </button>
-      <p
-        className="flex items-center justify-center gap-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
-        style={{ fontFamily: MONO }}
-      >
-        Secured by Stripe · Visa · Mastercard · Amex
-      </p>
-    </form>
+    </div>
   );
 }
 
@@ -169,6 +166,27 @@ function CardTab({ plan, context }: { plan: string | null; context: PayContext }
 function UsdtTab({ plan, context }: { plan: string | null; context: PayContext }) {
   const tier = TIERS.find((t) => t.slug === plan);
   const address = CONFIG.usdt.trc20;
+  const [txid, setTxid] = useState("");
+  const [email, setEmail] = useState("");
+  const [verifyStatus, setVerifyStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [verifyMsg, setVerifyMsg] = useState("");
+
+  async function handleVerify(e: React.FormEvent) {
+    e.preventDefault();
+    if (!context.workOrderId) { setVerifyMsg("No work order ID — please refresh and try again."); setVerifyStatus("error"); return; }
+    setVerifyStatus("loading");
+    setVerifyMsg("");
+    try {
+      const res = await fetch("/api/pay/verify-usdt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ txid: txid.trim(), plan, work_order_id: context.workOrderId, email: email.trim() || undefined }),
+      });
+      const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
+      if (data.ok) { setVerifyStatus("done"); setVerifyMsg(data.message ?? "Verified!"); }
+      else { setVerifyStatus("error"); setVerifyMsg(data.error ?? "Verification failed."); }
+    } catch { setVerifyStatus("error"); setVerifyMsg("Network error. Please try again."); }
+  }
 
   return (
     <div className="space-y-4">
@@ -264,101 +282,65 @@ function UsdtTab({ plan, context }: { plan: string | null; context: PayContext }
         </div>
       </div>
 
-      <NotifyButton plan={plan ?? "unknown plan"} context={context} />
-    </div>
-  );
-}
-
-/* ── Whish / OMT ───────────────────────────────────────────────────────── */
-
-function WhishTab({ plan, context }: { plan: string | null; context: PayContext }) {
-  const hasAny = CONFIG.whish || CONFIG.omt;
-
-  if (!hasAny) {
-    return (
-      <div className="rounded-md border border-stone-200/70 bg-stone-50/40 p-6 text-center">
-        <div
-          className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500 mb-1"
-          style={{ fontFamily: MONO }}
-        >
-          Coming soon
+      {/* TXID auto-verify */}
+      {verifyStatus === "done" ? (
+        <div className="rounded-sm border-l-2 border-emerald-600 bg-emerald-50/40 px-3.5 py-3 text-[12px] text-emerald-800 leading-relaxed">
+          <strong>Payment received.</strong> {verifyMsg}
         </div>
-        <h3
-          className="text-[18px] font-medium text-stone-900"
-          style={{ fontFamily: SERIF }}
-        >
-          Whish &amp; OMT links arriving shortly
-        </h3>
-        <p className="mt-2 text-[12px] text-stone-600">
-          Contact us to arrange payment directly:
-        </p>
-        <a
-          href={`mailto:${CONFIG.supportEmail}?subject=Payment%20via%20Whish%2FOMT`}
-          className="mt-2 inline-block text-[12px] font-semibold text-stone-900 underline underline-offset-2 hover:text-stone-700"
-          style={{ fontFamily: MONO }}
-        >
-          {CONFIG.supportEmail}
-        </a>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      <p className="text-[12.5px] text-stone-700 leading-relaxed">
-        Pay directly from your Whish Money or OMT wallet — tap to open the payment link.
-      </p>
-      {CONFIG.whish && (
-        <a
-          href={CONFIG.whish}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-3 rounded-md border border-stone-200/70 bg-white p-4 hover:border-stone-700 transition-colors"
-        >
+      ) : (
+        <form onSubmit={handleVerify} className="rounded-md border border-stone-200/70 bg-stone-50/40 p-4 space-y-3">
           <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-stone-100 text-stone-700 font-semibold"
+            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
             style={{ fontFamily: MONO }}
           >
-            W
+            Confirm your payment automatically
           </div>
-          <div className="flex-1">
-            <div
-              className="text-[13.5px] font-medium text-stone-900"
-              style={{ fontFamily: SERIF }}
-            >
-              Pay with Whish Money
-            </div>
-            <div className="text-[11px] text-stone-500">Tap to open in Whish app</div>
+          <div>
+            <label className="block text-[11px] text-stone-600 mb-1" style={{ fontFamily: MONO }}>
+              Your email address
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2 text-[12px] text-stone-900 focus:border-stone-700 focus:outline-none"
+              style={{ fontFamily: MONO }}
+            />
           </div>
-          <span className="text-stone-400 text-[16px]">→</span>
-        </a>
-      )}
-      {CONFIG.omt && (
-        <a
-          href={CONFIG.omt}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-3 rounded-md border border-stone-200/70 bg-white p-4 hover:border-stone-700 transition-colors"
-        >
-          <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-stone-100 text-stone-700 text-[10px] font-semibold tracking-[0.1em]"
-            style={{ fontFamily: MONO }}
+          <div>
+            <label className="block text-[11px] text-stone-600 mb-1" style={{ fontFamily: MONO }}>
+              Transaction ID (TXID) from TronScan
+            </label>
+            <input
+              type="text"
+              value={txid}
+              onChange={(e) => setTxid(e.target.value)}
+              placeholder="64-character hex hash"
+              className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2 text-[11.5px] text-stone-900 focus:border-stone-700 focus:outline-none"
+              style={{ fontFamily: MONO }}
+            />
+          </div>
+          {verifyStatus === "error" && (
+            <p className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3 py-2 text-[11.5px] text-red-700">
+              {verifyMsg}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={verifyStatus === "loading" || !txid.trim()}
+            className="w-full rounded-sm bg-stone-900 px-4 py-2.5 text-[12px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            OMT
-          </div>
-          <div className="flex-1">
-            <div
-              className="text-[13.5px] font-medium text-stone-900"
-              style={{ fontFamily: SERIF }}
-            >
-              Pay with OMT
-            </div>
-            <div className="text-[11px] text-stone-500">Tap to open in OMT app</div>
-          </div>
-          <span className="text-stone-400 text-[16px]">→</span>
-        </a>
+            {verifyStatus === "loading" ? "Verifying…" : "Verify transaction →"}
+          </button>
+          <p className="text-center text-[10.5px] text-stone-400" style={{ fontFamily: MONO }}>
+            Or email your receipt to{" "}
+            <a href={`mailto:${CONFIG.supportEmail}`} className="underline underline-offset-2 hover:text-stone-700">
+              {CONFIG.supportEmail}
+            </a>
+          </p>
+        </form>
       )}
-      <NotifyButton plan={plan ?? "unknown plan"} context={context} />
     </div>
   );
 }
@@ -367,7 +349,7 @@ function WhishTab({ plan, context }: { plan: string | null; context: PayContext 
 
 function WireTab({ plan, context }: { plan: string | null; context: PayContext }) {
   const w = CONFIG.wire;
-  const rows: [string, string][] = (
+  const wireRows: [string, string][] = (
     [
       ["Bank", w.bankName],
       ["Account name", w.accountName],
@@ -376,10 +358,34 @@ function WireTab({ plan, context }: { plan: string | null; context: PayContext }
     ] as [string, string][]
   ).filter(([, v]) => Boolean(v));
 
+  const [email, setEmail] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [uploadMsg, setUploadMsg] = useState("");
+
+  async function handleUpload(e: React.FormEvent) {
+    e.preventDefault();
+    if (!file) return;
+    if (!context.workOrderId) { setUploadMsg("No work order ID — please refresh and try again."); setUploadStatus("error"); return; }
+    setUploadStatus("loading");
+    setUploadMsg("");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("work_order_id", context.workOrderId);
+      if (email.trim()) fd.append("email", email.trim());
+      if (plan) fd.append("plan", plan);
+      const res = await fetch("/api/pay/wire-proof", { method: "POST", body: fd });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (data.ok) { setUploadStatus("done"); setUploadMsg("Receipt uploaded. We'll verify and activate your order within 1–3 business days."); }
+      else { setUploadStatus("error"); setUploadMsg(data.error ?? "Upload failed. Please try again."); }
+    } catch { setUploadStatus("error"); setUploadMsg("Network error. Please try again."); }
+  }
+
   return (
     <div className="space-y-4">
       <div className="rounded-md border border-stone-200/70 overflow-hidden">
-        {rows.map(([label, value]) => (
+        {wireRows.map(([label, value]) => (
           <div
             key={label}
             className="flex items-center gap-3 px-4 py-3 border-b border-stone-100 last:border-0"
@@ -403,7 +409,76 @@ function WireTab({ plan, context }: { plan: string | null; context: PayContext }
       <p className="text-[12px] leading-relaxed text-stone-600">
         Use your <strong className="text-stone-900">email address</strong> as the payment reference so we can match your transfer. Wire transfers are reflected within 1–3 business days.
       </p>
-      <NotifyButton plan={plan ?? "unknown plan"} context={context} />
+
+      {/* Screenshot upload */}
+      {uploadStatus === "done" ? (
+        <div className="rounded-sm border-l-2 border-emerald-600 bg-emerald-50/40 px-3.5 py-3 text-[12px] text-emerald-800 leading-relaxed">
+          <strong>Receipt received.</strong> {uploadMsg}
+        </div>
+      ) : (
+        <form onSubmit={handleUpload} className="rounded-md border border-stone-200/70 bg-stone-50/40 p-4 space-y-3">
+          <div
+            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+            style={{ fontFamily: MONO }}
+          >
+            Upload your payment receipt
+          </div>
+          <div>
+            <label className="block text-[11px] text-stone-600 mb-1" style={{ fontFamily: MONO }}>
+              Your email address
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2 text-[12px] text-stone-900 focus:border-stone-700 focus:outline-none"
+              style={{ fontFamily: MONO }}
+            />
+          </div>
+          <div>
+            {file ? (
+              <div className="flex items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-[11.5px] text-emerald-800" style={{ fontFamily: MONO }}>
+                <span className="flex-1 truncate">{file.name}</span>
+                <button type="button" onClick={() => setFile(null)} className="shrink-0 underline underline-offset-2 hover:text-emerald-900">Remove</button>
+              </div>
+            ) : (
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-stone-300 px-3.5 py-3 text-[11.5px] text-stone-500 hover:border-stone-700 hover:text-stone-700 transition-colors">
+                <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="leading-snug flex-1" style={{ fontFamily: MONO }}>
+                  <span className="font-semibold text-stone-700">Choose file</span> — screenshot or PDF of bank transfer receipt
+                </span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  className="sr-only"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                />
+              </label>
+            )}
+          </div>
+          {uploadStatus === "error" && (
+            <p className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3 py-2 text-[11.5px] text-red-700">
+              {uploadMsg}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={uploadStatus === "loading" || !file}
+            className="w-full rounded-sm bg-stone-900 px-4 py-2.5 text-[12px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {uploadStatus === "loading" ? "Uploading…" : "Upload receipt →"}
+          </button>
+          <p className="text-center text-[10.5px] text-stone-400" style={{ fontFamily: MONO }}>
+            Or email your receipt to{" "}
+            <a href={`mailto:${CONFIG.supportEmail}`} className="underline underline-offset-2 hover:text-stone-700">
+              {CONFIG.supportEmail}
+            </a>
+          </p>
+        </form>
+      )}
     </div>
   );
 }
@@ -480,7 +555,6 @@ function PayPage() {
   const tabs: { id: Tab; label: string }[] = [
     { id: "card", label: "Card" },
     { id: "usdt", label: "USDT" },
-    { id: "whish", label: "Whish" },
     { id: "wire", label: "Wire" },
   ];
 
@@ -604,7 +678,7 @@ function PayPage() {
           </div>
 
           {/* Tabs */}
-          <div className="grid grid-cols-4 gap-1 rounded-sm border border-stone-200/70 p-0.5 bg-stone-50/40 mb-5">
+          <div className="grid grid-cols-3 gap-1 rounded-sm border border-stone-200/70 p-0.5 bg-stone-50/40 mb-5">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -624,7 +698,6 @@ function PayPage() {
           {/* Tab body */}
           {activeTab === "card" && <CardTab plan={selectedSlug} context={context} />}
           {activeTab === "usdt" && <UsdtTab plan={selectedSlug} context={context} />}
-          {activeTab === "whish" && <WhishTab plan={selectedSlug} context={context} />}
           {activeTab === "wire" && <WireTab plan={selectedSlug} context={context} />}
         </div>
 
