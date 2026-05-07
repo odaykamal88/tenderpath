@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { ensureAssessmentRuntimeColumns } from "@/lib/assessment/run";
 
 export async function GET(
   _request: Request,
@@ -11,6 +12,8 @@ export async function GET(
   if (isNaN(assessmentId)) {
     return NextResponse.json({ error: "Invalid assessment ID" }, { status: 400 });
   }
+
+  await ensureAssessmentRuntimeColumns();
 
   const rows = await sql`
     SELECT * FROM assessments WHERE id = ${assessmentId}
@@ -39,6 +42,13 @@ export async function GET(
     dev_themes: row.dev_themes,
     matched_grants: row.matched_grants,
     grant_readiness_score: row.grant_readiness_score,
+    status: row.assessment_status ?? "completed",
+    assessment_status: row.assessment_status ?? "completed",
+    assessment_error: row.assessment_error ?? null,
+    assessment_duration_ms: row.assessment_duration_ms ?? null,
+    assessment_timings: row.assessment_timings ?? {},
+    assessment_started_at: row.assessment_started_at ?? null,
+    assessment_completed_at: row.assessment_completed_at ?? null,
     created_at: row.created_at,
   });
 }

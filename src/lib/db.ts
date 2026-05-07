@@ -83,6 +83,12 @@ export async function initializeDatabase() {
     )
   `;
   await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS include_consultancies BOOLEAN DEFAULT false`;
+  await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS assessment_status VARCHAR(32) DEFAULT 'completed'`;
+  await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS assessment_error TEXT`;
+  await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS assessment_duration_ms INTEGER`;
+  await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS assessment_timings JSONB DEFAULT '{}'`;
+  await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS assessment_started_at TIMESTAMPTZ`;
+  await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS assessment_completed_at TIMESTAMPTZ`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS tenders (

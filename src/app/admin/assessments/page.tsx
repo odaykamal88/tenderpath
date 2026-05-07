@@ -5,7 +5,7 @@ import Link from "next/link";
 import styles from "../admin.module.css";
 import { StatusTag } from "../_components/StatusTag";
 
-type SessionFilter = "all" | "logged_in" | "no_matches" | "email_attention" | "no_dashboard" | "weak_evidence";
+type SessionFilter = "all" | "logged_in" | "no_matches" | "email_attention" | "no_dashboard" | "weak_evidence" | "running_failed" | "slow";
 
 interface AssessmentSession {
   id: number;
@@ -29,7 +29,11 @@ interface AssessmentSession {
   crawl_render_method: string | null;
   crawl_thin: boolean | null;
   crawl_final_url: string | null;
-  completion_state: "matched" | "completed_no_matches";
+  assessment_status: string;
+  assessment_error: string | null;
+  assessment_duration_ms: number | null;
+  assessment_timings: Record<string, number>;
+  completion_state: "matched" | "completed_no_matches" | "queued" | "running" | "failed" | string;
 }
 
 interface AssessmentSessionsResponse {
@@ -42,12 +46,16 @@ interface AssessmentSessionsResponse {
     no_dashboard: number;
     weak_evidence: number;
     logged_in: number;
+    running_or_failed: number;
+    slow_assessments: number;
   };
   totals: {
     tenders: number;
     grants: number;
     loggedIn: number;
     withPipeline: number;
+    avgAssessmentMs: number | null;
+    p95AssessmentMs: number | null;
   };
 }
 
@@ -75,6 +83,8 @@ const FILTERS: Array<{ key: SessionFilter; label: string }> = [
   { key: "email_attention", label: "Email attention" },
   { key: "no_dashboard", label: "No dashboard handoff" },
   { key: "weak_evidence", label: "Weak website evidence" },
+  { key: "running_failed", label: "Running/failed" },
+  { key: "slow", label: "Slow" },
 ];
 
 function authHeaders(): HeadersInit {
@@ -84,6 +94,12 @@ function authHeaders(): HeadersInit {
 
 function fmtNum(n: number | string): string {
   return Number(n).toLocaleString("en-US");
+}
+
+function fmtMs(value: number | null | undefined): string {
+  if (value == null) return "-";
+  if (value < 1000) return `${value}ms`;
+  return `${Math.round(value / 100) / 10}s`;
 }
 
 function fmtDate(value: string | null): string {
@@ -111,6 +127,7 @@ function label(value: string | null): string {
 }
 
 function matchState(row: AssessmentSession): string {
+  if (row.assessment_status && row.assessment_status !== "completed") return row.assessment_status;
   if (row.tender_count > 0 || row.grant_count > 0) return "matched";
   return "completed no matches";
 }
@@ -194,7 +211,9 @@ export default function AdminAssessmentsPage() {
   const attentionTotal = (data?.attention.no_matches ?? 0)
     + (data?.attention.email_attention ?? 0)
     + (data?.attention.no_dashboard ?? 0)
-    + (data?.attention.weak_evidence ?? 0);
+    + (data?.attention.weak_evidence ?? 0)
+    + (data?.attention.running_or_failed ?? 0)
+    + (data?.attention.slow_assessments ?? 0);
 
   return (
     <>
@@ -227,8 +246,8 @@ export default function AdminAssessmentsPage() {
           <div className={styles.heroStatValue}>{fmtNum(matchedCount)}</div>
         </div>
         <div className={styles.heroStat}>
-          <div className={styles.heroStatLabel}>Dashboard handoff</div>
-          <div className={styles.heroStatValue}>{fmtNum(data?.totals.withPipeline ?? 0)}</div>
+          <div className={styles.heroStatLabel}>Avg / p95 runtime</div>
+          <div className={styles.heroStatValue}>{fmtMs(data?.totals.avgAssessmentMs)} / {fmtMs(data?.totals.p95AssessmentMs)}</div>
         </div>
       </section>
 
@@ -267,6 +286,16 @@ export default function AdminAssessmentsPage() {
             <span className={styles.attentionLabel}>Weak website evidence</span>
             <span className={styles.attentionValue}>{fmtNum(data?.attention.weak_evidence ?? 0)}</span>
             <span className={styles.attentionHint}>Website crawl was thin, failed, parked, or missing.</span>
+          </Link>
+          <Link href={filterHref("running_failed", appliedQuery)} className={styles.attentionTile}>
+            <span className={styles.attentionLabel}>Running or failed</span>
+            <span className={styles.attentionValue}>{fmtNum(data?.attention.running_or_failed ?? 0)}</span>
+            <span className={styles.attentionHint}>Queued, running, or failed assessments needing operational follow-up.</span>
+          </Link>
+          <Link href={filterHref("slow", appliedQuery)} className={styles.attentionTile}>
+            <span className={styles.attentionLabel}>Slow assessments</span>
+            <span className={styles.attentionValue}>{fmtNum(data?.attention.slow_assessments ?? 0)}</span>
+            <span className={styles.attentionHint}>Completed assessments that took at least 45 seconds.</span>
           </Link>
         </div>
       </section>
@@ -335,6 +364,7 @@ export default function AdminAssessmentsPage() {
                   <th className={styles.num}>Tenders</th>
                   <th className={styles.num}>Grants</th>
                   <th className={styles.num}>Score</th>
+                  <th className={styles.num}>Runtime</th>
                   <th>Email</th>
                   <th>Dashboard</th>
                   <th></th>
@@ -369,6 +399,12 @@ export default function AdminAssessmentsPage() {
                       {row.readiness_score ?? "-"}
                       {row.grant_readiness_score != null && (
                         <div className={styles.sessionSubtle}>grant {row.grant_readiness_score}</div>
+                      )}
+                    </td>
+                    <td className={styles.num}>
+                      {fmtMs(row.assessment_duration_ms)}
+                      {row.assessment_error && (
+                        <div className={styles.sessionError} title={row.assessment_error}>failed</div>
                       )}
                     </td>
                     <td>

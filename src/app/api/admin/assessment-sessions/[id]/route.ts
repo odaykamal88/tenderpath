@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
+import { ensureAssessmentRuntimeColumns } from "@/lib/assessment/run";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const guard = await requireAdmin(request);
@@ -12,6 +13,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     return NextResponse.json({ error: "Invalid assessment id" }, { status: 400 });
   }
 
+  await ensureAssessmentRuntimeColumns();
+
   const [rows, emailRows, pipelineRows] = await Promise.all([
     sql`
       SELECT
@@ -20,6 +23,12 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         a.matched_tenders, a.gaps, a.recommended_tier, a.org_type,
         a.dev_themes, a.matched_grants, a.grant_readiness_score,
         a.include_consultancies, a.created_at,
+        COALESCE(a.assessment_status, 'completed') AS assessment_status,
+        a.assessment_error,
+        a.assessment_duration_ms,
+        COALESCE(a.assessment_timings, '{}'::jsonb) AS assessment_timings,
+        a.assessment_started_at,
+        a.assessment_completed_at,
         u.id AS user_id, u.email AS user_email, u.created_at AS user_created_at
       FROM assessments a
       LEFT JOIN users u ON lower(u.email) = lower(a.email)
@@ -65,6 +74,12 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       dev_themes: Array.isArray(row.dev_themes) ? row.dev_themes : [],
       grant_readiness_score: row.grant_readiness_score,
       include_consultancies: row.include_consultancies,
+      assessment_status: row.assessment_status,
+      assessment_error: row.assessment_error,
+      assessment_duration_ms: row.assessment_duration_ms,
+      assessment_timings: row.assessment_timings,
+      assessment_started_at: row.assessment_started_at,
+      assessment_completed_at: row.assessment_completed_at,
       created_at: row.created_at,
       user: row.user_id ? {
         id: row.user_id,

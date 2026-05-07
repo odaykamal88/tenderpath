@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
+import { ensureAssessmentRuntimeColumns } from "@/lib/assessment/run";
 
 type AssessmentSessionRow = {
   id: number;
@@ -26,6 +27,10 @@ type AssessmentSessionRow = {
   crawl_render_method: string | null;
   crawl_thin: boolean | null;
   crawl_final_url: string | null;
+  assessment_status: string | null;
+  assessment_error: string | null;
+  assessment_duration_ms: number | string | null;
+  assessment_timings: unknown;
 };
 
 type AttentionCounts = {
@@ -34,9 +39,11 @@ type AttentionCounts = {
   no_dashboard: number | string | null;
   weak_evidence: number | string | null;
   logged_in: number | string | null;
+  running_or_failed: number | string | null;
+  slow_assessments: number | string | null;
 };
 
-const SESSION_FILTERS = new Set(["all", "logged_in", "no_matches", "email_attention", "no_dashboard", "weak_evidence"]);
+const SESSION_FILTERS = new Set(["all", "logged_in", "no_matches", "email_attention", "no_dashboard", "weak_evidence", "running_failed", "slow"]);
 
 function toInt(value: number | string | null | undefined): number {
   return Number(value ?? 0);
@@ -72,7 +79,13 @@ function normalizeRow(row: AssessmentSessionRow) {
     crawl_render_method: row.crawl_render_method,
     crawl_thin: row.crawl_thin,
     crawl_final_url: row.crawl_final_url,
-    completion_state: tenderCount > 0 || grantCount > 0 ? "matched" : "completed_no_matches",
+    assessment_status: row.assessment_status ?? "completed",
+    assessment_error: row.assessment_error,
+    assessment_duration_ms: row.assessment_duration_ms == null ? null : toInt(row.assessment_duration_ms),
+    assessment_timings: row.assessment_timings && typeof row.assessment_timings === "object" ? row.assessment_timings : {},
+    completion_state: row.assessment_status && row.assessment_status !== "completed"
+      ? row.assessment_status
+      : tenderCount > 0 || grantCount > 0 ? "matched" : "completed_no_matches",
   };
 }
 
@@ -85,6 +98,8 @@ export async function GET(request: Request) {
   const requestedFilter = url.searchParams.get("filter")?.trim() ?? "all";
   const filter = SESSION_FILTERS.has(requestedFilter) ? requestedFilter : "all";
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 100), 1), 250);
+
+  await ensureAssessmentRuntimeColumns();
 
   const rows = await sql`
     WITH session_rows AS (
@@ -111,6 +126,10 @@ export async function GET(request: Request) {
           ELSE 0
         END AS gap_count,
         a.created_at,
+        COALESCE(a.assessment_status, 'completed') AS assessment_status,
+        a.assessment_error,
+        a.assessment_duration_ms,
+        COALESCE(a.assessment_timings, '{}'::jsonb) AS assessment_timings,
         u.id AS user_id,
         u.email AS user_email,
         u.created_at AS user_created_at,
@@ -152,6 +171,8 @@ export async function GET(request: Request) {
         OR (${filter} = 'email_attention' AND (email_status IS NULL OR email_status NOT IN ('sent', 'delivered')))
         OR (${filter} = 'no_dashboard' AND user_id IS NOT NULL AND pipeline_items = 0)
         OR (${filter} = 'weak_evidence' AND (crawl_thin IS TRUE OR crawl_render_method IN ('failed', 'parked') OR crawl_render_method IS NULL))
+        OR (${filter} = 'running_failed' AND assessment_status IN ('queued', 'running', 'failed'))
+        OR (${filter} = 'slow' AND assessment_duration_ms >= 45000)
       )
       ORDER BY created_at DESC
       LIMIT ${limit}
@@ -163,6 +184,8 @@ export async function GET(request: Request) {
         a.email,
         a.company_name,
         a.website,
+        COALESCE(a.assessment_status, 'completed') AS assessment_status,
+        a.assessment_duration_ms,
         CASE WHEN jsonb_typeof(COALESCE(a.matched_tenders, '[]'::jsonb)) = 'array'
           THEN jsonb_array_length(COALESCE(a.matched_tenders, '[]'::jsonb))
           ELSE 0
@@ -196,7 +219,9 @@ export async function GET(request: Request) {
       COUNT(*) FILTER (WHERE email_status IS NULL OR email_status NOT IN ('sent', 'delivered'))::int AS email_attention,
       COUNT(*) FILTER (WHERE user_id IS NOT NULL AND pipeline_items = 0)::int AS no_dashboard,
       COUNT(*) FILTER (WHERE crawl_thin IS TRUE OR crawl_render_method IN ('failed', 'parked') OR crawl_render_method IS NULL)::int AS weak_evidence,
-      COUNT(*) FILTER (WHERE user_id IS NOT NULL)::int AS logged_in
+      COUNT(*) FILTER (WHERE user_id IS NOT NULL)::int AS logged_in,
+      COUNT(*) FILTER (WHERE assessment_status IN ('queued', 'running', 'failed'))::int AS running_or_failed,
+      COUNT(*) FILTER (WHERE assessment_duration_ms >= 45000)::int AS slow_assessments
     FROM session_rows
     WHERE
       ${query} = ''
@@ -212,8 +237,15 @@ export async function GET(request: Request) {
     acc.grants += row.grant_count;
     if (row.user) acc.loggedIn++;
     if (row.pipeline_items > 0) acc.withPipeline++;
+    if (row.assessment_duration_ms != null) {
+      acc.durationSamples++;
+      acc.totalDurationMs += row.assessment_duration_ms;
+      acc.p95Pool.push(row.assessment_duration_ms);
+    }
     return acc;
-  }, { tenders: 0, grants: 0, loggedIn: 0, withPipeline: 0 });
+  }, { tenders: 0, grants: 0, loggedIn: 0, withPipeline: 0, durationSamples: 0, totalDurationMs: 0, p95Pool: [] as number[] });
+  const p95Pool = [...totals.p95Pool].sort((a, b) => a - b);
+  const p95Index = p95Pool.length ? Math.min(p95Pool.length - 1, Math.ceil(p95Pool.length * 0.95) - 1) : -1;
 
   return NextResponse.json({
     sessions,
@@ -226,7 +258,16 @@ export async function GET(request: Request) {
       no_dashboard: toInt(attention.no_dashboard),
       weak_evidence: toInt(attention.weak_evidence),
       logged_in: toInt(attention.logged_in),
+      running_or_failed: toInt(attention.running_or_failed),
+      slow_assessments: toInt(attention.slow_assessments),
     },
-    totals,
+    totals: {
+      tenders: totals.tenders,
+      grants: totals.grants,
+      loggedIn: totals.loggedIn,
+      withPipeline: totals.withPipeline,
+      avgAssessmentMs: totals.durationSamples ? Math.round(totals.totalDurationMs / totals.durationSamples) : null,
+      p95AssessmentMs: p95Index >= 0 ? p95Pool[p95Index] : null,
+    },
   });
 }
