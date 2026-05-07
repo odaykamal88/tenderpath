@@ -218,6 +218,31 @@ Validation:
 - `npx eslint src/lib/assessment/match.ts src/lib/grants/eu-funding-tenders.ts scripts/import-eu-funding-grants.ts scripts/expire-grants.ts scripts/audit-grant-quality.ts scripts/grant-match-benchmark.ts`
 - `npx tsc --noEmit`
 
+### Grant freshness automation — 2026-05-07
+
+Implemented:
+
+- Added `src/lib/grants/sync.ts` as the shared grant refresh service.
+- Added `/api/cron/grants` with `GET`/`POST`, `CRON_SECRET` auth, `dry_run=1`, and optional per-source limits.
+- Scheduled the grant refresh daily at 07:15 UTC in `vercel.json`, after the tender crawl and before the weekly digest.
+- The refresh now:
+  - expires stale open grants whose deadlines have passed;
+  - refreshes EU Funding & Tenders;
+  - refreshes UNDP CFP;
+  - refreshes UN Women CFP;
+  - returns open/future/stale/rich-description/theme/eligibility/source-url quality counts.
+
+Validation:
+
+- `npx eslint src/lib/grants/sync.ts src/app/api/cron/grants/route.ts`
+- `npx tsc --noEmit`
+- Dry-run smoke with `euLimit=5`, `undpLimit=3`, `unWomenLimit=3` completed successfully in ~9.5s.
+
+Dry-run observation:
+
+- Found 72 stale-open grant rows ready to expire on the next write-mode cron run.
+- EU Funding & Tenders, UNDP CFP, and UN Women CFP all returned mapped rows.
+
 Remaining:
 
 - EU SEDIA rows often need richer detail-page enrichment for exact eligibility, budgets, destinations, and better descriptions.
