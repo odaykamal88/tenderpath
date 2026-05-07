@@ -111,6 +111,7 @@ function assertScenario(name: string, matches: MatchedGrant[]) {
   if (name.includes("civil society in Kenya")) {
     if (!matches.length) fail("expected at least one country-specific civil-society grant");
     if (!/undp/.test(text)) fail("expected UNDP CFP source to appear");
+    if (/alumni engagement innovation fund|aeif/.test(text)) fail("returned public-diplomacy AEIF noise");
     if (!/kenya|sub-saharan africa/.test(text)) fail("missing Kenya/Sub-Saharan Africa geography signal");
     if (!/civil society|capacity building|gender|livelihoods|women/.test(text)) fail("missing civil-society/livelihood rationale");
   }
@@ -118,6 +119,7 @@ function assertScenario(name: string, matches: MatchedGrant[]) {
   if (name.includes("Moldova")) {
     if (!matches.length) fail("expected at least one Moldova/gender grant");
     if (!/un women/.test(text)) fail("expected UN Women CFP source to appear");
+    if (/alumni engagement innovation fund|aeif/.test(text)) fail("returned public-diplomacy AEIF noise");
     if (!/moldova|eastern europe/.test(text)) fail("missing Moldova/Eastern Europe geography signal");
     if (!/gender|women|civil society|livelihood|economic empowerment/.test(text)) fail("missing gender/civil-society/livelihood rationale");
   }

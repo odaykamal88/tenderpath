@@ -375,6 +375,25 @@ function assignGrantOpportunityBuckets(grants: MatchedGrant[]): MatchedGrant[] {
     );
 }
 
+function weakGrantGeography(grant: MatchedGrant): boolean {
+  return grant.geography_alignment?.mode === "global-open" || grant.geography_alignment?.mode === "unknown";
+}
+
+function localGrantGeography(grant: MatchedGrant): boolean {
+  return grant.geography_alignment?.mode === "direct";
+}
+
+function exactGrantCountryMatch(grant: MatchedGrant): boolean {
+  const grantCountry = grant.country?.toLowerCase();
+  if (!grantCountry || GRANT_GLOBAL_TERMS.has(grantCountry)) return false;
+  return (grant.geography_alignment?.userCountries ?? [])
+    .some((country) => country.toLowerCase() === grantCountry);
+}
+
+function regionOnlyGrantGeography(grant: MatchedGrant): boolean {
+  return localGrantGeography(grant) && !!grant.country && !exactGrantCountryMatch(grant);
+}
+
 // Parse estimated_value strings like "$50,000,000", "USD 2.5M", "EUR 500k"
 // into a rough USD number. Conservative — if we can't parse, return null and
 // skip the demote rather than misfire.
@@ -1732,6 +1751,12 @@ export async function matchGrants(
     const exactCountryGrant = grantExplicitCountries(g)
       .map((value) => value.toLowerCase())
       .some((value) => userCountrySet.has(value));
+    const publicDiplomacyGrant = /\b(alumni engagement innovation fund|aeif|public diplomacy|pds annual|embassy .*program statement)\b/i
+      .test(`${gTitle} ${gDescription} ${String(g.agency ?? "")}`);
+    const profileWantsPublicDiplomacy = devThemes.some((theme) =>
+      /\b(public diplomacy|alumni|exchange|cultural|media|journalism|civil discourse)\b/i.test(theme)
+    );
+    if (publicDiplomacyGrant && !profileWantsPublicDiplomacy && !exactCountryGrant) continue;
     score += geography.score;
     if (geography.mode === "direct") reasons.push(`Geography fit: ${geography.label ?? "selected country"}.`);
     else if (geography.mode === "global-open") reasons.push("Geography fit: global or regional opportunity.");
@@ -1816,12 +1841,31 @@ export async function matchGrants(
     });
   }
 
-  scored.sort((a, b) => b.score - a.score);
+  const dedupedScored = dedupeGrantMatches(scored);
+  const hasLocalGrants = dedupedScored.some(localGrantGeography);
+  const hasExactCountryGrants = dedupedScored.some(exactGrantCountryMatch);
+  const normalizedOrgType = normalizeGrantOrgType(orgType ?? "");
+  const weakGeoLimit = hasLocalGrants
+    ? (normalizedOrgType === "company" ? 2 : 3)
+    : 5;
+  const regionOnlyLimit = hasExactCountryGrants
+    ? (normalizedOrgType === "company" ? 2 : 3)
+    : 6;
 
   // Cap at 2 results per agency to avoid one donor dominating the list.
   const agencyCounts = new Map<string, number>();
   const out: MatchedGrant[] = [];
-  for (const g of scored) {
+  let weakGeoCount = 0;
+  let regionOnlyCount = 0;
+  for (const g of dedupedScored) {
+    if (weakGrantGeography(g)) {
+      if (weakGeoCount >= weakGeoLimit) continue;
+      weakGeoCount++;
+    }
+    if (regionOnlyGrantGeography(g)) {
+      if (regionOnlyCount >= regionOnlyLimit) continue;
+      regionOnlyCount++;
+    }
     const agency = g.agency ?? "";
     const count = agencyCounts.get(agency) ?? 0;
     if (count >= 2) continue;
@@ -1829,5 +1873,5 @@ export async function matchGrants(
     out.push(g);
     if (out.length >= 20) break;
   }
-  return assignGrantOpportunityBuckets(dedupeGrantMatches(out));
+  return assignGrantOpportunityBuckets(out);
 }
