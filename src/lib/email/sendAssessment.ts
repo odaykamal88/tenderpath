@@ -53,7 +53,7 @@ const TIER_COPY: Record<TierSlug, { name: string; price: string; pitch: string }
 export async function sendAssessmentEmail(args: SendArgs): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? "TenderPath <no-reply@tenderpath.me>";
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://tenderpath.me";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.tenderpath.me";
 
   if (!apiKey) {
     const error = "RESEND_API_KEY missing";
