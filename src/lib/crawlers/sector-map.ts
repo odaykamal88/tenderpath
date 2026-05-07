@@ -389,11 +389,15 @@ export function normalizeSector(
 ): SectorSlug[] {
   const haystack = [rawSector, title, description].filter(Boolean).join(" ").toLowerCase();
   if (!haystack) return [];
+  const waterTechnologyContext =
+    /\b(water|wastewater|sanitation|wash|irrigation)\s+(technology|technologies|tech)\b/i.test(haystack)
+    || /\b(technology|technologies|tech)\s+(for|of|in)?\s*(water|wastewater|sanitation|wash|irrigation)\b/i.test(haystack);
 
   // Label-exact check on the raw sector (handles AI-style labels on some feeds).
   const direct = slugFromLabel(rawSector);
   const hits = new Set<SectorSlug>();
   if (direct) hits.add(direct);
+  if (waterTechnologyContext) hits.add("water_sanitation");
 
   // UNSPSC / NAICS-style numeric-coded feeds (UNGM, SAM.gov, WB) lose all
   // sector signal through keyword matching. Try segment mapping first so
@@ -429,6 +433,7 @@ export function normalizeSector(
   for (const slug of SECTOR_SLUGS) {
     if (hits.has(slug)) continue;
     for (const kw of SLUG_KEYWORDS[slug]) {
+      if (slug === "it" && kw === "technolog" && waterTechnologyContext) continue;
       if (keywordMatches(haystack, kw)) {
         hits.add(slug);
         break;

@@ -1666,6 +1666,7 @@ export async function matchGrants(
     ...tokenize(sectors.join(" ")),
     ...tokenize(devThemes.join(" ")),
   ].filter((token) => !GRANT_TOKEN_STOPWORDS.has(token)));
+  const normalizedUserOrgType = normalizeGrantOrgType(orgType ?? "");
 
   const scored: MatchedGrant[] = [];
 
@@ -1741,16 +1742,25 @@ export async function matchGrants(
     const grantHasWashSignal = gSlugs.has("water_sanitation")
       || grantThemes.some((theme) => /\b(wash|water|sanitation|hygiene)\b/i.test(theme))
       || /\b(wash|water|sanitation|hygiene)\b/i.test(`${gTitle} ${gDescription}`);
+    const exactCountryGrant = grantExplicitCountries(g)
+      .map((value) => value.toLowerCase())
+      .some((value) => userCountrySet.has(value));
     if (washFocusedProfile && !grantHasWashSignal && (gSlugs.has("healthcare") || grantThemes.some((theme) => /health/i.test(theme)))) {
       score -= 16;
       reasons.push("Specificity caveat: health-related, but no explicit WASH/water/sanitation signal.");
     }
+    const waterCompanyProfile = normalizedUserOrgType === "company" && washFocusedProfile;
+    const grantHasInfrastructureSignal = gSlugs.has("construction")
+      || grantThemes.some((theme) => /\b(infrastructure|urban development|resilience)\b/i.test(theme))
+      || /\b(infrastructure|water network|wastewater|irrigation|stormwater|flood|sanitation)\b/i.test(`${gTitle} ${gDescription}`);
+    if (waterCompanyProfile && !grantHasWashSignal) {
+      reasons.push("Specificity caveat: water/infrastructure profile, but no explicit water grant signal.");
+      if (!exactCountryGrant) continue;
+      score -= grantHasInfrastructureSignal ? 14 : 22;
+    }
 
     const geography = evaluateGrantGeography(g, userCountrySet);
     const fundingScope = inferGrantFundingScope(g);
-    const exactCountryGrant = grantExplicitCountries(g)
-      .map((value) => value.toLowerCase())
-      .some((value) => userCountrySet.has(value));
     const publicDiplomacyGrant = /\b(alumni engagement innovation fund|aeif|public diplomacy|pds annual|embassy .*program statement)\b/i
       .test(`${gTitle} ${gDescription} ${String(g.agency ?? "")}`);
     const profileWantsPublicDiplomacy = devThemes.some((theme) =>

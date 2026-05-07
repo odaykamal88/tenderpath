@@ -243,6 +243,32 @@ Dry-run observation:
 - Found 72 stale-open grant rows ready to expire on the next write-mode cron run.
 - EU Funding & Tenders, UNDP CFP, and UN Women CFP all returned mapped rows.
 
+## Sprint 3 — Prospect Outreach Readiness
+
+Goal: make sure real vendors see credible first-dashboard value before outreach.
+
+Implemented:
+
+- Added `scripts/prospect-match-smoke.ts`, a non-mutating CSV smoke test for real prospect lists.
+- The script builds conservative synthetic profiles from public CSV columns, then checks tender/grant match count, top-tender actionability, and outreach readiness.
+- Tightened sector normalization so `water technology` maps to WASH/water instead of generic IT.
+- Tightened grant matching for company WASH/water profiles so generic technology or innovation grants do not appear without explicit water signal.
+
+Validation:
+
+- `npx tsx scripts/prospect-match-smoke.ts /Users/odaykamal/Downloads/tenderpath_first50_prospects.csv --limit=5`
+- `npx tsx scripts/prospect-match-smoke.ts /Users/odaykamal/Downloads/tenderpath_first50_prospects.csv --limit=50`
+- `npx tsx scripts/grant-match-benchmark.ts`
+- `npx eslint src/lib/assessment/match.ts src/lib/crawlers/sector-map.ts scripts/prospect-match-smoke.ts`
+- `npx tsc --noEmit`
+
+First-50 smoke result:
+
+- 39 / 50 prospects cleared the outreach-ready bar.
+- Median tender matches: 7.
+- Median grant matches: 5.
+- Hold/manual-enrichment list before outreach: ADDAX ENERGY SA, Advancedlab GmbH, Alfer Constructions SA, Geoscience Engineering & Laboratory Services, National Pharmaceutical Industries CO.SAOG, LABIB MEDICAL CENTER s.a.l, Environment Solutions ApS, Converged Network Solutions - CNS SAL, EMIRATES WATER TECHNOLOGY COMPANY L.L.C, Water Engineering Services FZE, Healthy Air Solutions Pty Ltd.
+
 Remaining:
 
 - EU SEDIA rows often need richer detail-page enrichment for exact eligibility, budgets, destinations, and better descriptions.
