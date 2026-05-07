@@ -122,7 +122,7 @@ function CardTab({ plan, context }: { plan: string | null; context: PayContext }
       }
       const stripe = await stripePromise;
       if (!stripe) { setError("Stripe failed to load."); setStatus("error"); return; }
-      const checkout = await stripe.initEmbeddedCheckout({ clientSecret: data.clientSecret });
+      const checkout = await stripe.createEmbeddedCheckoutPage({ clientSecret: data.clientSecret });
       checkout.mount(containerRef.current!);
       checkoutRef.current = checkout;
       setStatus("mounted");
