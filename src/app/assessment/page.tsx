@@ -10,6 +10,7 @@ interface AssessmentResponse {
   id: number;
   company_name: string;
   email: string;
+  status?: "queued" | "running" | "completed" | "failed";
   sector: string;
   sectors: string[];
   readiness_score: number;
@@ -23,6 +24,46 @@ interface AssessmentResponse {
   gaps: Gap[];
   matched_tenders: MatchedTender[];
   matched_grants: MatchedGrant[];
+  assessment_duration_ms?: number | null;
+  assessment_timings?: Record<string, number>;
+}
+
+interface QueuedAssessmentResponse {
+  id: number;
+  status: "queued";
+  queued: true;
+  poll_url: string;
+}
+
+interface AssessmentPollResponse {
+  id: number;
+  company_name: string | null;
+  email: string | null;
+  sector: string | null;
+  countries?: string[];
+  ai_analysis?: {
+    detected_industry?: string;
+    sectors?: string[];
+    services?: string[];
+    capabilities?: string[];
+    certifications_detected?: string[];
+    strengths?: string[];
+    gaps?: Gap[];
+    readiness_dimensions?: ReadinessDimensions;
+    overall_score?: number;
+    summary?: string;
+  } | null;
+  readiness_score: number | null;
+  grant_readiness_score: number | null;
+  recommended_tier: TierSlug | null;
+  gaps: Gap[] | null;
+  matched_tenders: MatchedTender[] | null;
+  matched_grants: MatchedGrant[] | null;
+  status: "queued" | "running" | "completed" | "failed";
+  assessment_status?: "queued" | "running" | "completed" | "failed";
+  assessment_error?: string | null;
+  assessment_duration_ms?: number | null;
+  assessment_timings?: Record<string, number>;
 }
 
 type WizardPhase = "entry" | "crawling" | "step1" | "step2" | "step3" | "analyzing" | "results";
@@ -37,6 +78,9 @@ const ANALYZING_MESSAGES = [
   "Matching tenders to your confirmed capabilities",
   "Scoring readiness dimensions and identifying gaps",
 ];
+
+const ASSESSMENT_POLL_INTERVAL_MS = 2500;
+const ASSESSMENT_POLL_TIMEOUT_MS = 240000;
 
 const INITIAL_DATA: WizardData = {
   website: "",
@@ -78,6 +122,89 @@ function buildAssessmentInput(data: WizardData): AssessmentInput {
     includeConsultancies: false,
     intent: data.intent || undefined,
   };
+}
+
+function normalizeAssessmentResponse(data: AssessmentResponse | AssessmentPollResponse): AssessmentResponse {
+  const analysis = "ai_analysis" in data ? data.ai_analysis : null;
+  const sector =
+    data.sector ||
+    analysis?.detected_industry ||
+    analysis?.sectors?.[0] ||
+    "General";
+  const sectors =
+    "sectors" in data && Array.isArray(data.sectors) && data.sectors.length
+      ? data.sectors
+      : analysis?.sectors?.length
+      ? analysis.sectors
+      : [sector];
+
+  return {
+    id: data.id,
+    company_name: data.company_name || "Your company",
+    email: data.email || "",
+    status: data.status,
+    sector,
+    sectors,
+    readiness_score: data.readiness_score ?? analysis?.overall_score ?? 0,
+    grant_readiness_score: data.grant_readiness_score ?? 0,
+    recommended_tier: data.recommended_tier ?? "tender-intelligence",
+    summary: "summary" in data && data.summary ? data.summary : analysis?.summary ?? "Assessment completed.",
+    strengths: "strengths" in data && Array.isArray(data.strengths) ? data.strengths : analysis?.strengths ?? [],
+    capabilities:
+      "capabilities" in data && Array.isArray(data.capabilities)
+        ? data.capabilities
+        : analysis?.capabilities ?? analysis?.services ?? [],
+    certifications_detected:
+      "certifications_detected" in data && Array.isArray(data.certifications_detected)
+        ? data.certifications_detected
+        : analysis?.certifications_detected ?? [],
+    readiness_dimensions:
+      ("readiness_dimensions" in data && data.readiness_dimensions
+        ? data.readiness_dimensions
+        : analysis?.readiness_dimensions) ?? {
+        technical_capability: 0,
+        compliance_readiness: 0,
+        financial_stability: 0,
+        geographic_reach: 0,
+        experience_relevance: 0,
+      },
+    gaps: data.gaps ?? analysis?.gaps ?? [],
+    matched_tenders: data.matched_tenders ?? [],
+    matched_grants: data.matched_grants ?? [],
+    assessment_duration_ms: data.assessment_duration_ms ?? null,
+    assessment_timings: data.assessment_timings ?? {},
+  };
+}
+
+async function pollAssessment(pollUrl: string): Promise<AssessmentResponse> {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < ASSESSMENT_POLL_TIMEOUT_MS) {
+    const res = await fetch(pollUrl, { cache: "no-store" });
+    const data = (await res.json()) as AssessmentPollResponse & { error?: string };
+
+    if (!res.ok) throw new Error(data.error || "Assessment failed");
+    if (data.status === "failed" || data.assessment_status === "failed") {
+      throw new Error(data.assessment_error || "Assessment failed");
+    }
+    if (data.status === "completed" || data.assessment_status === "completed") {
+      return normalizeAssessmentResponse(data);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, ASSESSMENT_POLL_INTERVAL_MS));
+  }
+
+  throw new Error("Assessment is taking longer than expected. Please check your email shortly.");
+}
+
+function isQueuedAssessmentResponse(data: unknown): data is QueuedAssessmentResponse {
+  return Boolean(
+    data &&
+      typeof data === "object" &&
+      "queued" in data &&
+      (data as QueuedAssessmentResponse).queued === true &&
+      typeof (data as QueuedAssessmentResponse).poll_url === "string",
+  );
 }
 
 /* ── Typographic progress strip ────────────────────────────────────────── */
@@ -254,13 +381,16 @@ export default function AssessmentPage() {
       const res = await fetch("/api/assessment/public", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildAssessmentInput(wizard)),
+        body: JSON.stringify({ ...buildAssessmentInput(wizard), mode: "queued" }),
       });
+      const data = await res.json();
       if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.error || "Assessment failed");
+        throw new Error(data.error || "Assessment failed");
       }
-      setResults(await res.json());
+      const result = isQueuedAssessmentResponse(data)
+        ? await pollAssessment(data.poll_url)
+        : normalizeAssessmentResponse(data as AssessmentResponse);
+      setResults(result);
       setPhase("results");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
