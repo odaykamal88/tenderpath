@@ -5,7 +5,6 @@ import HowItWorks from "@/components/landing/HowItWorks";
 import Services from "@/components/landing/Services";
 import WhyUs from "@/components/landing/WhyUs";
 import CTA from "@/components/landing/CTA";
-import Testimonials from "@/components/landing/Testimonials";
 import Footer from "@/components/landing/Footer";
 import { getLandingTenders } from "@/lib/landing/recent-tenders";
 
@@ -51,7 +50,6 @@ export default async function Home() {
       <HowItWorks />
       <Services />
       <WhyUs />
-      <Testimonials />
       <CTA />
       <Footer />
     </>
