@@ -5,7 +5,10 @@ export const maxDuration = 300;
 
 function authorized(request: Request): boolean {
   const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret) return true;
+  if (!cronSecret) {
+    console.error("[api/cron/weekly-digest] CRON_SECRET not configured — refusing request");
+    return false;
+  }
   return request.headers.get("authorization") === `Bearer ${cronSecret}`;
 }
 

@@ -283,7 +283,15 @@ export async function syncAllTenders(): Promise<SyncSummary> {
   // Tier-1 free APIs first; legacy HTML scrapers kept as fallback fillers.
   // UN agencies consolidated into ungm.ts via residential proxy —
   // covers UNICEF, WFP, WHO, UNHCR, IOM, UNRWA, UNDP, and 50+ other UN bodies.
-  const crawls = await Promise.allSettled([
+  //
+  // Blocked-source policy: ADB, AfDB, EBRD have been Cloudflare/CAS-blocked for
+  // weeks (see docs/crawler-grant-debug-2026-05-03.md). Each consumes ~60s of
+  // browser-worker budget for guaranteed-zero output. They are gated behind
+  // ENABLE_BLOCKED_CRAWLERS so they can be re-enabled once a recovery path lands,
+  // without restoring the silent budget drain in production.
+  const includeBlocked = process.env.ENABLE_BLOCKED_CRAWLERS === "true";
+
+  const activeCrawls = [
     crawlUNGM(),
     crawlReliefWeb(),
     crawlTED(),
@@ -293,10 +301,7 @@ export async function syncAllTenders(): Promise<SyncSummary> {
     crawlGIZ(),
     crawlUNDP(),
     crawlUNDPAtlas(),
-    crawlADB(),
-    crawlAfDB(),
     crawlIDB(),
-    crawlEBRD(),
     crawlDevelopmentAidNPO(),
     crawlNRC(),
     crawlKfW(),
@@ -307,7 +312,13 @@ export async function syncAllTenders(): Promise<SyncSummary> {
     // crawlIOM(),    — disabled, notices are covered by UNGM and the direct page is bot-blocked
     // crawlUNRWA(),  — disabled, official UNRWA guidance points suppliers to UNGM notices
     // crawlUNOPS()  — disabled: already covered by UNGM (UNOPS posts to UNGM by mandate)
-  ]);
+  ];
+
+  if (includeBlocked) {
+    activeCrawls.push(crawlADB(), crawlAfDB(), crawlEBRD());
+  }
+
+  const crawls = await Promise.allSettled(activeCrawls);
 
   const settledResults: CrawlResult[] = [];
   const results: PlatformSyncResult[] = [];
