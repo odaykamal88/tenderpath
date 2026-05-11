@@ -550,12 +550,24 @@ function PayPage() {
     workOrderId: searchParams.get("work_order_id"),
   };
   const [selectedSlug, setSelectedSlug] = useState<string | null>(planSlug);
-  const [activeTab, setActiveTab] = useState<Tab>("card");
+  const [storedTab, setStoredTab] = useState<Tab>("card");
+
+  // Wire payments cannot be auto-fulfilled today (manual proof review), so they
+  // are hidden on one-time service plans where the user expects an immediate
+  // AI-generated deliverable. Keep wire for monthly/annual subscription tiers
+  // where the longer delivery window is acceptable.
+  const ONE_TIME_NO_WIRE = new Set(["bid-no-bid", "proposal-draft", "roster-fast-track"]);
+  const hideWire = selectedSlug ? ONE_TIME_NO_WIRE.has(selectedSlug) : false;
+
+  // Derive the rendered tab so a plan change can never leave the user on a
+  // hidden tab — no useEffect ping-pong required.
+  const activeTab: Tab = hideWire && storedTab === "wire" ? "card" : storedTab;
+  const setActiveTab = setStoredTab;
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "card", label: "Card" },
     { id: "usdt", label: "USDT" },
-    { id: "wire", label: "Wire" },
+    ...(hideWire ? [] : [{ id: "wire" as Tab, label: "Wire" }]),
   ];
 
   return (
@@ -678,7 +690,11 @@ function PayPage() {
           </div>
 
           {/* Tabs */}
-          <div className="grid grid-cols-3 gap-1 rounded-sm border border-stone-200/70 p-0.5 bg-stone-50/40 mb-5">
+          <div
+            className={`grid gap-1 rounded-sm border border-stone-200/70 p-0.5 bg-stone-50/40 mb-5 ${
+              tabs.length === 2 ? "grid-cols-2" : "grid-cols-3"
+            }`}
+          >
             {tabs.map((tab) => (
               <button
                 key={tab.id}

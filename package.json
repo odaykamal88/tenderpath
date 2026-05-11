@@ -13,16 +13,19 @@
     "@hello-pangea/dnd": "^18.0.1",
     "@neondatabase/serverless": "^1.0.2",
     "@react-pdf/renderer": "^4.5.1",
+    "@stripe/stripe-js": "^9.4.0",
     "@vercel/blob": "^2.3.3",
+    "docx": "^9.6.1",
+    "exceljs": "^4.4.0",
     "https-proxy-agent": "^9.0.0",
     "jose": "^6.2.2",
+    "jszip": "^3.10.1",
     "next": "16.2.3",
     "openai": "^6.34.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "resend": "^6.11.0",
-    "stripe": "^22.0.1",
-    "@stripe/stripe-js": "^9.4.0"
+    "stripe": "^22.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

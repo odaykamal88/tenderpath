@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { sql } from "@/lib/db";
 import { Resend } from "resend";
+import { generateBidNoBid, BID_PLAN } from "@/lib/bid-no-bid/generate";
+import { generateProposalPackage } from "@/lib/proposal-package/generate-proposal";
+import { generateRosterFastTrack } from "@/lib/proposal-package/generate-roster";
+import { PROPOSAL_PLAN, ROSTER_PLAN } from "@/lib/proposal-package/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 20;
+
+// Plans that are auto-fulfilled (deliverable generated and emailed) the moment
+// TronGrid confirms a valid transfer. The user does not wait for ops review.
+const AUTO_FULFILLED_PLANS = new Set([BID_PLAN, PROPOSAL_PLAN, ROSTER_PLAN]);
 
 const USDT_TRC20_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 
@@ -145,12 +154,17 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Update work order
+  // Decide downstream payment_status. Auto-fulfilled plans (bid-no-bid today)
+  // go straight to "paid" because TronGrid has already confirmed the contract,
+  // destination wallet, and minimum amount — no human in the loop.
+  const autoFulfilled = AUTO_FULFILLED_PLANS.has(plan);
+  const nextPaymentStatus = autoFulfilled ? "paid" : "pending_verification";
+
   const rows = await sql`
     UPDATE work_orders
     SET
       usdt_txid         = ${txid.trim()},
-      payment_status    = 'pending_verification',
+      payment_status    = ${nextPaymentStatus},
       email             = COALESCE(email, ${email?.trim() ?? null}),
       updated_at        = NOW()
     WHERE id = ${workOrderId}
@@ -168,6 +182,45 @@ export async function POST(req: NextRequest) {
     (order.email as string | null) ?? email?.trim() ?? null,
     txid.trim(),
   ).catch((err) => console.error("[verify-usdt] ops email failed", err));
+
+  if (autoFulfilled) {
+    const orderId = order.id as number;
+    // Kick off generation after the response. The user dashboards into the
+    // work-order page where the deliverable appears within a few minutes; the
+    // ready email notifies them too. Each generator handles its own pipeline.
+    after(async () => {
+      try {
+        if (plan === BID_PLAN) {
+          await generateBidNoBid({ workOrderId: orderId });
+        } else if (plan === PROPOSAL_PLAN) {
+          await generateProposalPackage({ workOrderId: orderId });
+        } else if (plan === ROSTER_PLAN) {
+          await generateRosterFastTrack({ workOrderId: orderId });
+        }
+      } catch (err) {
+        console.error("[verify-usdt] auto-generate failed", {
+          workOrderId: orderId,
+          plan,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    });
+
+    const message = (() => {
+      if (plan === BID_PLAN) {
+        return "Transaction verified. We're generating your Bid/No-Bid analysis now — you'll receive the PDF by email and in your dashboard within a few minutes.";
+      }
+      if (plan === PROPOSAL_PLAN) {
+        return "Transaction verified. We're drafting your proposal package now — you'll receive the ZIP bundle by email and in your dashboard within 15-30 minutes.";
+      }
+      if (plan === ROSTER_PLAN) {
+        return "Transaction verified. We're preparing your roster registration package now — you'll receive the bundle by email and in your dashboard within 15-30 minutes.";
+      }
+      return "Transaction verified.";
+    })();
+
+    return NextResponse.json({ ok: true, message });
+  }
 
   return NextResponse.json({
     ok: true,

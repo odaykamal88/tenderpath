@@ -247,6 +247,32 @@ ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS intake JSONB DEFAULT '{}'::json
 ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS usdt_txid TEXT;
 ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS payment_proof_url TEXT;
 
+CREATE TABLE IF NOT EXISTS proposal_packages (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  work_order_id INTEGER REFERENCES work_orders(id) ON DELETE SET NULL,
+  pipeline_item_id INTEGER REFERENCES pipeline_items(id) ON DELETE SET NULL,
+  plan VARCHAR(50) NOT NULL,
+  tender_title TEXT,
+  agency TEXT,
+  tender_url TEXT,
+  intake JSONB DEFAULT '{}'::jsonb,
+  stripe_session_id VARCHAR(200),
+  output JSONB NOT NULL DEFAULT '{}'::jsonb,
+  pdf_url TEXT,
+  pdf_pathname TEXT,
+  generation_status TEXT DEFAULT 'pending',
+  generation_attempts INTEGER DEFAULT 1,
+  error_message TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS pdf_url TEXT;
+ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS pdf_pathname TEXT;
+ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS generation_status TEXT DEFAULT 'pending';
+ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS generation_attempts INTEGER DEFAULT 1;
+ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS error_message TEXT;
+CREATE INDEX IF NOT EXISTS proposal_packages_work_order_plan ON proposal_packages (work_order_id, plan, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS weekly_digest_logs (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,

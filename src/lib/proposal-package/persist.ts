@@ -1,0 +1,92 @@
+import { sql } from "@/lib/db";
+import type { ProposalOutput, RosterOutput } from "./types";
+
+export interface UpsertArgs {
+  workOrderId: number;
+  userId: number | null;
+  pipelineItemId: number | null;
+  plan: string;
+  tenderTitle: string | null;
+  agency: string | null;
+  tenderUrl: string | null;
+  intake: Record<string, unknown>;
+  stripeSessionId: string | null;
+  output: ProposalOutput | RosterOutput;
+  pdfUrl: string | null;
+  pdfPathname: string | null;
+  attempts: number;
+  existingPackageId: number | null;
+}
+
+export async function upsertPackage(args: UpsertArgs): Promise<number> {
+  const outputJson = JSON.stringify(args.output);
+  const intakeJson = JSON.stringify(args.intake);
+  if (args.existingPackageId != null) {
+    const rows = await sql`
+      UPDATE proposal_packages SET
+        output = ${outputJson}::jsonb,
+        pdf_url = COALESCE(${args.pdfUrl}, pdf_url),
+        pdf_pathname = COALESCE(${args.pdfPathname}, pdf_pathname),
+        generation_status = 'ready',
+        generation_attempts = ${args.attempts},
+        error_message = NULL,
+        tender_title = COALESCE(${args.tenderTitle}, tender_title),
+        agency = COALESCE(${args.agency}, agency),
+        tender_url = COALESCE(${args.tenderUrl}, tender_url),
+        intake = ${intakeJson}::jsonb
+      WHERE id = ${args.existingPackageId}
+      RETURNING id
+    ` as unknown as Array<{ id: number }>;
+    return rows[0]?.id ?? args.existingPackageId;
+  }
+  if (args.userId == null) {
+    throw new Error("Cannot create proposal_packages row without user_id");
+  }
+  const rows = await sql`
+    INSERT INTO proposal_packages (
+      user_id, work_order_id, pipeline_item_id, plan,
+      tender_title, agency, tender_url, intake,
+      stripe_session_id, output, pdf_url, pdf_pathname,
+      generation_status, generation_attempts
+    ) VALUES (
+      ${args.userId}, ${args.workOrderId}, ${args.pipelineItemId}, ${args.plan},
+      ${args.tenderTitle}, ${args.agency}, ${args.tenderUrl}, ${intakeJson}::jsonb,
+      ${args.stripeSessionId}, ${outputJson}::jsonb, ${args.pdfUrl}, ${args.pdfPathname},
+      'ready', ${args.attempts}
+    )
+    RETURNING id
+  ` as unknown as Array<{ id: number }>;
+  return rows[0]?.id ?? 0;
+}
+
+export interface FailureArgs {
+  workOrderId: number;
+  userId: number | null;
+  plan: string;
+  attempts: number;
+  errorMessage: string;
+  existingPackageId: number | null;
+}
+
+export async function markFailure(args: FailureArgs): Promise<void> {
+  if (args.existingPackageId != null) {
+    await sql`
+      UPDATE proposal_packages SET
+        generation_status = 'failed',
+        generation_attempts = ${args.attempts},
+        error_message = ${args.errorMessage}
+      WHERE id = ${args.existingPackageId}
+    `;
+    return;
+  }
+  if (args.userId == null) return;
+  await sql`
+    INSERT INTO proposal_packages (
+      user_id, work_order_id, plan,
+      output, generation_status, generation_attempts, error_message
+    ) VALUES (
+      ${args.userId}, ${args.workOrderId}, ${args.plan},
+      '{}'::jsonb, 'failed', ${args.attempts}, ${args.errorMessage}
+    )
+  `;
+}

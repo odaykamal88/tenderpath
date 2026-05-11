@@ -338,9 +338,20 @@ export async function initializeDatabase() {
       intake JSONB DEFAULT '{}'::jsonb,
       stripe_session_id VARCHAR(200),
       output JSONB NOT NULL DEFAULT '{}'::jsonb,
+      pdf_url TEXT,
+      pdf_pathname TEXT,
+      generation_status TEXT DEFAULT 'pending',
+      generation_attempts INTEGER DEFAULT 1,
+      error_message TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+  await sql`ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS pdf_url TEXT`;
+  await sql`ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS pdf_pathname TEXT`;
+  await sql`ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS generation_status TEXT DEFAULT 'pending'`;
+  await sql`ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS generation_attempts INTEGER DEFAULT 1`;
+  await sql`ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS error_message TEXT`;
+  await sql`CREATE INDEX IF NOT EXISTS proposal_packages_work_order_plan ON proposal_packages (work_order_id, plan, created_at DESC)`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS weekly_digest_logs (
