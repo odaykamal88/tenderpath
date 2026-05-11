@@ -43,6 +43,36 @@ function mapGapsForUI(gaps: Gap[]): D2Gap[] {
   }));
 }
 
+function pickReasons(t: MatchedTender): string[] {
+  const summary = t.structured_reasons?.summary ?? [];
+  const fallback = t.match_reasons ?? (t.match_reason ? [t.match_reason] : []);
+  const sectors = t.structured_reasons?.matchedSectors ?? [];
+  const capabilities = t.structured_reasons?.matchedCapabilities ?? [];
+  // Prefer LLM-authored summary lines; if none, synthesize from structured
+  // sector/capability matches; if still none, fall back to flat reasons.
+  const lines: string[] = [];
+  for (const line of summary) {
+    if (line && !lines.includes(line)) lines.push(line);
+  }
+  if (lines.length === 0 && sectors.length > 0) {
+    lines.push(`Sector match: ${sectors.slice(0, 3).join(", ")}`);
+  }
+  if (lines.length < 3 && capabilities.length > 0) {
+    lines.push(`Capability match: ${capabilities.slice(0, 3).join(", ")}`);
+  }
+  for (const line of fallback) {
+    if (line && !lines.includes(line)) lines.push(line);
+    if (lines.length >= 3) break;
+  }
+  return lines.slice(0, 3);
+}
+
+function confidenceFrom(t: MatchedTender): "high" | "medium" | "low" | null {
+  const c = t.structured_reasons?.confidence ?? t.confidence ?? null;
+  if (c === "high" || c === "medium" || c === "low") return c;
+  return null;
+}
+
 function mapTendersForUI(tenders: MatchedTender[]): Tender[] {
   return tenders.map((t) => ({
     code: t.reference_id ?? `T-${t.id}`,
@@ -52,6 +82,15 @@ function mapTendersForUI(tenders: MatchedTender[]): Tender[] {
     deadline: t.deadline,
     value: t.estimated_value != null ? String(t.estimated_value) : "—",
     urgent: t.deadline ? new Date(t.deadline).getTime() - Date.now() < 14 * 86_400_000 : false,
+    sector: t.structured_reasons?.procurement?.sectorLabel ?? t.sector ?? null,
+    country: t.structured_reasons?.geographyAlignment?.tenderCountry ?? t.country ?? null,
+    sourceUrl: t.structured_reasons?.procurement?.sourceUrl ?? t.source_url ?? null,
+    sourceProvenance: t.structured_reasons?.procurement?.sourceProvenance ?? t.source_provenance ?? "unknown",
+    confidence: confidenceFrom(t),
+    bucketLabel: t.opportunity_bucket_label ?? null,
+    matchReasons: pickReasons(t),
+    caveats: t.structured_reasons?.caveats ?? [],
+    decisionHeadline: t.decision_brief?.headline ?? t.opportunity_bucket_reason ?? null,
   }));
 }
 
@@ -75,14 +114,20 @@ function mapDimensions(dims: ReadinessDimensions) {
 }
 
 function mapTopTenders(tenders: MatchedTender[]): TenderPeek[] {
-  return tenders.slice(0, 5).map((t) => ({
-    code: t.reference_id ?? `T-${t.id}`,
-    title: t.title,
-    agency: t.agency,
-    fit: t.score,
-    deadline: t.deadline,
-    urgent: t.deadline ? new Date(t.deadline).getTime() - Date.now() < 14 * 86_400_000 : false,
-  }));
+  return tenders.slice(0, 5).map((t) => {
+    const reasons = pickReasons(t);
+    return {
+      code: t.reference_id ?? `T-${t.id}`,
+      title: t.title,
+      agency: t.agency,
+      fit: t.score,
+      deadline: t.deadline,
+      urgent: t.deadline ? new Date(t.deadline).getTime() - Date.now() < 14 * 86_400_000 : false,
+      sector: t.structured_reasons?.procurement?.sectorLabel ?? t.sector ?? null,
+      matchReason: reasons[0] ?? t.decision_brief?.headline ?? t.opportunity_bucket_reason ?? null,
+      confidence: confidenceFrom(t),
+    };
+  });
 }
 
 function tierLabel(slug: string | null): string {

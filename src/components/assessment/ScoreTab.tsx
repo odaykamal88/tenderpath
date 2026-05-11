@@ -8,7 +8,17 @@ export type TenderPeek = {
   fit: number;
   deadline: string;
   urgent?: boolean;
+  sector?: string | null;
+  matchReason?: string | null;
+  confidence?: "high" | "medium" | "low" | null;
 };
+
+function peekDotColor(confidence: TenderPeek["confidence"]): string {
+  if (confidence === "high") return "var(--tp2-pos, #1f7a4d)";
+  if (confidence === "medium") return "var(--tp2-warn, #c08400)";
+  if (confidence === "low") return "var(--tp2-neg, #b03030)";
+  return "var(--tp2-line, #c8c0b3)";
+}
 
 export function ScoreTab({
   score,
@@ -71,9 +81,35 @@ export function ScoreTab({
             <div key={t.code} className={styles.peekRow}>
               <div>
                 <div className={`${styles.peekMeta} tp-mono`}>
+                  <span
+                    aria-hidden
+                    style={{
+                      display: "inline-block",
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      background: peekDotColor(t.confidence),
+                      marginRight: 6,
+                      verticalAlign: "middle",
+                    }}
+                  />
                   {t.code} · {t.agency}
+                  {t.sector && <> · {t.sector}</>}
                 </div>
                 <div className={styles.peekTitle}>{t.title}</div>
+                {t.matchReason && (
+                  <div
+                    style={{
+                      marginTop: 3,
+                      fontFamily: "var(--tp2-serif, ui-serif), serif",
+                      fontSize: 12,
+                      color: "var(--tp2-ink-3, #8a826f)",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {t.matchReason}
+                  </div>
+                )}
               </div>
               <span className={`${styles.peekFit} tp-mono`}>{t.fit}</span>
               <span
