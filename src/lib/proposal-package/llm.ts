@@ -34,8 +34,8 @@ function safeParseJSON<T>(text: string, fallback: T, tag: string): T {
   }
 }
 
-const HAIKU_MODEL = "claude-3-5-haiku-latest";
-const SONNET_MODEL = "claude-sonnet-4-5";
+const HAIKU_MODEL = "claude-haiku-4-5-20251001";
+const SONNET_MODEL = "claude-sonnet-4-6";
 
 export interface GenerationInputs {
   tenderText: string;
