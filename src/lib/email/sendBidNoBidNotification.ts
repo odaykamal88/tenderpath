@@ -69,7 +69,7 @@ export async function sendBidNoBidReadyEmail(args: BidReadyEmailArgs): Promise<v
     `— TenderPath`,
   ].filter(Boolean).join("\n");
 
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from,
     to: args.email,
     subject,
@@ -85,4 +85,10 @@ export async function sendBidNoBidReadyEmail(args: BidReadyEmailArgs): Promise<v
         }
       : {}),
   });
+  // The Resend SDK returns errors in the response body (data/error), not as
+  // thrown exceptions. We have to surface them ourselves; otherwise the
+  // generator's .catch never fires and we silently swallow a failed send.
+  if (error) {
+    throw new Error(`Resend send rejected: ${error.message ?? JSON.stringify(error)}`);
+  }
 }
