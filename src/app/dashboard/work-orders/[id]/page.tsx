@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import BidNoBidPanel from "./BidNoBidPanel";
+import ProposalPackagePanel from "./ProposalPackagePanel";
+import RosterWorkspacePanel from "./RosterWorkspacePanel";
 
 interface WorkOrder {
   id: number;
@@ -66,14 +69,27 @@ function orderRef(id: number): string {
   return `WO-${id.toString(16).toUpperCase().padStart(4, "0")}`;
 }
 
-const PROPOSAL_SLUGS = new Set(["proposal-draft", "roster-fast-track"]);
+const BID_SLUG = "bid-no-bid";
+const PROPOSAL_SLUG = "proposal-draft";
+const ROSTER_SLUG = "roster-fast-track";
+
+function isBidNoBidOrder(order: WorkOrder): boolean {
+  return order.plan === BID_SLUG || order.service_slug === BID_SLUG;
+}
+
+function isProposalOrder(order: WorkOrder): boolean {
+  return order.plan === PROPOSAL_SLUG || order.service_slug === PROPOSAL_SLUG;
+}
+
+function isRosterOrder(order: WorkOrder): boolean {
+  return order.plan === ROSTER_SLUG || order.service_slug === ROSTER_SLUG;
+}
 
 export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const [id, setId] = useState<string | null>(null);
   const [order, setOrder] = useState<WorkOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hasPackage, setHasPackage] = useState(false);
 
   useEffect(() => {
     params.then((value) => setId(value.id));
@@ -94,15 +110,6 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
       }
     })();
   }, [id]);
-
-  useEffect(() => {
-    if (!id || !order) return;
-    if (!PROPOSAL_SLUGS.has(order.service_slug ?? "")) return;
-    fetch(`/api/proposals/generate?work_order_id=${id}`, { headers: authHeaders() })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: { exists: boolean } | null) => { if (data?.exists) setHasPackage(true); })
-      .catch(() => {});
-  }, [id, order]);
 
   const intakeRows = useMemo(() => {
     if (!order?.intake) return [];
@@ -193,24 +200,26 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
         </span>
       </header>
 
-      {/* Package ready callout */}
-      {hasPackage && (
-        <div className="mt-6 flex items-center justify-between gap-4 rounded-md border-l-2 border-emerald-600 bg-emerald-50/40 px-4 py-3.5">
-          <div>
-            <div
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700"
-              style={{ fontFamily: MONO }}
-            >
-              Package ready
-            </div>
-            <p className="mt-1 text-[13.5px] text-emerald-900">Your AI-generated package is ready to review.</p>
-          </div>
-          <Link
-            href={`/dashboard/proposals/${id}`}
-            className="shrink-0 rounded-sm bg-emerald-700 px-4 py-2.5 text-[12.5px] font-semibold uppercase tracking-wider text-white hover:bg-emerald-800 transition-colors"
-          >
-            View package →
-          </Link>
+      {/* Auto-fulfilled deliverable panel — routed by plan */}
+      {isBidNoBidOrder(order) && (
+        <div className="mt-6">
+          <BidNoBidPanel workOrderId={order.id} paymentStatus={order.payment_status} />
+        </div>
+      )}
+
+      {isProposalOrder(order) && (
+        <div className="mt-6">
+          <ProposalPackagePanel workOrderId={order.id} paymentStatus={order.payment_status} />
+        </div>
+      )}
+
+      {isRosterOrder(order) && (
+        <div className="mt-6">
+          <RosterWorkspacePanel
+            workOrderId={order.id}
+            paymentStatus={order.payment_status}
+            initialWorkOrderStatus={order.status}
+          />
         </div>
       )}
 

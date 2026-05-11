@@ -1,6 +1,11 @@
 import type Stripe from "stripe";
+import { after } from "next/server";
 import { sql } from "@/lib/db";
 import { sendWorkOrderPaidNotifications } from "@/lib/email/sendWorkOrderNotifications";
+import { generateBidNoBid, BID_PLAN } from "@/lib/bid-no-bid/generate";
+import { generateProposalPackage } from "@/lib/proposal-package/generate-proposal";
+import { generateRosterFastTrack } from "@/lib/proposal-package/generate-roster";
+import { PROPOSAL_PLAN, ROSTER_PLAN } from "@/lib/proposal-package/types";
 
 export const WORK_ORDER_PLANS = new Set([
   "bid-no-bid",
@@ -8,6 +13,12 @@ export const WORK_ORDER_PLANS = new Set([
   "proposal-draft",
   "roster-fast-track",
 ]);
+
+// Plans where payment completion should trigger auto-fulfilled deliverable
+// generation in the background. The bid-ready / proposal-ready / roster-ready
+// email from inside each generator replaces the generic "we received your
+// order" email so the user gets one notification per stage, not two.
+const AUTO_FULFILLED_PLANS = new Set([BID_PLAN, PROPOSAL_PLAN, ROSTER_PLAN]);
 
 export function isWorkOrderPlan(plan: string | null | undefined): boolean {
   return !!plan && WORK_ORDER_PLANS.has(plan);
@@ -122,21 +133,68 @@ export async function createWorkOrderFromCheckout(
   const order = rows[0];
   const previousPaymentStatus = order?.previous_payment_status as string | null | undefined;
   if (order && session.payment_status === "paid" && previousPaymentStatus !== "paid") {
-    await sendWorkOrderPaidNotifications({
-      id: order.id as number,
-      plan: order.plan as string,
-      serviceSlug: order.service_slug as string | null,
-      email: (order.email as string | null) ?? email,
-      tenderTitle: order.tender_title as string | null,
-      agency: order.agency as string | null,
-      paymentStatus: order.payment_status as string | null,
-      amountCents: order.amount_cents as number | null,
-      currency: order.currency as string | null,
-    }).catch((err) => {
-      console.error("[tp:work_order_email:failed]", {
-        workOrderId: order.id,
-        error: err instanceof Error ? err.message : String(err),
+    const orderPlan = order.plan as string;
+    const orderId = order.id as number;
+
+    // For auto-fulfilled plans the deliverable-ready email IS the paid
+    // notification — skip the generic "we received your order" email to avoid
+    // double-mailing. Subscription tiers still get the receive-confirmation.
+    if (!AUTO_FULFILLED_PLANS.has(orderPlan)) {
+      sendWorkOrderPaidNotifications({
+        id: orderId,
+        plan: orderPlan,
+        serviceSlug: order.service_slug as string | null,
+        email: (order.email as string | null) ?? email,
+        tenderTitle: order.tender_title as string | null,
+        agency: order.agency as string | null,
+        paymentStatus: order.payment_status as string | null,
+        amountCents: order.amount_cents as number | null,
+        currency: order.currency as string | null,
+      }).catch((err) => {
+        console.error("[tp:work_order_email:failed]", {
+          workOrderId: orderId,
+          error: err instanceof Error ? err.message : String(err),
+        });
       });
-    });
+    }
+
+    // Schedule deliverable generation after the webhook returns. Each
+    // generator handles its own LLM call → file rendering → Blob upload →
+    // email, and writes status into proposal_packages so the dashboard can
+    // poll for "ready" without holding the webhook lambda open.
+    if (orderPlan === BID_PLAN) {
+      after(async () => {
+        try {
+          await generateBidNoBid({ workOrderId: orderId });
+        } catch (err) {
+          console.error("[tp:bid_no_bid:auto_generate_failed]", {
+            workOrderId: orderId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      });
+    } else if (orderPlan === PROPOSAL_PLAN) {
+      after(async () => {
+        try {
+          await generateProposalPackage({ workOrderId: orderId });
+        } catch (err) {
+          console.error("[tp:proposal_draft:auto_generate_failed]", {
+            workOrderId: orderId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      });
+    } else if (orderPlan === ROSTER_PLAN) {
+      after(async () => {
+        try {
+          await generateRosterFastTrack({ workOrderId: orderId });
+        } catch (err) {
+          console.error("[tp:roster_fast_track:auto_generate_failed]", {
+            workOrderId: orderId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      });
+    }
   }
 }

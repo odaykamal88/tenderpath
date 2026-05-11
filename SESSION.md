@@ -1946,6 +1946,216 @@ Continue Wave 4 grant quality. Google OAuth is now live in production (GOOGLE_CL
 - What remains: UN Women/UNDP CFP detail enrichment, a true WASH-specific grant source, UI caveats for inferred grant metadata, crawler recovery (EBRD/ADB/AfDB).
 - What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, docs/tender-grant-improvement-waves.md
 
+### Session Update
+- Agent: Claude Code (opus-4-7)
+- Date: 2026-05-11
+- Task Completed: Sprint 1 of the launch-readiness plan — "Safety & signal foundation." Closed three operational launch-blockers identified in the readiness audit: cron auth fail-open, partial-failure silence, and absence of an ops digest. Also dropped persistently-blocked crawlers from the daily run and patched two payment-config soft spots.
+- Files Changed:
+  - `src/app/api/cron/grants/route.ts` — `authorized()` now fails closed when `CRON_SECRET` is unset and logs an explicit refusal line.
+  - `src/app/api/cron/weekly-digest/route.ts` — same fail-closed pattern.
+  - `src/app/api/cron/sync-tenders/route.ts` — DELETED. Zombie route not in `vercel.json`; it duplicated `/api/cron/crawl` and shared the fail-open bug.
+  - `src/proxy.ts` — removed `/api/cron/sync-tenders` from `PUBLIC_PATHS`; added `/api/cron/daily-digest`.
+  - `src/app/api/cron/crawl/route.ts` — now returns HTTP 502 when the run is a full failure or partial-failure ratio ≥ 0.4; also fails closed if `CRON_SECRET` is unset and includes `failure_ratio` in the JSON payload.
+  - `src/lib/crawlers/sync.ts` — ADB / AfDB / EBRD removed from the default `Promise.allSettled` set; gated behind `ENABLE_BLOCKED_CRAWLERS=true` so they can be re-enabled when recovery work lands. Saves ~180 s of browser-worker budget per nightly run for guaranteed-zero output.
+  - `src/app/api/health/route.ts` — added `?deep=1` mode reporting `open_tenders`, `stale_sources`, `fresh_sources`, and a best-effort crawler-worker ping. Shallow mode unchanged. Returns 503 when DB is down, a load-bearing source (UNGM/World Bank/TED EU) is stale, the worker is unreachable, or `open_tenders === 0`.
+  - `src/lib/stripe.ts` — removed hardcoded `apiVersion: "2026-03-25.dahlia"` pin. SDK uses its built-in version. No env override surface introduced; if a future deploy truly needs a hard pin, it can be reintroduced narrowly.
+  - `src/app/api/admin/payment-health/route.ts` — added `STRIPE_PRICE_FOUNDING_MEMBER` to the configured-prices report and `missingConfig()`. Founding-member tier is now visible to admin health checks.
+  - `src/lib/email/sendDailyDigest.ts` — NEW. Renders a plain-text ops digest with severity (`ok` / `warning` / `alert`) covering last-crawl status, source freshness, payment activity, and email delivery. Sends via Resend to the first available of `OPS_DIGEST_EMAIL`, `ADMIN_ALERT_EMAIL`, `WORK_ORDER_OPS_EMAIL`, `OPS_EMAIL`. Failure is logged, never thrown.
+  - `src/app/api/cron/daily-digest/route.ts` — NEW. Authenticated cron endpoint that builds the digest payload from `crawl_logs`, `tenders`, `work_orders`, `email_queue`, and dispatches the email. Supports `?dry_run=1` for verification without sending.
+  - `vercel.json` — added `/api/cron/daily-digest` at `0 8 * * *` (daily 08:00 UTC, 2h after the crawl cron at 06:00 UTC).
+- Tests Run:
+  - `npx tsc --noEmit` — passed.
+  - `npx eslint` on all 10 changed/new files — passed.
+  - `curl -i http://localhost:3000/api/cron/grants` → 401 Unauthorized (confirms fail-closed with no `CRON_SECRET`).
+  - `curl -i http://localhost:3000/api/cron/daily-digest` → 401 Unauthorized (same).
+  - `curl http://localhost:3000/api/health` → 503 with `db: "disconnected"` (correct without DATABASE_URL locally).
+  - Did NOT run the daily-digest payload builder live — requires DB.
+- Result: Cron auth now fail-closed across the four scheduled routes. Daily crawl returns 502 on cascading source failure so Vercel cron monitoring + retries actually fire. Blocked crawlers no longer waste browser-worker budget in the default run. Founder receives one daily email summarising health (crawl status, stale sources, pending payments > 4h, failed payments / emails in the last 24h). Shallow health endpoint backwards compatible; deep mode adds load-bearing source liveness for external monitors.
+- Blockers: None for Sprint 1 acceptance. Production rollout requires three env vars to be set in Vercel: `CRON_SECRET` (already present per prior sessions), `OPS_DIGEST_EMAIL` (recipient), and `RESEND_API_KEY` (already present). Optional: `ENABLE_BLOCKED_CRAWLERS=true` only after a recovery path lands for ADB/AfDB/EBRD.
+- Important Decisions:
+  - Deleted `/api/cron/sync-tenders` rather than fixing it in place — it was never in `vercel.json` and duplicated `/api/cron/crawl`. Keeping two paths to the same syncAllTenders() was a long-running drift source.
+  - Removed the Stripe API version pin entirely rather than introduce an env override; YAGNI for the pre-launch state, and the SDK ships with a matching version by design.
+  - Daily-digest cadence is daily at 08:00 UTC — single signal channel, single recipient. Resisted the urge to build paging tiers / Slack integration; one well-curated email beats a noisy dashboard pre-launch.
+  - Inlined the per-source `STALE_AFTER_HOURS` map in two places (`/api/health` and `/api/cron/daily-digest`) instead of importing from `/api/admin/source-health` to avoid pulling admin auth into public/cron paths. Small duplication; clearer dependency graph.
+- Contracts or Interfaces Changed:
+  - `/api/cron/crawl` now returns HTTP 502 in failure / partial-failure-over-threshold cases. The response body is otherwise compatible; `failure_ratio` is added.
+  - `/api/health?deep=1` is additive; legacy callers using `/api/health` see the same shape.
+  - `/api/admin/payment-health` response gains `prices.foundingMember`; existing fields unchanged.
+  - `/api/cron/sync-tenders` is removed; any internal caller (none found in repo) would now 404.
+  - `RawTender`, `CrawlResult`, `SyncSummary`, and all assessment / dashboard contracts unchanged.
+- Docs Updated: `SESSION.md` only.
+- Next Recommended Task: Begin Sprint 2 — automated Bid/No-Bid generation. New `/api/work-orders/:id/generate-bid-no-bid` route triggered by Stripe webhook on the `bid-no-bid` plan and by successful USDT verification. Output: structured LLM analysis → `@react-pdf/renderer` PDF → attach to paid-user email and surface in `/dashboard/work-orders/:id`. Eliminate the `pending_verification` intermediate state for USDT — if TronGrid checks pass, mark `paid` and trigger generation. Drop wire from the bid-no-bid checkout path; keep wire only for subscription tiers.
+- Recommended Agent: Claude Code (Opus or Sonnet 4.6).
+- Paste-Ready Next Prompt:
+
+```text
+Read SESSION.md first, then AGENTS.md, CLAUDE.md, docs/agents/assessment-architecture.md, and docs/agents/dashboard-architecture.md.
+
+Sprint 1 (Safety & signal) is committed. Begin Sprint 2: automated Bid/No-Bid generation, the lowest-complexity LLM deliverable and the gating validation for the broader auto-fulfillment thesis.
+
+Build:
+1. `/api/work-orders/:id/generate-bid-no-bid` — LLM pipeline (gpt-4o-mini for tender classification + gpt-4o for the structured analysis). Inputs: tender URL or pasted TOR, the work-order's linked assessment, optional vault-uploaded docs. Output: strict-JSON deliverable with recommendation (bid/no-bid/conditional), fit reasoning, gap analysis, required-docs checklist, estimated effort, win-probability band, red flags.
+2. Render to PDF via `@react-pdf/renderer` (already a dependency).
+3. Wire `webhooks/stripe` `checkout.session.completed` for the `bid-no-bid` plan: flip `work_orders.payment_status = paid` AND trigger generation. PDF appears in `/dashboard/work-orders/:id` within ~3 minutes; paid email contains the attachment + dashboard link.
+4. USDT path: when `verify-usdt` succeeds, flip directly to `paid` and trigger generation — drop the `pending_verification` intermediate state for this plan.
+5. Remove wire payment option from the `bid-no-bid` checkout UI; keep it only on subscription plans.
+6. Self-serve `Regenerate` button on the work-order page, rate-limited to 2 retries per order.
+
+Acceptance: pay $39 with a real Stripe card (or sandbox) → PDF in `/dashboard/work-orders/:id` within 5 minutes with zero admin intervention. Same path with USDT TRC20.
+
+Preserve `RawTender`, `CrawlResult`, `work_orders` schema, and the pricing tier slugs. Do not break the manual ops fallback at `/admin/work-orders`. Update SESSION.md when finished.
+```
+
+### Short Resume State
+- What is now true: Sprint 1 of the launch-readiness plan is complete. All four scheduled cron routes fail-closed without `CRON_SECRET`. The daily crawl returns 502 on cascading source failure. ADB/AfDB/EBRD are gated behind `ENABLE_BLOCKED_CRAWLERS` so the nightly run no longer wastes ~180 s of browser-worker budget on known-blocked sources. `/api/health?deep=1` reports load-bearing source liveness for external uptime monitors. Stripe SDK no longer pinned to a hardcoded API version date. `/api/admin/payment-health` now reports founding-member price config. New `/api/cron/daily-digest` runs at 08:00 UTC daily and emails a single-channel ops digest covering crawl status, stale sources, payment activity, and email delivery.
+- What remains: Sprints 2-6 of the launch plan — auto Bid/No-Bid (Sprint 2), auto Proposal Draft + Roster Package (Sprint 3), match-quality & ICP fixes (Sprint 4), UX/trust hardening + activation funnel (Sprint 5), supervised pilot (Sprint 6).
+- What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, docs/agents/dashboard-architecture.md
+
+### Session Update
+- Agent: Claude Code (opus-4-7)
+- Date: 2026-05-11
+- Task Completed: Sprint 2 of the launch-readiness plan — "Automated Bid/No-Bid." Auto-fulfillment is now live for the $39 Bid/No-Bid SKU: payment (Stripe or USDT) triggers an LLM analysis + PDF render + Blob upload + email, all without an ops touch. The user sees the PDF in `/dashboard/work-orders/[id]` within a few minutes of paying, can regenerate twice if the first pass is off, and is no longer offered wire on one-time service plans where same-day fulfillment is the promise.
+- Files Changed:
+  - **New** `src/lib/bid-no-bid/types.ts` — strict TypeScript shape for the LLM output (recommendation, win-band, fit_reasoning, gap_analysis with severity, required_documents with effort hours, red_flags, conditions_for_bid, next_steps, evidence). Default fallback + normalize helpers downstream.
+  - **New** `src/lib/bid-no-bid/llm.ts` — two-stage Claude pipeline: Haiku for structured tender-requirements extraction, then Sonnet (`claude-sonnet-4-5`) for the analysis with strict-JSON contract. Includes `normalize()` so a misbehaving LLM cannot break the PDF or the dashboard panel.
+  - **New** `src/lib/bid-no-bid/pdfDoc.tsx` — two-page React-PDF document mirroring the editorial paper system from `assessmentPdf.tsx`. Page 1: recommendation hero, fit reasoning, conditions/red-flags, gap analysis. Page 2: required documents matrix, ordered next steps, evidence snippet.
+  - **New** `src/lib/bid-no-bid/generate.ts` — orchestrator that fetches work order + assessment + pipeline-item context, runs the LLM pipeline, renders the PDF, uploads to Vercel Blob (`bid-no-bid/<id>-<ts>.pdf`, public), and upserts `proposal_packages`. Idempotent on `(work_order_id, plan)`. PDF render failure does not block the analysis from being stored.
+  - **New** `src/lib/email/sendBidNoBidNotification.ts` — bid-ready email helper: subject includes the tender title, body contains the recommendation + win band + PDF link + dashboard deep-link. Best-effort via Resend; never throws into the generator.
+  - **New** `src/app/api/dashboard/work-orders/[id]/bid-no-bid/route.ts` — authenticated GET returns the latest analysis package (or `exists: false` + `payment_status`); POST regenerates, server-side rate-limited to `MAX_ATTEMPTS=3` total (1 auto + 2 user). `?force=1` is required to overwrite an existing `ready` package.
+  - **New** `src/app/dashboard/work-orders/[id]/BidNoBidPanel.tsx` — client panel: polls `/api/dashboard/work-orders/[id]/bid-no-bid` every 8 s until the package transitions to `ready` (max 40 polls). Renders recommendation badge, headline, fit-reasoning, gap analysis with severity, conditions/red-flags, ordered next-steps, generation count + remaining regenerations, download-PDF link, and a regenerate button.
+  - `src/lib/work-orders.ts` — `createWorkOrderFromCheckout()` now skips the generic "we received your order" email for `bid-no-bid` (the bid-ready email replaces it) and schedules `generateBidNoBid()` via Next 16 `after()` so the Stripe webhook returns fast.
+  - `src/app/api/pay/verify-usdt/route.ts` — `bid-no-bid` plan now flips directly to `payment_status = 'paid'` (no `pending_verification` intermediate state) and schedules generation via `after()`. The response message now tells the user the analysis is being generated and will land in their dashboard + email shortly. Other plans (subscription / proposal / roster) keep the existing manual-verification path for now.
+  - `src/app/pay/page.tsx` — Wire tab is hidden when `selectedSlug ∈ {bid-no-bid, proposal-draft, roster-fast-track}`. Subscription tiers (`grants-tenders-matching`, `founding-member`) still show all three methods. Tab fallback is computed (no `useEffect` ping-pong) so plan switches never leave the user on a hidden tab.
+  - `src/app/dashboard/work-orders/[id]/page.tsx` — added `BidNoBidPanel` mount when the work order's plan or `service_slug` is `bid-no-bid`. The existing proposal/roster "Package ready" callout is unchanged; bid-no-bid renders its full panel inline.
+  - `src/lib/db.ts` — additive schema: `proposal_packages` gains `pdf_url`, `pdf_pathname`, `generation_status`, `generation_attempts`, `error_message`. Added `proposal_packages_work_order_plan` index for the `(work_order_id, plan, created_at DESC)` lookup pattern.
+  - `scripts/migrate.mjs` — same additive schema, parallel migration path for prod.
+- Tests Run:
+  - `npx tsc --noEmit` — passed clean.
+  - `npx eslint` on all 12 new/changed files — passed (one unrelated pre-existing `NotifyButton` unused warning on `src/app/pay/page.tsx:70`).
+  - Browser smoke against local dev server (`http://localhost:3000`):
+    - `/pay?plan=bid-no-bid&work_order_id=999` — payment tabs render as `Card`, `USDT` (Wire hidden, 2-column grid).
+    - `/pay?plan=grants-tenders-matching` — payment tabs render as `Card`, `USDT`, `Wire` (3-column grid, subscription path unchanged).
+  - Did NOT run the live generation end-to-end (no `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `BLOB_READ_WRITE_TOKEN` / `DATABASE_URL` locally). Local LLM run is deferred to the supervised pilot in Sprint 6.
+- Result: $39 Bid/No-Bid is now a fully self-serve auto-fulfilled SKU. Pay → PDF + email + dashboard surface within ~3 minutes of the webhook firing, with zero founder/ops interaction. Wire is dropped from the one-time service checkout path so the user never gets "your receipt is being reviewed within 1–3 business days" for a service we can deliver in minutes. Regeneration is rate-limited at 3 total attempts; once exhausted, the user is steered to reply to the bid-ready email (founder-touch territory per the operating rule). All changes are additive: `RawTender`, `CrawlResult`, `work_orders`, and the existing `proposal_packages` shape are preserved.
+- Blockers: None for the code. Production rollout requires three env vars in Vercel:
+  - `ANTHROPIC_API_KEY` — already present per prior sessions (used by `/api/proposals/generate`).
+  - `BLOB_READ_WRITE_TOKEN` — already used by `wire-proof/route.ts`. Verify the same token has write access to the `bid-no-bid/` prefix.
+  - `STRIPE_BIDNOBID_PRICE_ID` — already present (live bid-no-bid checkout was live before Sprint 1).
+- Important Decisions:
+  - Reused the existing `proposal_packages` table rather than creating a new `service_deliverables` table — five additive columns gain bid-no-bid storage without touching the proposal/roster query path. The dashboard "Package ready" callout still keys on `proposal_packages` for proposal/roster orders; bid-no-bid uses its own panel.
+  - Default to **silent generation** in the webhook + USDT paths (no double email). The bid-ready email from inside `generateBidNoBid()` is the canonical paid-user notification. The generic "we received your order" email still fires for proposal / roster / subscription plans where there is no instant deliverable yet.
+  - Capped at **3 total generations** per work order (initial + 2 regenerations). Hit the cap → 429 + a copy line that routes the user to reply to support. This matches the founder-touch rule: re-pricing decisions stay with the founder; the analysis quality bar is automated.
+  - USDT auto-flip to `paid` is trusted because the existing TronGrid check already validates `contractRet === SUCCESS`, contract address, destination wallet, and minimum amount per plan. If verification fails, the route still returns 422 and the work order stays untouched.
+  - Did NOT change the Stripe API version pin from Sprint 1's removal — the SDK default continues to ship with the install. Future Stripe upgrades flow in via SDK version bumps.
+  - Did NOT add a separate `bid_no_bid_analyses` table or per-tier deliverable abstraction yet — keeping `proposal_packages` as the single deliverable store until Sprint 3 (Proposal Draft + Roster Package) confirms the shape.
+- Contracts or Interfaces Changed:
+  - `proposal_packages` table — additive columns (`pdf_url`, `pdf_pathname`, `generation_status`, `generation_attempts`, `error_message`). All existing rows continue to work; the `output` JSONB stays the source of truth for proposal/roster.
+  - `/api/pay/verify-usdt` response body for `bid-no-bid` plan now returns a different `message` string (analysis is generating, not "activate within 4 business hours"). Other plans unchanged.
+  - New routes: `/api/dashboard/work-orders/[id]/bid-no-bid` (GET + POST).
+  - `RawTender`, `CrawlResult`, `SyncSummary`, assessment, and dashboard pipeline contracts unchanged.
+- Docs Updated: `SESSION.md` only.
+- Next Recommended Task: Sprint 3 — automated Proposal Draft + Roster Package. The bid-no-bid pattern (intake → LLM → JSON → PDF → Blob → DB → email → dashboard panel + regenerate) is the template. For Proposal Draft, the deliverable is heavier: ZIP bundle of `.docx` proposal + `.xlsx` financial template + `.pdf` compliance matrix + `.docx` cover letter. For Roster Fast-Track, the deliverable is an agency-specific workspace inside `/dashboard/work-orders/[id]` — auto-generated capability statement, document-renaming pack, agency-specific submission instructions, and a "Mark as submitted" transition.
+- Recommended Agent: Claude Code (Opus or Sonnet 4.6).
+- Paste-Ready Next Prompt:
+
+```text
+Read SESSION.md first, then AGENTS.md, CLAUDE.md, docs/agents/dashboard-architecture.md, and the relevant Next.js 16 App Router docs under node_modules/next/dist/docs/.
+
+Sprint 1 (Safety & signal) and Sprint 2 (Automated Bid/No-Bid) are committed. Begin Sprint 3: automated Proposal Draft + Roster Package.
+
+Build:
+1. `/api/work-orders/[id]/generate-proposal` and `/api/work-orders/[id]/generate-roster` mirrors of the bid-no-bid generator at src/lib/bid-no-bid/. Async with Next 16 `after()` so the user gets immediate feedback ("we're drafting your package — you'll receive an email in 15-30 minutes").
+2. Proposal Draft deliverable bundle: `.docx` proposal (use `docx` package), `.xlsx` financial template (use `exceljs`), `.pdf` compliance matrix (`@react-pdf/renderer`), `.docx` cover letter. ZIP all four and upload to Vercel Blob under `proposal-draft/<id>-<ts>.zip`. Bundle pathname in `proposal_packages.pdf_pathname` (rename column later if needed) + `pdf_url`.
+3. Roster Fast-Track workspace: render an in-dashboard tab on `/dashboard/work-orders/[id]` with agency-specific checklist, auto-generated capability statement preview, downloadable submission package ZIP, and a "Mark as submitted" button that transitions `work_orders.status = 'submitted'`. Start with UNGM, WFP, UNICEF, UNDP, IOM templates; static roster-packages map.
+4. Wire both into Stripe webhook + USDT verify (the same pattern used in `src/lib/work-orders.ts` and `src/app/api/pay/verify-usdt/route.ts` for bid-no-bid). USDT auto-flips to `paid` for these plans too — same TronGrid checks.
+5. Email at completion includes ZIP download link + dashboard link.
+6. Regenerate cap stays at 3 total attempts per work order (use the `MAX_ATTEMPTS` const).
+
+Preserve `RawTender`, `CrawlResult`, the `work_orders` schema, and tier slugs. Do not break the manual ops fallback at `/admin/work-orders`. Update SESSION.md when finished.
+```
+
+### Short Resume State
+- What is now true: Sprint 1 + Sprint 2 of the launch-readiness plan are complete. Bid/No-Bid is end-to-end auto-fulfilled: pay → LLM analysis (Haiku tender extract + Sonnet structured analysis) → React-PDF document → Vercel Blob upload → bid-ready email → dashboard panel with regenerate (capped at 3 attempts). Wire payment is hidden on bid-no-bid (and proposal-draft, roster-fast-track) so the user is never offered a 1–3-day delivery for an instant-deliverable SKU. USDT verify flips directly to paid for bid-no-bid with no manual review step. `proposal_packages` is the unified deliverable store; bid-no-bid uses additive columns `pdf_url`, `pdf_pathname`, `generation_status`, `generation_attempts`, `error_message`.
+- What remains: Sprints 3-6 — auto Proposal Draft + Roster Package (Sprint 3), match-quality & ICP fixes (Sprint 4), UX/trust hardening + activation funnel (Sprint 5), supervised pilot (Sprint 6).
+- What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/dashboard-architecture.md, docs/agents/assessment-architecture.md
+
+### Session Update
+- Agent: Claude Code (opus-4-7)
+- Date: 2026-05-11
+- Task Completed: Sprint 3 of the launch-readiness plan — "Automated Proposal Draft + Roster Fast-Track." Both auto-fulfilled SKUs are now end-to-end live. Payment (Stripe or USDT) triggers a shared LLM pipeline that drafts a tender-aware proposal bundle (`.docx` proposal + `.docx` cover letter + `.xlsx` financial template + `.pdf` compliance matrix) or an agency-specific roster registration bundle (`.docx` capability statement + `.docx` cover letter + `.pdf` step-by-step submission instructions with file-naming rules), zips it, uploads to Vercel Blob, emails the user, and surfaces it in the dashboard panel with regenerate + (for roster) "Mark as submitted" — all without an ops touch.
+- Files Changed:
+  - **New** `src/lib/proposal-package/types.ts` — strict TypeScript shapes for `ProposalOutput`, `RosterOutput`, `ComplianceItem`, `DocumentRenameRule`, `TenderRequirements`. Default fallbacks for normalize paths. `PROPOSAL_PLAN = "proposal-draft"`, `ROSTER_PLAN = "roster-fast-track"`, `MAX_ATTEMPTS = 3`.
+  - **New** `src/lib/proposal-package/llm.ts` — three Anthropic calls behind a shared normalize: `extractTenderRequirements()` (Haiku-mini structured tender parse), `generateProposalDraft()` (Sonnet 4.5 — strict JSON contract for the proposal bundle), `generateRosterPackage()` (Sonnet 4.5 — strict JSON contract for the roster bundle with file-naming rules). Each result is hardened by a `normalize…()` so a misbehaving LLM cannot break the renderers.
+  - **New** `src/lib/proposal-package/docx.ts` — `renderProposalDocx()`, `renderCoverLetterDocx()`, `renderCapabilityStatementDocx()` using the `docx` package. Editable Word output with section headings, bullet lists, and signature blocks.
+  - **New** `src/lib/proposal-package/xlsx.ts` — `renderFinancialTemplateXlsx()` using `exceljs`. Pre-wired line-item, contingency, and grand-total formulas; ready for the founder to drop in quantities + unit costs.
+  - **New** `src/lib/proposal-package/pdfDocs.tsx` — `renderComplianceMatrixPdf()` (requirement-by-requirement, with compliant/partial/needs-action status column) and `renderSubmissionInstructionsPdf()` (agency portal walkthrough + file-naming rules) using `@react-pdf/renderer`.
+  - **New** `src/lib/proposal-package/roster-packages.ts` — static `AGENCY_PACKAGES` catalogue for **UNGM, WFP, UNICEF, UNDP, IOM** with portal URL, ordered submission steps, required documents, category hints, and operational notes. `findAgencyPackage(slug)` + `inferAgencySlug(target_agency)` helpers. Agencies that require TenderPath-staff submission are intentionally excluded.
+  - **New** `src/lib/proposal-package/bundle.ts` — `bundleAndUpload()` using `JSZip` + `@vercel/blob` (`allowOverwrite: true`, public read). Files inside the zip carry `safeFilenameStem()` names so the customer's company name shows up cleanly in the download.
+  - **New** `src/lib/proposal-package/context.ts` — shared `loadWorkOrder`, `loadExistingPackage`, `loadAssessmentForOrder`, `loadPipelineItem`, `buildTenderText`, `buildCompanyContext` helpers consumed by both generators.
+  - **New** `src/lib/proposal-package/persist.ts` — `upsertPackage()` and `markFailure()` against the unified `proposal_packages` table. `(work_order_id, plan)` is the idempotency key; `generation_status`, `generation_attempts`, `error_message`, `pdf_url`, `pdf_pathname` columns reused from Sprint 2's additive schema.
+  - **New** `src/lib/proposal-package/generate-proposal.ts` — proposal orchestrator: load context → extract tender requirements → draft proposal JSON → render `.docx` + `.docx` + `.xlsx` + `.pdf` → zip → Blob upload → email → upsert. Idempotent + 3-attempt rate limit. Best-effort blob/email; failures are persisted to `error_message` so the panel can show them.
+  - **New** `src/lib/proposal-package/generate-roster.ts` — roster orchestrator: `pickAgency()` from `intake.agency_slug` (user choice) or `inferAgencySlug(intake.target_agency)`; if neither, returns `skippedReason: "no_agency"` so the dashboard can prompt the user. Otherwise: load context → draft roster JSON → render capability `.docx` + cover-letter `.docx` + submission-instructions `.pdf` → zip → Blob → email → upsert. Sets `work_orders.agency` to the resolved label so the dashboard header reflects the agency.
+  - **New** `src/lib/email/sendProposalPackageNotification.ts` — `sendProposalReadyEmail()` and `sendRosterReadyEmail()` helpers. Body lists bundle contents, links the ZIP, deep-links the dashboard, and (for roster) links the agency portal.
+  - **New** `src/app/api/dashboard/work-orders/[id]/proposal-package/route.ts` — authenticated `GET` returns latest package + payment status + remaining regenerations; `POST?force=1` regenerates with the standard 3-attempt cap (returns 429 once exhausted).
+  - **New** `src/app/api/dashboard/work-orders/[id]/roster-package/route.ts` — authenticated `GET` returns latest package + `selected_agency` + `available_agencies`; `POST` accepts `{ agency_slug }` body to persist the user's choice into `intake.agency_slug` (+ `work_orders.agency`) before kicking off generation; `PATCH` accepts `{ action: "mark_submitted" }` to transition `work_orders.status = 'submitted'` (the final founder-out-of-the-loop milestone).
+  - **New** `src/app/dashboard/work-orders/[id]/ProposalPackagePanel.tsx` — polling client panel mirroring `BidNoBidPanel.tsx`. Shows executive summary, compliance snapshot (first 8 + "more in the PDF"), bundle contents, missing-information call-out, next steps, generation count + remaining regenerations, download-ZIP button, regenerate.
+  - **New** `src/app/dashboard/work-orders/[id]/RosterWorkspacePanel.tsx` — polling client panel with agency-selection UI when no agency is matched (radio cards for UNGM/WFP/UNICEF/UNDP/IOM with the "why" rationale). Once an agency is picked, polls for the generated package; renders registration checklist, file-naming rules table, missing-info call-out, next steps, download-ZIP + open-portal buttons, "Mark as submitted ✓" button (calls `PATCH`), regenerate.
+  - `src/lib/work-orders.ts` — Stripe webhook now schedules `generateProposalPackage()` and `generateRosterFastTrack()` via Next 16 `after()` in addition to `generateBidNoBid()`. Generic "we received your order" email skipped for all three auto-fulfilled plans (`AUTO_FULFILLED_PLANS = { BID_PLAN, PROPOSAL_PLAN, ROSTER_PLAN }`); the deliverable-ready email IS the paid notification.
+  - `src/app/api/pay/verify-usdt/route.ts` — USDT verification now flips `proposal-draft` and `roster-fast-track` directly to `payment_status = 'paid'` and schedules generation via `after()`. Each plan returns a plan-specific success message ("we're drafting your proposal…" / "we're preparing your roster registration…"). Subscription tiers still go to `pending_verification` as before.
+  - `src/app/dashboard/work-orders/[id]/page.tsx` — routes the panel by plan: `isBidNoBidOrder → BidNoBidPanel`, `isProposalOrder → ProposalPackagePanel`, `isRosterOrder → RosterWorkspacePanel`. The legacy "Package ready → View package" callout (which pointed at the obsolete `/dashboard/proposals/[id]` view) is removed; the panels are the canonical surface.
+- Tests Run:
+  - `npx tsc --noEmit` — passed clean across all Sprint 3 files.
+  - `npx eslint` on all 17 new/changed files — passed (no warnings, no errors).
+  - Did NOT run live generation end-to-end (no `ANTHROPIC_API_KEY` / `BLOB_READ_WRITE_TOKEN` / `DATABASE_URL` locally). Live LLM run is deferred to the supervised pilot in Sprint 6.
+- Result: $299 Proposal Draft and $749 Roster Fast-Track are now fully self-serve auto-fulfilled SKUs. Pay → ZIP bundle + email + dashboard panel within ~10-15 minutes of the webhook firing, with zero founder/ops interaction. Roster users without an inferred agency choice are shown a 5-option radio (UNGM/WFP/UNICEF/UNDP/IOM); their selection is persisted to `intake.agency_slug` before generation kicks off. Roster users who finish submission to the agency hit "Mark as submitted ✓" to flip `work_orders.status = 'submitted'` — the final founder-out-of-the-loop milestone. Regeneration is rate-limited at 3 total attempts per work order across all three SKUs; once exhausted, the user is steered to reply to the deliverable-ready email (founder-touch territory). All changes are additive: `RawTender`, `CrawlResult`, `work_orders`, and the existing `proposal_packages` shape are preserved. The legacy `/dashboard/proposals/[id]` view is no longer linked from the work-order page; the new panels render inline so the user never leaves their work-order context.
+- Blockers: None for the code. Production rollout requires three env vars in Vercel:
+  - `ANTHROPIC_API_KEY` — already present (used by Sprint 2 + `/api/proposals/generate`).
+  - `BLOB_READ_WRITE_TOKEN` — already present (Sprint 2 reuse). Verify the same token has write access to `proposal-draft/` and `roster-fast-track/` prefixes.
+  - `STRIPE_PROPOSAL_PRICE_ID` + `STRIPE_ROSTER_PRICE_ID` — already present (live checkout was working before Sprint 1).
+- Important Decisions:
+  - Reused `proposal_packages` as the single deliverable store for all three auto-fulfilled SKUs. The `output` JSONB column now holds three different shapes (`BidNoBidOutput`, `ProposalOutput`, `RosterOutput`), distinguished by the `plan` discriminator. Avoided a per-tier deliverable table because the lookup pattern is always `(work_order_id, plan) → latest row`.
+  - Static `AGENCY_PACKAGES` catalogue for v1 limited to **UNGM, WFP, UNICEF, UNDP, IOM**. Inclusion criterion: the user can self-submit through an open vendor portal. Agencies that require a TenderPath staff submission (embassy / in-person / closed roster) are intentionally excluded from the launch list — they re-enter the founder-touch path which violates the operating rule.
+  - Roster-only "Mark as submitted" transition is a `PATCH` (not a POST) because it's idempotent and modifies the work-order resource, not the package. The transition is one-way (`'new' | 'in_progress'` → `'submitted'`).
+  - Proposal regeneration uses the same `MAX_ATTEMPTS = 3` cap as Bid/No-Bid + Roster. Three attempts is enough for the user to recover from a bad first pass (typically agency name miss, missing requirement, or wrong product list) without the founder having to triage iteration requests.
+  - Compliance matrix in the proposal bundle is a `.pdf` (read-only) rather than `.docx`: the matrix is a checklist the user references during their final pass, not something they edit. Editable artifacts (proposal narrative, cover letter, financial template) are `.docx`/`.xlsx`.
+  - Submission-instructions PDF for the roster bundle was chosen over `.docx` because the user reads it while filling the agency portal; a polished, paginated PDF survives screen-sharing and printing better than a Word doc.
+  - `pickAgency()` prefers `intake.agency_slug` (explicit user choice) over `inferAgencySlug(intake.target_agency)` (free-text heuristic). Falling back is silent — only the API route surfaces `selected_agency: null` to the dashboard, which then renders the radio picker.
+  - Did NOT remove the legacy `/api/proposals/generate` route or `/dashboard/proposals/[id]` view. Existing rows continue to render via the old surface; the new panels are scoped to work orders with plans matching `proposal-draft` or `roster-fast-track`. A future cleanup can delete the legacy surface once we've confirmed no in-flight orders use it.
+- Contracts or Interfaces Changed:
+  - `proposal_packages.output` JSONB now legally holds `ProposalOutput | RosterOutput | BidNoBidOutput`, discriminated by `plan`. All existing rows continue to work; readers select by `plan`.
+  - New routes: `/api/dashboard/work-orders/[id]/proposal-package` (GET + POST), `/api/dashboard/work-orders/[id]/roster-package` (GET + POST + PATCH).
+  - `/api/pay/verify-usdt` response body for `proposal-draft` and `roster-fast-track` plans now returns plan-specific `message` copy and flips directly to `paid` (no `pending_verification`). Other plans (grants-tenders-matching, founding-member) unchanged.
+  - Dashboard work-order detail page no longer links to `/dashboard/proposals/[id]` for proposal/roster orders; the inline panel is canonical.
+  - `RawTender`, `CrawlResult`, `SyncSummary`, assessment pipeline, and `work_orders` table contracts unchanged.
+- Docs Updated: `SESSION.md` only.
+- Next Recommended Task: Sprint 4 — match-quality and ICP fixes. With the auto-fulfillment path now end-to-end across all three one-time SKUs, the next failure mode is upstream: an assessment that misses or mis-classifies a company surfaces irrelevant tenders, which torpedoes the post-assessment dashboard's first-try trust. Audit the assessment-to-matched flow with five fresh test companies (a humanitarian INGO, an IT consultancy, a logistics SME, an architecture firm, and a research org); for each, log the resolved domain, the extracted sector, the classification confidence, and the top-5 matched tenders. Where the top-5 includes obviously off-target tenders, trace upstream: weak evidence? wrong sector map? broken category filter? Then fix the highest-leverage broken link. Specifically: tighten the assessment classifier on thin/blocked sites, improve sector-map coverage for the top 10 UN sectors, and add a confidence band to the dashboard match cards so users can see _why_ a tender is being shown.
+- Recommended Agent: Claude Code (Opus or Sonnet 4.6).
+- Paste-Ready Next Prompt:
+
+```text
+Read SESSION.md first, then AGENTS.md, CLAUDE.md, docs/agents/assessment-architecture.md, docs/agents/dashboard-architecture.md, and the relevant Next.js 16 App Router docs under node_modules/next/dist/docs/.
+
+Sprints 1–3 of the launch plan are committed. Begin Sprint 4: match-quality and ICP fixes. With auto-fulfillment now live across all three one-time SKUs (bid-no-bid, proposal-draft, roster-fast-track), the dominant failure mode is upstream: a bad assessment surfaces irrelevant tenders, which destroys post-assessment trust.
+
+Audit the assessment-to-matched flow with five fresh test companies (a humanitarian INGO, an IT consultancy, a logistics SME, an architecture firm, and a research org). For each:
+1. Log the resolved domain after redirect handling.
+2. Log the extracted sector + classification confidence.
+3. Log the top-5 matched tenders + match reasons.
+4. Flag any obvious mismatches.
+
+Then fix the highest-leverage break:
+- If the classifier is the bottleneck → tighten thin/blocked-site handling.
+- If the sector map is the bottleneck → improve coverage for the top 10 UN sectors.
+- If the dashboard is the bottleneck → add a confidence band + match-reason snippet on every match card so users can see WHY a tender is being shown.
+
+Preserve `RawTender`, `CrawlResult`, `proposal_packages`, and `work_orders` contracts. Update SESSION.md when finished.
+```
+
+### Short Resume State
+- What is now true: Sprints 1, 2, and 3 of the launch-readiness plan are complete. All three one-time service SKUs (Bid/No-Bid $39, Proposal Draft $299, Roster Fast-Track $749) are end-to-end auto-fulfilled: pay → LLM-generated deliverable (PDF or ZIP bundle) → Blob upload → ready-email → dashboard panel with regenerate (capped at 3 attempts). Roster users pick their target agency from a 5-option radio (UNGM/WFP/UNICEF/UNDP/IOM) if it wasn't inferred; their selection persists to `intake.agency_slug`. Roster users mark their final submission via a PATCH that flips `work_orders.status = 'submitted'`. Wire payment is hidden on all three one-time SKUs. USDT verify flips directly to paid (no `pending_verification` intermediate) for all three. `proposal_packages` is the unified deliverable store across all plans. Founder is now out of the critical path for everything except refunds, 30-min calls, and difficult transactions — exactly the operating goal.
+- What remains: Sprints 4-6 — match-quality & ICP fixes (Sprint 4), UX/trust hardening + activation funnel (Sprint 5), supervised pilot (Sprint 6).
+- What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/assessment-architecture.md, docs/agents/dashboard-architecture.md
+
 ---
 
 The next agent must not infer progress from commits alone.  

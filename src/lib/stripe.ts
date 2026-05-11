@@ -6,7 +6,9 @@ export function getStripe(): Stripe {
   if (!stripeInstance) {
     const key = process.env.STRIPE_SECRET_KEY;
     if (!key) throw new Error("STRIPE_SECRET_KEY is not set");
-    stripeInstance = new Stripe(key, { apiVersion: "2026-03-25.dahlia" });
+    // No apiVersion pin: let the SDK use the version it ships with so we never
+    // silently break when the account default and a hardcoded date diverge.
+    stripeInstance = new Stripe(key);
   }
   return stripeInstance;
 }

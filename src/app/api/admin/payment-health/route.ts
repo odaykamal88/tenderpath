@@ -25,6 +25,7 @@ function paymentConfig(): PaymentConfig {
       tenderIntelligence: configured("STRIPE_PRICE_TENDER_INTELLIGENCE"),
       submissionPackage: configured("STRIPE_PRICE_SUBMISSION_PACKAGE"),
       strategicPartnership: configured("STRIPE_PRICE_STRATEGIC_PARTNERSHIP"),
+      foundingMember: configured("STRIPE_PRICE_FOUNDING_MEMBER"),
     },
     resendApiKey: configured("RESEND_API_KEY"),
     resendFromEmail: configured("RESEND_FROM_EMAIL"),
@@ -37,6 +38,7 @@ function missingConfig(config: PaymentConfig): string[] {
   if (!config.stripeSecretKey) missing.push("STRIPE_SECRET_KEY");
   if (!config.stripeWebhookSecret) missing.push("STRIPE_WEBHOOK_SECRET");
   if (!config.prices.bidNoBid) missing.push("STRIPE_BIDNOBID_PRICE_ID");
+  if (!config.prices.foundingMember) missing.push("STRIPE_PRICE_FOUNDING_MEMBER");
   if (!config.resendApiKey) missing.push("RESEND_API_KEY");
   if (!config.resendFromEmail) missing.push("RESEND_FROM_EMAIL");
   return missing;
