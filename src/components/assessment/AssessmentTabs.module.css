@@ -1,0 +1,212 @@
+/* Shared list / row / table primitives for all 5 tabs */
+
+.eyebrow {
+  font-family: var(--tp2-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--tp2-mute);
+  margin-bottom: 4px;
+}
+.eyebrowOnDark { composes: eyebrow; color: var(--tp2-accent); }
+
+.sectionTitle {
+  font-family: var(--tp2-display);
+  font-size: 36px;
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--tp2-ink);
+  margin: 4px 0 22px;
+}
+.sectionTitleSmall { composes: sectionTitle; font-size: 28px; margin-bottom: 12px; }
+
+/* ── Score tab ── */
+.scoreGrid {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 48px;
+}
+@media (max-width: 768px) {
+  .scoreGrid { grid-template-columns: 1fr; gap: 24px; padding: 0 18px; }
+}
+.heroRow { display: flex; align-items: baseline; gap: 12px; }
+.hero {
+  font-family: var(--tp2-display);
+  font-size: 152px;
+  font-weight: 400;
+  line-height: 0.85;
+  letter-spacing: -0.04em;
+  color: var(--tp2-ink);
+}
+.heroDenom { font-family: var(--tp2-display); font-size: 32px; color: var(--tp2-mute); }
+.deltaPos {
+  font-family: var(--tp2-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tp2-pos);
+  margin-top: 8px;
+}
+.summary { font-size: 14px; color: var(--tp2-ink-2); line-height: 1.5; margin: 8px 0 0; max-width: 480px; }
+.dimList { list-style: none; padding: 0; margin: 28px 0 0; border-top: 1px solid var(--tp2-rule); padding-top: 16px; }
+.dimRow {
+  display: grid;
+  grid-template-columns: 120px 1fr 40px;
+  gap: 14px;
+  padding: 9px 0;
+  border-bottom: 1px dashed var(--tp2-rule);
+  align-items: center;
+  font-size: 12.5px;
+  color: var(--tp2-ink);
+}
+.dimBar { position: relative; height: 2px; background: var(--tp2-paper-2); }
+.dimBar > span { position: absolute; inset: 0; }
+.dimVal { text-align: right; font-size: 12px; color: var(--tp2-ink); }
+
+.peekTable { background: #fff; border: 1px solid var(--tp2-rule); }
+.peekRow {
+  display: grid;
+  grid-template-columns: 1fr 38px 50px;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--tp2-rule);
+  align-items: center;
+}
+.peekRow:last-child { border-bottom: none; }
+.peekMeta { font-size: 10px; color: var(--tp2-mute); letter-spacing: 0.04em; margin-bottom: 2px; }
+.peekTitle { font-size: 12.5px; color: var(--tp2-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.peekFit { font-size: 12px; color: var(--tp2-ink); text-align: right; font-variant-numeric: tabular-nums; }
+.peekDl { font-size: 11px; color: var(--tp2-mute); text-align: right; }
+.peekDl[data-urgent="true"] { color: var(--tp2-neg); font-weight: 600; }
+
+.cta { margin-top: 22px; padding: 18px; background: var(--tp2-ink); color: var(--tp2-paper); }
+.ctaTitle { font-size: 15px; font-weight: 500; }
+.ctaPitch { font-size: 11.5px; color: #cdc6b3; margin: 4px 0 0; line-height: 1.5; }
+.ctaButton { margin-top: 10px; font-size: 11px; padding: 9px 16px; background: var(--tp2-paper); color: var(--tp2-ink); font-weight: 500; border: 0; cursor: pointer; }
+
+/* ── Gaps tab ── */
+.gapsGrid { display: grid; grid-template-columns: 1fr 320px; gap: 48px; }
+@media (max-width: 768px) { .gapsGrid { grid-template-columns: 1fr; gap: 24px; padding: 0 18px; } }
+.gapList { list-style: none; padding: 0; margin: 0; }
+.gapRow {
+  display: grid;
+  grid-template-columns: 60px 1fr 140px;
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid var(--tp2-rule);
+  align-items: baseline;
+}
+@media (max-width: 768px) {
+  .gapRow { grid-template-columns: 50px 1fr; }
+  .gapRow > button { grid-column: 1 / -1; justify-self: end; }
+}
+.sev {
+  font-family: var(--tp2-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 3px;
+  color: #fff;
+  text-align: center;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.sevHigh { background: var(--tp2-neg); }
+.sevMed  { background: var(--tp2-warn); }
+.sevLow  { background: var(--tp2-paper-2); color: var(--tp2-ink); }
+.gapTitle { font-size: 15px; color: var(--tp2-ink); font-weight: 600; margin-bottom: 4px; }
+.gapWhy   { font-size: 12.5px; color: var(--tp2-ink-2); line-height: 1.5; margin: 0 0 4px; }
+.gapFix   { font-size: 11px; color: var(--tp2-accent); letter-spacing: 0.04em; }
+.rowCta {
+  font-family: var(--tp2-mono);
+  font-size: 10.5px;
+  color: var(--tp2-ink);
+  border: 0;
+  border-bottom: 1px solid var(--tp2-ink);
+  background: transparent;
+  cursor: pointer;
+  justify-self: end;
+  letter-spacing: 0.08em;
+  padding: 0 0 2px;
+}
+.impactCard { background: #fff; border: 1px solid var(--tp2-rule); padding: 18px; }
+.impactRow { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--tp2-rule); font-size: 13px; color: var(--tp2-ink-2); }
+.impactDelta { color: var(--tp2-pos); }
+.impactCeiling { display: flex; justify-content: space-between; padding: 10px 0 4px; font-size: 13px; font-weight: 600; color: var(--tp2-ink); }
+
+/* ── Tenders / Grants tables ── */
+.tableHead { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+.filterBar { display: flex; gap: 8px; }
+.filterChip {
+  font-size: 10px;
+  padding: 6px 11px;
+  border: 1px solid var(--tp2-rule);
+  background: transparent;
+  color: var(--tp2-ink-2);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.filterChip[data-active="true"] {
+  border-color: var(--tp2-ink);
+  background: var(--tp2-ink);
+  color: var(--tp2-paper);
+}
+
+.gridHead {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--tp2-ink);
+  font-family: var(--tp2-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tp2-mute);
+}
+.gridRow {
+  padding: 11px 0;
+  border-bottom: 1px solid var(--tp2-rule);
+  align-items: baseline;
+  font-size: 12.5px;
+}
+.tendersGrid { display: grid; grid-template-columns: 150px 1fr 100px 80px 100px 90px; gap: 16px; }
+.grantsGrid  { display: grid; grid-template-columns: 200px 1fr 110px 130px 100px 80px; gap: 16px; }
+@media (max-width: 768px) {
+  .gridHead { display: none; }
+  .tendersGrid, .grantsGrid {
+    grid-template-columns: 1fr 60px;
+    grid-template-areas:
+      "ref dl"
+      "title fit";
+    row-gap: 4px;
+  }
+  .tendersGrid > :nth-child(3), .grantsGrid > :nth-child(4) { display: none; }
+}
+
+.refCell { color: var(--tp2-ink-2); font-size: 11px; }
+.cellMeta { font-size: 10px; color: var(--tp2-mute); margin-top: 2px; }
+.cellSecondary { color: var(--tp2-ink-2); }
+.fitCell { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; color: var(--tp2-ink); }
+.fitCell[data-strength="strong"] { color: var(--tp2-pos); }
+.fitCell[data-strength="weak"]   { color: var(--tp2-mute); font-weight: 400; }
+.dlCell { color: var(--tp2-mute); text-align: right; }
+.dlCell[data-urgent="true"] { color: var(--tp2-neg); font-weight: 600; }
+
+.funderCell { color: var(--tp2-ink); font-weight: 500; }
+.ceilingCell { text-align: right; color: var(--tp2-ink); }
+.eligCell { font-size: 10.5px; color: var(--tp2-ink-2); }
+.effortCell { text-align: right; color: var(--tp2-mute); font-size: 11px; }
+.eligibilityToggle { font-size: 10px; color: var(--tp2-mute); align-self: end; }
+.toggleActive { color: var(--tp2-ink); border-bottom: 1px solid var(--tp2-ink); }
+.note { margin-top: 24px; padding: 14px; background: var(--tp2-paper-2); font-size: 12px; color: var(--tp2-ink-2); }
+.noteTag { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--tp2-accent); margin-right: 10px; }
+
+/* ── Next steps ── */
+.nextGroup { display: grid; grid-template-columns: 150px 1fr; gap: 32px; padding: 18px 0; border-top: 1px solid var(--tp2-rule); }
+@media (max-width: 768px) { .nextGroup { grid-template-columns: 1fr; gap: 8px; padding: 0 18px; } }
+.nextWhen { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--tp2-accent); align-self: start; margin-top: 4px; }
+.nextItems { list-style: none; padding: 0; margin: 0; }
+.nextRow { display: grid; grid-template-columns: 1fr 90px 100px; gap: 16px; padding: 8px 0; border-bottom: 1px dashed var(--tp2-rule); align-items: baseline; }
+.nextRow:last-child { border-bottom: none; }
+.nextTitle { font-size: 14px; color: var(--tp2-ink); font-weight: 500; }
+.nextWhy   { font-size: 12px; color: var(--tp2-ink-2); margin-top: 2px; }
+.nextEta   { font-size: 11px; color: var(--tp2-mute); text-align: right; }

@@ -1,0 +1,25 @@
+/* TenderPath D2 — design tokens
+   Imported by src/app/globals.css */
+
+:root {
+  --tp2-ink:        #0f1620;
+  --tp2-ink-2:      #2b3543;
+  --tp2-paper:      #f6f3ec;
+  --tp2-paper-2:    #ece6d5;
+  --tp2-rule:       #d8d1bf;
+  --tp2-mute:       #6b6557;
+  --tp2-accent:     #9c6b1f;
+  --tp2-accent-2:   #c8973e;
+  --tp2-pos:        #1f6b3d;
+  --tp2-warn:       #b3691a;
+  --tp2-neg:        #9c2a2a;
+  --tp2-blue:       #1c3a5f;
+
+  --tp2-display: "Fraunces", "Playfair Display", Georgia, serif;
+  --tp2-sans:    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --tp2-mono:    "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+
+.tp-display { font-family: var(--tp2-display); font-optical-sizing: auto; }
+.tp-mono    { font-family: var(--tp2-mono); }
+.tp-tabular { font-variant-numeric: tabular-nums; }

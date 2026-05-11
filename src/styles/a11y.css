@@ -1,0 +1,54 @@
+/* TenderPath D2 — accessibility primitives */
+
+:root {
+  --tp2-mute:   #5a5447;
+  --tp2-accent: #a85636;
+}
+
+.tp2-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.tp2-skip-link {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 8px 12px;
+  background: var(--tp2-accent);
+  color: #fff;
+  font-family: var(--tp2-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  z-index: 9999;
+  transform: translateY(-200%);
+  transition: transform 120ms ease-out;
+}
+.tp2-skip-link:focus { transform: none; }
+
+:where(button, a, [role="tab"], [role="button"], input, select, textarea):focus-visible {
+  outline: 2px solid var(--tp2-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+[dir="rtl"] .tp2-tabbar { flex-direction: row-reverse; }
+[dir="rtl"] .tp2-dim-bar > span { left: auto; right: 0; }
+.tp2-num, .tp2-code, .tp2-url {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+@media (pointer: coarse) {
+  :where(button, a, [role="tab"], [role="button"]) {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}

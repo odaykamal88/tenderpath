@@ -1,0 +1,121 @@
+.chrome {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  font-family: var(--tp2-sans);
+  color: var(--tp2-ink);
+  background: var(--tp2-paper);
+  min-height: 100vh;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--tp2-ink);
+  margin-bottom: 18px;
+}
+.eyebrow {
+  font-family: var(--tp2-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--tp2-accent);
+  margin-bottom: 6px;
+}
+.title {
+  font-family: var(--tp2-display);
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  color: var(--tp2-ink);
+  margin: 0;
+}
+.actions {
+  display: flex;
+  gap: 16px;
+}
+.actions button,
+.actions a {
+  font-family: var(--tp2-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tp2-mute);
+  border: 0;
+  border-bottom: 1px solid var(--tp2-rule);
+  background: transparent;
+  cursor: pointer;
+  padding: 0 0 2px;
+  text-decoration: none;
+}
+
+.tabbar {
+  display: flex;
+  align-items: baseline;
+  border-bottom: 1px solid var(--tp2-rule);
+  margin-bottom: 22px;
+}
+.tab {
+  padding: 10px 20px 12px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  display: inline-flex;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--tp2-mute);
+  font-weight: 400;
+  font-size: 13px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.tabActive {
+  border-bottom-color: var(--tp2-ink);
+  color: var(--tp2-ink);
+  font-weight: 600;
+}
+.tabCount {
+  font-family: var(--tp2-mono);
+  font-size: 10px;
+  color: var(--tp2-mute);
+}
+.tabActive .tabCount { color: var(--tp2-accent); }
+.tabFooter {
+  margin-left: auto;
+  font-family: var(--tp2-mono);
+  font-size: 10px;
+  color: var(--tp2-mute);
+  letter-spacing: 0.08em;
+}
+
+.tabContent { min-height: 400px; }
+
+@media (max-width: 768px) {
+  .chrome { padding: 18px 0; }
+  .header { flex-direction: column; gap: 12px; padding: 0 18px 14px; }
+  .tabbar {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    border: 1px solid var(--tp2-rule);
+    background: #fff;
+    margin: 12px 18px 18px;
+  }
+  .tab {
+    padding: 8px 4px;
+    text-align: center;
+    border-right: 1px solid var(--tp2-rule);
+    border-bottom: none;
+    font-family: var(--tp2-mono);
+    font-size: 10px;
+    justify-content: center;
+  }
+  .tab:last-child { border-right: none; }
+  .tabActive {
+    background: var(--tp2-ink);
+    color: var(--tp2-paper);
+    border-bottom: none;
+  }
+  .tabFooter { display: none; }
+  .tabContent { padding: 0 18px; }
+}
