@@ -51,7 +51,10 @@ export async function sendProposalReadyEmail(args: ProposalReadyEmailArgs): Prom
     `— TenderPath`,
   ].filter(Boolean).join("\n");
 
-  await resend.emails.send({ from: fromAddress(), to: args.email, subject, text: body });
+  const { error } = await resend.emails.send({ from: fromAddress(), to: args.email, subject, text: body });
+  if (error) {
+    throw new Error(`Resend send rejected (proposal): ${error.message ?? JSON.stringify(error)}`);
+  }
 }
 
 export interface RosterReadyEmailArgs {
@@ -89,5 +92,8 @@ export async function sendRosterReadyEmail(args: RosterReadyEmailArgs): Promise<
     `— TenderPath`,
   ].filter(Boolean).join("\n");
 
-  await resend.emails.send({ from: fromAddress(), to: args.email, subject, text: body });
+  const { error } = await resend.emails.send({ from: fromAddress(), to: args.email, subject, text: body });
+  if (error) {
+    throw new Error(`Resend send rejected (roster): ${error.message ?? JSON.stringify(error)}`);
+  }
 }
