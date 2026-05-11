@@ -11,6 +11,7 @@ const PUBLIC_PATHS = new Set([
   "/api/webhooks/stripe",
   "/api/cron/sync-tenders",
   "/api/cron/crawl",
+  "/api/cron/grants",
   "/api/cron/weekly-digest",
   "/api/assessment/public",
   "/api/assessment/preview",
