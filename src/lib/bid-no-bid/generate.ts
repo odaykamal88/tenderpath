@@ -262,8 +262,9 @@ export async function generateBidNoBid({
 
     let pdfUrl: string | null = null;
     let pdfPathname: string | null = null;
+    let pdfBuffer: Buffer | null = null;
     try {
-      const pdfBuffer = await renderBidNoBidPdf({
+      pdfBuffer = await renderBidNoBidPdf({
         workOrderId: order.id,
         companyName: assessment?.company_name ?? order.email ?? "Vendor",
         tenderTitle: pipelineItem?.tender_title ?? order.tender_title,
@@ -279,7 +280,27 @@ export async function generateBidNoBid({
         workOrderId: order.id,
         error: err instanceof Error ? err.message : String(err),
       });
-      // PDF failure does not block storing the analysis — dashboard still renders.
+      // Render failure means no buffer. We'll fail the package below so the
+      // user sees an actionable Retry state and we never claim 'ready' without
+      // a deliverable artifact.
+    }
+
+    // No artifact at all → don't store as 'ready'. This protects against the
+    // historic silent-success state where status='ready' but pdf_url=null and
+    // no email fired.
+    if (!pdfBuffer) {
+      await markFailure({
+        workOrderId: order.id,
+        userId: order.user_id,
+        attempts,
+        errorMessage: "PDF render failed; analysis text was generated but no deliverable was produced.",
+        existingPackageId: existing?.id ?? null,
+      }).catch(() => {});
+      return {
+        ok: false,
+        attempts,
+        error: "PDF render failed",
+      };
     }
 
     const persisted = await upsertPackage({
@@ -298,8 +319,9 @@ export async function generateBidNoBid({
       existingPackageId: existing?.id ?? null,
     });
 
-    if (!silent && order.email && pdfUrl) {
-      // Best-effort: never let email failure roll back the generation.
+    if (!silent && order.email) {
+      // We have the PDF buffer — send the email regardless of whether Blob
+      // upload succeeded. If pdfUrl is null, the helper attaches the PDF.
       sendBidNoBidReadyEmail({
         email: order.email,
         workOrderId: order.id,
@@ -308,6 +330,7 @@ export async function generateBidNoBid({
         recommendation: output.recommendation,
         winProbabilityBand: output.win_probability_band,
         pdfUrl,
+        pdfBuffer: pdfUrl ? null : pdfBuffer,
       }).catch((err) => {
         console.error("[bid-no-bid:email_failed]", {
           workOrderId: order.id,
