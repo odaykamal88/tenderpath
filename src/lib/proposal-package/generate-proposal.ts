@@ -134,18 +134,23 @@ export async function generateProposalPackage({
     });
 
     if (!silent && order.email && zipUrl) {
-      sendProposalReadyEmail({
-        email: order.email,
-        workOrderId: order.id,
-        tenderTitle,
-        agency,
-        zipUrl,
-      }).catch((err) => {
+      // MUST await inside Vercel after() — see bid-no-bid generate.ts for
+      // detailed explanation. Fire-and-forget inside after() = lambda kills
+      // the in-flight Resend HTTP call and the email never sends.
+      try {
+        await sendProposalReadyEmail({
+          email: order.email,
+          workOrderId: order.id,
+          tenderTitle,
+          agency,
+          zipUrl,
+        });
+      } catch (err) {
         console.error("[proposal-draft:email_failed]", {
           workOrderId: order.id,
           error: err instanceof Error ? err.message : String(err),
         });
-      });
+      }
     }
 
     return { ok: true, packageId: persisted, output, zipUrl, attempts };

@@ -180,18 +180,23 @@ export async function generateRosterFastTrack({
     });
 
     if (!silent && order.email && zipUrl) {
-      sendRosterReadyEmail({
-        email: order.email,
-        workOrderId: order.id,
-        agencyLabel: agency.label,
-        portalUrl: agency.portalUrl,
-        zipUrl,
-      }).catch((err) => {
+      // MUST await inside Vercel after() — see bid-no-bid generate.ts for
+      // detailed explanation. Fire-and-forget inside after() = lambda kills
+      // the in-flight Resend HTTP call and the email never sends.
+      try {
+        await sendRosterReadyEmail({
+          email: order.email,
+          workOrderId: order.id,
+          agencyLabel: agency.label,
+          portalUrl: agency.portalUrl,
+          zipUrl,
+        });
+      } catch (err) {
         console.error("[roster-fast-track:email_failed]", {
           workOrderId: order.id,
           error: err instanceof Error ? err.message : String(err),
         });
-      });
+      }
     }
 
     return { ok: true, packageId: persisted, output, zipUrl, agency, attempts };
