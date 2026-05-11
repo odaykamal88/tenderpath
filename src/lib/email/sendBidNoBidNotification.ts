@@ -7,7 +7,14 @@ export interface BidReadyEmailArgs {
   agency: string | null;
   recommendation: "bid" | "no-bid" | "conditional";
   winProbabilityBand: string;
-  pdfUrl: string;
+  /**
+   * Public download URL on Vercel Blob. Provide when the upload succeeded so
+   * the user can re-download from the email + dashboard. Null when Blob is
+   * misconfigured — in that case `pdfBuffer` is the fallback delivery vector.
+   */
+  pdfUrl: string | null;
+  /** Render output. Attached to the email when `pdfUrl` is null. */
+  pdfBuffer?: Buffer | null;
 }
 
 function envValue(key: string): string | null {
@@ -39,6 +46,9 @@ export async function sendBidNoBidReadyEmail(args: BidReadyEmailArgs): Promise<v
     args.tenderTitle ?? `Work order #${args.workOrderId}`
   }`;
 
+  const dashboardUrl = `${appUrl}/dashboard/work-orders/${args.workOrderId}`;
+  const hasAttachment = !args.pdfUrl && !!args.pdfBuffer;
+
   const body = [
     `Your Bid/No-Bid analysis is ready.`,
     ``,
@@ -47,8 +57,12 @@ export async function sendBidNoBidReadyEmail(args: BidReadyEmailArgs): Promise<v
     ``,
     recommendationLine(args.recommendation, args.winProbabilityBand),
     ``,
-    `Download the PDF: ${args.pdfUrl}`,
-    `Review in your dashboard: ${appUrl}/dashboard/work-orders/${args.workOrderId}`,
+    args.pdfUrl
+      ? `Download the PDF: ${args.pdfUrl}`
+      : hasAttachment
+        ? `Your PDF is attached to this email.`
+        : null,
+    `Review in your dashboard: ${dashboardUrl}`,
     ``,
     `This analysis is generated automatically and surfaces the company-vs-tender fit, gaps, required documents, and the next concrete steps. If anything looks off, you can regenerate the analysis once from your dashboard, or reply to this email and we'll take a look.`,
     ``,
@@ -60,5 +74,15 @@ export async function sendBidNoBidReadyEmail(args: BidReadyEmailArgs): Promise<v
     to: args.email,
     subject,
     text: body,
+    ...(hasAttachment && args.pdfBuffer
+      ? {
+          attachments: [
+            {
+              filename: `bid-no-bid-${args.workOrderId}.pdf`,
+              content: args.pdfBuffer,
+            },
+          ],
+        }
+      : {}),
   });
 }
