@@ -322,21 +322,26 @@ export async function generateBidNoBid({
     if (!silent && order.email) {
       // We have the PDF buffer — send the email regardless of whether Blob
       // upload succeeded. If pdfUrl is null, the helper attaches the PDF.
-      sendBidNoBidReadyEmail({
-        email: order.email,
-        workOrderId: order.id,
-        tenderTitle: pipelineItem?.tender_title ?? order.tender_title,
-        agency: pipelineItem?.tender_agency ?? order.agency,
-        recommendation: output.recommendation,
-        winProbabilityBand: output.win_probability_band,
-        pdfUrl,
-        pdfBuffer: pdfUrl ? null : pdfBuffer,
-      }).catch((err) => {
+      // MUST await: inside a Vercel after() callback the lambda terminates
+      // when this function returns. A fire-and-forget promise gets its
+      // in-flight HTTP call cancelled mid-flight and the email never sends.
+      try {
+        await sendBidNoBidReadyEmail({
+          email: order.email,
+          workOrderId: order.id,
+          tenderTitle: pipelineItem?.tender_title ?? order.tender_title,
+          agency: pipelineItem?.tender_agency ?? order.agency,
+          recommendation: output.recommendation,
+          winProbabilityBand: output.win_probability_band,
+          pdfUrl,
+          pdfBuffer: pdfUrl ? null : pdfBuffer,
+        });
+      } catch (err) {
         console.error("[bid-no-bid:email_failed]", {
           workOrderId: order.id,
           error: err instanceof Error ? err.message : String(err),
         });
-      });
+      }
     }
 
     return {
