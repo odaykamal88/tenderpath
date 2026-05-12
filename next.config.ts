@@ -25,7 +25,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: turboRoot,
   },
-  serverExternalPackages: ["@anthropic-ai/sdk"],
+  serverExternalPackages: ["@anthropic-ai/sdk", "@sparticuz/chromium", "puppeteer-core"],
 };
 
 export default nextConfig;
