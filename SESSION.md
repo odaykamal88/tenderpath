@@ -2278,6 +2278,85 @@ Preserve `RawTender`, `CrawlResult`, `MatchedTender`, `proposal_packages`, `work
 - What remains: Sprint 5 (UX trust hardening: redesign /dashboard/page.tsx + add minimal funnel telemetry + diagnose Blob upload) and Sprint 6 (5-company assessment audit + classifier or sector-map fix).
 - What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/dashboard-architecture.md, docs/agents/assessment-architecture.md
 
+### Session Update
+- Agent: Claude Code (opus-4-7)
+- Date: 2026-05-12
+- Task Completed: Sprint 5 first cut — D2 dashboard alignment, service-intake simplification, work-order detail cleanup, assessment-completion email rebrand, scoring-prompt evidence rules, and wired the previously-dead "Email ↗" button on assessment results with a 3-per-24h rate limit. Commit `6a0aee4` pushed to `origin/claude/amazing-margulis-9493a4`; PR ready to open against `main` at https://github.com/odaykamal88/tenderpath/pull/new/claude/amazing-margulis-9493a4 (gh CLI not authenticated on this host).
+- Files Changed (17 files, +494/-221 from the single commit):
+  - **Dashboard alignment with D2 handoff (`handoff 2/app/dashboard/page.tsx` reference):**
+    - `src/app/dashboard/page.tsx` — replaced the 57-line stub with `<AssessmentChrome>` + 5-tab routing (Score / Gaps / Tenders / Grants / Next steps) + dark "This week" strip pinned above the tabs. Matches `/assessment/[id]` chrome so the dashboard surface IS the report. Empty-state redirects to `/assessment`; computing/failed redirects to `/assessment/[id]`.
+  - **Service intake simplification (per UX feedback):**
+    - `src/app/dashboard/services/ServiceIntakeForm.tsx` — bid-no-bid drops `main_concern` ("biggest concern"), renames upload label to "Upload your documents", adds an `additional_details` textarea. Proposal and lta-roster intakes reduced to required field (submission_deadline / target_agency) + `additional_details` only. Form now accepts `initialTenderUrl` prop and pre-fills the URL state.
+    - `src/app/dashboard/services/[service]/page.tsx` — reads `query.tender_url` and forwards it as `initialTenderUrl`. Digest service reframed as a subscription page (eyebrow "Subscription · $49/mo", lead emphasizes live subscription not one-off task, CTA "Subscribe · $49/mo").
+    - `src/app/dashboard/pipeline/page.tsx` — `serviceHref()` now appends `tender_url` query param (preferring `manual_source_url`, falling back to `source_url`) so checkout pages pre-fill the URL field instead of forcing re-paste.
+  - **Work order detail cleanup:**
+    - `src/app/dashboard/work-orders/[id]/page.tsx` — removed the "01 · Fulfillment progress" section entirely (4-step kanban bar + status-step helper). Renumbered Intake → 01 and Tender context → 02. "Back to work orders" link enlarged from 11px to 13px with underline border affordance.
+    - `src/app/dashboard/work-orders/[id]/BidNoBidPanel.tsx` / `ProposalPackagePanel.tsx` / `RosterWorkspacePanel.tsx` — dropped the now-orphaned "04 ·" section-number prefix (4 occurrences in each).
+  - **Landing/marketing polish:**
+    - `src/components/landing/Footer.tsx` — removed "Founder note" link from Resources column (placeholder content not ready).
+    - `src/lib/pricing.ts` — Founding Member tagline reframed: "Save 33% off the monthly plan — $390/yr vs $588/yr at $49/mo. Founding rate locked forever." (was "Lock in founding-member pricing before the list price rises to $59/mo.")
+    - `src/app/pay/page.tsx` — `← Home` nav link → `← Dashboard` (`href="/"` → `"/dashboard"`) so logged-in users don't bounce back to marketing during checkout.
+  - **Assessment completion email rebrand (`src/lib/email/sendAssessment.ts`):**
+    - Full HTML rewrite from dark slate (#0f172a / #1e293b / #fbbf24 amber) to paper-toned editorial brand: Fraunces serif headlines, IBM Plex Mono labels with letter-spacing, orange (#ea580c) accent, white cards on #fafaf7, INK/RULE design tokens matching the website. 580px max-width, all inline styles, branded header with `Tender·Path` mark + "Readiness report · {Company}" eyebrow, score card with /100 subscript, top-gap callout, top tenders with reason chips, recommended-services cards, single dark CTA button, branded footer ("TenderPath · Amman · Beirut").
+  - **Assessment scoring prompt — explicit evidence boundaries (`src/lib/assessment/analyze.ts`):**
+    - Added an "EVIDENCE RULES" block to the full-readiness prompt explicitly listing allowed evidence sources (public website, user description, structured input, uploaded docs) and forbidden penalty targets (audited financials, internal compliance policies, etc.). Instructs the model to score "unknown but plausible" near 50 when no signal exists, reserve <35 only for concrete negative signal, and frame missing-evidence gaps as "supply evidence of X" rather than "company lacks X". Target score range raised from 30–50 to 50–65 for companies with clear capability + light evidence.
+    - Default fallback `readiness_dimensions` raised from 20–30 → 40–50 (and `overall_score` from 24 → 46) so a parse failure no longer punishes the user with a 24/100.
+  - **Email resend — wire the previously dead button:**
+    - `src/app/api/assessment/[id]/resend-email/route.ts` (NEW) — `POST` endpoint, cookie/Bearer auth via `getUserFromRequest`, ownership check (`user.email === assessment.email` or `is_super_admin`), 3-per-24h rate limit per assessment via new `email_resend_log` table (lazy `CREATE TABLE IF NOT EXISTS` matching the existing `ensureAssessmentRuntimeColumns` pattern). 429 response includes `Retry-After` header + structured `code: "RATE_LIMITED"` + `retryAt` ISO timestamp. Calls `sendAssessmentEmail` with full report payload reconstructed from the DB row. `email_queue` ON CONFLICT upsert with plain-insert fallback if no unique index exists.
+    - `src/components/assessment/AssessmentActions.tsx` (NEW) — client island wrapping PDF link + Email button. Idle / sending / sent ✓ / error → "Retry email ↗" states with an inline toast (`role="status"`, `aria-live="polite"`). Sends `credentials: "include"` + Bearer token from `localStorage.tp_token` so both auth modes work. Auto-resets state after 4s on success.
+    - `src/components/assessment/AssessmentChrome.tsx` — replaced the inline `<a href="/api/report?id=X">PDF ↓</a><button>Email ↗</button><a href="/assessment">Run again →</a>` with `<AssessmentActions reportId={reportId} />`. Server component stays server, only the action area hydrates.
+    - `src/components/assessment/AssessmentChrome.module.css` — added hover/disabled states, toast colors (accent for sent, #b8463f for error, mute for sending), `flex-wrap` so the toast doesn't break layout.
+- Tests Run:
+  - `npx tsc --noEmit` clean after every patch (final pass after rate-limit logic landed).
+  - Browser preview (`localhost:55096` via `preview_start`) — verified landing changes: Footer no longer contains "Founder note", Founding Member tagline shows the new 33%-off framing, `/pay` nav reads "← Dashboard" (`navLabel: "← Dashboard", status: 200`).
+  - Resend endpoint compiles and routes: `POST /api/assessment/1/resend-email` returns `{"error":"Server configuration error", status: 500}` in preview (no DATABASE_URL set) — expected; confirms no syntax/import errors. No 4xx/5xx in the route handler itself.
+  - `/dashboard` redirects to `/login?next=%2Fdashboard` when no `tp_session` cookie — confirms auth gating intact.
+- Result: PR commit `6a0aee4` pushed. Not yet merged — `gh auth login` is unauthenticated on this host so the PR was not opened via CLI. User has the new-PR URL and a paste-ready title/body. Once merged, Vercel auto-deploys on push to main (per the 2026-05-02 entry).
+- Blockers:
+  - **PR not opened via CLI.** Solvable by either running `gh auth login` and re-prompting, or by clicking the GitHub URL and pasting the prepared body manually.
+  - **`email_queue` unique-index assumption.** The resend endpoint's `INSERT … ON CONFLICT (assessment_id)` requires a unique index on `email_queue.assessment_id`. If the index doesn't exist in prod, the route falls back to a plain `INSERT` (no functional break — just creates a duplicate pending row). One `\d email_queue` check on prod settles whether the index should be added. The fallback `.catch` guards against the error.
+  - **Email template untested live.** The new HTML compiles, but no real Resend send tested with the new template yet. 580px-max layout and inline styles should be safe across Gmail / Outlook / Apple Mail, but worth sending one to a test address before letting the next assessment finish.
+  - **Scoring prompt shift visible only on next assessment.** Existing assessment rows keep their old scores. The change affects fresh runs only. Worth running one through prod and checking the number lands where you expect before broadcasting.
+- Important Decisions:
+  - **Dashboard as report, not workflow page.** My first pass rebuilt `/dashboard` as an operational workflow page (quick-action tiles, recent work orders, deadlines strip). The D2 handoff (`handoff 2/app/dashboard/page.tsx`) explicitly defines the dashboard as the same five-tab chrome as `/assessment/[id]` with a "This week" strip above. Reverted to that direction. The sidebar layout already provides operational nav (pipeline / services / work-orders / vault); the main content area should be the trust moment, not duplicate nav.
+  - **Resend rate limit: 3 per 24h, sliding window per assessment.** Counts rows in `email_resend_log` where `requested_at >= NOW() - 24h`. The window slides off the oldest of the 3 most recent requests, so a user who sends 3 in quick succession gets one slot back ~24h later, not all at once. Admins (`is_super_admin`) bypass entirely. Per-assessment rather than per-user so a multi-assessment user isn't unfairly throttled.
+  - **`email_resend_log` is its own table, not piggybacked on `email_queue`.** `email_queue` has UPSERT semantics (one row per assessment, `attempts` increments), which makes "count resend requests in the last 24h" impossible to derive from it. A dedicated append-only log table is the cleanest answer.
+  - **Evidence rules in scoring prompt, not weighting refactor.** `score.ts` still weighs `financial_stability` at 25% of total (15% Financial Controls + 50% × 20% Grant Mgmt). The prompt change tells the model to default to neutral 50 rather than penalizing, which is the immediately shippable fix. Re-weighting the formula is a separate decision pending user input.
+  - **Email button rate-limit beats hard-cap-per-user.** A logged-in user who legitimately needs the report sent to a different inbox can DM support; the 3-per-24h cap is enough to defeat accidental hammering and refund disputes, not enough to block honest use.
+- Contracts or Interfaces Changed:
+  - **Additive only.** New `email_resend_log` table (id, assessment_id, requested_by_email, requested_at) created lazily on first hit. New `POST /api/assessment/:id/resend-email` route. `ServiceIntakeForm` now accepts optional `initialTenderUrl` prop.
+  - `RawTender`, `CrawlResult`, `MatchedTender`, `proposal_packages`, `work_orders`, `pipeline_items`, `assessments`, `email_queue` schemas unchanged.
+- Docs Updated: `SESSION.md` (this entry).
+- Next Recommended Task:
+  1. Open the PR via `gh auth login` then `gh pr create` (or click the URL), merge to main, watch Vercel deploy.
+  2. Send one assessment to a test address (e.g., `oday.kamal+test@gmail.com`); verify the new paper-toned email renders in Gmail / Outlook / Apple Mail and that the score lands in the new 50–65 range for a typical company.
+  3. Hit `Email ↗` 4× in a row on `/assessment/[id]`; confirm the 4th request returns 429 with `Retry-After`.
+  4. Confirm `email_queue.assessment_id` has a unique index in prod (`\d email_queue` in psql). If not, decide whether to add the index or accept the duplicate-row fallback.
+  5. If user wants, fold in: (a) Sprint 5's funnel telemetry (`funnel_events` table + `/api/telemetry/event` + sprinkled calls); (b) the Blob upload diagnostic from the 2026-05-12 Sprint 4 carryover; (c) reweight `score.ts` if the evidence-rules prompt change still leaves the formula tilted toward non-public dimensions.
+- Recommended Agent: Claude Code (Opus or Sonnet 4.6), or user direct review for the email-template visual.
+- Paste-Ready Next Prompt:
+
+```text
+Read SESSION.md (especially the 2026-05-12 Sprint 5 first-cut entry), AGENTS.md, docs/agents/dashboard-architecture.md, and docs/agents/assessment-architecture.md.
+
+PR `claude/amazing-margulis-9493a4` (commit 6a0aee4) is the latest Sprint 5 first cut: D2 dashboard, intake cleanup, work-order panel polish, assessment email rebrand, scoring-prompt evidence rules, and a wired Email-resend button with a 3-per-24h rate limit. It has not been merged yet — open the PR and merge once CI is green.
+
+After merge:
+1. Send one assessment to a fresh test inbox. Verify the paper-toned HTML email renders correctly in Gmail / Outlook / Apple Mail. Capture screenshots.
+2. Run one assessment for a real prospect company and confirm the score lands in 50–65 (not 30–40) when evidence is light. If still suppressed, propose either lowering financial_stability weight in src/lib/assessment/score.ts or making it conditional on uploaded financial evidence.
+3. Spam the Email ↗ button 4× on /assessment/[id] for the test assessment. Confirm the 4th returns 429 with a Retry-After header, and that the AssessmentActions toast surfaces the rate-limit error message.
+4. Check whether email_queue has a unique index on assessment_id in prod. If not, decide whether to add it (preferred) or live with the duplicate-row fallback.
+5. Then start Sprint 5 funnel telemetry: funnel_events table + POST /api/telemetry/event + call sites at assessment_started, assessment_completed, dashboard_landed, tender_clicked, paid_intent_clicked, payment_succeeded, deliverable_ready. Expose a /api/admin/funnel JSON endpoint so the daily-digest cron can include funnel counts.
+6. Investigate why [bid-no-bid:blob_upload_failed] persists despite the Blob store creation (likely token name/scope mismatch).
+
+Preserve RawTender, CrawlResult, MatchedTender, proposal_packages, work_orders, pipeline_items, assessments contracts. Update SESSION.md when finished.
+```
+
+### Short Resume State
+- What is now true: Sprint 5 first cut is committed and pushed (`6a0aee4` on `claude/amazing-margulis-9493a4`). Dashboard mirrors the D2 tabbed report. Service intake is simplified per UX direction. Work order detail no longer shows the fulfilment progress bar. Assessment-completion email is rebranded to the paper-toned editorial style. Scoring prompt has explicit evidence rules + raised neutral baseline. Previously-dead "Email ↗" button on `/assessment/[id]` now POSTs to `/api/assessment/:id/resend-email` with cookie/Bearer auth, ownership check, and a 3-per-24h rate limit. TypeScript passes; preview-verifiable landing changes are confirmed; auth-gated and DB-dependent paths compile and route correctly but need real prod data to fully validate. PR not yet merged.
+- What remains: Open + merge PR; live-test the new email template in inboxes; live-test the rate-limit and resend flow; confirm or add `email_queue.assessment_id` unique index; Sprint 5 funnel telemetry + Blob upload diagnostic; optional score weighting refactor.
+- What the next agent must read first: SESSION.md (this entry), AGENTS.md, docs/agents/dashboard-architecture.md, docs/agents/assessment-architecture.md
+
 ---
 
 The next agent must not infer progress from commits alone.  
