@@ -19,8 +19,12 @@ const PUBLIC_PATHS = new Set([
   "/api/telegram/webhook",
 ]);
 
+// Matches /api/assessment/{numeric-id} only — not subpaths like /pdf
+const PUBLIC_ASSESSMENT_POLL_RE = /^\/api\/assessment\/\d+$/;
+
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true;
+  if (PUBLIC_ASSESSMENT_POLL_RE.test(pathname)) return true;
   if (!pathname.startsWith("/api/") && !pathname.startsWith("/dashboard")) return true;
   return false;
 }
