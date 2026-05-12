@@ -56,25 +56,25 @@ const SERVICES: Record<ServiceSlug, ServiceConfig> = {
   digest: {
     slug: "digest",
     tierSlug: "grants-tenders-matching",
-    eyebrow: "Ongoing matching",
+    eyebrow: "Subscription · $49/mo",
     title: "Daily matched digest",
-    lead: "Keep the sourcing engine running after assessment. Tenderpath sends daily notifications when the crawler finds relevant matches, and a curated shortlist back into your dashboard workflow.",
+    lead: "A live subscription, not a one-off task. The crawler runs daily against your profile and emails you a scored shortlist of tenders and grants worth your time. Cancel anytime — no contract, no minimum term.",
     output: [
-      "Daily notifications when new matches are found",
-      "Scored shortlist with deadline and agency context",
-      "Fit reasons and caveats per opportunity",
-      "Reminder-ready shortlist for the dashboard workflow",
+      "Daily email when new matches are found (silent days stay silent)",
+      "Scored shortlist with deadline, agency, and value context",
+      "Fit reasons and caveats so you can skim or skip in seconds",
+      "Matches synced to your dashboard pipeline automatically",
     ],
     workflow: [
-      "Subscribe with the company account email",
-      "Tenderpath monitors matched sources daily against your assessment profile",
-      "New matches trigger an email notification on the next digest run",
-      "Use dashboard feedback to tune what stays relevant",
+      "Confirm preferences below (what to prioritize, what to skip)",
+      "Complete checkout — billing starts today, cancel anytime",
+      "First digest lands within 24 hours; daily after that when there's something to send",
+      "Use the dashboard to mark items relevant or not — the digest tunes itself",
     ],
-    deliverySla: "First digest within 24 hours; daily notifications of relevant matches",
-    intakePrompt: "Tell us what to prioritize and what to ignore — the more specific you are, the less noise gets into your digest.",
-    caveat: "Digest quality depends on a current company profile and clear preference feedback.",
-    cta: "Subscribe to digest",
+    deliverySla: "Billing starts on checkout. First digest within 24 hours. Cancel anytime from settings.",
+    intakePrompt: "Two short preferences sharpen your digest immediately. You can edit these anytime from settings — they take effect on the next run.",
+    caveat: "Digest quality depends on a current assessment profile and feedback. If your company profile shifts, re-run the assessment to keep matches accurate.",
+    cta: "Subscribe · $49/mo",
     sampleLines: [
       "Subject: TenderPath Digest — 4 new matches this week",
       "TOP MATCH: UNICEF Supply Division — Laboratory equipment procurement | Fit: 81% | Deadline: 12 May",
@@ -178,6 +178,7 @@ export default async function ServiceDetailPage({
     agency: firstValue(query.agency),
     pipelineItemId: firstValue(query.pipeline_item_id),
     docId: firstValue(query.doc_id),
+    tenderUrl: firstValue(query.tender_url),
   };
   const tier = TIERS.find((item) => item.slug === service.tierSlug);
   const hasContext = Boolean(context.tender || context.agency || context.pipelineItemId);
@@ -428,6 +429,7 @@ export default async function ServiceDetailPage({
             tenderTitle={context.tender}
             agency={context.agency}
             docId={context.docId}
+            initialTenderUrl={context.tenderUrl}
             label={service.cta}
           />
         </aside>

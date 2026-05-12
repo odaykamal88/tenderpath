@@ -144,7 +144,6 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
     return (
       <section className="rounded-md border-l-2 border-stone-300 bg-stone-50/60 p-5">
         <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
-          <span className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle" style={{ fontFamily: MONO }}>04 ·</span>
           Proposal package
         </h2>
         <p className="mt-2 text-[13px] text-stone-600">
@@ -164,7 +163,6 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
     return (
       <section className="rounded-md border-l-2 border-amber-600 bg-amber-50/40 p-5">
         <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
-          <span className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle" style={{ fontFamily: MONO }}>04 ·</span>
           Drafting your proposal…
         </h2>
         <p className="mt-2 text-[13px] text-stone-700">
@@ -179,7 +177,6 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
     return (
       <section className="rounded-md border-l-2 border-red-600 bg-red-50/40 p-5">
         <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
-          <span className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle" style={{ fontFamily: MONO }}>04 ·</span>
           Generation hit a snag
         </h2>
         <p className="mt-2 text-[13px] text-red-800">
@@ -209,8 +206,7 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
       <div className="p-5 border-b border-stone-100">
         <div className="flex items-baseline justify-between mb-4">
           <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
-            <span className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle" style={{ fontFamily: MONO }}>04 ·</span>
-            Proposal package
+              Proposal package
           </h2>
           {pkg.pdf_url && (
             <a

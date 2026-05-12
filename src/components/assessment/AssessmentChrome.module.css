@@ -35,6 +35,8 @@
 .actions {
   display: flex;
   gap: 16px;
+  align-items: baseline;
+  flex-wrap: wrap;
 }
 .actions button,
 .actions a {
@@ -50,6 +52,27 @@
   padding: 0 0 2px;
   text-decoration: none;
 }
+.actions button:hover,
+.actions a:hover {
+  color: var(--tp2-ink);
+  border-bottom-color: var(--tp2-ink);
+}
+.actions button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.actionToast {
+  font-family: var(--tp2-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 0;
+  white-space: nowrap;
+}
+.actionToast[data-state="sent"] { color: var(--tp2-accent); }
+.actionToast[data-state="error"] { color: #b8463f; }
+.actionToast[data-state="sending"] { color: var(--tp2-mute); }
 
 .tabbar {
   display: flex;
