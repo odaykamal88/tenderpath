@@ -321,6 +321,98 @@ Goal: prevent quality drift.
 - Assert expected classes of grants and caveats rather than brittle exact IDs.
 - Add crawler health smoke script that reports status, useful rows, metadata completeness, and likely root-cause class.
 
+## Wave 5A — Grant Miss Retrospective And Self-Learning Loop
+
+Goal: make obvious user-relevant grants surface without relying on manual dashboard entry as the normal path.
+
+Trigger case:
+
+- `https://aljumhuriya.net/ar/` should see the EU PROSPECT grant `185831PROSPECTSEN` / `EuropeAid/185831/DD/ACT/SY` as a strong grant match.
+- The opportunity is visible in the EU Funding & Tenders portal and has application material, but it is currently missed because:
+  - the EU importer excludes PROSPECT rows with SEDIA `type = 2`;
+  - the importer over-filters mixed/older programme periods;
+  - EU rows are stored as global by default, so Syria-specific evidence in the title/reference does not receive country priority;
+  - the company assessment crawler drops Cloudflare/JS-blocked 403 responses before browser fallback can run.
+
+Sprint 1 — Recover EU PROSPECT / EuropeAid grant coverage:
+
+- Include SEDIA `type = 2` rows in EU grant refresh when they are open/forthcoming calls for proposals.
+- Map `PROSPECTS` / `EuropeAid` references into first-class grant rows, preserving both `185831PROSPECTSEN` and `EuropeAid/185831/DD/ACT/SY`.
+- Derive country and region from clear evidence in identifier, title, and detail metadata (`SY` / Syria in this case).
+- Add themes for justice, freedom of expression, civil society, media, social cohesion, democracy, and human rights when present.
+- Capture attachment/document links from the stable official source path or browser-rendered page where available; store enough source provenance for dashboard trust and operator debugging.
+- Add a non-mutating smoke fixture asserting that `185831PROSPECTSEN` is imported with deadline, source URL, country/theme evidence, and non-empty application-document metadata when source access allows it.
+
+Sprint 2 — Fix blocked-site assessment fidelity:
+
+- Treat 403/503 anti-bot pages and "enable JavaScript/cookies" shells as browser-fallback candidates instead of failed static responses.
+- Add crawl diagnostics for blocked/static/browser/failed render path so assessment misses can be explained from logs.
+- Add an assessment regression fixture for Al Jumhuriya:
+  - expected org type: nonprofit / NGO / civil-society media organization;
+  - expected sectors/themes: media, journalism, freedom of expression, civil society, Syria;
+  - expected caveat if browser fallback fails: ask for user description and mark website evidence low-confidence.
+
+Sprint 3 — Match diagnosis for known-good pairs:
+
+- Add an operator script or admin action that accepts a company URL/profile plus an opportunity URL/reference and reports:
+  - whether the opportunity was ingested;
+  - which importer filter accepted or rejected it;
+  - stored grant fields and metadata quality;
+  - assessment crawl render method and detected sectors/themes/org type/countries;
+  - whether the grant entered `matchGrants()`;
+  - score components, caveats, final bucket, and the exact gate that dropped it.
+- Convert the Al Jumhuriya + `185831PROSPECTSEN` pair into a permanent regression case with an expected strong/direct grant outcome.
+
+Sprint 4 — Dashboard feedback as crawler intelligence:
+
+- Keep manual tender/grant entry as a recovery path, but treat every manually added source URL as a learning signal.
+- Add a weekly feedback miner that groups:
+  - manually entered pipeline items with source URLs;
+  - saved / pursuing / applied grants;
+  - not-relevant grants and tenders;
+  - assessments that completed with no matches;
+  - source URLs users paste into service intake forms.
+- For each cluster, classify the root cause:
+  - source not ingested;
+  - source ingested but detail fields too thin;
+  - company website crawl failed or under-classified;
+  - geography/org eligibility was misread;
+  - match gate too strict or too loose;
+  - dashboard rank/bucket hid an otherwise good match.
+- Produce weekly operator output with:
+  - top missed source domains;
+  - high-confidence missed opportunities to add to source backlog;
+  - false positives to suppress;
+  - regression fixture candidates;
+  - recommended crawler/enrichment/matcher patch list.
+- Promote repeated user-added official source URLs into crawler backlog before adding new aggregator sources.
+
+Weekly operating rhythm:
+
+- Run the learning loop every week before outreach/digest quality review.
+- Only auto-file code tasks from high-confidence patterns; ambiguous cases stay in an operator review queue.
+- After each implemented fix, add or update a regression fixture so the same miss cannot quietly recur.
+- Track impact as: imported rows recovered, strong matches recovered, false positives reduced, manual-add rate by source, and no-match assessment rate.
+
+Implemented so far:
+
+- EU Funding & Tenders importer now includes SEDIA `type = 2` PROSPECT rows and no longer excludes mixed programme-period records when deadline/status are open.
+- EU PROSPECT rows now preserve the public `PROSPECTS` reference as the grant key and source URL, derive explicit countries/regions from identifiers and title text, and enrich civil-society/media/governance themes from title evidence.
+- EU refresh/import now sorts mapped rows by deadline before applying the configured limit, so urgent PROSPECT rows are not clipped by unstable raw API ordering.
+- Company assessment crawl now treats anti-bot 403/429/503 JavaScript shells as browser-render candidates instead of dropping them before fallback.
+- Manual dashboard pipeline entries now persist `source_url`, giving the weekly learning loop real official-source URLs to mine.
+- Added `scripts/diagnose-grant-miss.ts` for known company/opportunity pair diagnosis.
+- Added `scripts/weekly-learning-review.ts` for the non-mutating weekly feedback/manual-addition learning report.
+- Updated the weekly Codex heartbeat automation to run the learning review.
+
+Validation:
+
+- `npx tsx -e "import { fetchEuFundingGrantByReference } from './src/lib/grants/eu-funding-tenders'; ..."` mapped `185831PROSPECTSEN` to Syria / MENA with civil-society, media, freedom-of-expression, social-cohesion, governance, and rule-of-law themes.
+- `npx tsx scripts/import-eu-funding-grants.ts --limit=8 --pages=1` now includes `EU_FT:185831PROSPECTSEN` in the earliest mapped future rows.
+- `npx tsx scripts/diagnose-grant-miss.ts` confirms SEDIA lookup succeeds and the local DB miss is currently ingestion/table state, not source absence.
+- `npx tsx scripts/weekly-learning-review.ts --days=7` ran and surfaced repeated `ec.europa.eu` work-order source URLs.
+- Targeted ESLint passed for the touched implementation and script files.
+
 ## Wave 6 — Dashboard Trust Polish
 
 Goal: make weak versus strong matches obvious to users.

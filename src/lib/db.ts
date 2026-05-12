@@ -198,6 +198,7 @@ export async function initializeDatabase() {
       tender_agency VARCHAR(200),
       tender_deadline DATE,
       tender_value VARCHAR(100),
+      source_url TEXT,
       fit_score INTEGER DEFAULT 0,
       stage VARCHAR(32) NOT NULL DEFAULT 'matched',
       position INTEGER DEFAULT 0,
@@ -206,6 +207,7 @@ export async function initializeDatabase() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+  await sql`ALTER TABLE pipeline_items ADD COLUMN IF NOT EXISTS source_url TEXT`;
   await sql`
     CREATE INDEX IF NOT EXISTS pipeline_items_user_tender_idx
     ON pipeline_items (user_id, tender_id)

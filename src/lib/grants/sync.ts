@@ -133,18 +133,19 @@ async function loadEuGrants(options: Required<Pick<GrantRefreshOptions, "euLimit
   const byRef = new Map<string, EuFundingGrant>();
   let scanned = 0;
 
-  for (let page = 1; page <= options.euPages && byRef.size < options.euLimit; page++) {
+  for (let page = 1; page <= options.euPages; page++) {
     const batch = await fetchEuFundingGrants(options.euPageSize, page);
     scanned += batch.totalResults;
     for (const grant of batch.grants) {
-      if (byRef.size >= options.euLimit) break;
       byRef.set(grant.reference_id, grant);
     }
     if (page * options.euPageSize >= batch.totalResults) break;
   }
 
   return {
-    grants: [...byRef.values()].sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? "")),
+    grants: [...byRef.values()]
+      .sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? ""))
+      .slice(0, options.euLimit),
     scanned,
   };
 }

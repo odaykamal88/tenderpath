@@ -1,4 +1,5 @@
 import { normalizeSector, type SectorSlug } from "@/lib/crawlers/sector-map";
+import { ALL_COUNTRIES } from "@/lib/countries";
 
 export type EuFundingGrant = {
   reference_id: string;
@@ -34,6 +35,13 @@ type SearchResponse = {
 const SEARCH_URL = "https://api.tech.ec.europa.eu/search-api/prod/rest/search";
 const SOURCE_NAME = "EU Funding & Tenders" as const;
 const PORTAL_BASE = "https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/";
+const PROSPECT_BASE = "https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/prospect-details/";
+const REGION_NAMES = typeof Intl !== "undefined" && "DisplayNames" in Intl
+  ? new Intl.DisplayNames(["en"], { type: "region" })
+  : null;
+const COUNTRY_CANONICAL = new Map(ALL_COUNTRIES.map((row) => [row.country.toLowerCase(), row.country]));
+COUNTRY_CANONICAL.set("syrian arab republic", "Syria");
+const COUNTRY_REGION = new Map(ALL_COUNTRIES.map((row) => [row.country, row.region]));
 
 const THEME_MAP: Array<[RegExp, string[]]> = [
   [/\b(agricultur|rural|food|farm|crop|bioeconomy)\b/i, ["agriculture", "food security", "rural development"]],
@@ -44,6 +52,8 @@ const THEME_MAP: Array<[RegExp, string[]]> = [
   [/\b(digital|data|cyber|artificial intelligence|\bai\b|software|technology|innovation|ict)\b/i, ["digital", "technology", "innovation", "data"]],
   [/\b(education|skills|training|youth|erasmus|learning)\b/i, ["education", "training", "youth", "skills"]],
   [/\b(governance|democracy|rights|civil society|rule of law|justice)\b/i, ["governance", "civil society", "rule of law"]],
+  [/\b(freedom of expression|media|journalis|independent press|information integrity|disinformation)\b/i, ["civil society", "media", "freedom of expression"]],
+  [/\b(social cohesion|peacebuilding|reconciliation|community dialogue)\b/i, ["civil society", "social cohesion", "peacebuilding"]],
   [/\b(security|defence|defense|conflict|peace|border)\b/i, ["security", "peacebuilding", "protection"]],
 ];
 
@@ -129,7 +139,7 @@ function eligibleOrgTypesFor(text: string): string[] {
   if (/\b(sme|small and medium|enterprise|startup|start-up|company|companies|business|private sector|industry|innovation action|cascade funding|financial support to third parties|eic)\b/i.test(text)) {
     orgs.push("company");
   }
-  if (/\b(non-profit|nonprofit|ngo|civil society|association|foundation|community|volunteer|humanitarian|quality label)\b/i.test(text)) {
+  if (/\b(non-profit|nonprofit|ngo|civil society|association|foundation|community|volunteer|humanitarian|quality label|freedom of expression|social cohesion|human rights|rule of law|justice|democracy)\b/i.test(text)) {
     orgs.push("NGO");
   }
   if (/\b(research|university|academic|horizon|doctoral|science|scientific|laborator|institute)\b/i.test(text)) {
@@ -144,12 +154,62 @@ function eligibleOrgTypesFor(text: string): string[] {
   return unique(orgs.length ? orgs : DEFAULT_EU_ELIGIBILITY);
 }
 
-function sourceUrl(meta: Record<string, string[] | undefined> | undefined, result: SearchResult, identifier: string): string {
+function isProspectReference(value: string | null | undefined): boolean {
+  return /PROSPECTS[A-Z]{2,}/i.test(value ?? "");
+}
+
+function prospectReference(meta: Record<string, string[] | undefined> | undefined, result: SearchResult): string | null {
+  const candidates = [
+    result.reference,
+    first(meta, "REFERENCE"),
+    first(meta, "reference"),
+  ];
+  return candidates.find(isProspectReference) ?? null;
+}
+
+function rowReferenceId(meta: Record<string, string[] | undefined> | undefined, result: SearchResult, identifier: string): string {
+  return prospectReference(meta, result) ?? identifier;
+}
+
+function sourceUrl(
+  meta: Record<string, string[] | undefined> | undefined,
+  result: SearchResult,
+  identifier: string,
+): string {
+  const prospectRef = prospectReference(meta, result);
+  if (prospectRef) return `${PROSPECT_BASE}${encodeURIComponent(prospectRef)}`;
+
   const url = first(meta, "url") ?? first(meta, "esST_URL") ?? result.url;
   if (url?.includes("/data/topicDetails/")) {
     return `${PORTAL_BASE}${encodeURIComponent(identifier)}`;
   }
   return url ?? `${PORTAL_BASE}${encodeURIComponent(identifier)}`;
+}
+
+function canonicalCountry(value: string | null | undefined): string | null {
+  const clean = value?.trim();
+  if (!clean) return null;
+  return COUNTRY_CANONICAL.get(clean.toLowerCase()) ?? null;
+}
+
+function countryFromIso2(code: string | null | undefined): string | null {
+  if (!code || !/^[A-Z]{2}$/i.test(code)) return null;
+  const display = REGION_NAMES?.of(code.toUpperCase()) ?? null;
+  return canonicalCountry(display) ?? null;
+}
+
+function countriesFor(text: string, identifier: string): string[] {
+  const countries: string[] = [];
+  const identifierCountry = countryFromIso2(identifier.match(/\/([A-Z]{2})$/i)?.[1]);
+  if (identifierCountry) countries.push(identifierCountry);
+
+  for (const { country } of ALL_COUNTRIES) {
+    const escaped = country.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`\\b${escaped}\\b`, "i").test(text)) countries.push(country);
+  }
+  if (/\bSyrian Arab Republic\b/i.test(text)) countries.push("Syria");
+
+  return unique(countries);
 }
 
 function toGrant(result: SearchResult): EuFundingGrant | null {
@@ -168,24 +228,29 @@ function toGrant(result: SearchResult): EuFundingGrant | null {
   const primarySlugs = normalizeSector(categoryText, title, "");
   const fallbackSlugs = normalizeSector("", title, description);
   const sector = primarySlugs[0] ?? fallbackSlugs[0] ?? null;
+  const countryMatches = countriesFor(`${title} ${description} ${identifier}`, identifier);
+  const country = countryMatches.length === 1 ? countryMatches[0] : countryMatches.length > 1 ? null : "Global";
+  const matchedRegions = unique(countryMatches.map((c) => COUNTRY_REGION.get(c)));
+  const region = matchedRegions.length === 1 ? matchedRegions[0] : countryMatches.length > 1 ? "Multi-country" : "Global";
   const themes = unique([
     ...themesFor(text),
     ...actionTypes,
     programme,
   ]);
   const eligibleOrgTypes = eligibleOrgTypesFor(text);
+  const referenceId = rowReferenceId(meta, result, identifier);
 
   return {
-    reference_id: `EU_FT:${identifier}`,
+    reference_id: `EU_FT:${referenceId}`,
     title,
     agency: "European Commission",
     deadline,
     sector,
     themes,
     eligible_org_types: eligibleOrgTypes,
-    countries: ["Global"],
-    country: "Global",
-    region: "Global",
+    countries: countryMatches.length ? countryMatches : ["Global"],
+    country,
+    region,
     description: description.length >= 80 ? description : null,
     value_range: null,
     source_name: SOURCE_NAME,
@@ -212,9 +277,8 @@ export async function fetchEuFundingGrants(pageSize = 100, pageNumber = 1): Prom
   appendJson(form, "query", {
     bool: {
       must: [
-        { terms: { type: ["1", "8"] } },
+        { terms: { type: ["1", "2", "8"] } },
         { terms: { status: ["31094501", "31094502"] } },
-        { term: { programmePeriod: "2021 - 2027" } },
       ],
     },
   });
@@ -240,4 +304,44 @@ export async function fetchEuFundingGrants(pageSize = 100, pageNumber = 1): Prom
     grants: (data.results ?? []).map(toGrant).filter((g): g is EuFundingGrant => !!g),
     totalResults: data.totalResults ?? 0,
   };
+}
+
+export async function fetchEuFundingGrantByReference(reference: string): Promise<EuFundingGrant | null> {
+  const url = new URL(SEARCH_URL);
+  url.searchParams.set("apiKey", "SEDIA");
+  url.searchParams.set("text", reference);
+  url.searchParams.set("pageSize", "10");
+  url.searchParams.set("pageNumber", "1");
+
+  const form = new FormData();
+  appendJson(form, "query", {
+    bool: {
+      must: [
+        { terms: { status: ["31094501", "31094502"] } },
+      ],
+    },
+  });
+  appendJson(form, "languages", ["en"]);
+  appendJson(form, "displayFields", [
+    "type", "identifier", "reference", "callccm2Id", "title", "status",
+    "caName", "startDate", "deadlineDate", "description", "frameworkProgramme",
+    "programmePeriod", "typesOfAction", "url",
+  ]);
+
+  const response = await fetch(url, {
+    method: "POST",
+    body: form,
+    headers: {
+      accept: "application/json",
+      "user-agent": "Tenderpath EU grant import (+https://tenderpath.me)",
+    },
+  });
+  if (!response.ok) throw new Error(`EU Funding & Tenders reference lookup failed: HTTP ${response.status}`);
+  const data = await response.json() as SearchResponse;
+  return (data.results ?? [])
+    .map(toGrant)
+    .find((grant): grant is EuFundingGrant => !!grant && (
+      grant.reference_id.toLowerCase().includes(reference.toLowerCase())
+      || grant.source_url.toLowerCase().includes(reference.toLowerCase())
+    )) ?? null;
 }

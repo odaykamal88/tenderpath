@@ -9,10 +9,18 @@ function isStage(v: unknown): v is Stage {
   return typeof v === "string" && (STAGES as readonly string[]).includes(v);
 }
 
+let pipelineColumnsEnsured = false;
+async function ensurePipelineColumns() {
+  if (pipelineColumnsEnsured) return;
+  await sql`ALTER TABLE pipeline_items ADD COLUMN IF NOT EXISTS source_url TEXT`;
+  pipelineColumnsEnsured = true;
+}
+
 export async function GET(request: Request) {
   const guard = await requireDashboardAccess(request);
   if (!guard.authorized) return guard.response!;
 
+  await ensurePipelineColumns();
   const userId = guard.user!.id;
   const { searchParams } = new URL(request.url);
   const stageFilter = searchParams.get("stage");
@@ -46,9 +54,10 @@ export async function GET(request: Request) {
   const rows = await sql`
     SELECT
       pi.id, pi.tender_id, pi.tender_title, pi.tender_agency, pi.tender_deadline,
-      pi.tender_value, pi.fit_score, pi.stage, pi.position, pi.notes, pi.match_reasons,
+      pi.tender_value, pi.source_url AS manual_source_url, pi.fit_score, pi.stage, pi.position, pi.notes, pi.match_reasons,
       pi.assessment_id, pi.updated_at,
-      t.source_name, t.source_url, t.opportunity_type, t.sector AS tender_sector,
+      t.source_name, COALESCE(t.source_url, pi.source_url) AS source_url,
+      t.opportunity_type, t.sector AS tender_sector,
       t.created_at AS tender_created_at, t.updated_at AS tender_updated_at,
       t.has_broken_link,
       COALESCE(pi.tender_value, t.estimated_value) AS display_value
@@ -84,6 +93,7 @@ export async function POST(request: Request) {
   const guard = await requireDashboardAccess(request);
   if (!guard.authorized) return guard.response!;
 
+  await ensurePipelineColumns();
   const body = await request.json();
   const {
     tender_id = null,
@@ -96,6 +106,7 @@ export async function POST(request: Request) {
     stage = "matched",
     notes = null,
     match_reasons = null,
+    source_url = null,
   } = body ?? {};
 
   if (!tender_title || typeof tender_title !== "string") {
@@ -135,6 +146,7 @@ export async function POST(request: Request) {
         tender_agency = COALESCE(${tender_agency}, tender_agency),
         tender_deadline = COALESCE(${tender_deadline}, tender_deadline),
         tender_value = COALESCE(${tender_value}, tender_value),
+        source_url = COALESCE(${source_url}, source_url),
         fit_score = GREATEST(fit_score, ${fit_score}),
         stage = CASE
           WHEN stage = 'matched' THEN ${stage}
@@ -162,11 +174,11 @@ export async function POST(request: Request) {
   const rows = await sql`
     INSERT INTO pipeline_items
       (user_id, tender_id, assessment_id, tender_title, tender_agency, tender_deadline,
-       tender_value, fit_score, stage, notes, match_reasons)
+       tender_value, source_url, fit_score, stage, notes, match_reasons)
     VALUES
       (${guard.user!.id}, ${tender_id}, ${assessment_id},
        ${tender_title}, ${tender_agency},
-       ${tender_deadline}, ${tender_value}, ${fit_score}, ${stage}, ${notes},
+       ${tender_deadline}, ${tender_value}, ${source_url}, ${fit_score}, ${stage}, ${notes},
        ${matchReasonsJson}::jsonb)
     RETURNING *
   `;

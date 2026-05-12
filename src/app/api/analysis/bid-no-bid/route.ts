@@ -104,7 +104,7 @@ export async function POST(request: Request) {
   const pipelineRows = await sql`
     SELECT
       pi.id, pi.tender_id, pi.tender_title, pi.tender_agency,
-      pi.tender_deadline, pi.tender_value,
+      pi.tender_deadline, pi.tender_value, pi.source_url AS manual_source_url,
       t.description AS t_description,
       t.source_name,
       t.opportunity_type,
@@ -131,6 +131,7 @@ export async function POST(request: Request) {
     item.sector ? `Sector/Category: ${item.sector}` : null,
     item.tender_value ? `Estimated Value: ${item.tender_value}` : null,
     item.tender_deadline ? `Deadline: ${item.tender_deadline}` : null,
+    (item.t_source_url ?? item.manual_source_url) ? `Source URL: ${item.t_source_url ?? item.manual_source_url}` : null,
     item.t_description ? `\nDescription:\n${item.t_description}` : null,
     item.eligibility_summary ? `\nEligibility:\n${item.eligibility_summary}` : null,
   ].filter(Boolean).join("\n");

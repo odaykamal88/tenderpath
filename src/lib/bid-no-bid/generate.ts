@@ -54,6 +54,7 @@ interface PipelineRow {
   tender_agency: string | null;
   tender_deadline: string | null;
   tender_value: string | null;
+  manual_source_url: string | null;
   t_description: string | null;
   source_name: string | null;
   opportunity_type: string | null;
@@ -110,7 +111,7 @@ async function loadPipelineItem(pipelineItemId: number | null): Promise<Pipeline
   const rows = await sql`
     SELECT
       pi.id, pi.tender_id, pi.tender_title, pi.tender_agency,
-      pi.tender_deadline, pi.tender_value,
+      pi.tender_deadline, pi.tender_value, pi.source_url AS manual_source_url,
       t.description AS t_description,
       t.source_name,
       t.opportunity_type,
@@ -126,22 +127,25 @@ async function loadPipelineItem(pipelineItemId: number | null): Promise<Pipeline
 }
 
 function buildTenderText(order: WorkOrderRow, pipelineItem: PipelineRow | null): string {
+  const intakeContext = order.intake?.tender_context;
+  const torText = typeof intakeContext === "string" ? intakeContext : "";
+
   if (pipelineItem) {
+    const sourceUrl = pipelineItem.t_source_url ?? pipelineItem.manual_source_url ?? order.tender_url;
     return [
       `Title: ${pipelineItem.tender_title ?? order.tender_title ?? "Unknown"}`,
       (pipelineItem.tender_agency ?? order.agency) && `Agency: ${pipelineItem.tender_agency ?? order.agency}`,
       pipelineItem.source_name && `Source: ${pipelineItem.source_name}`,
+      sourceUrl && `Source URL: ${sourceUrl}`,
       pipelineItem.opportunity_type && `Opportunity type: ${pipelineItem.opportunity_type}`,
       pipelineItem.sector && `Sector: ${pipelineItem.sector}`,
       pipelineItem.tender_value && `Estimated value: ${pipelineItem.tender_value}`,
       pipelineItem.tender_deadline && `Deadline: ${pipelineItem.tender_deadline}`,
       pipelineItem.t_description && `\nDescription:\n${pipelineItem.t_description}`,
       pipelineItem.eligibility_summary && `\nEligibility:\n${pipelineItem.eligibility_summary}`,
+      torText && `\nPasted requirements:\n${torText}`,
     ].filter(Boolean).join("\n");
   }
-
-  const intakeContext = order.intake?.tender_context;
-  const torText = typeof intakeContext === "string" ? intakeContext : "";
 
   return [
     order.tender_title && `Title: ${order.tender_title}`,

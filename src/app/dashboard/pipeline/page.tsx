@@ -73,6 +73,8 @@ interface PipelineItem {
   notes: string | null;
   match_reasons: MatchReason | null;
   assessment_id: number | null;
+  manual_source_url?: string | null;
+  source_url?: string | null;
 }
 
 const UN_AGENCIES = [

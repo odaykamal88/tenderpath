@@ -44,6 +44,18 @@ interface FetchResult {
   finalUrl: string;
 }
 
+function isBrowserFallbackStatus(status: number): boolean {
+  return status === 403 || status === 429 || status === 503;
+}
+
+function isBrowserFallbackShell(html: string): boolean {
+  const text = html.toLowerCase();
+  return text.includes("enable javascript and cookies")
+    || text.includes("just a moment")
+    || text.includes("cf-browser-verification")
+    || text.includes("cloudflare");
+}
+
 /**
  * Returns false for inputs that are clearly not valid domain-like strings,
  * preventing pointless retry loops for garbage input.
@@ -149,11 +161,15 @@ async function fetchPage(url: string): Promise<FetchResult | null> {
 
     clearTimeout(timeout);
 
-    if (!res.ok) return null;
     const ct = res.headers.get("content-type") ?? "";
     if (!ct.includes("text/html") && !ct.includes("application/xhtml")) return null;
 
-    return { html: await res.text(), finalUrl: res.url };
+    const html = await res.text();
+    if (!res.ok && !(isBrowserFallbackStatus(res.status) && isBrowserFallbackShell(html))) {
+      return null;
+    }
+
+    return { html, finalUrl: res.url };
   } catch {
     return null;
   }
@@ -257,16 +273,19 @@ async function fetchViaBrowserWorker(url: string): Promise<FetchResult | null> {
       return null;
     });
 
-  const timeoutPromise = new Promise<null>((resolve) =>
-    setTimeout(() => {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<null>((resolve) => {
+    timeout = setTimeout(() => {
       console.warn(
         `[crawl] Browser worker timed out after ${BROWSER_FALLBACK_TIMEOUT_MS}ms for ${url}`
       );
       resolve(null);
-    }, BROWSER_FALLBACK_TIMEOUT_MS)
-  );
+    }, BROWSER_FALLBACK_TIMEOUT_MS);
+  });
 
-  return Promise.race([fetchPromise, timeoutPromise]);
+  const result = await Promise.race([fetchPromise, timeoutPromise]);
+  if (timeout) clearTimeout(timeout);
+  return result;
 }
 
 function extractMeta(html: string) {

@@ -81,18 +81,18 @@ async function main() {
   const byRef = new Map<string, EuFundingGrant>();
   let totalResults = 0;
 
-  for (let page = 1; page <= requestedPages && byRef.size < limit; page++) {
+  for (let page = 1; page <= requestedPages; page++) {
     const batch = await fetchEuFundingGrants(pageSize, page);
     totalResults = batch.totalResults;
     for (const grant of batch.grants) {
-      if (byRef.size >= limit) break;
       byRef.set(grant.reference_id, grant);
     }
     if (page * pageSize >= batch.totalResults) break;
   }
 
   const grants = [...byRef.values()]
-    .sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? ""));
+    .sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? ""))
+    .slice(0, limit);
 
   console.log(`EU Funding & Tenders import ${write ? "write" : "dry-run"}`);
   console.log(`SEDIA total results: ${totalResults}`);
