@@ -12,6 +12,7 @@ interface ServiceIntakeFormProps {
   tenderTitle?: string | null;
   agency?: string | null;
   docId?: string | null;
+  initialTenderUrl?: string | null;
   label: string;
 }
 
@@ -20,8 +21,8 @@ const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
 const SERVICE_FIELDS: Record<ServiceSlug, Array<{ key: string; label: string; placeholder: string; required?: boolean; rows?: number }>> = {
   "bid-no-bid": [
     { key: "decision_deadline", label: "When do you need the decision?", placeholder: "e.g. Tomorrow, before the Friday bid meeting" },
-    { key: "main_concern", label: "What is your biggest concern?", placeholder: "e.g. Eligibility, references, pricing, deadline, required documents" },
     { key: "tender_context", label: "Paste eligibility or evaluation criteria", placeholder: "Copy the key requirements from the TOR, RFP, or tender notice — the more specific, the sharper the analysis", rows: 6 },
+    { key: "additional_details", label: "Additional details we should know", placeholder: "Anything else that would help sharpen the analysis — competitive concerns, partner constraints, timeline pressure", rows: 3 },
   ],
   digest: [
     { key: "focus", label: "What should the digest prioritize?", placeholder: "Countries, agencies, sectors, contract types, or exclusions" },
@@ -29,13 +30,11 @@ const SERVICE_FIELDS: Record<ServiceSlug, Array<{ key: string; label: string; pl
   ],
   proposal: [
     { key: "submission_deadline", label: "Submission deadline", placeholder: "Date/time and timezone if known", required: true },
-    { key: "submission_channel", label: "Submission channel", placeholder: "Portal, email, e-tendering system, or unknown" },
-    { key: "package_notes", label: "What should the proposal package account for?", placeholder: "Compliance concerns, required sections, pricing notes, partner roles" },
+    { key: "additional_details", label: "Additional details we should know", placeholder: "Compliance concerns, required sections, pricing notes, partner roles, or anything else we should account for", rows: 4 },
   ],
   "lta-roster": [
     { key: "target_agency", label: "Target agency or roster", placeholder: "e.g. WFP logistics LTA, UNICEF vendor registration", required: true },
-    { key: "current_status", label: "Current registration status", placeholder: "Not registered, profile started, submitted before, active vendor, unknown" },
-    { key: "category", label: "Product/service category", placeholder: "What category should the roster/LTA package target?" },
+    { key: "additional_details", label: "Additional details we should know", placeholder: "Current registration status, product/service category, or anything specific to this application", rows: 4 },
   ],
 };
 
@@ -69,10 +68,11 @@ export default function ServiceIntakeForm({
   tenderTitle,
   agency,
   docId,
+  initialTenderUrl,
   label,
 }: ServiceIntakeFormProps) {
   const router = useRouter();
-  const [tenderUrl, setTenderUrl] = useState("");
+  const [tenderUrl, setTenderUrl] = useState(initialTenderUrl ?? "");
   const [fields, setFields] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -173,7 +173,7 @@ export default function ServiceIntakeForm({
   const requiresPipeline = service === "bid-no-bid" && !pipelineItemId;
 
   const uploadLabel: Record<ServiceSlug, string> = {
-    "bid-no-bid": "Upload TOR or eligibility criteria · optional",
+    "bid-no-bid": "Upload your documents",
     "proposal": "Upload TOR / RFP / call document",
     "lta-roster": "Upload vendor guide / call for applications",
     "digest": "",

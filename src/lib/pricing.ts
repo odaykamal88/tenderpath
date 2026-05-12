@@ -105,7 +105,7 @@ export const TIERS: Tier[] = [
     price: "$390",
     billingPeriod: "/yr",
     billingNote: "locked rate forever — first 100 only",
-    tagline: "Lock in founding-member pricing before the list price rises to $59/mo.",
+    tagline: "Save 33% off the monthly plan — $390/yr vs $588/yr at $49/mo. Founding rate locked forever.",
     description: "Everything in Grants + Tenders Matching, billed annually at the founding rate. First 100 subscribers keep this price permanently.",
     features: [
       "Everything in Grants + Tenders Matching",

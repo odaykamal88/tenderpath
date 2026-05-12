@@ -204,7 +204,6 @@ export default function RosterWorkspacePanel({ workOrderId, paymentStatus, initi
     return (
       <section className="rounded-md border-l-2 border-stone-300 bg-stone-50/60 p-5">
         <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
-          <span className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle" style={{ fontFamily: MONO }}>04 ·</span>
           Roster workspace
         </h2>
         <p className="mt-2 text-[13px] text-stone-600">
@@ -221,7 +220,6 @@ export default function RosterWorkspacePanel({ workOrderId, paymentStatus, initi
     return (
       <section className="rounded-md border-l-2 border-amber-600 bg-amber-50/40 p-5">
         <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
-          <span className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle" style={{ fontFamily: MONO }}>04 ·</span>
           Pick your target agency
         </h2>
         <p className="mt-2 text-[13px] text-stone-700">
@@ -279,7 +277,6 @@ export default function RosterWorkspacePanel({ workOrderId, paymentStatus, initi
     return (
       <section className="rounded-md border-l-2 border-amber-600 bg-amber-50/40 p-5">
         <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
-          <span className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle" style={{ fontFamily: MONO }}>04 ·</span>
           Preparing your {selectedAgency.label} package…
         </h2>
         <p className="mt-2 text-[13px] text-stone-700">
@@ -294,7 +291,6 @@ export default function RosterWorkspacePanel({ workOrderId, paymentStatus, initi
     return (
       <section className="rounded-md border-l-2 border-red-600 bg-red-50/40 p-5">
         <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
-          <span className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle" style={{ fontFamily: MONO }}>04 ·</span>
           Generation hit a snag
         </h2>
         <p className="mt-2 text-[13px] text-red-800">
@@ -322,8 +318,7 @@ export default function RosterWorkspacePanel({ workOrderId, paymentStatus, initi
       <div className="p-5 border-b border-stone-100">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-baseline lg:justify-between">
           <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
-            <span className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle" style={{ fontFamily: MONO }}>04 ·</span>
-            {selectedAgency.label} roster package
+              {selectedAgency.label} roster package
           </h2>
           <div className="flex flex-wrap gap-2">
             {pkg.pdf_url && (

@@ -13,7 +13,6 @@ export default function Footer() {
   const resources = [
     { label: "UN procurement guide", href: "/faq" },
     { label: "UNGM registration", href: "https://www.ungm.org/Account/Registration" },
-    { label: "Founder note", href: "/faq" },
     { label: "FAQ", href: "/faq" },
   ];
 

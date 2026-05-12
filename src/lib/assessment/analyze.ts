@@ -354,27 +354,40 @@ ${context}
 
 Already classified as: ${JSON.stringify(classification)}
 
+EVIDENCE RULES — read carefully before scoring:
+You may only score based on evidence that is actually present in the context above. That means:
+  ✓ Public website content
+  ✓ User-supplied business description
+  ✓ Structured user input (org type, countries, themes)
+  ✓ Any uploaded documents reflected in the context
+You MAY NOT penalize a company for the absence of items that are typically non-public:
+  ✗ Audited financial statements
+  ✗ Bank references or balance sheets
+  ✗ Internal compliance policies, ISO certificates, or insurance documents not mentioned
+  ✗ Past performance contracts not described
+When evidence for a dimension is missing, do NOT score it low — score it as "unknown but plausible" near 50 and flag it as a gap so the user can supply evidence. Reserve low scores (<35) for dimensions where there is concrete negative signal (e.g. website explicitly contradicts capability, single-person consultancy with no infrastructure, etc.).
+
 Return a JSON object with exactly these fields:
 - "capabilities": array of key capabilities relevant to UN procurement
 - "certifications_detected": array of certifications, registrations, or compliance standards found (ISO, UNGM, etc.)
 - "company_size_signal": one of "micro", "small", "medium", "large" — inferred from website/description
 - "strengths": array of strengths for UN procurement participation
 - "gaps": array of objects, each with:
-  - "gap": description of the gap
+  - "gap": description of the gap (frame as "evidence needed" rather than "deficiency" when the gap is about missing non-public information)
   - "severity": "high", "medium", or "low"
   - "fix": one-line recommendation
   - "action_steps": array of 2-4 concrete action steps
   - "upsell_tier": one of "tender-intelligence", "submission-package", "strategic-partnership"
 - "readiness_dimensions": object with scores 0-100 for each:
-  - "technical_capability": ability to deliver the work
-  - "compliance_readiness": registration, certifications, policies
-  - "financial_stability": evidence of financial capacity
-  - "geographic_reach": presence in target countries/regions
-  - "experience_relevance": track record with similar projects
+  - "technical_capability": ability to deliver the work — score from public evidence + user description
+  - "compliance_readiness": registration, certifications, policies — score 50 (neutral) when no signal either way
+  - "financial_stability": evidence of financial capacity — score 50 (neutral) when no public signal; only deviate when website shows clear team size, scale, or operations
+  - "geographic_reach": presence in target countries/regions — usually scoreable from public content
+  - "experience_relevance": track record with similar projects — score from case studies, client lists, references that ARE described
 - "overall_score": weighted average (technical 25%, compliance 25%, financial 20%, geographic 15%, experience 15%)
-- "summary": 2-3 sentence executive assessment
+- "summary": 2-3 sentence executive assessment that distinguishes confirmed strengths from evidence gaps
 
-Be rigorous. Most first-time applicants score 30-50. Only score above 70 if there is strong evidence of UN experience, relevant certifications, and established operations in target countries. Identify at least 3 gaps for any company scoring below 60.
+Be rigorous but fair. Anchor scores in observed evidence, not in absences. A company with a clear capability story and missing financial info should land in the 50-65 range, not 30-40. Identify at least 3 gaps for any company scoring below 60, and prefer "supply evidence of X" gaps over "company lacks X" gaps when X is typically non-public.
 
 Return ONLY valid JSON, no explanation.`,
       },
@@ -394,14 +407,14 @@ Return ONLY valid JSON, no explanation.`,
     strengths: [],
     gaps: [],
     readiness_dimensions: {
-      technical_capability: 30,
-      compliance_readiness: 20,
-      financial_stability: 25,
-      geographic_reach: 20,
-      experience_relevance: 20,
+      technical_capability: 45,
+      compliance_readiness: 50,
+      financial_stability: 50,
+      geographic_reach: 45,
+      experience_relevance: 40,
     },
-    overall_score: 24,
-    summary: "Unable to complete full analysis.",
+    overall_score: 46,
+    summary: "Analysis incomplete — neutral baseline applied. Add a business description or upload documents to refine the score.",
   };
 
   const parsed = safeParseJSON<Partial<AIAnalysis>>(text, {});

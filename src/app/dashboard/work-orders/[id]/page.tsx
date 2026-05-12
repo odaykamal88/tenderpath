@@ -54,17 +54,6 @@ function money(cents: number | null, currency: string | null): string {
   }).format(cents / 100);
 }
 
-function statusSteps(status: string) {
-  const steps = [
-    { key: "new", label: "Intake received", index: "01" },
-    { key: "in_progress", label: "In progress", index: "02" },
-    { key: "waiting_on_client", label: "Waiting on client", index: "03" },
-    { key: "delivered", label: "Delivered", index: "04" },
-  ];
-  const index = steps.findIndex((step) => step.key === status);
-  return { steps, activeIndex: index < 0 ? 0 : index };
-}
-
 function orderRef(id: number): string {
   return `WO-${id.toString(16).toUpperCase().padStart(4, "0")}`;
 }
@@ -145,14 +134,12 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
     );
   }
 
-  const progress = statusSteps(order.status);
-
   return (
     <div className="px-8 py-8 max-w-[1400px]">
       {/* Back link */}
       <Link
         href="/dashboard/work-orders"
-        className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-500 hover:text-stone-900 transition-colors"
+        className="inline-flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.15em] text-stone-600 hover:text-stone-900 transition-colors border-b border-stone-300 hover:border-stone-900 pb-0.5"
         style={{ fontFamily: MONO }}
       >
         ← Back to work orders
@@ -223,81 +210,6 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
-      {/* Progress */}
-      <section className="mt-7 rounded-md border border-stone-200/70 bg-white p-5">
-        <div className="flex items-baseline justify-between mb-4">
-          <h2
-            className="text-[20px] font-medium text-stone-900"
-            style={{ fontFamily: SERIF }}
-          >
-            <span
-              className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle"
-              style={{ fontFamily: MONO }}
-            >
-              01 ·
-            </span>
-            Fulfillment progress
-          </h2>
-          <span
-            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
-            style={{ fontFamily: MONO }}
-          >
-            Step {progress.activeIndex + 1} / {progress.steps.length}
-          </span>
-        </div>
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
-          {progress.steps.map((step, index) => {
-            const active = index === progress.activeIndex;
-            const past = index < progress.activeIndex;
-            return (
-              <div
-                key={step.key}
-                className={`rounded-sm border px-3.5 py-3 ${
-                  active
-                    ? "border-stone-900 bg-stone-900 text-white"
-                    : past
-                    ? "border-stone-300 bg-stone-100/60 text-stone-700"
-                    : "border-stone-200 bg-stone-50/40 text-stone-400"
-                }`}
-              >
-                <div className="flex items-baseline justify-between gap-2">
-                  <span
-                    className={`text-[10px] font-semibold tabular-nums ${active ? "text-white/70" : "text-stone-400"}`}
-                    style={{ fontFamily: MONO }}
-                  >
-                    {step.index}
-                  </span>
-                  {past && !active && (
-                    <span
-                      className="text-[10px] uppercase tracking-[0.18em] text-emerald-700 font-semibold"
-                      style={{ fontFamily: MONO }}
-                    >
-                      ✓
-                    </span>
-                  )}
-                </div>
-                <div className="mt-1 text-[12.5px] font-medium">{step.label}</div>
-              </div>
-            );
-          })}
-        </div>
-        {order.fulfillment_notes ? (
-          <div className="mt-5 rounded-md border-l-2 border-amber-600 bg-amber-50/40 px-4 py-3">
-            <div
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700"
-              style={{ fontFamily: MONO }}
-            >
-              Latest note · from the team
-            </div>
-            <p className="mt-1.5 text-[13.5px] leading-relaxed text-amber-950">{order.fulfillment_notes}</p>
-          </div>
-        ) : (
-          <p className="mt-5 text-[12.5px] text-stone-500">
-            The TenderPath team will add fulfillment notes here as work progresses.
-          </p>
-        )}
-      </section>
-
       {/* Two-column: Intake + Tender context */}
       <div className="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]">
         <section className="rounded-md border border-stone-200/70 bg-white p-5">
@@ -309,7 +221,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
               className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle"
               style={{ fontFamily: MONO }}
             >
-              02 ·
+              01 ·
             </span>
             Intake
           </h2>
@@ -341,7 +253,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
               className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle"
               style={{ fontFamily: MONO }}
             >
-              03 ·
+              02 ·
             </span>
             Tender context
           </h2>

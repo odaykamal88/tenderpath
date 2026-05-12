@@ -583,11 +583,11 @@ function PayPage() {
             Tender<span style={{ color: "#ea580c" }}>·</span>Path
           </Link>
           <Link
-            href="/"
+            href="/dashboard"
             className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-500 hover:text-stone-900 transition-colors"
             style={{ fontFamily: MONO }}
           >
-            ← Home
+            ← Dashboard
           </Link>
         </div>
       </nav>

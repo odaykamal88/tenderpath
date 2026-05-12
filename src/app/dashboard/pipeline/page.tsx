@@ -122,6 +122,8 @@ function serviceHref(
     tender: item.tender_title,
   });
   if (item.tender_agency) params.set("agency", item.tender_agency);
+  const sourceUrl = item.manual_source_url ?? item.source_url;
+  if (sourceUrl) params.set("tender_url", sourceUrl);
   return `/dashboard/services/${service}?${params.toString()}`;
 }
 

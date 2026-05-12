@@ -1,5 +1,6 @@
 import Link from "next/link";
 import styles from "./AssessmentChrome.module.css";
+import { AssessmentActions } from "./AssessmentActions";
 
 type TabKey = "score" | "gaps" | "tenders" | "grants" | "next";
 
@@ -25,9 +26,7 @@ export function AssessmentHeader({
         <h1 className={styles.title}>{companyName}</h1>
       </div>
       <nav className={styles.actions}>
-        <a href={`/api/report?id=${reportId}`} target="_blank" rel="noopener">PDF ↓</a>
-        <button>Email ↗</button>
-        <a href="/assessment">Run again →</a>
+        <AssessmentActions reportId={reportId} />
       </nav>
     </header>
   );
