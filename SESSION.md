@@ -2211,6 +2211,73 @@ Preserve `RawTender`, `CrawlResult`, `MatchedTender`, `proposal_packages`, `work
 - What remains: Sprint 5 (UX trust hardening + activation funnel — make /dashboard useful, instrument funnel events) and Sprint 6 (5-company assessment audit + classifier or sector-map fix). Gating prerequisite: supervised $39 Bid/No-Bid prod payment test to validate Sprints 2+3 actually work end-to-end with a live customer.
 - What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/dashboard-architecture.md, docs/agents/assessment-architecture.md
 
+### Session Update
+- Agent: Claude Code (opus-4-7)
+- Date: 2026-05-12
+- Task Completed: Supervised the first real $39 Bid/No-Bid production payment test (Sprint 5's gating prerequisite). The test surfaced four distinct bugs in the Sprint 2 auto-fulfillment pipeline, each of which was patched, shipped, and re-validated in the same session. Stripe payment confirmed end-to-end (live charge `ch_3TVuv701HOM3YIKo06F4P5n3`, session `cs_live_a1fpH3...`, $39 USD, webhook delivered, work_orders id=8 marked paid). LLM analysis output stored on `proposal_packages.id=1` with `recommendation='conditional'`. Email-delivery layer fixed in code+type but still pending one final Regenerate click for empirical confirmation in prod. Vercel Blob upload remains the one open issue — separate from email, doesn't block dashboard rendering or email-attachment delivery.
+- Files Changed (across PRs #3-#6):
+  - **PR #3** `src/lib/bid-no-bid/llm.ts` + `src/lib/proposal-package/llm.ts` — replaced deprecated `claude-3-5-haiku-latest` + `claude-sonnet-4-5` model aliases (both returning 404 from Anthropic) with the current `claude-haiku-4-5-20251001` + `claude-sonnet-4-6` that the existing assessment pipeline uses. Root cause for the first failed retry (404 error_message persisted on the package).
+  - **PR #4** `src/lib/bid-no-bid/generate.ts` + `src/lib/email/sendBidNoBidNotification.ts` — (a) generator now refuses to mark `status='ready'` when no PDF buffer was produced (was silently leaving rows in half-success state with `pdf_url=null` and no email); (b) email helper accepts `pdfBuffer` as fallback attachment when `pdfUrl` is null so Blob outages don't block delivery; (c) generator passes the buffer through.
+  - **PR #5** `src/lib/email/sendBidNoBidNotification.ts` + `src/lib/email/sendProposalPackageNotification.ts` — Resend SDK returns send errors in the response body (`{ data, error }`), not as thrown exceptions. Three email helpers now destructure `{ error }` and throw on non-null so the generator's `.catch` actually fires. Matches the working pattern in `sendAssessment.ts:107-115`.
+  - **PR #6** `src/lib/bid-no-bid/generate.ts` + `src/lib/proposal-package/generate-proposal.ts` + `src/lib/proposal-package/generate-roster.ts` — the actual root cause for "no email arrives": `sendEmail(...).catch(...)` was fire-and-forget inside a Vercel `after()` callback. When the generator function returned, the lambda terminated and the in-flight Resend HTTP call was cancelled mid-flight. Resend never received the request — confirmed empirically (zero "bid-no-bid analysis is ready" rows in Resend's Sending log despite multiple retries). Fixed by wrapping in `try { await sendEmail(...) } catch { log }` — same shape as the working assessment email path.
+- Tests Run:
+  - `npx tsc --noEmit` clean after every patch.
+  - Reproduced the exact bid-no-bid Resend payload from a local script using the user's prod creds — Resend accepted both plain and PDF-attachment sends (IDs `25599a07-...` and `0f2a1637-...`), proving the SDK/key/domain are fine and the only problem was the missing await.
+  - Direct test emails landed in the user's Gmail inbox (not spam), confirming sender reputation.
+  - Stripe live-mode charge confirmed via Stripe Dashboard event log (charge ch_3TVuv701HOM3YIKo06F4P5n3 succeeded 17:34:59, webhook delivered to /api/webhooks/stripe).
+  - Vercel runtime logs cross-referenced (after each retry) to confirm `[bid-no-bid:blob_upload_failed]` was the active error after the model-name fix.
+- Result: Of the seven validation checkpoints called out in the original Sprint 5 gating plan, six are confirmed:
+  - ✅ Stripe live payment captures $39 successfully
+  - ✅ Webhook signature verification passes
+  - ✅ `work_orders` row inserted with `payment_status='paid'`
+  - ✅ Next 16 `after()` schedules `generateBidNoBid`
+  - ✅ LLM pipeline (Haiku extract + Sonnet analysis) returns valid output, persisted to `proposal_packages.output`
+  - ✅ Dashboard `/dashboard/work-orders/8` renders the analysis (panel reads `pkg.output` regardless of pdf_url)
+  - ⏳ Bid-ready email delivery — code+type validated; one final Regenerate click needed to lock empirical confirmation post-PR-#6.
+- Blockers:
+  - **Vercel Blob upload is still failing** for the bid-no-bid pdf-pathname path. User confirmed BLOB_READ_WRITE_TOKEN was added (via Blob store creation in Vercel dashboard) AFTER the Sprint 2 deploy, but `[bid-no-bid:blob_upload_failed]` continued logging on both subsequent retries. Hypothesis: the token Vercel auto-generates when you create a Blob store from the project UI may be scoped to a different store name than expected, or the token's permissions need explicit scope grant. Worth investigating in Sprint 5 or as a small standalone fix. Crucially, the email path now delivers the PDF as an attachment when pdf_url is null, so this is no longer customer-blocking — only the dashboard's "Download PDF" button is affected (the panel still renders the full analysis inline).
+  - The user has two `STRIPE_SECRET_KEY` and two `STRIPE_WEBHOOK_SECRET` entries in Vercel env. Live-mode charge confirms one set is correctly wired, but the duplicate creates risk of mode drift on future deploys. Worth auditing scopes (Production vs Preview) and deleting unused entries.
+- Important Decisions:
+  - **Email delivery is the founder-out-of-the-loop critical path.** When Blob is the source of failure, we email the PDF as an attachment rather than block the entire deliverable. The dashboard's "Download PDF" button is a nice-to-have; the email + inline analysis are the must-have.
+  - **Resend SDK error handling pattern.** Standardized on the `const { error } = await resend.emails.send(...); if (error) throw` pattern in all three deliverable email helpers (bid-no-bid, proposal, roster) so failure modes route through the generator's `.catch` and log a structured `[*:email_failed]` entry. Caught a real silent-failure category.
+  - **Fire-and-forget inside Vercel `after()` is a footgun.** Any HTTP call (Resend, third-party APIs) inside an `after()` block that isn't awaited at the top level gets cancelled when the function returns. Fixed in all three generators and noted via comment so it doesn't recur.
+  - **Did NOT bump `MAX_ATTEMPTS=3`.** Reset `generation_attempts=0` directly via SQL after each fix landed so the user could retry on the same package. For real customer recovery the cron-based retry or a one-off admin endpoint is the proper path, but a single supervised SQL reset was fine for this test.
+- Contracts or Interfaces Changed: None. All four PRs are internal generator/email-helper changes. No schema migrations, no API contract changes, no UI prop changes.
+- Docs Updated: `SESSION.md` only.
+- Next Recommended Task: Sprint 5 — UX/trust hardening + activation funnel. Now that the auto-fulfillment chain is empirically validated except for one final email-retry click, proceed with the original Sprint 5 plan: rebuild `/dashboard/page.tsx` as a proper post-assessment home page (latest score + delta, top 3 tenders with Sprint 4 explainability surface, top 2 readiness gaps with CTAs, latest work-order status, recommendedTier card) and slot in activation-funnel telemetry (assessment_started, assessment_completed, dashboard_landed, tender_clicked, paid_intent_clicked, payment_succeeded, deliverable_ready). The Blob upload fix should be folded in as a small standalone diagnostic — likely just a token name/scope mismatch or missing region.
+- Recommended Agent: Claude Code (Opus or Sonnet 4.6).
+- Paste-Ready Next Prompt:
+
+```text
+Read SESSION.md first, then AGENTS.md, CLAUDE.md, docs/agents/dashboard-architecture.md, and any relevant Next.js 16 App Router docs under node_modules/next/dist/docs/.
+
+Sprints 1–4 are committed, hotfixed, and deployed to prod. The first real $39 Bid/No-Bid payment has cleared through Stripe in live mode, the work_orders row is paid, the LLM analysis is stored, and email delivery is type-verified (final empirical confirmation pending one Regenerate click on /dashboard/work-orders/8).
+
+Begin Sprint 5: rebuild /dashboard/page.tsx as the proper authenticated home.
+
+Current state of /dashboard/page.tsx: 57 lines that just render a thisWeek list and 5 tab links pointing to /assessment/[id]?tab=X. This is the URL users land on every time they come back, but it adds nothing to the trust moment — it just routes them away.
+
+Rebuild it to show, in order:
+1. Latest readiness score + delta + summary (reuse getCurrentUserAssessment data layer)
+2. This week — closing tenders + actionable next steps with Sprint 4 explainability surface (confidence dots, sector chips, match reasons)
+3. Top 2 readiness gaps with severity + the upsell CTA tied to each (e.g. "Compliance gap → Buy bid-no-bid for $39")
+4. Active work-order status — if user has an in-flight bid-no-bid / proposal / roster, show a compact panel with current generation_status and a "View →" link
+5. Recommended tier upsell card
+
+Reuse existing data layer + Sprint 4 mapTendersForUI shape. NO new API routes, NO schema changes, NO new LLM calls.
+
+Then add minimal activation-funnel telemetry: a funnel_events table (user_id, event TEXT, props JSONB, created_at) + POST /api/telemetry/event + sprinkle calls at: assessment_started, assessment_completed, dashboard_landed, tender_clicked, paid_intent_clicked, payment_succeeded, deliverable_ready. Expose a /api/admin/funnel JSON endpoint so the daily-digest cron can include funnel counts.
+
+Also worth slotting in: investigate why [bid-no-bid:blob_upload_failed] persists despite the user creating a Blob store in Vercel. Likely a token name/scope mismatch or missing region. Small standalone fix.
+
+Preserve `RawTender`, `CrawlResult`, `MatchedTender`, `proposal_packages`, `work_orders`, `pipeline_items` contracts. Update SESSION.md when finished.
+```
+
+### Short Resume State
+- What is now true: Sprints 1, 2, 3, 4 complete. Four hotfixes from today's $39 payment test (PRs #3-#6) merged to main and deployed: Anthropic model names corrected, generator no longer marks ready without an artifact, email helper accepts attachment fallback, Resend SDK errors surfaced, and email sends are awaited inside `after()` callbacks. Live $39 Stripe charge confirmed (ch_3TVuv701HOM3YIKo06F4P5n3 succeeded). Auto-fulfillment chain validated end-to-end except for one final Regenerate click to lock empirical email delivery. Blob upload remains broken but is no longer customer-blocking thanks to the attachment-fallback path.
+- What remains: Sprint 5 (UX trust hardening: redesign /dashboard/page.tsx + add minimal funnel telemetry + diagnose Blob upload) and Sprint 6 (5-company assessment audit + classifier or sector-map fix).
+- What the next agent must read first: SESSION.md, AGENTS.md, docs/agents/dashboard-architecture.md, docs/agents/assessment-architecture.md
+
 ---
 
 The next agent must not infer progress from commits alone.  
