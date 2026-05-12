@@ -4,6 +4,8 @@ import {
   extractTenderRequirements,
   generateBidNoBidAnalysis,
 } from "@/lib/bid-no-bid/llm";
+import { renderBidNoBidPdf } from "@/lib/bid-no-bid/pdfDoc";
+import { sendBidNoBidReadyEmail } from "@/lib/email/sendBidNoBidNotification";
 
 export interface AdminBidNoBidRequest {
   // Tender fields
@@ -28,6 +30,8 @@ export interface AdminBidNoBidRequest {
     description?: string;
     capabilities?: string;
   }>;
+  // Optional: email address to receive a PDF copy
+  send_to?: string;
 }
 
 function buildTenderText(body: AdminBidNoBidRequest): string {
@@ -105,7 +109,35 @@ export async function POST(request: Request) {
       { tenderText, companyContext, intakeSummary },
       requirements
     );
-    return NextResponse.json({ output, requirements });
+
+    let emailSent = false;
+    if (body.send_to) {
+      try {
+        const pdfBuffer = await renderBidNoBidPdf({
+          workOrderId: 0,
+          companyName: body.company_name ?? "Admin Test",
+          tenderTitle: body.tender_title ?? null,
+          agency: body.tender_agency ?? null,
+          output,
+          generatedAt: new Date().toISOString(),
+        });
+        await sendBidNoBidReadyEmail({
+          email: body.send_to,
+          workOrderId: 0,
+          tenderTitle: body.tender_title ?? null,
+          agency: body.tender_agency ?? null,
+          recommendation: output.recommendation,
+          winProbabilityBand: output.win_probability_band,
+          pdfUrl: null,
+          pdfBuffer,
+        });
+        emailSent = true;
+      } catch (emailErr) {
+        console.error("[admin:bid-no-bid:email-failed]", emailErr);
+      }
+    }
+
+    return NextResponse.json({ output, requirements, emailSent });
   } catch (err) {
     console.error("[admin:bid-no-bid:failed]", err);
     const message = err instanceof Error ? err.message : String(err);

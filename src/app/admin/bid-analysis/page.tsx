@@ -10,6 +10,7 @@ const SERIF = "'Fraunces', 'Times New Roman', serif";
 interface ApiResult {
   output: BidNoBidOutput;
   requirements: TenderRequirements;
+  emailSent?: boolean;
 }
 
 function authHeaders(): HeadersInit {
@@ -32,58 +33,58 @@ function sevColor(sev: "high" | "medium" | "low"): string {
 }
 
 const CIM_SYR_DEFAULTS: AdminBidNoBidRequest = {
-  tender_title: "EU Support for Independent Syrian Media",
-  tender_agency: "European Commission / DG NEAR",
+  tender_title: "Support to justice, freedom of expression and social cohesion in Syria",
+  tender_agency: "European Commission - International Partnerships / EuropeAid",
   tender_url:
-    "https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/prospect-details/185831PROSPECTSEN",
-  tender_deadline: "",
-  tender_value: "",
-  tender_sector: "Civil Society / Media Development",
+    "https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/prospect-details/185831PROSPECTSEN?isExactMatch=true&status=31094502&order=DESC&pageNumber=1&pageSize=50&sortBy=startDate",
+  tender_deadline: "2026-05-18 10:00 UTC",
+  tender_value: "Total budget EUR 13,350,000; grants EUR 675,000 to EUR 4,000,000; 70-100% co-financing",
+  tender_sector: "Governance, rule of law, human rights, media freedom, social cohesion, civil society",
   tender_eligibility:
-    "Registered non-profit or civil society organisations. Consortium applications accepted. Lead applicant must be established for at least 2 years. Eligible countries: Syria, Turkey, Lebanon, Jordan, Germany and other EU member states.",
+    "Lead applicant must be a legal person, non-profit-making, and a type of organisation such as a non-governmental organisation, public sector operator, or local authority. Lead applicant must be directly responsible for preparation and management of the action with co-applicants and affiliated entities, not an intermediary. Actions must take place in Syria. Concept note and lead applicant declaration are submitted online via PROSPECT.",
   tender_description:
-    "Support for independent Syrian media organisations and journalists operating in exile or inside Syria. Programme objectives include: strengthening editorial independence, improving digital security practices, supporting audience development, and building organisational sustainability of independent media outlets. Activities may include training, technical assistance, small grants, and networking initiatives.",
-  company_name: "CIM-SYR Consortium",
-  company_sector: "Media / Civil Society",
-  company_countries: "Syria, Turkey, Lebanon, Germany, France",
+    "Reference: EuropeAid/185831/DD/ACT/SY / 185831PROSPECTSEN. Global objective: contribute to sustainable and equitable development of communities in Syria and full enjoyment of all human rights by all. Specific lots: Lot 1 access to affordable justice for all in Syria; Lot 2 promotion of transitional justice processes in Syria; Lot 3 promotion of and support to media freedom and pluralism in Syria; Lot 4 promotion of social cohesion in Syria. Relevant to independent Syrian media under Lot 3 and potentially Lot 4. Submission is concept note stage via EU PROSPECT.",
+  company_name: "Consortium of Syrian Independent Media (CSIM / CIM Syria)",
+  company_sector: "Independent media, journalism, civil society, freedom of expression, media development",
+  company_countries: "Syria; Syrian diaspora / regional operations",
   company_description:
-    "CIM-SYR is a consortium of independent Syrian media organisations dedicated to professional, independent journalism and freedom of expression. Founded by Syrian journalists and media professionals in exile and inside Syria. Members produce Arabic-language digital, radio, and print content for Syrian audiences.",
+    "The Consortium of Syrian Independent Media is a consortium of Syrian independent media organisations founded to strengthen sustainability, independence, solidarity, integrity, and collective influence of independent Syrian journalism. The consortium works in a landscape affected by conflict, displacement, and disinformation and aims to support a free and independent Syrian media landscape.",
   company_capabilities:
-    "Independent journalism production · Arabic and Kurdish language content · Digital media operations · Radio broadcasting · Editorial independence track record · Audience reach inside Syria and diaspora · Partnerships with international media development organisations · Experience with donor-funded programmes (EU, NED, USAID)",
+    "Independent journalism and editorial production · media freedom and pluralism · Syrian audience reach · multilingual and Arabic media production · conflict-sensitive reporting · civil-society communications · local knowledge of Syria · consortium coordination across independent media outlets · public-interest journalism · community trust and audience engagement",
   intake_notes:
-    "Test run requested by admin. Applicant is a consortium with four member organisations. Evaluate feasibility as lead applicant and consortium structure fit.",
+    "Pre-deployment Tenderpath validation run requested by admin. Evaluate as a real bid/no-bid test for the consortium against Lot 3 media freedom/pluralism and possibly Lot 4 social cohesion. Be rigorous about likely EU eligibility, consortium governance, registration status, audited financial/admin capacity, co-applicant structure, PROSPECT documentation, and short time to concept note deadline.",
   consortium_members: [
     {
       name: "Al-Jumhuriya",
       url: "https://aljumhuriya.net/",
       description:
-        "Syrian digital publication focusing on political analysis, culture, and democracy promotion. Founded by Syrian intellectuals and journalists.",
+        "Independent Syrian media platform / knowledge-production publication covering Syrian politics, society, culture, and public debate.",
       capabilities:
-        "Long-form Arabic journalism · Political analysis · Cultural coverage · Digital publication · International credibility",
+        "Analysis · essays · journalism · civic debate · freedom of expression · Syrian intellectual and media networks",
     },
     {
-      name: "Arta FM",
+      name: "ARTA for Media and Development",
       url: "https://www.artaorg.net/",
       description:
-        "Syrian radio station operating from Turkey serving audiences in northern Syria and diaspora with news and cultural programming.",
+        "Media and development organisation working on the ground since 2013 in northeastern Syria / Rojava.",
       capabilities:
-        "Radio broadcasting · FM and digital streaming · Northern Syria audience reach · Local reporting",
+        "Local journalism · field reporting · media development · community storytelling · on-the-ground networks",
     },
     {
-      name: "Rozana Radio",
+      name: "Radio Rozana",
       url: "https://www.rozana.fm/en",
       description:
-        "Independent Syrian radio station broadcasting in Arabic and Kurdish from Paris. Produces news, human rights reporting, and cultural content.",
+        "Syrian independent radio/media outlet.",
       capabilities:
-        "Bilingual Arabic and Kurdish broadcasting · Diaspora and inside-Syria reach · Human rights reporting · EU-based operations",
+        "Broadcast/audio journalism · digital media · Syrian audience reach · independent reporting",
     },
     {
       name: "Enab Baladi",
       url: "https://english.enabbaladi.net/",
       description:
-        "Syrian civil society newspaper covering humanitarian issues, governance, and daily life. Has English-language edition and strong local reporter network.",
+        "Independent Syrian media organization founded in 2011 with multilingual interactive websites and weekly newspaper coverage of Syrian political and social issues.",
       capabilities:
-        "Ground-level reporting inside Syria · Local correspondent network · English and Arabic content · Humanitarian focus",
+        "News coverage · investigations · multilingual publishing · print and digital journalism · Syrian civil-society coverage",
     },
   ],
 };
@@ -94,6 +95,7 @@ export default function AdminBidAnalysisPage() {
     JSON.stringify(CIM_SYR_DEFAULTS.consortium_members, null, 2)
   );
   const [memberJsonError, setMemberJsonError] = useState<string | null>(null);
+  const [sendTo, setSendTo] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ApiResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -129,7 +131,7 @@ export default function AdminBidAnalysisPage() {
       const res = await fetch("/api/admin/bid-no-bid", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, ...(sendTo ? { send_to: sendTo } : {}) }),
       });
       const body = await res.json();
       if (!res.ok) {
@@ -227,6 +229,21 @@ export default function AdminBidAnalysisPage() {
           </div>
         </section>
 
+        {/* Delivery */}
+        <section style={{ background: "#fafaf9", border: "1px solid #e7e5e4", borderRadius: 6, padding: "20px 24px", marginBottom: 20 }}>
+          <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase", color: "#a8a29e", marginBottom: 16 }}>
+            03 · Delivery (optional)
+          </div>
+          <LabeledInput
+            label="Email PDF results to"
+            type="email"
+            value={sendTo}
+            onChange={(e) => setSendTo(e.target.value)}
+            placeholder="you@example.com — leave blank to skip"
+            style={{ maxWidth: 360 }}
+          />
+        </section>
+
         {/* Submit */}
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <button
@@ -264,6 +281,15 @@ export default function AdminBidAnalysisPage() {
             Error
           </div>
           <p style={{ fontFamily: MONO, fontSize: 12, color: "#7f1d1d", margin: 0 }}>{error}</p>
+        </div>
+      )}
+
+      {/* Email sent notice */}
+      {result?.emailSent && sendTo && (
+        <div style={{ marginTop: 16, borderLeft: "2px solid #16a34a", background: "#f0fdf4", padding: "10px 16px", borderRadius: "0 4px 4px 0" }}>
+          <span style={{ fontFamily: MONO, fontSize: 12, color: "#15803d" }}>
+            PDF sent to {sendTo}
+          </span>
         </div>
       )}
 
