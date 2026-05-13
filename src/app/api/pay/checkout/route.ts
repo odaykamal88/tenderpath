@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
+import { getUserFromRequest } from "@/lib/auth";
+import { track } from "@/lib/telemetry/funnel";
 
 const SLUG_TO_PRICE_ENV: Record<string, string> = {
   "bid-no-bid":              "STRIPE_BIDNOBID_PRICE_ID",
@@ -82,6 +84,19 @@ export async function POST(request: Request) {
         work_order_id: workOrderId,
       },
     });
+
+    const user = await getUserFromRequest(request);
+    await track(
+      "paid_intent_clicked",
+      {
+        plan,
+        is_subscription: SUBSCRIPTION_PLANS.has(plan),
+        work_order_id: workOrderId || null,
+        pipeline_item_id: pipelineItemId || null,
+        stripe_session_id: session.id,
+      },
+      { userId: user?.id ?? null },
+    );
 
     return NextResponse.json({ clientSecret: session.client_secret });
   } catch (err) {

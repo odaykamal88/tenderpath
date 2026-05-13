@@ -12,6 +12,7 @@ import { GapsTab } from "@/components/assessment/GapsTab";
 import { TendersTab } from "@/components/assessment/TendersTab";
 import { GrantsTab } from "@/components/assessment/GrantsTab";
 import { NextStepsTab } from "@/components/assessment/NextStepsTab";
+import { FunnelBeacon } from "@/components/telemetry/FunnelBeacon";
 import { getCurrentUserAssessment, getThisWeek } from "@/lib/assessment";
 import dashStyles from "@/components/assessment/dashboard.module.css";
 
@@ -53,6 +54,15 @@ export default async function DashboardPage({
       companyName={data.companyName}
       counts={counts}
     >
+      <FunnelBeacon
+        event="dashboard_landed"
+        props={{
+          report_id: data.reportId,
+          score: data.score,
+          tab: activeTab,
+          tier: data.tier,
+        }}
+      />
       {week.length > 0 && (
         <section className={dashStyles.thisWeek} aria-label="This week">
           <span className={dashStyles.eyebrow}>This week</span>

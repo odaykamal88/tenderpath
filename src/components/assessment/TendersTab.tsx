@@ -1,4 +1,5 @@
 import styles from "./AssessmentTabs.module.css";
+import { TenderOpenLink } from "@/components/telemetry/TenderOpenLink";
 
 export type Tender = {
   code: string;
@@ -195,14 +196,16 @@ export function TendersTab({
               {t.deadline}
             </span>
             {t.sourceUrl ? (
-              <a
+              <TenderOpenLink
                 href={t.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
                 className={styles.rowCta}
+                code={t.code}
+                sourceProvenance={t.sourceProvenance}
+                confidence={t.confidence}
+                fit={t.fit}
               >
                 Open ↗
-              </a>
+              </TenderOpenLink>
             ) : (
               <span
                 className={styles.rowCta}

@@ -1,4 +1,5 @@
 import { sendProposalReadyEmail } from "@/lib/email/sendProposalPackageNotification";
+import { track } from "@/lib/telemetry/funnel";
 import {
   PROPOSAL_PLAN,
   MAX_ATTEMPTS,
@@ -152,6 +153,18 @@ export async function generateProposalPackage({
         });
       }
     }
+
+    await track(
+      "deliverable_ready",
+      {
+        plan: PROPOSAL_PLAN,
+        work_order_id: order.id,
+        package_id: persisted,
+        attempts,
+        has_zip_url: Boolean(zipUrl),
+      },
+      { userId: order.user_id ?? null },
+    );
 
     return { ok: true, packageId: persisted, output, zipUrl, attempts };
   } catch (err) {
