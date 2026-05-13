@@ -61,9 +61,15 @@ const SLUG_KEYWORDS: Record<SectorSlug, string[]> = {
     "supply of goods", "supply of basic goods", "general goods",
     "non-specialized goods", "non specialized goods", "non-food item",
     "non food item", "nfi", "relief item", "hygiene kit",
-    "spare part", "replacement part", "furniture", "office supplies",
-    "school furniture", "accommodation", "accommodation service",
-    "lodging", "lodging service", "hotel venue",
+    "spare part", "replacement part",
+    // NB: "furniture", "office supplies", "school furniture",
+    // "accommodation", "lodging", "hotel venue" were removed — they made
+    // normalizeSector() tag pure goods/hospitality tenders (UNIDO Coffee
+    // Training Center Furniture, UNDP-UGA Hotel Accommodation, IDLO
+    // accommodation+conference) as logistics. That cascaded into a +40
+    // sector_score for any logistics user (Rafiki Holdings false matches).
+    // Genuine combined-delivery tenders still match via "supply and
+    // delivery", "delivery of goods", and the warehousing terms below.
     "forwarding", "haulage", "trucking", "cargo", "stockpile",
     "prepositioning", "pre-positioning", "clearing agent", "clearance service",
     "storage service", "fuel delivery",
