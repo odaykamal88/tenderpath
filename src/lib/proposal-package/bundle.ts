@@ -9,6 +9,11 @@ export interface BundleFile {
 export interface BundleUploadResult {
   url: string | null;
   pathname: string | null;
+  /** Non-null when upload failed — propagated to proposal_packages.error_message
+   *  so silent Blob failures are queryable from the DB. Vercel runtime logs
+   *  are paywalled (ExceedsBillingLimitError) on the current plan and the
+   *  console diagnostic below is not always reachable from there. */
+  error: string | null;
 }
 
 /**
@@ -29,7 +34,7 @@ export async function bundleAndUpload(
   const token = process.env.BLOB_READ_WRITE_TOKEN;
   if (!token) {
     console.warn("[proposal-package:blob_token_missing]", { pathname });
-    return { url: null, pathname: null };
+    return { url: null, pathname: null, error: "blob_token_missing" };
   }
   try {
     const result = await put(pathname, zipBuffer, {
@@ -39,11 +44,12 @@ export async function bundleAndUpload(
       addRandomSuffix: false,
       allowOverwrite: true,
     });
-    return { url: result.url, pathname: result.pathname };
+    return { url: result.url, pathname: result.pathname, error: null };
   } catch (err) {
     // Match the diagnostic shape used in bid-no-bid/generate.ts:uploadPdf so
     // the two upload failure modes can be triaged from the same log query.
     const e = err as { name?: string; code?: string; status?: number; message?: string };
+    const summary = `blob_upload_failed: ${e?.name ?? "Error"}${e?.status ? ` (${e.status})` : ""} — ${e?.message ?? String(err)}`;
     console.error("[proposal-package:blob_upload_failed]", {
       pathname,
       bufferBytes: zipBuffer.length,
@@ -54,7 +60,7 @@ export async function bundleAndUpload(
       errorStatus: e?.status ?? null,
       message: e?.message ?? String(err),
     });
-    return { url: null, pathname: null };
+    return { url: null, pathname: null, error: summary };
   }
 }
 

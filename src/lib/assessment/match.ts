@@ -738,9 +738,13 @@ export async function matchTenders(
       "supply of goods", "supply of basic goods", "general goods",
       "non-specialized goods", "non specialized goods", "non-food item",
       "non food item", "nfi", "relief item", "hygiene kit",
-      "spare part", "replacement part", "furniture", "office supplies",
-      "school furniture", "accommodation", "accommodation service",
-      "lodging", "lodging service", "hotel venue",
+      "spare part", "replacement part",
+      // NB: "furniture", "office supplies", "school furniture",
+      // "accommodation", "lodging", "hotel venue" were removed — they pulled
+      // pure goods/hospitality tenders (e.g. UNIDO Coffee Training Center
+      // furniture) into the logistics candidate pool and were causing Rafiki
+      // Holdings false matches. Genuine combined-delivery tenders still match
+      // via "supply and delivery", "delivery of", and warehousing terms below.
       "prepositioning", "pre-positioning", "clearing", "clearance",
       "loading", "unloading", "import", "export", "dispatch",
       "installation and delivery",

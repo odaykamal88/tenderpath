@@ -194,11 +194,14 @@ function buildIntakeSummary(intake: Record<string, unknown> | null): string {
   return lines.join("\n");
 }
 
-async function uploadPdf(workOrderId: number, pdfBuffer: Buffer): Promise<{ url: string | null; pathname: string | null }> {
+async function uploadPdf(
+  workOrderId: number,
+  pdfBuffer: Buffer,
+): Promise<{ url: string | null; pathname: string | null; error: string | null }> {
   const token = process.env.BLOB_READ_WRITE_TOKEN;
   if (!token) {
     console.warn("[bid-no-bid:blob_token_missing]", { workOrderId });
-    return { url: null, pathname: null };
+    return { url: null, pathname: null, error: "blob_token_missing" };
   }
   const pathname = `bid-no-bid/${workOrderId}-${Date.now()}.pdf`;
   try {
@@ -209,12 +212,16 @@ async function uploadPdf(workOrderId: number, pdfBuffer: Buffer): Promise<{ url:
       addRandomSuffix: false,
       allowOverwrite: true,
     });
-    return { url: result.url, pathname: result.pathname };
+    return { url: result.url, pathname: result.pathname, error: null };
   } catch (err) {
     // Surface the most diagnostic fields the @vercel/blob SDK exposes so we
     // can tell apart: bad token, wrong store, expired token, network reset,
     // payload too large, etc. Each of these is fixable in a different way.
+    // We also persist a one-line summary to proposal_packages.error_message
+    // so the failure is queryable from the DB even when Vercel runtime logs
+    // are paywalled (ExceedsBillingLimitError on the current plan).
     const e = err as { name?: string; code?: string; status?: number; message?: string };
+    const summary = `blob_upload_failed: ${e?.name ?? "Error"}${e?.status ? ` (${e.status})` : ""} — ${e?.message ?? String(err)}`;
     console.error("[bid-no-bid:blob_upload_failed]", {
       workOrderId,
       pathname,
@@ -226,7 +233,7 @@ async function uploadPdf(workOrderId: number, pdfBuffer: Buffer): Promise<{ url:
       errorStatus: e?.status ?? null,
       message: e?.message ?? String(err),
     });
-    return { url: null, pathname: null };
+    return { url: null, pathname: null, error: summary };
   }
 }
 
@@ -291,6 +298,7 @@ export async function generateBidNoBid({
 
     let pdfUrl: string | null = null;
     let pdfPathname: string | null = null;
+    let pdfUploadError: string | null = null;
     let pdfBuffer: Buffer | null = null;
     try {
       pdfBuffer = await renderBidNoBidPdf({
@@ -304,6 +312,7 @@ export async function generateBidNoBid({
       const uploaded = await uploadPdf(order.id, pdfBuffer);
       pdfUrl = uploaded.url;
       pdfPathname = uploaded.pathname;
+      pdfUploadError = uploaded.error;
     } catch (err) {
       console.error("[bid-no-bid:pdf_render_failed]", {
         workOrderId: order.id,
@@ -344,6 +353,7 @@ export async function generateBidNoBid({
       output,
       pdfUrl,
       pdfPathname,
+      uploadError: pdfUploadError,
       attempts,
       existingPackageId: existing?.id ?? null,
     });
@@ -421,6 +431,10 @@ interface UpsertArgs {
   output: BidNoBidOutput;
   pdfUrl: string | null;
   pdfPathname: string | null;
+  /** Non-null when the Blob upload silently failed. Persisted to
+   *  error_message so the failure is queryable from the DB even when
+   *  Vercel runtime logs are paywalled. */
+  uploadError: string | null;
   attempts: number;
   existingPackageId: number | null;
 }
@@ -428,6 +442,8 @@ interface UpsertArgs {
 async function upsertPackage(args: UpsertArgs): Promise<number> {
   const outputJson = JSON.stringify(args.output);
   const intakeJson = JSON.stringify(args.intake);
+  // When blob failed, preserve the diagnostic instead of clearing error_message.
+  const errorMessage = args.pdfUrl == null && args.uploadError ? args.uploadError : null;
   if (args.existingPackageId != null) {
     const rows = await sql`
       UPDATE proposal_packages SET
@@ -436,7 +452,7 @@ async function upsertPackage(args: UpsertArgs): Promise<number> {
         pdf_pathname = COALESCE(${args.pdfPathname}, pdf_pathname),
         generation_status = 'ready',
         generation_attempts = ${args.attempts},
-        error_message = NULL,
+        error_message = ${errorMessage},
         tender_title = COALESCE(${args.tenderTitle}, tender_title),
         agency = COALESCE(${args.agency}, agency),
         tender_url = COALESCE(${args.tenderUrl}, tender_url),
@@ -456,12 +472,12 @@ async function upsertPackage(args: UpsertArgs): Promise<number> {
       user_id, work_order_id, pipeline_item_id, plan,
       tender_title, agency, tender_url, intake,
       stripe_session_id, output, pdf_url, pdf_pathname,
-      generation_status, generation_attempts
+      generation_status, generation_attempts, error_message
     ) VALUES (
       ${args.userId}, ${args.workOrderId}, ${args.pipelineItemId}, ${BID_PLAN},
       ${args.tenderTitle}, ${args.agency}, ${args.tenderUrl}, ${intakeJson}::jsonb,
       ${args.stripeSessionId}, ${outputJson}::jsonb, ${args.pdfUrl}, ${args.pdfPathname},
-      'ready', ${args.attempts}
+      'ready', ${args.attempts}, ${errorMessage}
     )
     RETURNING id
   ` as unknown as Array<{ id: number }>;
