@@ -2357,6 +2357,87 @@ Preserve RawTender, CrawlResult, MatchedTender, proposal_packages, work_orders, 
 - What remains: Open + merge PR; live-test the new email template in inboxes; live-test the rate-limit and resend flow; confirm or add `email_queue.assessment_id` unique index; Sprint 5 funnel telemetry + Blob upload diagnostic; optional score weighting refactor.
 - What the next agent must read first: SESSION.md (this entry), AGENTS.md, docs/agents/dashboard-architecture.md, docs/agents/assessment-architecture.md
 
+### Session Update
+- Agent: Claude Code (opus-4-7)
+- Date: 2026-05-13
+- Task Completed: Closed the Sprint 5 tail (PR #11) and shipped the score-reweight + financial-docs-at-purchase bundle (PR #12). Both merged to `main`, Vercel deployed, prod DB backfilled where applicable. Sprint 5 is now functionally complete; Sprint 6 is the next coherent task.
+- Files Changed (across PRs #11 + #12):
+  - **PR #11 — activation funnel telemetry + Blob diagnostic** (commit `efd9cc2`, merged in `3fbcaa9`):
+    - `src/lib/telemetry/funnel.ts` (NEW) — `funnel_events` table (lazy CREATE TABLE IF NOT EXISTS), `track()` helper that never throws, `getFunnelDaily()` + `getFunnelTotals()` for digest consumption.
+    - `src/lib/telemetry/client.ts` (NEW) — client beacon with `sendBeacon` for anonymous events, fetch+keepalive for authed (sendBeacon can't carry headers). Per-browser `anon_id` in localStorage so anonymous-funnel counts work.
+    - `src/components/telemetry/FunnelBeacon.tsx` (NEW) — one-shot mount beacon, dropped onto `/dashboard` for `dashboard_landed`.
+    - `src/components/telemetry/TenderOpenLink.tsx` (NEW) — wraps the Open ↗ in `TendersTab` so each click fires `tender_clicked` with code/sourceProvenance/confidence/fit before navigation.
+    - `src/app/api/telemetry/event/route.ts` (NEW) — POST endpoint; strict event-name validation; optional auth.
+    - `src/app/api/admin/funnel/route.ts` (NEW) — admin GET, per-day + totals, `?days=N`.
+    - Server-side `track()` sprinkled into: `src/app/api/assessment/route.ts` (authed `assessment_started`), `src/lib/assessment/run.ts` (`assessment_completed`), `src/app/api/pay/checkout/route.ts` (`paid_intent_clicked`), `src/app/api/webhooks/stripe/route.ts` (`payment_succeeded` in `handleCheckoutCompleted`), and all three generators on the `ok:true` path (`deliverable_ready`).
+    - Blob diagnostics: `src/lib/bid-no-bid/generate.ts` and `src/lib/proposal-package/bundle.ts` widened from `error: <message>` to `{ errorName, errorCode, errorStatus, tokenPrefix, tokenLength, bufferBytes }` so the next `[*:blob_upload_failed]` is one log query away from triage.
+  - **PR #12 — drop financial_stability from score; collect financial docs at purchase** (commit `63db3d8`, merged in `fe117e5`):
+    - `src/lib/types.ts` — `ReadinessDimensions` now has 4 fields (dropped `financial_stability`).
+    - `src/lib/assessment/analyze.ts` — prompt rewritten: "financial evidence is collected at the deliverable stage, not scored here." New weights: technical 30%, compliance 30%, geographic 20%, experience 20%. Default fallback `overall_score` raised 46 → 49. Parser now recomputes `overall_score` from dimensions when the LLM nests it under `readiness_dimensions` instead of returning it at the top level (the exact bug observed on row 175 — model put `overall_score: 65` inside `readiness_dimensions` and the merge dropped it to the default 46).
+    - `src/lib/assessment/score.ts` — grant formula rewritten: drop the two financial buckets. New weights: Impact 35% / M&E 25% / Grant-Mgmt 20% (compliance only) / Org-Capacity 20%.
+    - `src/lib/assessment/data.ts`, `src/lib/email/assessmentPdf.tsx`, `src/app/assessment/AssessmentResults.tsx`, `src/app/assessment/page.tsx`, `src/lib/ai.ts`, `scripts/prospect-match-smoke.ts` — drop the 5th dim from labels / peer defaults / PDF DimBar / results page / dead-code prompt / test smoke.
+    - `src/app/dashboard/services/ServiceIntakeForm.tsx` — second file-upload slot "Upload financial documents (audited financials, bank reference, or balance sheet — optional, sharpens the financial section)" on bid-no-bid + proposal-draft + roster-fast-track intakes. Stored on intake as `financial_documents_url` / `financial_documents_filename`.
+    - `src/lib/proposal-package/context.ts` + `src/lib/bid-no-bid/generate.ts` — `buildIntakeSummary` now surfaces `financial_documents_provided: yes (<filename>)` to the deliverable LLM context instead of leaking the storage URL.
+    - `src/app/api/assessment/public/route.ts` — `assessment_started` telemetry now fires on the public (lead-gen) route too. Sprint 5 tail validation surfaced that only the authenticated route was instrumented.
+    - `scripts/migrate.mjs` — added a dedupe-then-CREATE-UNIQUE-INDEX block for `email_queue.assessment_id`. Caveat: the splitter filters by `^(CREATE|ALTER)` so the new multi-line `DELETE` block confused it; the partial index was filtered out and had to be applied manually after migrate.mjs ran.
+    - `src/lib/text/entities.ts` (NEW) — small `decodeHtmlEntities()` decoder for `&#8211;` / `&amp;` / named entities. Applied at write (run.ts cleanCompanyName), read (data.ts rowToReport), and email render (sendAssessment.ts cleanArgs) so scraped page-title HTML entities no longer reach Gmail.
+- Tests Run:
+  - `npx tsc --noEmit` — clean after both PRs.
+  - **Prod DB validation against assessment 175 (Fortuna DMCC, oday@zawda.me)** after PR #11 deployed but before PR #12:
+    - `assessments.readiness_score = 46` even though LLM dims averaged 65 (`technical 75 + compliance 55 + financial 50 + geographic 80 + experience 65`). Root cause: LLM nested `overall_score: 65` inside `readiness_dimensions`, so the merge fell back to the default 46.
+    - `funnel_events` had 1 row: `assessment_completed` with full props. `assessment_started` did NOT fire (public route was uninstrumented — fixed in PR #12).
+    - `email_queue` had only `email_queue_pkey` — no unique index on `assessment_id`. Confirmed 173 rows, 0 duplicates.
+    - `company_name` persisted as `Fortuna DMCC &#8211; Your Agri-Processor Partner across Middle East, Africa &amp; Asia` (raw HTML entities).
+  - **Prod backfill applied to row 175** (one-shot script, dry-run first): `readiness_score 46 → 68`, `company_name` decoded to `Fortuna DMCC – Your Agri-Processor Partner across Middle East, Africa & Asia`, `ai_analysis.overall_score` set to 68 via `jsonb_set`.
+  - **Email template render check against `oday@zawda.me`** — the PR #9 paper-toned editorial template renders correctly in Gmail. One visible bug — HTML entities in the eyebrow + "BEST FIT FOR" callout (`&#8211;` / `&amp;`) — fixed in PR #12 via the read-side decode in sendAssessment.ts.
+  - **Migration applied to prod**: `node scripts/migrate.mjs` ran clean for all `CREATE TABLE` / `ALTER TABLE` statements. The new `CREATE UNIQUE INDEX email_queue_assessment_id_unique` was filtered out by the splitter; applied directly via tagged template literal. Confirmed in `pg_indexes`: `email_queue_assessment_id_unique ON public.email_queue USING btree (assessment_id) WHERE (assessment_id IS NOT NULL)`.
+- Result:
+  - **Activation funnel is now end-to-end measurable.** Seven events sprinkled across the live activation path, an admin `/api/admin/funnel?days=N` endpoint exposes per-day + totals + distinct users, daily-digest cron can include funnel counts.
+  - **Readiness scoring is no longer dominated by non-public financial signal.** New weights put a typical SME with a clear capability story into the 55–70 band. Financial evidence is captured at the bid-no-bid / proposal / roster intake step.
+  - **Row 175 fixed in prod** — first real-world test of the new pipeline shape is now 68/100 with a clean company name, ready to be re-emailed if you want to validate the cross-client render with the decoded entities + new score.
+  - **Blob diagnostic richer** — the next `[bid-no-bid:blob_upload_failed]` will tell us errorName/errorCode/errorStatus/tokenPrefix in one log line.
+- Blockers:
+  - **Vercel Blob upload still failing** for bid-no-bid pdf-pathname path — not customer-facing (email-attachment fallback delivers the PDF). Richer logging will catch the error mode on next retry.
+  - **`migrate.mjs` splitter has a regex/comment fragility** — multi-line non-CREATE/ALTER statements confuse the `split(/;/) + filter` pattern; non-DDL migration steps need to be applied manually.
+  - **Two STRIPE_SECRET_KEY + two STRIPE_WEBHOOK_SECRET entries in Vercel env** — still pending audit + cleanup.
+- Important Decisions:
+  - **Financial stability removed from the public score; collected at the deliverable purchase step.** Founder call: "remove [financial_stability] and put it in the bid/no bid, proposal draft, roster fast track, as a field for documents to upload." The dashboard score now measures what's actually fixable through evidence-on-website.
+  - **Parser tolerance instead of just retraining the LLM.** The parser now recomputes the score from the four dimensions whenever the top-level field is missing or zero — the user never falls back to the default 46 by accident.
+  - **HTML-entity decode applied at three boundaries (write + read + email)** rather than one. The email-render path doesn't necessarily go through the read path, so all three needed coverage.
+- Contracts or Interfaces Changed:
+  - **Type-breaking for the dimension**: `ReadinessDimensions` lost `financial_stability`. JSONB columns still carry the old field for existing rows; the read-side ignores it.
+  - New endpoints: `POST /api/telemetry/event`, `GET /api/admin/funnel?days=N`.
+  - New table: `funnel_events (id BIGSERIAL, user_id INTEGER, anon_id TEXT, event TEXT, props JSONB, created_at TIMESTAMPTZ)`.
+  - New partial index: `email_queue_assessment_id_unique ON email_queue (assessment_id) WHERE assessment_id IS NOT NULL`.
+  - New intake fields: `financial_documents_url`, `financial_documents_filename` on bid-no-bid / proposal / roster work_orders.
+  - `RawTender`, `CrawlResult`, `MatchedTender`, `proposal_packages`, `work_orders`, `pipeline_items`, `assessments` schemas unchanged.
+- Docs Updated: `SESSION.md` only (this entry).
+- Next Recommended Task: **Sprint 6 — 5-company assessment audit + classifier or sector-map fix.** Run 5 representative companies through the live `/assessment` flow on prod. For each: compare LLM classification + matched-sector + matched-tenders against ground truth. Identify the highest-impact failure mode and fix in `analyze.ts` (prompt), `sector-adjacency.ts` (mapping), or `match.ts` (scoring).
+- Recommended Agent: Claude Code (Opus or Sonnet 4.6).
+- Paste-Ready Next Prompt:
+
+```text
+Read SESSION.md (especially the 2026-05-13 entry), AGENTS.md, CLAUDE.md, docs/agents/assessment-architecture.md.
+
+Sprints 1–5 are complete and deployed. The auto-fulfillment chain is validated end-to-end with a real $39 payment; the dashboard is the D2 tabbed report; the readiness score is no longer dominated by non-public financial signal; activation telemetry is wired on both authenticated and public assessment routes; the email_queue partial unique index is in prod; assessment 175 is backfilled to 68/100 with a decoded company name.
+
+Begin Sprint 6: 5-company assessment audit + classifier/sector-map fix.
+
+The founder will provide 5 company URLs (mix of industries). For each:
+1. Run the company through /assessment on prod (https://www.tenderpath.me/assessment).
+2. Record the LLM's detected_industry, sectors[], capabilities[], readiness_dimensions, and the top 5 matched tenders + match_reasons.
+3. Compare against ground truth (what the company actually does, where they could realistically bid, what sectors map). Flag mismatches.
+4. After all 5, group failures by category: (a) classification too broad/narrow, (b) sector-map missing or wrong, (c) match scoring over/under-weights some signal, (d) something else.
+5. Identify the single highest-impact failure and propose a fix in analyze.ts (prompt), sector-adjacency.ts (mapping), or match.ts (scoring). Land it as one focused PR with before/after screenshots.
+
+Reuse the new score formula (technical 30 / compliance 30 / geographic 20 / experience 20) — do NOT add another dimension unless the audit clearly motivates it. Update SESSION.md with the 5-company table + the chosen fix when finished.
+```
+
+### Short Resume State
+- What is now true: Sprints 1, 2, 3, 4 + 5 (both first cut and tail) complete and deployed to prod. PRs merged today: #11 (activation funnel telemetry + Blob diagnostic) + #12 (drop financial_stability from score, financial docs at deliverable intake, assessment_started on public route, email_queue unique index, HTML entity decode, row-175 backfill 46 → 68). `migrate.mjs` applied against prod; `email_queue_assessment_id_unique` partial index created. Email template renders correctly in Gmail; HTML-entity bug visible in row 175's first send is now fixed at write/read/email-render boundaries.
+- What remains: **Sprint 6** (5-company assessment audit + classifier/sector-map fix). Small open items: Blob upload still failing (no customer impact; richer logging in place), two duplicate Stripe env entries in Vercel needing audit, optional `migrate.mjs` splitter refactor.
+- What the next agent must read first: SESSION.md (this entry), AGENTS.md, CLAUDE.md, docs/agents/assessment-architecture.md, docs/agents/dashboard-architecture.md
+
 ---
 
 The next agent must not infer progress from commits alone.  
