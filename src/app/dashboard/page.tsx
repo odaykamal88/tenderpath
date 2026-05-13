@@ -13,6 +13,7 @@ import { TendersTab } from "@/components/assessment/TendersTab";
 import { GrantsTab } from "@/components/assessment/GrantsTab";
 import { NextStepsTab } from "@/components/assessment/NextStepsTab";
 import { FunnelBeacon } from "@/components/telemetry/FunnelBeacon";
+import { FoundingMemberOffer } from "@/components/assessment/FoundingMemberOffer";
 import { getCurrentUserAssessment, getThisWeek } from "@/lib/assessment";
 import dashStyles from "@/components/assessment/dashboard.module.css";
 
@@ -54,6 +55,7 @@ export default async function DashboardPage({
       companyName={data.companyName}
       counts={counts}
     >
+      <FoundingMemberOffer />
       <FunnelBeacon
         event="dashboard_landed"
         props={{

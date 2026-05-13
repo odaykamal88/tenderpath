@@ -67,7 +67,7 @@ export default function Services() {
               Rate sheet
             </p>
             <p className="text-[13px] text-ink-2 leading-[1.6]">
-              Transparent, listed pricing. No discovery calls. No tier upsell. Pay with card, USDT, wire, or Whish.
+              Transparent, listed pricing. No discovery calls. No tier upsell. Pay with card.
             </p>
           </div>
           <div className="border-t border-ink">
@@ -110,24 +110,11 @@ export default function Services() {
                   >
                     {tier.cta} →
                   </a>
-                  <a
-                    href={`/pay?plan=${tier.slug}`}
-                    className="hidden sm:inline-block font-mono text-[9px] tracking-[0.08em] uppercase text-mute hover:text-ink"
-                  >
-                    Pay USDT · Wire · Whish
-                  </a>
                 </div>
                 {/* Mobile-only tagline (full width) */}
                 <p className="lg:hidden col-span-2 text-[13px] text-ink-2 leading-[1.55]">
                   {tier.tagline}
                 </p>
-                {/* Mobile-only payment options under tagline */}
-                <a
-                  href={`/pay?plan=${tier.slug}`}
-                  className="sm:hidden col-span-2 -mt-1 font-mono text-[9px] tracking-[0.08em] uppercase text-mute"
-                >
-                  Pay USDT · Wire · Whish →
-                </a>
               </article>
             ))}
           </div>
