@@ -95,6 +95,18 @@ function addUnique(items: string[], additions: string[]): string[] {
  * "consulting" even when the evidence says warehousing, transport, security,
  * or facility operations. Keep this narrow and evidence-driven.
  */
+function countStringMatches(text: string, signals: string[]): number {
+  let n = 0;
+  for (const s of signals) if (text.includes(s)) n += 1;
+  return n;
+}
+
+function countPatternMatches(text: string, patterns: RegExp[]): number {
+  let n = 0;
+  for (const re of patterns) if (re.test(text)) n += 1;
+  return n;
+}
+
 function applyConcreteIndustryGuards(
   classification: IndustryClassification,
   context: string,
@@ -104,14 +116,27 @@ function applyConcreteIndustryGuards(
     ...classification.services,
   ].join(" ").toLowerCase();
 
+  // Concrete physical-trade signals — each entry is a distinct piece of
+  // evidence. Counted, not flagged. Order doesn't matter.
   const logisticsSignals = [
     "warehouse", "warehousing", "supply chain", "logistics",
-    "freight", "transport services", "transportation services",
+    "freight", "freight forwarding", "transport services", "transportation services",
     "distribution services", "last-mile", "last mile",
     "cargo", "fleet", "food packaging", "food distribution",
+    "shipping", "courier", "haulage", "trucking", "drayage",
+    "customs clearance", "customs broker", "multimodal", "intermodal",
+    "container", "container handling", "sea freight", "air freight",
+    "land freight", "ocean freight", "stevedoring",
   ];
+  // IT signals — tightened. Dropped the ambiguous catch-alls "platform",
+  // "managed services", "telecom", "cloud" which appear on many non-IT
+  // company sites (freight forwarders mention "tracking platform", logistics
+  // companies say "managed services", anybody can host on "cloud"). Kept
+  // unambiguous software-trade terms and explicit IT-reseller patterns.
   const itSignals = [
-    /\b(information technology|ict|it services?|software|saas|platform|systems integration|network solutions?|cybersecurity|data systems?|digital transformation|erp|cloud|managed services?|telecom|telecommunications)\b/i,
+    /\b(information technology services|ict services?|it services? (provider|firm|company)|software development|software engineering|saas|systems integration|network solutions?|cybersecurity|data systems? services?|digital transformation|erp implementation|cloud (services?|infrastructure|migration))\b/i,
+    /\b(software (company|firm|house|vendor|developer)|tech (company|firm|startup)|technology (company|firm)|it firm)\b/i,
+    /\b(apple (premium )?reseller|microsoft (gold )?partner|cisco partner|samsung reseller|hardware reseller|ict retailer|it (hardware|equipment) (reseller|supplier|distributor))\b/i,
   ];
   const researchConsultingSignals = [
     /\b(monitoring and evaluation|monitoring, evaluation|m&e|research consultants?|research and consultancy|policy research|impact evaluation|survey research|data collection|analytics|development consulting|technical assistance|capacity building)\b/i,
@@ -129,32 +154,69 @@ function applyConcreteIndustryGuards(
     "cleaning service", "catering",
   ];
 
-  const hasIt = hasAnyPattern(text, itSignals);
-  const hasResearchConsulting = hasAnyPattern(text, researchConsultingSignals);
-  const hasEngineering = hasAnyPattern(text, engineeringSignals);
-  const hasLogistics = hasAnySignal(text, logisticsSignals);
-  const hasSecurity = hasAnySignal(text, securitySignals);
-  const hasFacility = hasAnySignal(text, facilitySignals);
+  const counts = {
+    logistics: countStringMatches(text, logisticsSignals),
+    it: countPatternMatches(text, itSignals),
+    consulting: countPatternMatches(text, researchConsultingSignals),
+    engineering: countPatternMatches(text, engineeringSignals),
+    security: countStringMatches(text, securitySignals),
+    facility: countStringMatches(text, facilitySignals),
+  };
 
-  if (!hasIt && !hasResearchConsulting && !hasEngineering && !hasLogistics && !hasSecurity && !hasFacility) return classification;
+  const total = counts.logistics + counts.it + counts.consulting + counts.engineering + counts.security + counts.facility;
+  if (total === 0) return classification;
 
+  // Sectors get added when a category fires at all. This stays lenient — the
+  // tightening happens at the industry-pick step below.
   const sectors = addUnique(classification.sectors, [
-    ...(hasIt ? ["Information Technology"] : []),
-    ...(hasResearchConsulting ? ["Consulting Services", "Research & Evaluation", "Technical Assistance"] : []),
-    ...(hasEngineering ? ["Engineering Services"] : []),
-    ...(hasLogistics ? ["Logistics & Supply Chain", "Warehousing & Distribution"] : []),
-    ...(hasSecurity ? ["Security Services"] : []),
-    ...(hasFacility ? ["Facility Management"] : []),
+    ...(counts.it > 0 ? ["Information Technology"] : []),
+    ...(counts.consulting > 0 ? ["Consulting Services", "Research & Evaluation", "Technical Assistance"] : []),
+    ...(counts.engineering > 0 ? ["Engineering Services"] : []),
+    ...(counts.logistics > 0 ? ["Logistics & Supply Chain", "Warehousing & Distribution"] : []),
+    ...(counts.security > 0 ? ["Security Services"] : []),
+    ...(counts.facility > 0 ? ["Facility Management"] : []),
   ]);
 
-  const detected_industry =
-    hasIt ? "it"
-    : hasResearchConsulting ? "consulting"
-    : hasEngineering ? "engineering"
-    : hasLogistics ? "logistics"
-    : hasSecurity ? "security"
-    : hasFacility ? "facilities"
-    : classification.detected_industry;
+  // Pick the category with the most distinct evidence — not the first one in
+  // a hardcoded priority order. The Sprint 6 audit found a freight forwarder
+  // (Transporters SAL) misclassified as "it" because the old priority order
+  // hardcoded IT first: any single IT mention (e.g. "platform" or "managed
+  // services") would override 8+ logistics signals. Now: most signals wins,
+  // ties broken in favour of concrete physical trades (logistics/engineering/
+  // security/facility) over service-economy categories (it/consulting).
+  const categoryToIndustry: Record<keyof typeof counts, string> = {
+    logistics: "logistics",
+    it: "it",
+    consulting: "consulting",
+    engineering: "engineering",
+    security: "security",
+    facility: "facilities",
+  };
+  const concretePhysicalTrades = new Set<keyof typeof counts>(["logistics", "engineering", "security", "facility"]);
+
+  const ranked = (Object.entries(counts) as Array<[keyof typeof counts, number]>)
+    .filter(([, c]) => c > 0)
+    .sort((a, b) => {
+      if (b[1] !== a[1]) return b[1] - a[1];
+      const aPhys = concretePhysicalTrades.has(a[0]);
+      const bPhys = concretePhysicalTrades.has(b[0]);
+      if (aPhys && !bPhys) return -1;
+      if (!aPhys && bPhys) return 1;
+      return 0;
+    });
+
+  let detected_industry = classification.detected_industry;
+  const top = ranked[0];
+  if (top) {
+    const [topCategory, topCount] = top;
+    const topIndustry = categoryToIndustry[topCategory];
+    // Keep the LLM's industry when it already matches our top category.
+    // Override only when our top has ≥2 distinct signals — a single match
+    // is too thin to flip a primary industry on its own.
+    if (topIndustry === classification.detected_industry || topCount >= 2) {
+      detected_industry = topIndustry;
+    }
+  }
 
   return {
     ...classification,
@@ -194,6 +256,14 @@ function applyBroadProfileGuards(
     "supply chain management", "supply and delivery", "construction",
     "engineering", "software", "platform", "translation", "interpretation",
     "localization",
+    // IT-retail / hardware-reseller signals so Apple/Microsoft/Cisco partners
+    // and similar device-distribution businesses aren't broadened into
+    // generic "Consulting Services" when their site mentions training or
+    // capacity building (Apple Professional Learning is a classic trigger).
+    "apple reseller", "apple premium reseller", "microsoft partner",
+    "cisco partner", "hardware reseller", "device reseller",
+    "it equipment", "ict retailer", "device sales", "hardware sales",
+    "macbook", "iphone", "ipad",
   ];
   const directSecuritySignals = [
     "guard service", "guarding", "armed security", "security guards",
