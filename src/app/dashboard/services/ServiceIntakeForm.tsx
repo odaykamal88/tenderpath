@@ -78,29 +78,46 @@ export default function ServiceIntakeForm({
   const [error, setError] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<{ name: string; url: string } | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [financialFile, setFinancialFile] = useState<{ name: string; url: string } | null>(null);
+  const [uploadingFinancial, setUploadingFinancial] = useState(false);
+
+  async function uploadOne(file: File): Promise<{ name: string; url: string } | { error: string }> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+    const headers: HeadersInit = token ? { authorization: `Bearer ${token}` } : {};
+    try {
+      const res = await fetch("/api/dashboard/vault/upload", { method: "POST", headers, body: formData });
+      const data = (await res.json().catch(() => ({}))) as { url?: string; name?: string; error?: string };
+      if (!res.ok || !data.url) {
+        return { error: data.error ?? "File upload failed. Try again or skip." };
+      }
+      return { url: data.url, name: data.name ?? file.name };
+    } catch {
+      return { error: "File upload failed. Try again or skip." };
+    }
+  }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     setError(null);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-      const headers: HeadersInit = token ? { authorization: `Bearer ${token}` } : {};
-      const res = await fetch("/api/dashboard/vault/upload", { method: "POST", headers, body: formData });
-      const data = (await res.json().catch(() => ({}))) as { url?: string; name?: string; error?: string };
-      if (!res.ok || !data.url) {
-        setError(data.error ?? "File upload failed. Try again or skip.");
-        return;
-      }
-      setUploadedFile({ url: data.url, name: data.name ?? file.name });
-    } catch {
-      setError("File upload failed. Try again or skip.");
-    } finally {
-      setUploading(false);
-    }
+    const result = await uploadOne(file);
+    if ("error" in result) setError(result.error);
+    else setUploadedFile(result);
+    setUploading(false);
+  }
+
+  async function handleFinancialFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingFinancial(true);
+    setError(null);
+    const result = await uploadOne(file);
+    if ("error" in result) setError(result.error);
+    else setFinancialFile(result);
+    setUploadingFinancial(false);
   }
 
   async function submit(e: React.FormEvent) {
@@ -112,6 +129,7 @@ export default function ServiceIntakeForm({
       const intakeWithFile = {
         ...fields,
         ...(uploadedFile ? { vault_url: uploadedFile.url, vault_filename: uploadedFile.name } : {}),
+        ...(financialFile ? { financial_documents_url: financialFile.url, financial_documents_filename: financialFile.name } : {}),
         ...(docId ? { vault_doc_id: docId } : {}),
       };
 
@@ -251,6 +269,53 @@ export default function ServiceIntakeForm({
                   className="sr-only"
                   disabled={uploading}
                   onChange={handleFileChange}
+                />
+              </label>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Financial documents — captured here instead of being scored on the
+          dashboard. The deliverable templates use audited financials, bank
+          references, and balance sheets to populate the financial section. */}
+      {(service === "bid-no-bid" || service === "proposal" || service === "lta-roster") && (
+        <div>
+          <label className={labelCls} style={{ fontFamily: MONO }}>
+            Upload financial documents
+          </label>
+          <div className="mt-1.5">
+            {financialFile ? (
+              <div
+                className="flex items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 text-[12px] text-emerald-800"
+                style={{ fontFamily: MONO }}
+              >
+                <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+                </svg>
+                <span className="flex-1 truncate">{financialFile.name} · uploaded</span>
+                <button
+                  type="button"
+                  onClick={() => setFinancialFile(null)}
+                  className="shrink-0 text-emerald-700 hover:text-emerald-900 underline underline-offset-2"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-stone-300 px-3.5 py-3 text-[12px] text-stone-500 hover:border-stone-700 hover:text-stone-700 transition-colors">
+                <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="leading-snug flex-1">
+                  {uploadingFinancial ? "Uploading…" : <><span className="font-semibold text-stone-700">Choose file</span> — Audited financials, bank reference, or balance sheet (optional, sharpens the financial section)</>}
+                </span>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx"
+                  className="sr-only"
+                  disabled={uploadingFinancial}
+                  onChange={handleFinancialFileChange}
                 />
               </label>
             )}

@@ -174,11 +174,24 @@ function buildCompanyContext(assessment: AssessmentRow | null): string {
   ].filter(Boolean).join("\n");
 }
 
+const INTAKE_HIDDEN_KEYS = new Set([
+  "vault_url",
+  "vault_filename",
+  "vault_doc_id",
+  "financial_documents_url",
+  "financial_documents_filename",
+]);
+
 function buildIntakeSummary(intake: Record<string, unknown> | null): string {
   if (!intake) return "";
-  const entries = Object.entries(intake)
-    .filter(([k]) => !["vault_url", "vault_filename", "vault_doc_id"].includes(k));
-  return entries.map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`).join("\n");
+  const entries = Object.entries(intake).filter(([k]) => !INTAKE_HIDDEN_KEYS.has(k));
+  const lines = entries.map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`);
+  if (intake.financial_documents_url) {
+    lines.push(
+      `financial_documents_provided: yes (${typeof intake.financial_documents_filename === "string" ? intake.financial_documents_filename : "uploaded"})`,
+    );
+  }
+  return lines.join("\n");
 }
 
 async function uploadPdf(workOrderId: number, pdfBuffer: Buffer): Promise<{ url: string | null; pathname: string | null }> {

@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { CrawledData, AIAnalysis, Gap, TierSlug } from "@/lib/types";
+import type { CrawledData, AIAnalysis, Gap, ReadinessDimensions, TierSlug } from "@/lib/types";
 
 type IndustryClassification = {
   detected_industry: string;
@@ -361,7 +361,7 @@ You may only score based on evidence that is actually present in the context abo
   ✓ Structured user input (org type, countries, themes)
   ✓ Any uploaded documents reflected in the context
 You MAY NOT penalize a company for the absence of items that are typically non-public:
-  ✗ Audited financial statements
+  ✗ Audited financial statements (financial evidence is collected at the deliverable stage, not scored here)
   ✗ Bank references or balance sheets
   ✗ Internal compliance policies, ISO certificates, or insurance documents not mentioned
   ✗ Past performance contracts not described
@@ -381,13 +381,12 @@ Return a JSON object with exactly these fields:
 - "readiness_dimensions": object with scores 0-100 for each:
   - "technical_capability": ability to deliver the work — score from public evidence + user description
   - "compliance_readiness": registration, certifications, policies — score 50 (neutral) when no signal either way
-  - "financial_stability": evidence of financial capacity — score 50 (neutral) when no public signal; only deviate when website shows clear team size, scale, or operations
   - "geographic_reach": presence in target countries/regions — usually scoreable from public content
   - "experience_relevance": track record with similar projects — score from case studies, client lists, references that ARE described
-- "overall_score": weighted average (technical 25%, compliance 25%, financial 20%, geographic 15%, experience 15%)
+- "overall_score": top-level number — weighted average across exactly the four dimensions above: technical 30%, compliance 30%, geographic 20%, experience 20%. Do NOT include overall_score inside readiness_dimensions.
 - "summary": 2-3 sentence executive assessment that distinguishes confirmed strengths from evidence gaps
 
-Be rigorous but fair. Anchor scores in observed evidence, not in absences. A company with a clear capability story and missing financial info should land in the 50-65 range, not 30-40. Identify at least 3 gaps for any company scoring below 60, and prefer "supply evidence of X" gaps over "company lacks X" gaps when X is typically non-public.
+Be rigorous but fair. Anchor scores in observed evidence, not in absences. A company with a clear capability story and missing financial info should land in the 55-70 range, not 30-40 — financial evidence is collected separately when the user buys a deliverable. Identify at least 3 gaps for any company scoring below 60, and prefer "supply evidence of X" gaps over "company lacks X" gaps when X is typically non-public.
 
 Return ONLY valid JSON, no explanation.`,
       },
@@ -407,13 +406,12 @@ Return ONLY valid JSON, no explanation.`,
     strengths: [],
     gaps: [],
     readiness_dimensions: {
-      technical_capability: 45,
+      technical_capability: 50,
       compliance_readiness: 50,
-      financial_stability: 50,
-      geographic_reach: 45,
-      experience_relevance: 40,
+      geographic_reach: 50,
+      experience_relevance: 45,
     },
-    overall_score: 46,
+    overall_score: 49,
     summary: "Analysis incomplete — neutral baseline applied. Add a business description or upload documents to refine the score.",
   };
 
@@ -426,12 +424,37 @@ Return ONLY valid JSON, no explanation.`,
     devThemes,
   );
 
+  // The LLM sometimes nests overall_score inside readiness_dimensions instead
+  // of at the top level. If we got dimensions but no top-level score, recompute
+  // from the four-dimension formula so the user never falls back to 46 just
+  // because the model placed the field one level deep.
+  const mergedDims: ReadinessDimensions = {
+    ...defaultAnalysis.readiness_dimensions,
+    ...(parsed.readiness_dimensions ?? {}),
+  };
+  let overallScore = parsed.overall_score;
+  const dimsAsLoose = parsed.readiness_dimensions as unknown as Record<string, unknown> | undefined;
+  const nestedOverallScore =
+    dimsAsLoose && typeof dimsAsLoose.overall_score === "number"
+      ? (dimsAsLoose.overall_score as number)
+      : null;
+  if (typeof overallScore !== "number" || overallScore <= 0) {
+    overallScore = nestedOverallScore ?? Math.round(
+      mergedDims.technical_capability * 0.3
+        + mergedDims.compliance_readiness * 0.3
+        + mergedDims.geographic_reach * 0.2
+        + mergedDims.experience_relevance * 0.2
+    );
+  }
+
   // Merge analysis fields, but keep Stage 1 company identity authoritative.
   // The full-readiness prompt evaluates readiness; it must not reclassify a
   // logistics/warehouse/security company back into generic consulting.
   return {
     ...defaultAnalysis,
     ...parsed,
+    readiness_dimensions: mergedDims,
+    overall_score: overallScore,
     detected_industry: guardedClassification.detected_industry,
     sectors: guardedClassification.sectors,
     services: guardedClassification.services,

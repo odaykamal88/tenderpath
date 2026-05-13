@@ -58,7 +58,6 @@ export interface AIAnalysis {
 export interface ReadinessDimensions {
   technical_capability: number;
   compliance_readiness: number;
-  financial_stability: number;
   geographic_reach: number;
   experience_relevance: number;
 }

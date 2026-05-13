@@ -103,7 +103,7 @@ Return JSON with:
 - strengths: array of strengths for UN procurement
 - gaps: array of objects { gap, severity (high/medium/low), fix, action_steps[], upsell_tier }
   - upsell_tier must be one of: "tender-intelligence", "submission-package", "strategic-partnership"
-- readiness_dimensions: { technical_capability: 0-100, compliance_readiness: 0-100, financial_stability: 0-100, geographic_reach: 0-100, experience_relevance: 0-100 }
+- readiness_dimensions: { technical_capability: 0-100, compliance_readiness: 0-100, geographic_reach: 0-100, experience_relevance: 0-100 }
 - overall_score: 0-100 weighted average
 - summary: 2-3 sentence assessment summary
 
@@ -128,7 +128,6 @@ Return only valid JSON.`,
     readiness_dimensions: {
       technical_capability: 30,
       compliance_readiness: 30,
-      financial_stability: 30,
       geographic_reach: 30,
       experience_relevance: 30,
     },
@@ -160,16 +159,14 @@ export function computeGrantReadinessScore(
     dims.experience_relevance * 0.6 + dims.technical_capability * 0.4
   );
   const mAndE = Math.min(100, dims.compliance_readiness * 0.7 + dims.technical_capability * 0.3);
-  const grantMgmt = Math.min(100, dims.financial_stability * 0.5 + dims.compliance_readiness * 0.5);
+  const grantMgmt = dims.compliance_readiness;
   const orgCapacity = dims.technical_capability;
-  const financialControls = dims.financial_stability;
 
   let score =
-    impactMethodology * 0.3 +
-    mAndE * 0.2 +
+    impactMethodology * 0.35 +
+    mAndE * 0.25 +
     grantMgmt * 0.2 +
-    orgCapacity * 0.15 +
-    financialControls * 0.15;
+    orgCapacity * 0.2;
 
   if (orgType === "NGO") score = Math.min(100, score + 5);
   if (devThemes.length > 2) score = Math.min(100, score + 3);

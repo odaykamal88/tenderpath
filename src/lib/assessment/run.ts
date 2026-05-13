@@ -9,7 +9,14 @@ import { computeGrantReadinessScore } from "@/lib/assessment/score";
 import { matchTenders, matchGrants } from "@/lib/assessment/match";
 import { sendAssessmentEmail } from "@/lib/email/sendAssessment";
 import { track } from "@/lib/telemetry/funnel";
+import { decodeHtmlEntities } from "@/lib/text/entities";
 import type { AssessmentInput, Gap, MatchedGrant, MatchedTender, ReadinessDimensions, TierSlug } from "@/lib/types";
+
+function cleanCompanyName(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined) return null;
+  const decoded = decodeHtmlEntities(raw).replace(/\s+/g, " ").trim();
+  return decoded.length > 0 ? decoded : null;
+}
 
 export type AssessmentRunMode = "public" | "authenticated";
 
@@ -102,7 +109,7 @@ export async function createQueuedAssessment(body: Partial<AssessmentInput>) {
       company_name, email, website, description, countries, org_type,
       dev_themes, include_consultancies, assessment_status
     ) VALUES (
-      ${body.companyName ?? null}, ${body.email ?? null}, ${body.website ?? null},
+      ${cleanCompanyName(body.companyName)}, ${body.email ?? null}, ${body.website ?? null},
       ${description}, ${JSON.stringify(body.countries ?? [])}, ${body.orgType ?? null},
       ${JSON.stringify(body.devThemes ?? [])}, ${body.includeConsultancies ?? false}, 'queued'
     ) RETURNING id, created_at
@@ -244,7 +251,7 @@ export async function runAssessmentPipeline(
     const rows = options.assessmentId
       ? await sql`
           UPDATE assessments
-          SET company_name = ${body.companyName ?? null},
+          SET company_name = ${cleanCompanyName(body.companyName)},
               email = ${body.email ?? null},
               website = ${body.website ?? null},
               description = ${storedDescription},
@@ -278,7 +285,7 @@ export async function runAssessmentPipeline(
             include_consultancies, assessment_status, assessment_duration_ms,
             assessment_timings, assessment_started_at, assessment_completed_at
           ) VALUES (
-            ${body.companyName ?? null}, ${body.email ?? null}, ${body.website ?? null},
+            ${cleanCompanyName(body.companyName)}, ${body.email ?? null}, ${body.website ?? null},
             ${storedDescription}, ${classification.detected_industry},
             ${JSON.stringify(body.countries ?? [])}, ${JSON.stringify(crawledData)},
             ${JSON.stringify(analysis)}, ${analysis.overall_score},
@@ -320,7 +327,7 @@ export async function runAssessmentPipeline(
 
     const result = {
       id: assessmentId,
-      company_name: body.companyName!,
+      company_name: cleanCompanyName(body.companyName) ?? body.companyName!,
       email: body.email!,
       sector: classification.detected_industry,
       sectors: classification.sectors,

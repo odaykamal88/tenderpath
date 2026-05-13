@@ -8,6 +8,7 @@ import {
   sendAssessmentResultEmail,
   validateAssessmentInput,
 } from "@/lib/assessment/run";
+import { track } from "@/lib/telemetry/funnel";
 import type { AssessmentInput } from "@/lib/types";
 
 /**
@@ -28,6 +29,12 @@ export async function POST(request: Request) {
     const wantsQueued = body.async === true || body.queued === true || body.mode === "queued";
     if (wantsQueued) {
       const queued = await createQueuedAssessment(body);
+      await track("assessment_started", {
+        assessment_id: queued.id,
+        mode: "public-queued",
+        has_website: Boolean(body.website),
+        has_description: Boolean(body.description),
+      });
       after(async () => {
         try {
           await runAssessmentPipeline(body, {
@@ -47,6 +54,12 @@ export async function POST(request: Request) {
         created_at: queued.created_at,
       }, { status: 202 });
     }
+
+    await track("assessment_started", {
+      mode: "public-inline",
+      has_website: Boolean(body.website),
+      has_description: Boolean(body.description),
+    });
 
     const result = await runAssessmentPipeline(body, {
       mode: "public",

@@ -123,6 +123,19 @@ ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS attempts INTEGER DEFAULT 0;
 ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS provider TEXT;
 ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS error TEXT;
 
+-- One row per assessment so resend-email's ON CONFLICT (assessment_id) upsert
+-- works without falling back to a plain INSERT. Dedupes any prior duplicates
+-- by keeping the most recent row.
+DELETE FROM email_queue
+WHERE id NOT IN (
+  SELECT DISTINCT ON (assessment_id) id
+  FROM email_queue
+  WHERE assessment_id IS NOT NULL
+  ORDER BY assessment_id, COALESCE(sent_at, created_at) DESC NULLS LAST, id DESC
+)
+AND assessment_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS email_queue_assessment_id_unique ON email_queue (assessment_id) WHERE assessment_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS crawl_logs (
   id SERIAL PRIMARY KEY,
   platform TEXT NOT NULL,
