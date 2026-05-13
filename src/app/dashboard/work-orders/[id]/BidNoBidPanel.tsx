@@ -235,6 +235,18 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
               Download PDF ↓
             </a>
           )}
+          {!pkg.pdf_url && pkg.error_message && (
+            <p className="text-[11px] text-amber-700" style={{ fontFamily: MONO }}>
+              PDF unavailable —{" "}
+              <button
+                onClick={handleRegenerate}
+                disabled={regenBusy || remaining <= 0}
+                className="underline underline-offset-2 hover:text-amber-900 disabled:opacity-50"
+              >
+                {regenBusy ? "retrying…" : "regenerate →"}
+              </button>
+            </p>
+          )}
         </div>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-6">
           <span

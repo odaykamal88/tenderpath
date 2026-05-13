@@ -332,6 +332,18 @@ export default function RosterWorkspacePanel({ workOrderId, paymentStatus, initi
                 Download bundle (.zip) ↓
               </a>
             )}
+            {!pkg.pdf_url && pkg.error_message && (
+              <p className="text-[11px] text-amber-700" style={{ fontFamily: MONO }}>
+                Bundle unavailable —{" "}
+                <button
+                  onClick={handleRegenerate}
+                  disabled={regenBusy || remaining <= 0}
+                  className="underline underline-offset-2 hover:text-amber-900 disabled:opacity-50"
+                >
+                  {regenBusy ? "retrying…" : "regenerate →"}
+                </button>
+              </p>
+            )}
             <a
               href={selectedAgency.portalUrl}
               target="_blank"
