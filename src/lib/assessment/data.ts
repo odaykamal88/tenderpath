@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { sql } from "@/lib/db";
 import { verifyToken } from "@/lib/auth";
+import { decodeHtmlEntities } from "@/lib/text/entities";
 import type { Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
 import type { Gap as D2Gap } from "@/components/assessment/GapsTab";
 import type { Tender } from "@/components/assessment/TendersTab";
@@ -10,7 +11,6 @@ import type { TenderPeek } from "@/components/assessment/ScoreTab";
 const DIM_LABELS: Record<keyof ReadinessDimensions, string> = {
   technical_capability: "Technical capability",
   compliance_readiness: "Compliance",
-  financial_stability: "Financial stability",
   geographic_reach: "Geography",
   experience_relevance: "Track record",
 };
@@ -18,7 +18,6 @@ const DIM_LABELS: Record<keyof ReadinessDimensions, string> = {
 const PEER_DEFAULTS: Record<keyof ReadinessDimensions, number> = {
   technical_capability: 68,
   compliance_readiness: 61,
-  financial_stability: 72,
   geographic_reach: 65,
   experience_relevance: 58,
 };
@@ -196,12 +195,14 @@ type DBRow = {
 };
 
 function rowToReport(row: DBRow): AssessmentReport {
-  const dims = row.ai_analysis?.readiness_dimensions ?? {
-    technical_capability: 0,
-    compliance_readiness: 0,
-    financial_stability: 0,
-    geographic_reach: 0,
-    experience_relevance: 0,
+  // Older assessment rows persisted with a 5th `financial_stability` field;
+  // we read whatever is there and ignore it. The UI no longer renders it.
+  const rawDims = row.ai_analysis?.readiness_dimensions as Partial<ReadinessDimensions> | undefined;
+  const dims: ReadinessDimensions = {
+    technical_capability: rawDims?.technical_capability ?? 0,
+    compliance_readiness: rawDims?.compliance_readiness ?? 0,
+    geographic_reach: rawDims?.geographic_reach ?? 0,
+    experience_relevance: rawDims?.experience_relevance ?? 0,
   };
   const status =
     row.assessment_status === "completed" ? "ready"
@@ -223,7 +224,7 @@ function rowToReport(row: DBRow): AssessmentReport {
     reportId: String(row.id),
     preparedAt: new Date(row.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
     status,
-    companyName: row.company_name,
+    companyName: decodeHtmlEntities(row.company_name) || row.company_name,
     sector: row.sector ?? "General",
     score,
     scoreDelta: 0,

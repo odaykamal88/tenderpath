@@ -60,7 +60,6 @@ export default function AssessmentResults({
     { label: "Geography", score: dims.geography ?? 0 },
     { label: "Compliance", score: dims.compliance ?? 0 },
     { label: "Track record", score: dims.experience ?? 0 },
-    { label: "Documentation", score: dims.documentation ?? 0 },
   ];
 
   return (

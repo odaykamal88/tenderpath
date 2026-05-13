@@ -164,7 +164,6 @@ function normalizeAssessmentResponse(data: AssessmentResponse | AssessmentPollRe
         : analysis?.readiness_dimensions) ?? {
         technical_capability: 0,
         compliance_readiness: 0,
-        financial_stability: 0,
         geographic_reach: 0,
         experience_relevance: 0,
       },

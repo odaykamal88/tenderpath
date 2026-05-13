@@ -124,7 +124,6 @@ const AssessmentDocument = ({
           <DimBar label="Geography" score={dims.geographic_reach ?? 0} />
           <DimBar label="Compliance" score={dims.compliance_readiness ?? 0} />
           <DimBar label="Track record" score={dims.experience_relevance ?? 0} />
-          <DimBar label="Documentation" score={dims.financial_stability ?? 0} />
         </View>
       </View>
 

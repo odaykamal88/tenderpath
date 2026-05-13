@@ -3,6 +3,7 @@ import { sql } from "@/lib/db";
 import type { TierSlug, Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
 import { notifyAdmin } from "@/lib/email/notifyAdmin";
 import { generateAssessmentPdf } from "@/lib/email/assessmentPdf";
+import { decodeHtmlEntities } from "@/lib/text/entities";
 
 interface TopTender {
   title: string;
@@ -73,8 +74,9 @@ export async function sendAssessmentEmail(args: SendArgs): Promise<void> {
   const resultsUrl = `${appUrl}/dashboard`;
   const ctaUrl = `${appUrl}/#services`;
 
-  const html = renderHtml({ ...args, tier, resultsUrl, ctaUrl });
-  const text = renderText({ ...args, tier, resultsUrl, ctaUrl });
+  const cleanArgs = { ...args, companyName: decodeHtmlEntities(args.companyName) || args.companyName };
+  const html = renderHtml({ ...cleanArgs, tier, resultsUrl, ctaUrl });
+  const text = renderText({ ...cleanArgs, tier, resultsUrl, ctaUrl });
 
   // Generate PDF attachment when full assessment data is available
   let pdfAttachment: { filename: string; content: Buffer } | null = null;
@@ -82,7 +84,7 @@ export async function sendAssessmentEmail(args: SendArgs): Promise<void> {
     try {
       const pdfBuffer = await generateAssessmentPdf({
         id: args.assessmentId,
-        companyName: args.companyName,
+        companyName: cleanArgs.companyName,
         email: args.email,
         sectors: args.sectors ?? [],
         readinessScore: args.readinessScore,

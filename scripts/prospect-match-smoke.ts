@@ -116,7 +116,6 @@ function readinessDimensions(score: number): ReadinessDimensions {
   return {
     technical_capability: Math.min(92, score + 6),
     compliance_readiness: Math.min(88, score + 2),
-    financial_stability: Math.max(48, score - 8),
     geographic_reach: Math.min(90, score + 4),
     experience_relevance: Math.max(50, score - 4),
   };
