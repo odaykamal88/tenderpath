@@ -14,6 +14,10 @@ export interface UpsertArgs {
   output: ProposalOutput | RosterOutput;
   pdfUrl: string | null;
   pdfPathname: string | null;
+  /** Non-null when the Blob upload silently failed. Persisted to
+   *  error_message so the failure is queryable from the DB even when
+   *  Vercel runtime logs are paywalled. */
+  uploadError: string | null;
   attempts: number;
   existingPackageId: number | null;
 }
@@ -21,6 +25,8 @@ export interface UpsertArgs {
 export async function upsertPackage(args: UpsertArgs): Promise<number> {
   const outputJson = JSON.stringify(args.output);
   const intakeJson = JSON.stringify(args.intake);
+  // When blob failed, preserve the diagnostic instead of clearing error_message.
+  const errorMessage = args.pdfUrl == null && args.uploadError ? args.uploadError : null;
   if (args.existingPackageId != null) {
     const rows = await sql`
       UPDATE proposal_packages SET
@@ -29,7 +35,7 @@ export async function upsertPackage(args: UpsertArgs): Promise<number> {
         pdf_pathname = COALESCE(${args.pdfPathname}, pdf_pathname),
         generation_status = 'ready',
         generation_attempts = ${args.attempts},
-        error_message = NULL,
+        error_message = ${errorMessage},
         tender_title = COALESCE(${args.tenderTitle}, tender_title),
         agency = COALESCE(${args.agency}, agency),
         tender_url = COALESCE(${args.tenderUrl}, tender_url),
@@ -47,12 +53,12 @@ export async function upsertPackage(args: UpsertArgs): Promise<number> {
       user_id, work_order_id, pipeline_item_id, plan,
       tender_title, agency, tender_url, intake,
       stripe_session_id, output, pdf_url, pdf_pathname,
-      generation_status, generation_attempts
+      generation_status, generation_attempts, error_message
     ) VALUES (
       ${args.userId}, ${args.workOrderId}, ${args.pipelineItemId}, ${args.plan},
       ${args.tenderTitle}, ${args.agency}, ${args.tenderUrl}, ${intakeJson}::jsonb,
       ${args.stripeSessionId}, ${outputJson}::jsonb, ${args.pdfUrl}, ${args.pdfPathname},
-      'ready', ${args.attempts}
+      'ready', ${args.attempts}, ${errorMessage}
     )
     RETURNING id
   ` as unknown as Array<{ id: number }>;

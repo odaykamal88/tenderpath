@@ -138,6 +138,7 @@ export async function generateRosterFastTrack({
 
     let zipUrl: string | null = null;
     let zipPathname: string | null = null;
+    let zipUploadError: string | null = null;
     try {
       const docCtx = { companyName, tenderTitle: agency.label, agency: agency.label, generatedAt };
       const [capabilityDoc, coverLetterDoc, instructionsPdf] = await Promise.all([
@@ -156,11 +157,14 @@ export async function generateRosterFastTrack({
       );
       zipUrl = uploaded.url;
       zipPathname = uploaded.pathname;
+      zipUploadError = uploaded.error;
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error("[roster-fast-track:bundle_failed]", {
         workOrderId: order.id,
-        error: err instanceof Error ? err.message : String(err),
+        error: msg,
       });
+      zipUploadError = `bundle_failed: ${msg}`;
     }
 
     const persisted = await upsertPackage({
@@ -176,6 +180,7 @@ export async function generateRosterFastTrack({
       output,
       pdfUrl: zipUrl,
       pdfPathname: zipPathname,
+      uploadError: zipUploadError,
       attempts,
       existingPackageId: existing?.id ?? null,
     });

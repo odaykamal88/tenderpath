@@ -89,6 +89,7 @@ export async function generateProposalPackage({
 
     let zipUrl: string | null = null;
     let zipPathname: string | null = null;
+    let zipUploadError: string | null = null;
     try {
       const docCtx = { companyName, tenderTitle, agency, generatedAt };
       const [proposalDoc, coverLetterDoc, financialXlsx, complianceMatrixPdf] = await Promise.all([
@@ -109,12 +110,17 @@ export async function generateProposalPackage({
       );
       zipUrl = uploaded.url;
       zipPathname = uploaded.pathname;
+      zipUploadError = uploaded.error;
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error("[proposal-draft:bundle_failed]", {
         workOrderId: order.id,
-        error: err instanceof Error ? err.message : String(err),
+        error: msg,
       });
-      // Bundle failure does not block analysis storage — dashboard still renders the JSON view.
+      // Bundle failure does not block analysis storage — dashboard still
+      // renders the JSON view. Persist the diagnostic so the failure is
+      // queryable from the DB without depending on Vercel runtime logs.
+      zipUploadError = `bundle_failed: ${msg}`;
     }
 
     const persisted = await upsertPackage({
@@ -130,6 +136,7 @@ export async function generateProposalPackage({
       output,
       pdfUrl: zipUrl,
       pdfPathname: zipPathname,
+      uploadError: zipUploadError,
       attempts,
       existingPackageId: existing?.id ?? null,
     });
