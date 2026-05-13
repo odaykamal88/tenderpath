@@ -1,6 +1,7 @@
 import { put } from "@vercel/blob";
 import { sql } from "@/lib/db";
 import { sendBidNoBidReadyEmail } from "@/lib/email/sendBidNoBidNotification";
+import { track } from "@/lib/telemetry/funnel";
 import { renderBidNoBidPdf } from "./pdfDoc";
 import {
   extractTenderRequirements,
@@ -197,9 +198,20 @@ async function uploadPdf(workOrderId: number, pdfBuffer: Buffer): Promise<{ url:
     });
     return { url: result.url, pathname: result.pathname };
   } catch (err) {
+    // Surface the most diagnostic fields the @vercel/blob SDK exposes so we
+    // can tell apart: bad token, wrong store, expired token, network reset,
+    // payload too large, etc. Each of these is fixable in a different way.
+    const e = err as { name?: string; code?: string; status?: number; message?: string };
     console.error("[bid-no-bid:blob_upload_failed]", {
       workOrderId,
-      error: err instanceof Error ? err.message : String(err),
+      pathname,
+      bufferBytes: pdfBuffer.length,
+      tokenPrefix: token.slice(0, 14),
+      tokenLength: token.length,
+      errorName: e?.name ?? null,
+      errorCode: e?.code ?? null,
+      errorStatus: e?.status ?? null,
+      message: e?.message ?? String(err),
     });
     return { url: null, pathname: null };
   }
@@ -347,6 +359,19 @@ export async function generateBidNoBid({
         });
       }
     }
+
+    await track(
+      "deliverable_ready",
+      {
+        plan: BID_PLAN,
+        work_order_id: order.id,
+        package_id: persisted,
+        attempts,
+        has_pdf_url: Boolean(pdfUrl),
+        recommendation: output.recommendation ?? null,
+      },
+      { userId: order.user_id ?? null },
+    );
 
     return {
       ok: true,

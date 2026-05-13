@@ -8,6 +8,7 @@ import {
 import { computeGrantReadinessScore } from "@/lib/assessment/score";
 import { matchTenders, matchGrants } from "@/lib/assessment/match";
 import { sendAssessmentEmail } from "@/lib/email/sendAssessment";
+import { track } from "@/lib/telemetry/funnel";
 import type { AssessmentInput, Gap, MatchedGrant, MatchedTender, ReadinessDimensions, TierSlug } from "@/lib/types";
 
 export type AssessmentRunMode = "public" | "authenticated";
@@ -300,6 +301,15 @@ export async function runAssessmentPipeline(
       grantCount: matchedGrants.length,
       durationMs,
       timings,
+    });
+
+    await track("assessment_completed", {
+      assessment_id: assessmentId,
+      readiness_score: analysis.overall_score,
+      tender_count: matchedTenders.length,
+      grant_count: matchedGrants.length,
+      duration_ms: durationMs,
+      mode: options.mode,
     });
 
     await sql`

@@ -1,4 +1,5 @@
 import { sendRosterReadyEmail } from "@/lib/email/sendProposalPackageNotification";
+import { track } from "@/lib/telemetry/funnel";
 import {
   ROSTER_PLAN,
   MAX_ATTEMPTS,
@@ -198,6 +199,19 @@ export async function generateRosterFastTrack({
         });
       }
     }
+
+    await track(
+      "deliverable_ready",
+      {
+        plan: ROSTER_PLAN,
+        work_order_id: order.id,
+        package_id: persisted,
+        attempts,
+        has_zip_url: Boolean(zipUrl),
+        agency_slug: agency.slug,
+      },
+      { userId: order.user_id ?? null },
+    );
 
     return { ok: true, packageId: persisted, output, zipUrl, agency, attempts };
   } catch (err) {

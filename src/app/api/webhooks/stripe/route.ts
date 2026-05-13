@@ -4,6 +4,7 @@ import { sql } from "@/lib/db";
 import type Stripe from "stripe";
 import { createWorkOrderFromCheckout } from "@/lib/work-orders";
 import { notifyAdmin } from "@/lib/email/notifyAdmin";
+import { track } from "@/lib/telemetry/funnel";
 
 /**
  * FIX #1: Proper Stripe webhook with constructEvent verification.
@@ -130,6 +131,19 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   }
 
   await createWorkOrderFromCheckout(session, userId);
+
+  await track(
+    "payment_succeeded",
+    {
+      plan,
+      stripe_session_id: session.id,
+      amount_cents: session.amount_total ?? 0,
+      currency: session.currency ?? "usd",
+      is_subscription: isSubscriptionCheckout,
+      tier: tier ?? null,
+    },
+    { userId },
+  );
 
   // Create subscription record
   if (isSubscriptionCheckout && tier) {

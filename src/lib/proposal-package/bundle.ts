@@ -41,9 +41,18 @@ export async function bundleAndUpload(
     });
     return { url: result.url, pathname: result.pathname };
   } catch (err) {
+    // Match the diagnostic shape used in bid-no-bid/generate.ts:uploadPdf so
+    // the two upload failure modes can be triaged from the same log query.
+    const e = err as { name?: string; code?: string; status?: number; message?: string };
     console.error("[proposal-package:blob_upload_failed]", {
       pathname,
-      error: err instanceof Error ? err.message : String(err),
+      bufferBytes: zipBuffer.length,
+      tokenPrefix: token.slice(0, 14),
+      tokenLength: token.length,
+      errorName: e?.name ?? null,
+      errorCode: e?.code ?? null,
+      errorStatus: e?.status ?? null,
+      message: e?.message ?? String(err),
     });
     return { url: null, pathname: null };
   }
