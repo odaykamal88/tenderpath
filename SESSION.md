@@ -2438,6 +2438,78 @@ Reuse the new score formula (technical 30 / compliance 30 / geographic 20 / expe
 - What remains: **Sprint 6** (5-company assessment audit + classifier/sector-map fix). Small open items: Blob upload still failing (no customer impact; richer logging in place), two duplicate Stripe env entries in Vercel needing audit, optional `migrate.mjs` splitter refactor.
 - What the next agent must read first: SESSION.md (this entry), AGENTS.md, CLAUDE.md, docs/agents/assessment-architecture.md, docs/agents/dashboard-architecture.md
 
+### Session Update
+- Agent: Claude Code (opus-4-7)
+- Date: 2026-05-13 (later in the same day as the Sprint 5 closure entry above)
+- Task Completed: **Sprint 6 — 5-company assessment audit + classifier fix.** Audited 5 real companies provided by the founder, identified the single highest-impact classifier failure mode (a freight forwarder with extensive UN clientele being classified as "IT" because of how `applyConcreteIndustryGuards` ordered signal categories), shipped PR #14 to fix it, re-ran all 5 companies, and confirmed the structural wins with zero regressions on the strong cases.
+- Files Changed (PR #14, commit `eb767e2`, merged in `b04758d`):
+  - `src/lib/assessment/analyze.ts` (+93/-23) — three changes:
+    1. **Rewrote `applyConcreteIndustryGuards`** from hardcoded priority order (`hasIt > hasConsulting > hasEngineering > hasLogistics > …`) to a **signal-count tiebreak**: count distinct matches per category, pick the category with the most evidence, break ties in favour of concrete physical trades (logistics/engineering/security/facility) over service-economy categories (IT/consulting). Only override the LLM's industry pick when our top category has **≥2 distinct signals** — a single passing mention is no longer enough to flip a primary industry.
+    2. **Tightened `itSignals`**: dropped the catch-alls "platform" / "managed services" / "telecom" / bare "cloud" (which fired on every freight forwarder's tracking page and every NGO's modern-website description). Added unambiguous software-trade terms (`software development`, `saas`, `systems integration`, `cybersecurity`, `erp implementation`) plus explicit IT-reseller patterns (`apple premium reseller`, `microsoft partner`, `cisco partner`, `hardware reseller`, `ict retailer`).
+    3. **Extended `applyBroadProfileGuards.concreteTradeSignals`** with IT-retail / hardware-reseller terms (`apple reseller`, `apple premium reseller`, `microsoft partner`, `hardware reseller`, `it equipment`, `device sales`, `macbook`, `iphone`, `ipad`) so legitimate Apple-reseller and similar device-distribution businesses aren't broadened into Consulting/Research/Technical-Assistance sectors when their site mentions Apple Professional Learning or capacity-building.
+- Tests Run:
+  - `npx tsc --noEmit` — clean.
+  - **First audit pass against prod (pre-fix), 5 companies submitted via POST /api/assessment/public with `queued: true`, IDs 176-180**:
+    | # | Company | Real industry | TenderPath industry | Top-5 match flavor |
+    |---|---|---|---|---|
+    | 176 | Group ILS | humanitarian logistics | logistics ✓ | **strong** — UNHCR Sudan water, UNDP solar Sudan, UNOPS Ukraine pipes, WB Turkey resilient cities, WB Ukraine logistics infra |
+    | 177 | Rafiki Holdings | petroleum transport (Zambia/E.Africa) | logistics ✓ but too generic | mixed — IOM Kenya vehicle rental + transport ✓ but also UNIDO furniture for coffee training centre |
+    | 178 | Elite Digital | Apple Premium Reseller (Kenya retail/IT) | it ✓ but **6 sectors** (Consulting/Research/TA/Education & Training added) | weak — UNICEF consultancy, UNIDO furniture, ILO conference services, no IT hardware tenders |
+    | 179 | Awash Welday GC | likely Ethiopian general contractor (site unreachable for ground-truth) | consulting ✗ (defaulted via thin crawl) | wrong-domain — all research/evaluation consultancies |
+    | 180 | Transporters SAL | Lebanese integrated logistics, 20+ UN clients (WFP/UNHCR/UNICEF/WHO/ICRC) | **it ✗✗** | catastrophically wrong — 5 IT equipment tenders (UNDP IT, UNRWA Computer Desktops, UNFPA pap smear "as IT"); ZERO logistics tenders |
+  - **Root cause identified**: `applyConcreteIndustryGuards` at `analyze.ts:150-157` used hardcoded priority (`hasIt ? "it" : hasResearchConsulting ? "consulting" : … : hasLogistics ? "logistics" : …`). Any single IT-adjacent term on Transporters SAL's website (likely "managed services" or "platform" or "telecom" in passing) fired `hasIt=true` and overrode the 8+ distinct logistics signals (warehouse, freight, transport, cargo, distribution, customs, multimodal, container, etc.) that also fired.
+  - **Second audit pass against prod (post-fix), same 5 companies submitted, IDs 181-185**:
+    | # | Company | Industry before → after | Sectors before → after | Top-match flavor before → after |
+    |---|---|---|---|---|
+    | 181 | Group ILS | logistics → logistics | 7 → 7 | strong → strong (no regression) |
+    | 182 | Rafiki Holdings | logistics → logistics | 3 → 3 (Energy variance) | mixed → mixed (no change — that's tender-coverage, not classifier) |
+    | 183 | Elite Digital | it → it | **6 → 2** (dropped Consulting/Research/TA, Education & Training) | irrelevant consultancies → now includes **FAO Kenya GIS Software Package** ✓ |
+    | 184 | Awash Welday GC | consulting → consulting | same | unchanged (thin-crawl fallback is a separate issue) |
+    | 185 | Transporters SAL | **it → logistics ✓** | dropped "Information Technology" | 5 IT equipment tenders → now **ILO Syria Event Logistics, ILO Lebanon Courier Services** ✓ |
+- Result:
+  - **Transporters SAL classifier flipped from "it" → "logistics"** — the single biggest classifier failure in the sample is fixed. Top matches now include actual logistics tenders (ILO Lebanon Courier Services, ILO Syria Event Logistics) instead of 5 random IT equipment RFPs. The "Information Technology" sector no longer pollutes the sector list.
+  - **Elite Digital sector explosion contained, 6 → 2 sectors.** The Apple Professional Learning → "Education & Training → Consulting Services → Research & Evaluation → Technical Assistance" cascade is dead. Top matches now include relevant IT tenders (FAO GIS Software, WB Kenya National Youth Opportunities with IT focus).
+  - **Zero regressions** on the no-IT-noise cases (Group ILS, Rafiki, Awash Welday). Small score deltas (±2-5 points) are within normal LLM run-to-run variance.
+  - **Two remaining failure modes are independent of the classifier and out of scope for this PR**:
+    - **Rafiki Holdings**: top matches drift to generic transport tenders (UNIDO Coffee Training Furniture, UNHCR Latrine Materials). Root cause: petroleum-transport specific UN tenders are sparse in our pool; the matcher falls back to generic logistics. Fix would be at the tender-coverage layer or the match-scoring weights, not the classifier.
+    - **Awash Welday GC**: thin website crawl → LLM defaults to "consulting" because no concrete signals are available. Fix would be in the LLM prompt for low-evidence inputs (e.g. "if the crawl is thin, prefer to return `detected_industry: \"\"` over `\"consulting\"` so downstream guards stay neutral"). Could land as a small standalone PR.
+- Blockers: None new. The two open issues above are Sprint 7 candidates.
+- Important Decisions:
+  - **Signal counting + ≥2 override threshold instead of static priority order.** The old code's priority list was a footgun: any time IT signals had a higher position than the company's actual trade, a single matching term flipped the industry. The new code counts distinct evidence, breaks ties toward concrete physical trades, and requires ≥2 distinct signals to override what the LLM already decided. This is robust against future "company X mentions ERP once" edge cases.
+  - **Did NOT touch the LLM prompt itself.** The LLM's own classification of Transporters SAL was probably correct (logistics) — the post-LLM guard was the failure. Fixing the guard is the smallest coherent change. Adjusting the LLM prompt would also work but is a higher-blast-radius change with more risk of side effects on the other 4 cases.
+  - **Did NOT widen logistics signals beyond what the audit empirically required.** I added a few terms (`shipping`, `courier`, `haulage`, `trucking`, `drayage`, `customs clearance`, `multimodal`, `sea freight`, `air freight`) that are unambiguously logistics-specific. Did not add `route`, `delivery`, `dispatch` etc. which could cross-fire on e-commerce or healthcare companies.
+  - **IT-retail signals added with caution.** Only added device-reseller specific terms (`apple reseller`, `microsoft partner`, `macbook`, `iphone`, `ipad`). Did not add generic `retailer` or `store` which would cross-fire on non-IT retail.
+- Contracts or Interfaces Changed: None. Pure classifier-rule refactor inside `analyze.ts`. `RawTender`, `CrawlResult`, `MatchedTender`, `proposal_packages`, `work_orders`, `pipeline_items`, `assessments`, `ReadinessDimensions` all unchanged.
+- Docs Updated: `SESSION.md` (this entry).
+- Next Recommended Task: **Sprint 7 candidates** (small, independent):
+  1. **Thin-crawl LLM prompt fix** — when the crawl returns < N chars of useful content, instruct the LLM to return `detected_industry: ""` (empty) rather than defaulting to `"consulting"`. Awash Welday GC and similar low-evidence cases would stop being labelled as consulting firms.
+  2. **Match-scoring weight audit on Rafiki-like cases** — investigate why a petroleum-transport company's top matches include UNIDO furniture for a coffee training centre. Likely a keyword-overlap quirk where "logistics" gets a high score on anything that mentions distribution.
+  3. **Resolve duplicate `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` entries in Vercel env** — operational hygiene, mode-drift risk.
+  4. **Diagnose Vercel Blob upload failure** — richer logging is in place (errorName/errorCode/errorStatus/tokenPrefix); next failed retry will surface the root cause.
+- Recommended Agent: Claude Code (Opus or Sonnet 4.6).
+- Paste-Ready Next Prompt:
+
+```text
+Read SESSION.md (especially the 2026-05-13 Sprint 6 entry), AGENTS.md, CLAUDE.md, docs/agents/assessment-architecture.md.
+
+Sprint 6 closed via PR #14 — classifier no longer flips concrete-trade companies to IT when a passing IT signal appears. Validated against 5 real companies: Transporters SAL now classifies as logistics (was IT), Elite Digital's sectors no longer over-broaden from Apple Professional Learning, no regressions on Group ILS / Rafiki / Awash Welday GC.
+
+Two failure modes from the audit are independent of the classifier and untouched by this PR:
+
+(a) THIN-CRAWL FALLBACK TO CONSULTING (Awash Welday GC) — site was unreachable for ground-truth and the LLM returned "consulting" for what is most likely a general contractor (Ethiopian "GC" suffix). The applyBroadProfileGuards path then locks that in.
+
+(b) MATCH-SCORING DRIFT (Rafiki Holdings) — petroleum-transport company's top matches include a UNIDO furniture-for-coffee-training-centre tender. Likely a keyword-overlap artefact where "logistics" matches on "distribution" or similar.
+
+Pick ONE of (a), (b), or one of the other Sprint 7 candidates noted in SESSION.md (Stripe env cleanup, Blob upload diagnosis), based on what creates the most user-facing value next. Land it as one focused PR. Update SESSION.md when finished.
+
+Reuse all existing types and contracts. No schema migrations unless absolutely required.
+```
+
+### Short Resume State
+- What is now true: Sprints 1–6 complete and deployed. PRs merged in this two-day arc: #1-#6 (auto-fulfilment + Sprint-2 hotfixes), #9 (Sprint 5 first cut), #11 (Sprint 5 tail: telemetry + Blob diagnostic), #12 (drop financial_stability, financial docs at intake, public-route telemetry, email_queue unique index, HTML entity decode, row-175 backfill), #13 (Sprint 5 SESSION update), #14 (Sprint 6 classifier fix: Transporters SAL now logistics, Elite Digital sector explosion contained). 10 assessments now exist in prod for the 5 audit companies (rows 176-180 pre-fix, 181-185 post-fix). Activation funnel events, email-attachment fallback for bid-no-bid, 3-per-24h email resend rate limit, and the D2 dashboard chrome are all live.
+- What remains: **Sprint 7 candidates** (independent, pick one): (a) thin-crawl LLM prompt fix to stop defaulting to "consulting"; (b) match-scoring weight audit for petroleum-transport / niche logistics cases; (c) Vercel Stripe env duplicate cleanup; (d) Vercel Blob upload root-cause diagnosis (richer logging already in place).
+- What the next agent must read first: SESSION.md (this entry), AGENTS.md, CLAUDE.md, docs/agents/assessment-architecture.md
+
 ---
 
 The next agent must not infer progress from commits alone.  
