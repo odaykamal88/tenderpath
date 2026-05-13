@@ -340,6 +340,28 @@ export async function classifyIndustry(
   const client = getClient();
   const context = buildCompanyContext(crawledData, description, countries, orgType, devThemes);
 
+  // Short-circuit: when we have NO evidence at all (crawl failed AND user
+  // gave no usable description), do not call the LLM. Empty/ambiguous prompts
+  // were drifting toward "consulting" despite the prompt instructions, which
+  // mis-classifies real concrete-trade companies whose websites were down.
+  // Return an empty classification — downstream guards and dashboard cues
+  // already handle this case as low-confidence and fall back to user input.
+  const crawlContent = crawledData?.content?.trim() ?? "";
+  const crawlIsUsable =
+    crawlContent.length >= 50 && crawledData?.isThinContent !== true;
+  const descriptionIsUsable = description.trim().length >= 30;
+  if (!crawlIsUsable && !descriptionIsUsable) {
+    return applyBroadProfileGuards(
+      applyConcreteIndustryGuards(
+        { detected_industry: "", sectors: [], services: [] },
+        context,
+      ),
+      context,
+      orgType,
+      devThemes,
+    );
+  }
+
   const msg = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 600,
