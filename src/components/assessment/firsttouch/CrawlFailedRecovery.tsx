@@ -1,3 +1,4 @@
+import Link from "next/link";
 import styles from "./firsttouch.module.css";
 
 export function CrawlFailedRecovery({
@@ -17,7 +18,7 @@ export function CrawlFailedRecovery({
   }[reason];
   return (
     <div className={styles.failed} role="alert">
-      <span className={styles.eyebrow}>We tried, didn't find enough</span>
+      <span className={styles.eyebrow}>We tried, didn&rsquo;t find enough</span>
       <h2 className={styles.failedTitle}>{reasonCopy}</h2>
       <div className={styles.failedMeta}>
         <span>tried</span>
@@ -26,11 +27,11 @@ export function CrawlFailedRecovery({
         <span>error</span>
         <code>{errorId}</code>
       </div>
-      <p className={styles.failedHint}>You can still complete an assessment in three ways:</p>
+      <p className={styles.failedHint}>You can still complete the free assessment without uploading documents:</p>
       <ul className={styles.forkList}>
-        <li><a href="/assessment/manual" className={styles.forkRow}><span className={styles.forkTitle}>Answer 4 questions</span><span className={styles.forkSub}>~3 min</span><span aria-hidden="true">›</span></a></li>
-        <li><a href="/assessment/upload" className={styles.forkRow}><span className={styles.forkTitle}>Upload a capability statement</span><span className={styles.forkSub}>PDF or DOCX</span><span aria-hidden="true">›</span></a></li>
-        <li><a href={`mailto:help@tenderpath.me?subject=Crawl failed ${errorId}`} className={styles.forkRow}><span className={styles.forkTitle}>Email us — we'll do it manually</span><span className={styles.forkSub}>1 business day</span><span aria-hidden="true">›</span></a></li>
+        <li><Link href="/assessment/manual" className={styles.forkRow}><span className={styles.forkTitle}>Answer 4 questions</span><span className={styles.forkSub}>~3 min</span><span aria-hidden="true">›</span></Link></li>
+        <li><Link href="/assessment" className={styles.forkRow}><span className={styles.forkTitle}>Describe your capabilities</span><span className={styles.forkSub}>Public/self-reported details only</span><span aria-hidden="true">›</span></Link></li>
+        <li><a href={`mailto:help@tenderpath.me?subject=Crawl failed ${errorId}`} className={styles.forkRow}><span className={styles.forkTitle}>Email us — we&rsquo;ll do it manually</span><span className={styles.forkSub}>1 business day</span><span aria-hidden="true">›</span></a></li>
       </ul>
     </div>
   );

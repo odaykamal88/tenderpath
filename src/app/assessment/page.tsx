@@ -68,7 +68,7 @@ interface AssessmentPollResponse {
 
 type WizardPhase = "entry" | "crawling" | "step1" | "step2" | "step3" | "analyzing" | "results";
 
-const STEP_LABELS = ["Company basics", "What you do", "Experience"];
+const STEP_LABELS = ["Company basics", "What you do", "Public proof"];
 const STEP_TIME_REMAINING = ["~120s left", "~80s left", "~30s left"];
 
 const ANALYZING_MESSAGES = [
@@ -95,7 +95,7 @@ const INITIAL_DATA: WizardData = {
   capabilities: [],
   devThemes: [],
   contractVolume: "",
-  maxContractValue: "",
+  annualRevenueRange: "",
   unRegistered: "",
   certifications: [],
 };
@@ -105,7 +105,7 @@ function buildAssessmentInput(data: WizardData): AssessmentInput {
   if (data.capabilities.length) parts.push(`Services: ${data.capabilities.join(", ")}`);
   if (data.certifications.length) parts.push(`Certifications: ${data.certifications.join(", ")}`);
   if (data.contractVolume) parts.push(`Past contract volume: ${data.contractVolume}`);
-  if (data.maxContractValue) parts.push(`Largest contract value: ${data.maxContractValue}`);
+  if (data.annualRevenueRange) parts.push(`Self-reported annual revenue range: ${data.annualRevenueRange}`);
   if (data.unRegistered) parts.push(`UNGM registration: ${data.unRegistered}`);
   if (data.submissionLanguage) parts.push(`Submission language: ${data.submissionLanguage}`);
 
@@ -251,11 +251,10 @@ function WizardProgress({ phase }: { phase: WizardPhase }) {
 /* ── Sample readiness card (shown on entry — "you'll get this") ────────── */
 function SampleReadinessCard() {
   const dims = [
-    { label: "Sector fit", score: 82 },
+    { label: "Technical fit", score: 82 },
     { label: "Geography", score: 91 },
-    { label: "Compliance", score: 58 },
+    { label: "Compliance signals", score: 58 },
     { label: "Track record", score: 64 },
-    { label: "Documentation", score: 71 },
   ];
   return (
     <aside className="border border-ink bg-paper-2 p-6 lg:p-7">
@@ -441,7 +440,7 @@ export default function AssessmentPage() {
               </h1>
               <p className="text-[16px] lg:text-[17px] text-ink-2 leading-[1.55] max-w-xl mb-10">
                 Match your business to 2,000+ live UN tenders across 15+ agencies.
-                Get a 5-dimension readiness score, gap analysis, and the specific
+                Get a public-data readiness score, gap analysis, and the specific
                 opportunities worth your week of evenings.
               </p>
 
@@ -485,7 +484,7 @@ export default function AssessmentPage() {
               {/* Bottom: what you get */}
               <ul className="grid sm:grid-cols-2 gap-x-8 gap-y-3 mt-12 pt-8 border-t border-rule">
                 {[
-                  "Vendor readiness score across 5 dimensions",
+                  "Vendor readiness score from public data + self-report",
                   "Live tender + grant matches from 15+ agencies",
                   "Compliance gap analysis with specific fixes",
                   "Recommended next step based on your profile",

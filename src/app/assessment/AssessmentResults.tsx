@@ -8,7 +8,7 @@ import { TIER_INFO_BY_SLUG } from "@/lib/pricing";
    AssessmentResults — Direction A (paper, serif, mono)
    Editorial readiness report. Same data contract as before:
    - readiness_score, grant_readiness_score
-   - readiness_dimensions (5 axes)
+   - readiness_dimensions (public-data axes)
    - gaps[], matched_tenders[], matched_grants[]
    - recommended_tier (drives the bottom CTA)
    ============================================================ */
@@ -56,10 +56,10 @@ export default function AssessmentResults({
   const tier = TIER_INFO_BY_SLUG[data.recommended_tier];
   const dims = data.readiness_dimensions as Partial<ReadinessDimensions> & Record<string, number | undefined>;
   const dimensionEntries = [
-    { label: "Sector fit", score: dims.sector_fit ?? dims.sector ?? 0 },
-    { label: "Geography", score: dims.geography ?? 0 },
-    { label: "Compliance", score: dims.compliance ?? 0 },
-    { label: "Track record", score: dims.experience ?? 0 },
+    { label: "Technical capability", score: dims.technical_capability ?? dims.sector_fit ?? dims.sector ?? 0 },
+    { label: "Geographic reach", score: dims.geographic_reach ?? dims.geography ?? 0 },
+    { label: "Compliance signals", score: dims.compliance_readiness ?? dims.compliance ?? 0 },
+    { label: "Experience relevance", score: dims.experience_relevance ?? dims.experience ?? 0 },
   ];
 
   return (
@@ -127,6 +127,9 @@ export default function AssessmentResults({
         <div>
           <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-mute mb-5">
             By dimension
+          </p>
+          <p className="text-[12px] text-ink-3 leading-[1.5] mb-5">
+            Scored from public evidence, your business description, and broad self-reported bands. Private documents are collected only for paid deliverables.
           </p>
           <div className="space-y-4">
             {dimensionEntries.map((d) => (

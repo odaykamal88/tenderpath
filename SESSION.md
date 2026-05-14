@@ -86,6 +86,26 @@ Additional work done outside the prompt sequence:
 
 ## Current Status
 
+## Latest Session Update — 2026-05-14 (Sprint 5 started)
+
+- **Agent**: Codex
+- **Branch**: `codex/proposal-requirements-model`
+- **Scope Decision**: The only remaining Sprint 4 close-out item is the live Stripe webhook `$1` verification, which requires a real live-mode charge. Moved to the next implementable feedback slice: free assessment public-data-only cleanup.
+- **Task Completed**: Removed free-assessment cues that implied users must provide audited financials, private documents, or upload proof before receiving value.
+- **Files / Areas Changed**:
+  - `src/app/assessment/WizardSteps.tsx` — Step 3 now states the free assessment uses public data and broad self-reported bands only; replaced “largest single contract value” with a self-reported annual revenue range; certification copy now says no certificate or policy uploads are required.
+  - `src/app/assessment/page.tsx` — updated step naming and assessment copy from “5-dimension” to public-data readiness; assessment payload now carries the self-reported annual revenue range instead of largest contract value.
+  - `src/app/assessment/AssessmentResults.tsx`, `src/app/api/assessment/[id]/pdf/route.ts` — readiness dimensions now map to the actual four persisted assessment dimensions: technical capability, geographic reach, compliance signals, and experience relevance; added public-data context to the results page.
+  - `src/components/landing/Hero.tsx`, `src/components/landing/VendorReadinessCard.tsx`, `src/app/faq/page.tsx` — removed audited-financial/private-document framing from free assessment marketing surfaces.
+  - `src/components/assessment/firsttouch/*` — removed legacy upload-into-assessment links and converted touched internal links to `next/link`.
+  - `src/lib/assessment/analyze.ts` — fallback summary now asks for clearer business description or public evidence, not document uploads.
+- **Verification Run**:
+  - `npx tsc --noEmit`
+  - `npx eslint src/app/assessment/page.tsx src/app/assessment/WizardSteps.tsx src/app/assessment/AssessmentResults.tsx src/app/api/assessment/[id]/pdf/route.ts src/app/faq/page.tsx src/components/assessment/firsttouch/NoWebsiteFork.tsx src/components/assessment/firsttouch/CrawlFailedRecovery.tsx src/components/assessment/firsttouch/WebsitePasteForm.tsx src/components/landing/Hero.tsx src/components/landing/VendorReadinessCard.tsx src/lib/assessment/analyze.ts`
+  - `rm -rf .next/cache && NEXT_FONT_GOOGLE_MOCKED_RESPONSES=/tmp/tenderpath-next-font-mocks.cjs npm run build`
+- **Sprint 5 Status**: In progress. The free assessment is now visibly public-data-first; deeper evidence and financial proof remain in paid work-order intake where users have exchanged value.
+- **Next Recommended Task**: Continue with the next feedback-driven product slice: surface requirement-model outputs inside Bid/No-Bid artifacts and dashboard, starting with tender type, mandatory/recommended documents, eligibility gap action, and commercial terms.
+
 ## Latest Session Update — 2026-05-14 (Sprint 4 started)
 
 - **Agent**: Codex

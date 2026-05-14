@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { LandingTender } from "@/lib/landing/recent-tenders";
 
 /* Hero — Direction A · editorial dossier · mobile-tuned at 375px */
@@ -10,7 +11,7 @@ const CHECKLIST: Array<{ label: string; ok: boolean; note?: string }> = [
   { label: "Geographic coverage · East Africa", ok: true, note: "85" },
   { label: "Compliance — ISO 9001 quality cert", ok: false, note: "Open" },
   { label: "Past performance · references", ok: true, note: "70" },
-  { label: "Financial capacity · audited 3y", ok: false, note: "Open" },
+  { label: "Revenue band · self-reported", ok: true, note: "Band" },
 ];
 
 function useCountUp(target: number, duration = 1500, start = false) {
@@ -100,12 +101,12 @@ function ReadinessCard() {
           <span className="font-mono text-[9px] sm:text-[10px] text-mute tracking-[0.06em]">
             Generated 5 min · 12 matches
           </span>
-          <a
+          <Link
             href="/assessment"
             className="font-mono text-[10px] tracking-[0.08em] uppercase text-ink border-b border-ink hover:text-accent hover:border-accent transition-colors whitespace-nowrap"
           >
             Run mine →
-          </a>
+          </Link>
         </div>
       </div>
     </div>
@@ -191,13 +192,13 @@ export default function Hero({ tenders }: { tenders: LandingTender[] }) {
                 className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-4 sm:gap-5"
                 style={{ animation: "fadeInUp 0.5s ease-out 360ms both" }}
               >
-                <a
+                <Link
                   href="/assessment"
                   className="inline-flex items-center justify-center sm:justify-start gap-3 bg-ink px-6 sm:px-7 py-4 text-[14px] font-medium text-paper hover:bg-accent transition-colors"
                 >
                   Get my readiness score
                   <span className="font-mono text-[13px]">→</span>
-                </a>
+                </Link>
                 <a
                   href="#how-it-works"
                   className="font-mono text-[11px] tracking-[0.12em] uppercase text-ink-3 hover:text-ink transition-colors border-b border-rule hover:border-ink pb-0.5 self-center sm:self-auto"

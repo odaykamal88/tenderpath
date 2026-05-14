@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export const metadata = {
   title: "FAQ — TenderPath",
   description: "Answers to common questions about TenderPath and UN procurement.",
@@ -10,7 +12,7 @@ const faqs = [
   },
   {
     q: "How does the free assessment work?",
-    a: "Enter your company name, email, and either your website or a short description of what you do. Our AI crawls your website, extracts your capabilities, matches you against active tenders and grants from 15+ UN agencies, and scores your readiness across 5 dimensions — all in under 30 seconds. The report is free and sent to your email.",
+    a: "Enter your company name, email, and either your website or a short description of what you do. The free assessment uses public website evidence plus broad self-reported bands; we do not ask for audited financials, bank references, or private documents. The report is free and sent to your email.",
   },
   {
     q: "What is UNGM and do I need to register?",
@@ -26,7 +28,7 @@ const faqs = [
   },
   {
     q: "What documents will I need for UN tenders?",
-    a: "Most UN agencies require: UNGM registration, audited financial statements (last 2–3 years), company registration certificate, tax compliance certificate, past performance references, and technical capability documentation. The specific requirements vary by tender and agency — our readiness assessment identifies exactly which you're missing.",
+    a: "Most UN agencies require some mix of UNGM registration, company registration, tax compliance, past performance references, technical capability documents, and sometimes audited financial statements. The free assessment flags likely document categories from public/self-reported evidence; paid Bid/No-Bid, Proposal Draft, and Roster Fast-Track workflows collect the actual proof documents when they are needed.",
   },
   {
     q: "What does the Bid Analysis ($39) include?",
@@ -55,20 +57,20 @@ export default function FAQPage() {
       {/* Nav */}
       <nav className="border-b border-stone-200/70 bg-white/95 backdrop-blur-sm sticky top-0 z-50">
         <div className="mx-auto max-w-5xl px-5 sm:px-6 flex h-14 items-center justify-between">
-          <a
+          <Link
             href="/"
             className="text-[15px] font-semibold text-stone-900"
             style={{ fontFamily: SERIF }}
           >
             Tender<span style={{ color: "#ea580c" }}>·</span>Path
-          </a>
-          <a
+          </Link>
+          <Link
             href="/"
             className="text-[10.5px] sm:text-[11px] font-semibold uppercase tracking-[0.16em] sm:tracking-[0.18em] text-stone-500 hover:text-stone-900 transition-colors"
             style={{ fontFamily: MONO }}
           >
             ← Home
-          </a>
+          </Link>
         </div>
       </nav>
 
@@ -177,9 +179,9 @@ export default function FAQPage() {
           style={{ fontFamily: MONO }}
         >
           © {new Date().getFullYear()} Tender·Path ·{" "}
-          <a href="/" className="underline underline-offset-2 hover:text-stone-700">
+          <Link href="/" className="underline underline-offset-2 hover:text-stone-700">
             Home
-          </a>
+          </Link>
         </p>
       </footer>
     </div>

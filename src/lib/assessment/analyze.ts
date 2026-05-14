@@ -504,7 +504,7 @@ Return ONLY valid JSON, no explanation.`,
       experience_relevance: 45,
     },
     overall_score: 49,
-    summary: "Analysis incomplete — neutral baseline applied. Add a business description or upload documents to refine the score.",
+    summary: "Analysis incomplete — neutral baseline applied. Add a clearer business description or public profile evidence to refine the score.",
   };
 
   const parsed = safeParseJSON<Partial<AIAnalysis>>(text, {});

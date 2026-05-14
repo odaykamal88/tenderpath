@@ -39,7 +39,7 @@ export interface WizardData {
   capabilities: string[];
   devThemes: string[];
   contractVolume: string;
-  maxContractValue: string;
+  annualRevenueRange: string;
   unRegistered: string;
   certifications: string[];
 }
@@ -89,11 +89,13 @@ const CONTRACT_VOLUME_OPTIONS = [
   { value: "20+", label: "20+ contracts" },
 ];
 
-const CONTRACT_VALUE_OPTIONS = [
-  { value: "<50k", label: "< $50k" },
-  { value: "50k-250k", label: "$50k–$250k" },
-  { value: "250k-1m", label: "$250k–$1m" },
-  { value: "1m+", label: "$1m+" },
+const REVENUE_RANGE_OPTIONS = [
+  { value: "unknown", label: "Prefer not to say" },
+  { value: "<100k", label: "< $100K" },
+  { value: "100k-500k", label: "$100K–$500K" },
+  { value: "500k-5m", label: "$500K–$5M" },
+  { value: "5m-25m", label: "$5M–$25M" },
+  { value: "25m+", label: "$25M+" },
 ];
 
 const UN_REG_OPTIONS = [
@@ -621,6 +623,15 @@ export function Step3({
 
   return (
     <div>
+      <div className="mb-2 border-l-2 border-accent bg-paper-2 px-5 py-4">
+        <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-accent mb-1.5">
+          Free assessment · public data only
+        </p>
+        <p className="text-[13px] text-ink-2 leading-snug">
+          No uploads, audited financials, bank references, or private documents here. We only ask for public profile details and broad self-reported bands; proof comes later if you order a paid deliverable.
+        </p>
+      </div>
+
       <Field
         num="01"
         label="Past UN / donor contracts"
@@ -640,16 +651,16 @@ export function Step3({
 
       <Field
         num="02"
-        label="Largest single contract value"
-        why="Tenders specify minimum vendor revenue or contract experience. We use this to filter out tenders you&rsquo;d be disqualified on."
+        label="Annual revenue range"
+        why="A self-reported band is enough for the free assessment. We use it only to avoid tenders with obvious turnover thresholds — no financial statements required."
       >
         <div className="flex flex-wrap gap-1.5">
-          {CONTRACT_VALUE_OPTIONS.map((o) => (
+          {REVENUE_RANGE_OPTIONS.map((o) => (
             <ChipButton
               key={o.value}
-              active={data.maxContractValue === o.value}
+              active={data.annualRevenueRange === o.value}
               label={o.label}
-              onClick={() => onChange({ maxContractValue: o.value })}
+              onClick={() => onChange({ annualRevenueRange: o.value })}
             />
           ))}
         </div>
@@ -675,7 +686,7 @@ export function Step3({
       <Field
         num="04"
         label="Certifications & compliance"
-        why="ISO, sphere, sector certs unlock specific tender categories. We score documentation strength based on these."
+        why="Name registrations or certifications you already know you have. We do not ask for certificates or policy documents in the free assessment."
       >
         <div className="flex flex-wrap gap-1.5 mb-4">
           {CERT_SUGGESTIONS.map((c) => (

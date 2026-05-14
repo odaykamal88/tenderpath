@@ -50,11 +50,10 @@ export async function GET(
     : [];
 
   const dimensionRows = [
-    { label: "Sector fit",    score: Number(dims.sector_fit ?? dims.sector ?? 0) },
-    { label: "Geography",     score: Number(dims.geography ?? 0) },
-    { label: "Compliance",    score: Number(dims.compliance ?? 0) },
-    { label: "Track record",  score: Number(dims.experience ?? 0) },
-    { label: "Documentation", score: Number(dims.documentation ?? 0) },
+    { label: "Technical capability", score: Number(dims.technical_capability ?? dims.sector_fit ?? dims.sector ?? 0) },
+    { label: "Geographic reach",     score: Number(dims.geographic_reach ?? dims.geography ?? 0) },
+    { label: "Compliance signals",   score: Number(dims.compliance_readiness ?? dims.compliance ?? 0) },
+    { label: "Experience relevance", score: Number(dims.experience_relevance ?? dims.experience ?? 0) },
   ];
 
   const dimBars = dimensionRows.map((d) => {

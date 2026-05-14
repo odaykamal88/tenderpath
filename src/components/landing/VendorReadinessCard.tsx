@@ -36,8 +36,8 @@ export default function VendorReadinessCard() {
       {/* Rows */}
       <div className="px-6 py-4 space-y-4">
         <Row label="UNGM Registration" value="Ready" variant="blue" />
-        <Row label="Documentation Compliance" value="Gaps Found" variant="gold" />
-        <Row label="Financial Requirements" value="Compliant" variant="green" />
+        <Row label="Evidence Gaps" value="Likely gaps" variant="gold" />
+        <Row label="Revenue Band" value="Self-reported" variant="green" />
         <Row label="Active Tenders Matched" value="12 opportunities" variant="navy" />
         <Row label="Nearest Deadline" value="14 days — Act Now" variant="link" />
       </div>
