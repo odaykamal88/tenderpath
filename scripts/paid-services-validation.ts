@@ -27,7 +27,7 @@ try {
 
 const DEFAULT_PANEL = "data/validation/paid-services-panel.csv";
 const DEFAULT_PROPOSAL_FIXTURES = "data/validation/proposal-requirement-fixtures.json";
-const VALIDATION_VERSION = "sprint-3-proposal-requirement-model-v1";
+const VALIDATION_VERSION = "sprint-5-bid-decision-surface-v1";
 const SUPPORTED_ROSTER_AGENCY_LABELS = new Set(AGENCY_PACKAGES.map((agency) => agency.label.toUpperCase()));
 
 type PanelRow = Record<string, string>;
@@ -93,6 +93,13 @@ type ProposalFixtureSignal = {
   requirementModel: ProposalRequirementModel;
 };
 
+type BidDecisionSurfaceSignal = {
+  score: number;
+  status: string;
+  components: string[];
+  missing: string[];
+};
+
 type ProfileResult = {
   panel_id: string;
   prospect_company: string;
@@ -112,6 +119,10 @@ type ProfileResult = {
   service_context_completeness_0_10: number;
   proposal_requirement_model_0_10: number | null;
   proposal_requirement_model_status: string | null;
+  bid_decision_surface_0_10: number | null;
+  bid_decision_surface_status: string | null;
+  bid_decision_surface_components: string[];
+  bid_decision_surface_gaps: string[];
   proposal_fixture_title: string | null;
   proposal_fixture_source_url: string | null;
   service_output_quality_0_10: number;
@@ -282,6 +293,10 @@ function toCsv(results: ProfileResult[]): string {
     "service_context_completeness_0_10",
     "proposal_requirement_model_0_10",
     "proposal_requirement_model_status",
+    "bid_decision_surface_0_10",
+    "bid_decision_surface_status",
+    "bid_decision_surface_components",
+    "bid_decision_surface_gaps",
     "proposal_fixture_title",
     "proposal_fixture_source_url",
     "service_output_quality_0_10",
@@ -310,6 +325,10 @@ function toCsv(results: ProfileResult[]): string {
       result.service_context_completeness_0_10,
       result.proposal_requirement_model_0_10,
       result.proposal_requirement_model_status,
+      result.bid_decision_surface_0_10,
+      result.bid_decision_surface_status,
+      result.bid_decision_surface_components.join(" | "),
+      result.bid_decision_surface_gaps.join(" | "),
       result.proposal_fixture_title,
       result.proposal_fixture_source_url,
       result.service_output_quality_0_10,
@@ -938,6 +957,116 @@ function proposalRequirementModelScore(
   return clampScore(score);
 }
 
+function bidDecisionSurfaceSignal(row: PanelRow): BidDecisionSurfaceSignal | null {
+  const serviceTrack = cell(row, "service_track").toLowerCase();
+  if (!serviceTrack.includes("bid")) return null;
+
+  const benchmark = cell(row, "benchmark_tender_or_agency");
+  const missing = cell(row, "missing_inputs").toLowerCase();
+  const publicInputs = cell(row, "public_inputs_available").toLowerCase();
+  const hasCompanyEvidence = !!cell(row, "website") || (/official/.test(publicInputs) && !/no official/.test(publicInputs));
+  const ungmStatus = cell(row, "ungm_status").toLowerCase();
+  const combined = `${benchmark} ${missing} ${publicInputs}`;
+  const hasTenderTypeCue = /\b(notice|rfp|request for proposals|rfq|request for quotation|itb|invitation to bid|eoi|expression of interest|tender|lta|framework|call)\b/i.test(benchmark);
+  const hasSpecificNotice = /\b(notice|rfp|rfq|itb|eoi|tender|lta|framework|call)\b|\b\d{4,}\b/i.test(benchmark);
+  const actualTenderDocMissing = /actual (tor|rfp|tender|scope)|exact tender|eligibility criteria|evaluation criteria/.test(missing);
+  const capacityInputsMissing = /\bcapacity|licenses?|insurance|certifications?|financials?|references?|cvs?|route|fleet|warehouse|dangerous-goods|pricing\b/.test(missing);
+  const documentCue = /\b(required docs?|documents?|licenses?|insurance|certifications?|financials?|references?|cvs?|eligibility|submission|audited|legal)\b/.test(missing);
+  const commercialCue = /\b(value|financial|commercial|price|pricing|budget|bond|guarantee|payment|validity|insurance|route|customs|freight|warehouse|dangerous-goods|tax|audit)\b/i.test(combined);
+  const components: string[] = [];
+  const gaps: string[] = [];
+  let score = 1.2;
+
+  if (hasSpecificNotice) {
+    score += 2.2;
+    components.push("specific tender/source context");
+  } else if (hasTenderTypeCue) {
+    score += 1.1;
+    components.push("tender type cue present");
+    gaps.push("specific source notice still missing");
+  } else if (benchmark) {
+    score += 0.7;
+    components.push("benchmark context only");
+    gaps.push("specific tender type/source notice missing");
+  } else {
+    gaps.push("benchmark tender/source context missing");
+  }
+
+  if (!actualTenderDocMissing && hasSpecificNotice) {
+    score += 2.0;
+    components.push("requirements can ground the bid/no-bid decision");
+  } else if (!actualTenderDocMissing) {
+    score += 1.4;
+    components.push("requirements gap is not blocking");
+  } else {
+    score += 0.5;
+    gaps.push("actual TOR/RFP or eligibility requirements missing");
+  }
+
+  if (!actualTenderDocMissing && documentCue) {
+    score += 1.2;
+    components.push("mandatory/recommended document split can be surfaced");
+  } else if (documentCue) {
+    score += 0.8;
+    components.push("document gap list can be surfaced");
+    gaps.push("mandatory versus recommended documents need source confirmation");
+  } else {
+    score += 0.4;
+    gaps.push("document checklist inputs are thin");
+  }
+
+  if (capacityInputsMissing) {
+    score += 1.4;
+    components.push("eligibility gap action can be generated");
+  } else if (!actualTenderDocMissing) {
+    score += 1.2;
+    components.push("eligibility action path is clear");
+  } else {
+    score += 0.5;
+    gaps.push("vendor eligibility evidence is not structured");
+  }
+
+  if (commercialCue) {
+    score += 1.2;
+    components.push("commercial-term review cues present");
+  } else {
+    score += 0.4;
+    gaps.push("commercial terms are not visible enough");
+  }
+
+  if (hasCompanyEvidence) {
+    score += 0.6;
+    components.push("public company evidence handoff");
+  } else {
+    gaps.push("public company evidence is weak");
+  }
+  if (/yes/.test(ungmStatus)) {
+    score += 0.4;
+    components.push("UNGM status handoff");
+  }
+
+  if (!hasSpecificNotice && actualTenderDocMissing) score = Math.min(score, 6.2);
+  else if (!hasSpecificNotice) score = Math.min(score, 6.4);
+  else if (actualTenderDocMissing) score = Math.min(score, 6.7);
+  if (capacityInputsMissing) score = Math.min(score, 8.8);
+
+  const finalScore = clampScore(score);
+  const status = finalScore >= 8.5
+    ? "decision_surface_ready"
+    : finalScore >= 7.0
+    ? "usable_with_vendor_evidence"
+    : finalScore >= 5.8
+    ? "needs_tender_source_or_human_review"
+    : "not_ready";
+
+  return {
+    score: finalScore,
+    status,
+    components: unique(components),
+    missing: unique(gaps),
+  };
+}
+
 function projectedScores(
   row: PanelRow,
   matchRun: MatchRun,
@@ -950,6 +1079,7 @@ function projectedScores(
   const fit = cell(row, "fit_class").toLowerCase();
   const fitScore = fit.includes("strong") ? 8.4 : fit.includes("adjacent") ? 6.4 : 3.8;
   const requirementModelScore = proposalRequirementModelScore(row, contextScore, fixtureSignal);
+  const bidSurface = bidDecisionSurfaceSignal(row);
   let serviceOutput = 0.32 * contextScore + 0.28 * assessmentScore + 0.22 * matchScore + 0.18 * fitScore;
   let trustworthiness = 0.38 * assessmentScore + 0.34 * contextScore + 0.18 * matchScore + 0.10 * fitScore;
   let timeSaved = 0.30 * contextScore + 0.28 * matchScore + 0.22 * assessmentScore + 0.20 * fitScore;
@@ -962,6 +1092,18 @@ function projectedScores(
     if (requirementModelScore < 5.5) {
       serviceOutput = Math.min(serviceOutput, 5.6);
       trustworthiness = Math.min(trustworthiness, 6.0);
+    }
+  }
+
+  if (bidSurface) {
+    serviceOutput = 0.60 * serviceOutput + 0.40 * bidSurface.score;
+    trustworthiness = 0.72 * trustworthiness + 0.28 * bidSurface.score;
+    timeSaved = 0.70 * timeSaved + 0.30 * bidSurface.score;
+    shortlistImpact = 0.86 * shortlistImpact + 0.14 * bidSurface.score;
+    if (bidSurface.score < 6.5) {
+      serviceOutput = Math.min(serviceOutput, 6.7);
+      trustworthiness = Math.min(trustworthiness, 6.9);
+      timeSaved = Math.min(timeSaved, 7.0);
     }
   }
 
@@ -996,6 +1138,7 @@ function projectedScores(
     procurementEffortCollapsed,
     paidReadiness,
     requirementModelScore,
+    bidSurface,
   };
 }
 
@@ -1022,6 +1165,9 @@ function highestLeverageFix(row: PanelRow, failureCategory: FailureCategory, mis
   if (matchRun.status === "error") return "Fix validation environment/setup so live matching can run before judging paid readiness.";
   if (track.includes("proposal") && missing.some((item) => /TOR|RFP|evaluation|deliverables|submission/.test(item))) {
     return "Parse uploaded TOR/RFP documents into requirements before checkout and cap proposal output when source coverage is low.";
+  }
+  if (track.includes("bid") && missing.some((item) => /specific tender notice|TOR|RFP|eligibility|source context/.test(item))) {
+    return "Require a selected tender source/TOR before paid bid/no-bid, then use the decision surface to split documents, eligibility actions and commercial checks.";
   }
   if (track.includes("roster") && missing.some((item) => /agency pack|category/.test(item))) {
     return "Add agency/category roster packs and force category narrowing before payment.";
@@ -1070,6 +1216,10 @@ function validateProfile(row: PanelRow, matchRun: MatchRun, fixture?: ProposalFi
     service_context_completeness_0_10: context.score,
     proposal_requirement_model_0_10: scores.requirementModelScore,
     proposal_requirement_model_status: fixtureSignal?.requirementModel.status ?? null,
+    bid_decision_surface_0_10: scores.bidSurface?.score ?? null,
+    bid_decision_surface_status: scores.bidSurface?.status ?? null,
+    bid_decision_surface_components: scores.bidSurface?.components ?? [],
+    bid_decision_surface_gaps: scores.bidSurface?.missing ?? [],
     proposal_fixture_title: fixture?.source_title ?? null,
     proposal_fixture_source_url: fixture?.source_url ?? null,
     service_output_quality_0_10: scores.serviceOutput,
@@ -1110,6 +1260,9 @@ function summarize(results: ProfileResult[]) {
       median_proposal_requirement_model_0_10: rows.some((row) => row.proposal_requirement_model_0_10 != null)
         ? median(rows.flatMap((row) => row.proposal_requirement_model_0_10 == null ? [] : [row.proposal_requirement_model_0_10]))
         : null,
+      median_bid_decision_surface_0_10: rows.some((row) => row.bid_decision_surface_0_10 != null)
+        ? median(rows.flatMap((row) => row.bid_decision_surface_0_10 == null ? [] : [row.bid_decision_surface_0_10]))
+        : null,
     },
   ]));
 
@@ -1141,6 +1294,9 @@ function summarize(results: ProfileResult[]) {
     median_procurement_effort_collapsed_0_10: median(results.map((result) => result.procurement_effort_collapsed_0_10)),
     median_proposal_requirement_model_0_10: results.some((result) => result.proposal_requirement_model_0_10 != null)
       ? median(results.flatMap((result) => result.proposal_requirement_model_0_10 == null ? [] : [result.proposal_requirement_model_0_10]))
+      : null,
+    median_bid_decision_surface_0_10: results.some((result) => result.bid_decision_surface_0_10 != null)
+      ? median(results.flatMap((result) => result.bid_decision_surface_0_10 == null ? [] : [result.bid_decision_surface_0_10]))
       : null,
     status_counts: Object.fromEntries(statusCounts.entries()),
     failure_category_counts: Object.fromEntries(failureCounts.entries()),

@@ -123,6 +123,28 @@ Additional work done outside the prompt sequence:
 - **Sprint 5 Status**: In progress. Free assessment friction is reduced and Bid/No-Bid now exposes the contractor-style procurement details that matter for a real bid/no-bid decision.
 - **Next Recommended Task**: Run the paid-services static validation again and compare Bid/No-Bid readiness/procurement-effort-collapsed movement; if scoring does not move, update the validation rubric to explicitly score tender-type, document split, eligibility action, and commercial-term surfacing.
 
+### Sprint 5 Continuation — Bid/No-Bid Validation Rubric
+
+- **Task Completed**: Updated the paid-services validation harness so Bid/No-Bid is scored on the actual decision surface now exposed in the product.
+- **Files / Areas Changed**:
+  - `scripts/paid-services-validation.ts` — validation version advanced to `sprint-5-bid-decision-surface-v1`; added `bid_decision_surface_0_10`, status, surfaced components, and remaining gaps to JSON/CSV outputs.
+  - Bid/No-Bid scoring now explicitly measures specific tender/source context, tender-type signal, mandatory/recommended document split readiness, eligibility actionability, commercial-term cues, public company evidence, and UNGM handoff.
+  - Broad benchmark-only Bid/No-Bid cases are capped until a selected tender source/TOR is present, so the validation does not reward optimistic decision memos without procurement source material.
+- **Validation Outputs**:
+  - `outputs/paid-services-validation/sprint5-static-after-bid-surfacing-rubric.json`
+  - `outputs/paid-services-validation/sprint5-static-after-bid-surfacing-rubric.csv`
+- **Score Movement**:
+  - Full first wave VP-01 to VP-09: median paid-service readiness `8.1/10`, median procurement effort collapsed `7.5/10`.
+  - Bid/No-Bid track: median paid-service readiness `7.3/10`, median procurement effort collapsed `6.8/10`, median decision surface `6.2/10`.
+  - VP-03 with a concrete MONUSCO notice reaches paid-service readiness `8.5/10` and decision surface `8.8/10`.
+  - VP-01 and VP-02 remain `needs_human_review` because they have vendor/sector fit but no selected tender notice/TOR or eligibility source.
+- **Verification Run**:
+  - `npx tsc --noEmit`
+  - `npx eslint scripts/paid-services-validation.ts`
+  - `npm run validation:paid-services -- --skip-live-matching --limit=9 --out=outputs/paid-services-validation/sprint5-static-after-bid-surfacing-rubric.json`
+- **Important Decision**: Bid/No-Bid only reaches the 8.5 target when the user or pipeline carries a real selected tender/source context into the paid service. Strong vendor fit alone is not enough.
+- **Next Recommended Task**: Continue Sprint 5 with the intake/work-order continuity needed to require or carry the selected tender/TOR into Bid/No-Bid checkout, then use the same decision-surface fields as the user-facing readiness explanation.
+
 ## Latest Session Update — 2026-05-14 (Sprint 4 started)
 
 - **Agent**: Codex
