@@ -4,6 +4,7 @@ import {
   type RosterOutput,
   type TenderRequirements,
   type ProposalEvidenceProfile,
+  type ProposalRequirementModel,
   DEFAULT_PROPOSAL_OUTPUT,
   DEFAULT_ROSTER_OUTPUT,
   DEFAULT_TENDER_REQUIREMENTS,
@@ -13,6 +14,10 @@ import {
   attachEvidenceProfileToRequirements,
   formatProposalEvidenceProfile,
 } from "./evidence";
+import {
+  applyProposalRequirementModelGuardrails,
+  formatProposalRequirementModelForPrompt,
+} from "./requirements-model";
 
 let _anthropic: Anthropic | null = null;
 function getClient(): Anthropic {
@@ -96,9 +101,11 @@ export async function generateProposalDraft(
   inputs: GenerationInputs,
   requirements: TenderRequirements,
   evidenceProfile?: ProposalEvidenceProfile,
+  requirementModel?: ProposalRequirementModel,
 ): Promise<ProposalOutput> {
   const client = getClient();
   const sourceQuality = evidenceProfile ? formatProposalEvidenceProfile(evidenceProfile) : "";
+  const requirementModelPrompt = requirementModel ? formatProposalRequirementModelForPrompt(requirementModel) : "";
   const response = await client.messages.create({
     model: SONNET_MODEL,
     max_tokens: 4500,
@@ -116,6 +123,7 @@ TENDER REQUIREMENTS (extracted):
 ${JSON.stringify(requirements, null, 2)}
 
 ${sourceQuality ? `SOURCE QUALITY CHECK:\n${sourceQuality}\n` : ""}
+${requirementModelPrompt ? `REQUIREMENT-LEVEL COMPLIANCE MODEL:\n${requirementModelPrompt}\n` : ""}
 
 TENDER SUMMARY:
 ${inputs.tenderText}
@@ -128,8 +136,8 @@ Return a strict-shape JSON object with EXACTLY these keys:
   "executive_summary": string — 2-3 paragraph summary opening with company name, sector fit, and key win-themes. Plain prose, no markdown.,
   "technical_approach": string[] — 5-8 paragraphs describing methodology, mobilization, work plan, deliverables, and quality assurance. Each item is a full paragraph.,
   "compliance_checklist": [
-    { "requirement": string, "status": "compliant" | "partial" | "needs_action", "evidence_or_action": string }
-  ] — 8-15 items mapping each tender requirement to a compliance status and either evidence or a specific action.,
+    { "requirement": string, "status": "compliant" | "partial" | "needs_action", "evidence_or_action": string, "category": "eligibility" | "technical" | "document" | "evaluation" | "submission" | "financial" | "constraint", "priority": "mandatory" | "weighted" | "recommended" | "unknown", "evidence_snippet": string, "response_section": string }
+  ] — 8-15 items mapping each tender requirement to a compliance status and either evidence or a specific action. Use the requirement-level compliance model when present.,
   "required_documents": string[] — complete list of documents to compile (10-20 items),
   "cover_letter_draft": string — full cover letter addressed to the contracting agency. Include date placeholder, salutation, 3 body paragraphs (interest, capability, request for evaluation), and a signature block. Plain prose, no markdown.,
   "financial_template_notes": string[] — guidance on pricing structure, cost line items, taxes/contingency, and pricing strategy (5-10 items),
@@ -139,8 +147,10 @@ Return a strict-shape JSON object with EXACTLY these keys:
 
 Rules:
 - Use the company's actual capabilities, geography, and certifications. Reference them by name.
+- Use the requirement-level compliance model as the spine of the compliance checklist; preserve its category, priority, and response_section fields.
 - Do NOT invent facts. If evidence is thin, flag it in missing_information.
 - If source quality is "needs_review" or "blocked", produce a conservative draft scaffold and mark uncertain compliance items as "partial" or "needs_action"; do not claim a requirement is compliant without company/source evidence.
+- If the requirement model is "needs_review" or "blocked", say exactly which source categories are missing and keep the package framed as a draft scaffold.
 - Treat missing evaluation criteria, required documents, submission format, or TOR scope as explicit missing_information.
 - Cover letter must be a complete draft — no [bracketed placeholders] except the date and salutation.
 - compliance_checklist.status MUST be one of the three exact strings: "compliant", "partial", "needs_action".
@@ -152,7 +162,12 @@ Rules:
   const text = response.content[0]?.type === "text" ? response.content[0].text : "{}";
   const parsed = safeParseJSON(text, DEFAULT_PROPOSAL_OUTPUT, "proposal");
   const normalized = normalizeProposal(parsed);
-  return evidenceProfile ? applyProposalEvidenceGuardrails(normalized, requirements, evidenceProfile) : normalized;
+  const evidenceGuarded = evidenceProfile
+    ? applyProposalEvidenceGuardrails(normalized, requirements, evidenceProfile)
+    : normalized;
+  return requirementModel
+    ? applyProposalRequirementModelGuardrails(evidenceGuarded, requirementModel)
+    : evidenceGuarded;
 }
 
 export async function generateRosterPackage(
@@ -224,6 +239,27 @@ function clampStringArray(value: unknown, max: number, perItem = 1200): string[]
     .slice(0, max);
 }
 
+function normalizeRequirementCategory(value: unknown): ProposalOutput["compliance_checklist"][number]["category"] {
+  return ([
+    "eligibility",
+    "technical",
+    "document",
+    "evaluation",
+    "submission",
+    "financial",
+    "constraint",
+  ] as const).includes(value as never) ? value as ProposalOutput["compliance_checklist"][number]["category"] : undefined;
+}
+
+function normalizeRequirementPriority(value: unknown): ProposalOutput["compliance_checklist"][number]["priority"] {
+  return ([
+    "mandatory",
+    "weighted",
+    "recommended",
+    "unknown",
+  ] as const).includes(value as never) ? value as ProposalOutput["compliance_checklist"][number]["priority"] : undefined;
+}
+
 function normalizeProposal(raw: Partial<ProposalOutput>): ProposalOutput {
   const out: ProposalOutput = { ...DEFAULT_PROPOSAL_OUTPUT, ...raw };
   out.executive_summary = clampString(out.executive_summary, 3000);
@@ -240,6 +276,11 @@ function normalizeProposal(raw: Partial<ProposalOutput>): ProposalOutput {
           requirement: clampString(c.requirement, 400),
           status: (["compliant", "partial", "needs_action"] as const).includes(c.status) ? c.status : "needs_action",
           evidence_or_action: clampString(c.evidence_or_action, 600),
+          category: normalizeRequirementCategory(c.category),
+          priority: normalizeRequirementPriority(c.priority),
+          source: (["tender_requirements", "source_text", "inferred_from_context"] as const).includes(c.source as never) ? c.source : undefined,
+          evidence_snippet: clampString(c.evidence_snippet, 420) || undefined,
+          response_section: clampString(c.response_section, 180) || undefined,
         }))
         .filter((c) => c.requirement.length > 0)
     : [];

@@ -421,7 +421,17 @@ export async function buildServiceContextPacket(args: BuildServiceContextArgs): 
       has_assessment: Boolean(assessment),
       has_uploaded_document: hasUploadedDocument(args.intake),
       has_extracted_document_text: documents.some((doc) => doc.extraction_status === "extracted" && cleanText(doc.text_excerpt, 20)),
-      has_user_requirements: hasIntakeText(args.intake, ["tender_context", "additional_details", "target_agency", "package_notes"]),
+      has_user_requirements: hasIntakeText(args.intake, [
+        "tender_context",
+        "additional_details",
+        "target_agency",
+        "package_notes",
+        "requirement_eligibility",
+        "requirement_scope",
+        "requirement_documents",
+        "requirement_evaluation",
+        "requirement_submission",
+      ]),
     },
     missing_inputs: missing,
     context_quality: {

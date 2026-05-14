@@ -151,6 +151,29 @@ function sourceQualityLabel(output: ProposalOutput): string | null {
   ].filter(Boolean).join(" | ");
 }
 
+function requirementModelLabel(output: ProposalOutput): string | null {
+  const model = output.requirement_model;
+  if (!model) return null;
+  return [
+    `Status: ${model.status}`,
+    `Score: ${model.score_0_10}/10`,
+    `Requirements: ${model.total_requirements}`,
+    `Mandatory: ${model.mandatory_count}`,
+    `Weighted: ${model.weighted_count}`,
+    model.missing_categories.length ? `Missing categories: ${model.missing_categories.join(", ")}` : null,
+    model.warnings.length ? `Warnings: ${model.warnings.slice(0, 4).join("; ")}` : null,
+  ].filter(Boolean).join(" | ");
+}
+
+function complianceMeta(c: ComplianceItem): string | null {
+  const parts = [
+    c.category ? `Category: ${c.category}` : null,
+    c.priority ? `Priority: ${c.priority}` : null,
+    c.response_section ? `Response section: ${c.response_section}` : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" | ") : null;
+}
+
 function buildSection(ctx: DocContext, paragraphs: Paragraph[], kind: string): ISectionOptions {
   return {
     properties: { page: { margin: { top: 1200, bottom: 1200, left: 1200, right: 1200 } } },
@@ -175,12 +198,19 @@ export async function renderProposalDocx(
     paragraphs.push(body(sourceQuality));
   }
 
+  const requirementModel = requirementModelLabel(output);
+  if (requirementModel) {
+    paragraphs.push(h2("Requirement model"));
+    paragraphs.push(body(requirementModel));
+  }
+
   paragraphs.push(h2("Technical approach"));
   output.technical_approach.forEach((p) => paragraphs.push(body(p)));
 
   if (output.compliance_checklist.length > 0) {
     paragraphs.push(h2("Compliance checklist"));
     output.compliance_checklist.forEach((c) => {
+      const meta = complianceMeta(c);
       paragraphs.push(
         new Paragraph({
           spacing: { before: 120, after: 40 },
@@ -188,6 +218,16 @@ export async function renderProposalDocx(
             new TextRun({ text: c.requirement, font: BODY_FONT, bold: true, size: 22 }),
           ],
         }),
+        ...(meta
+          ? [
+              new Paragraph({
+                spacing: { after: 50 },
+                children: [
+                  new TextRun({ text: meta, font: BODY_FONT, size: 18, color: "6B6B6B" }),
+                ],
+              }),
+            ]
+          : []),
         new Paragraph({
           spacing: { after: 80 },
           children: [
@@ -196,6 +236,16 @@ export async function renderProposalDocx(
             new TextRun({ text: c.evidence_or_action, font: BODY_FONT, size: 20, color: "4A4A4A" }),
           ],
         }),
+        ...(c.evidence_snippet
+          ? [
+              new Paragraph({
+                spacing: { after: 80 },
+                children: [
+                  new TextRun({ text: `Source snippet: ${c.evidence_snippet}`, font: BODY_FONT, size: 18, color: "6B6B6B" }),
+                ],
+              }),
+            ]
+          : []),
       );
     });
   }

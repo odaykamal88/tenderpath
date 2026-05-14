@@ -63,6 +63,10 @@ function statusLabel(s: ComplianceItem["status"]): string {
   return "Needs action";
 }
 
+function categoryLabel(item: ComplianceItem): string {
+  return [item.category, item.priority].filter(Boolean).join(" / ") || "unclassified";
+}
+
 /**
  * Compliance matrix — companion to the technical proposal .docx.
  * Maps each tender requirement to a status + evidence/action.
@@ -93,6 +97,20 @@ export async function renderComplianceMatrixPdf(
           </View>
         )}
 
+        {output.requirement_model && (
+          <View style={[styles.section, { borderLeftWidth: 2, borderLeftColor: output.requirement_model.status === "ready" ? GREEN : GOLD, paddingLeft: 12 }]}>
+            <Text style={[styles.label, { color: output.requirement_model.status === "ready" ? GREEN : GOLD, marginBottom: 6 }]}>
+              Requirement model · {output.requirement_model.status} · {output.requirement_model.score_0_10}/10 · {output.requirement_model.total_requirements} items
+            </Text>
+            {output.requirement_model.missing_categories.slice(0, 5).map((m, i) => (
+              <Text key={i} style={[styles.bullet, { color: INK2 }]}>· Missing category: {m}</Text>
+            ))}
+            {output.requirement_model.warnings.slice(0, 3).map((w, i) => (
+              <Text key={`rw-${i}`} style={[styles.bullet, { color: INK2 }]}>· {w}</Text>
+            ))}
+          </View>
+        )}
+
         {output.compliance_checklist.length === 0 ? (
           <View>
             <Text style={[styles.label, { marginBottom: 6 }]}>No compliance items returned</Text>
@@ -104,8 +122,9 @@ export async function renderComplianceMatrixPdf(
         ) : (
           <View>
             <View style={{ flexDirection: "row", paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: INK }}>
-              <Text style={[styles.label, { width: 240 }]}>Requirement</Text>
-              <Text style={[styles.label, { width: 80 }]}>Status</Text>
+              <Text style={[styles.label, { width: 72 }]}>Type</Text>
+              <Text style={[styles.label, { width: 190 }]}>Requirement</Text>
+              <Text style={[styles.label, { width: 78 }]}>Status</Text>
               <Text style={[styles.label, { flex: 1 }]}>Evidence or action</Text>
             </View>
             {output.compliance_checklist.map((c, i) => (
@@ -118,14 +137,17 @@ export async function renderComplianceMatrixPdf(
                   borderBottomColor: RULE,
                 }}
               >
-                <Text style={{ fontSize: 10, color: INK, width: 240, paddingRight: 8, lineHeight: 1.4 }}>
+                <Text style={{ fontSize: 8, color: INK3, width: 72, paddingRight: 8, lineHeight: 1.35 }}>
+                  {categoryLabel(c)}
+                </Text>
+                <Text style={{ fontSize: 10, color: INK, width: 190, paddingRight: 8, lineHeight: 1.4 }}>
                   {c.requirement}
                 </Text>
-                <Text style={{ fontSize: 9, color: statusColor(c.status), width: 80, fontFamily: "Helvetica-Bold" }}>
+                <Text style={{ fontSize: 9, color: statusColor(c.status), width: 78, fontFamily: "Helvetica-Bold" }}>
                   {statusLabel(c.status)}
                 </Text>
                 <Text style={{ fontSize: 9.5, color: INK2, flex: 1, lineHeight: 1.4 }}>
-                  {c.evidence_or_action}
+                  {c.evidence_or_action}{c.response_section ? ` Response: ${c.response_section}.` : ""}{c.evidence_snippet ? ` Source: ${c.evidence_snippet}` : ""}
                 </Text>
               </View>
             ))}

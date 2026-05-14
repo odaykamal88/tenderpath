@@ -4,7 +4,8 @@ import {
   serviceContextFromIntake,
 } from "@/lib/service-context";
 import { buildProposalEvidenceProfile } from "@/lib/proposal-package/evidence";
-import { PROPOSAL_PLAN, ROSTER_PLAN } from "@/lib/proposal-package/types";
+import { buildProposalRequirementModel } from "@/lib/proposal-package/requirements-model";
+import { DEFAULT_TENDER_REQUIREMENTS, PROPOSAL_PLAN, ROSTER_PLAN } from "@/lib/proposal-package/types";
 import {
   AGENCY_PACKAGES,
   findAgencyPackage,
@@ -110,6 +111,10 @@ function contextMissing(order: WorkOrderRow): string[] {
   return asStringArray(asRecord(context)?.missing_inputs, 10, 180);
 }
 
+function requirementCategoryMissing(categories: string[]): string[] {
+  return categories.map((category) => `${category} requirements or instructions`);
+}
+
 function pickAgency(order: WorkOrderRow): string | null {
   const intakeSlug = clean(order.intake?.agency_slug, 80);
   if (intakeSlug && findAgencyPackage(intakeSlug)) return intakeSlug;
@@ -125,48 +130,65 @@ async function proposalGate(order: WorkOrderRow): Promise<ServiceFulfillmentGate
   const tenderText = buildTenderText(order, pipeline);
   const intakeSummary = buildIntakeSummary(order.intake);
   const profile = buildProposalEvidenceProfile({ tenderText, intakeSummary });
+  const requirementModel = buildProposalRequirementModel({
+    requirements: DEFAULT_TENDER_REQUIREMENTS,
+    tenderText,
+    evidenceProfile: profile,
+  });
+  const readinessScore = Math.min(profile.score_0_10, requirementModel.score_0_10);
   const missing = unique([
     ...profile.missing_inputs,
+    ...requirementCategoryMissing(requirementModel.missing_categories),
     ...contextMissing(order),
   ]).slice(0, 12);
-  const warnings = profile.warnings.slice(0, 8);
+  const warnings = unique([
+    ...profile.warnings,
+    ...requirementModel.warnings,
+  ]).slice(0, 8);
 
-  if (profile.status === "blocked") {
+  if (profile.status === "blocked" || requirementModel.status === "blocked") {
     return {
       plan: PROPOSAL_PLAN,
       work_order_id: order.id,
       mode: "blocked",
       payment_allowed: false,
       auto_fulfill_allowed: false,
-      score_0_10: profile.score_0_10,
+      score_0_10: readinessScore,
       missing_inputs: missing,
       warnings,
       code: "SOURCE_CONTEXT_REQUIRED",
-      message: "Proposal Draft needs an extractable TOR/RFP or pasted scope, required documents, evaluation criteria, and submission instructions before checkout.",
+      message: "Proposal Draft needs an extractable TOR/RFP with requirement-level coverage before checkout.",
       metadata: {
         fulfillment_mode: "blocked",
         readiness_code: "SOURCE_CONTEXT_REQUIRED",
-        readiness_score: String(profile.score_0_10),
+        readiness_score: String(readinessScore),
+        source_quality_score: String(profile.score_0_10),
+        requirement_model_score: String(requirementModel.score_0_10),
+        requirement_model_status: requirementModel.status,
+        missing_requirement_categories: requirementModel.missing_categories.join(" | "),
       },
     };
   }
 
-  if (profile.status === "needs_review") {
+  if (profile.status === "needs_review" || requirementModel.status === "needs_review") {
     return {
       plan: PROPOSAL_PLAN,
       work_order_id: order.id,
       mode: "human_review",
       payment_allowed: true,
       auto_fulfill_allowed: false,
-      score_0_10: profile.score_0_10,
+      score_0_10: readinessScore,
       missing_inputs: missing,
       warnings,
       code: "HUMAN_REVIEW_REQUIRED",
-      message: "Payment can proceed, but this Proposal Draft should enter human QA because source coverage is incomplete.",
+      message: "Payment can proceed, but this Proposal Draft should enter human QA because requirement coverage is incomplete.",
       metadata: {
         fulfillment_mode: "human_review",
         readiness_code: "HUMAN_REVIEW_REQUIRED",
-        readiness_score: String(profile.score_0_10),
+        readiness_score: String(readinessScore),
+        source_quality_score: String(profile.score_0_10),
+        requirement_model_score: String(requirementModel.score_0_10),
+        requirement_model_status: requirementModel.status,
         missing_inputs: missing.slice(0, 5).join(" | "),
       },
     };
@@ -178,15 +200,18 @@ async function proposalGate(order: WorkOrderRow): Promise<ServiceFulfillmentGate
     mode: "self_serve",
     payment_allowed: true,
     auto_fulfill_allowed: true,
-    score_0_10: profile.score_0_10,
+    score_0_10: readinessScore,
     missing_inputs: missing,
     warnings,
     code: null,
-    message: "Proposal Draft source coverage is strong enough for automated fulfillment.",
+    message: "Proposal Draft source and requirement coverage are strong enough for automated fulfillment.",
     metadata: {
       fulfillment_mode: "self_serve",
       readiness_code: "READY",
-      readiness_score: String(profile.score_0_10),
+      readiness_score: String(readinessScore),
+      source_quality_score: String(profile.score_0_10),
+      requirement_model_score: String(requirementModel.score_0_10),
+      requirement_model_status: requirementModel.status,
     },
   };
 }

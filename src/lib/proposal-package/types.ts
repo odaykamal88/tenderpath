@@ -18,12 +18,61 @@ export interface ProposalOutput {
   missing_information: string[];
   next_steps: string[];
   source_quality?: ProposalEvidenceProfile;
+  requirement_model?: ProposalRequirementModel;
 }
 
 export interface ComplianceItem {
   requirement: string;
   status: "compliant" | "partial" | "needs_action";
   evidence_or_action: string;
+  category?: ProposalRequirementCategory;
+  priority?: ProposalRequirementPriority;
+  source?: ProposalRequirementSource;
+  evidence_snippet?: string;
+  response_section?: string;
+}
+
+export type ProposalRequirementCategory =
+  | "eligibility"
+  | "technical"
+  | "document"
+  | "evaluation"
+  | "submission"
+  | "financial"
+  | "constraint";
+
+export type ProposalRequirementPriority = "mandatory" | "weighted" | "recommended" | "unknown";
+
+export type ProposalRequirementSource =
+  | "tender_requirements"
+  | "source_text"
+  | "inferred_from_context";
+
+export interface ProposalRequirementItem {
+  id: string;
+  category: ProposalRequirementCategory;
+  priority: ProposalRequirementPriority;
+  requirement: string;
+  source: ProposalRequirementSource;
+  source_label: string;
+  evidence_snippet?: string;
+  response_section: string;
+  status: ComplianceItem["status"];
+  evidence_or_action: string;
+}
+
+export type ProposalRequirementCategoryCounts = Record<ProposalRequirementCategory, number>;
+
+export interface ProposalRequirementModel {
+  status: "ready" | "needs_review" | "blocked";
+  score_0_10: number;
+  total_requirements: number;
+  mandatory_count: number;
+  weighted_count: number;
+  category_counts: ProposalRequirementCategoryCounts;
+  missing_categories: ProposalRequirementCategory[];
+  warnings: string[];
+  items: ProposalRequirementItem[];
 }
 
 export interface RosterOutput {

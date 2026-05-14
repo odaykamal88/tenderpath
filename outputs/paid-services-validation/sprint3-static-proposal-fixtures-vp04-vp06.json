@@ -1,0 +1,209 @@
+{
+  "checked_at": "2026-05-14T12:41:30.005Z",
+  "validation_version": "sprint-3-proposal-requirement-model-v1",
+  "panel": "/Users/odaykamal/Desktop/TENDERPATH/data/validation/paid-services-panel.csv",
+  "mode": {
+    "live_matching": false,
+    "include_grants": false,
+    "ids": [
+      "VP-04",
+      "VP-05",
+      "VP-06"
+    ],
+    "timeout_ms_per_profile": 12000,
+    "proposal_fixtures": "/Users/odaykamal/Desktop/TENDERPATH/data/validation/proposal-requirement-fixtures.json",
+    "proposal_fixtures_loaded": 3
+  },
+  "summary": {
+    "checked": 3,
+    "ready_for_beta": 3,
+    "needs_human_review": 0,
+    "blocked": 0,
+    "median_paid_service_readiness_0_10": 8.5,
+    "median_procurement_effort_collapsed_0_10": 8.1,
+    "median_proposal_requirement_model_0_10": 9.7,
+    "status_counts": {
+      "ready_for_beta": 3
+    },
+    "failure_category_counts": {
+      "context issue": 2,
+      "coverage issue": 1
+    },
+    "track_summary": {
+      "Proposal Draft": {
+        "checked": 3,
+        "ready_for_beta": 3,
+        "needs_human_review": 0,
+        "blocked": 0,
+        "median_paid_service_readiness_0_10": 8.5,
+        "median_procurement_effort_collapsed_0_10": 8.1,
+        "median_proposal_requirement_model_0_10": 9.7
+      }
+    },
+    "top_blockers": [
+      {
+        "blocker": "proposal evidence vault is not complete enough for a paid draft",
+        "count": 2
+      },
+      {
+        "blocker": "risk/safeguarding evidence is missing for this proposal context",
+        "count": 2
+      }
+    ],
+    "sprint_0_gate_passed": true
+  },
+  "profiles": [
+    {
+      "panel_id": "VP-04",
+      "prospect_company": "INSIGHT HEALTH ADVISORS LIMITED",
+      "source_row_id": "4",
+      "website": "https://www.insighthealthadvisors.com/",
+      "country": "Kenya",
+      "region": "Africa",
+      "sector": "Health Systems Management and Financing",
+      "sub_icp": "Health systems strengthening, research and health financing",
+      "ungm_status": "Yes - Level 1; UNGM ID 587257; USAID-funded project participation in prospect DB",
+      "fit_class": "Strong-fit",
+      "service_track": "Proposal Draft",
+      "benchmark_tender_or_agency": "WHO/UNICEF health systems strengthening or health financing technical proposal",
+      "scenario_goal": "Generate an 80% proposal package for a health systems RFP using public company evidence and a benchmark TOR.",
+      "assessment_quality_0_10": 9.2,
+      "dashboard_continuity_0_10": 7.1,
+      "service_context_completeness_0_10": 9.3,
+      "proposal_requirement_model_0_10": 9.7,
+      "proposal_requirement_model_status": "ready",
+      "proposal_fixture_title": "WHO Indonesia RFP 088-2021 - Strengthening National and Subnational Monitoring and Enforcement Systems",
+      "proposal_fixture_source_url": "https://cdn.who.int/media/docs/default-source/searo/indonesia/procurement/bidding-document-rfp-088-2021.pdf?sfvrsn=24336cea_5",
+      "service_output_quality_0_10": 8.9,
+      "trustworthiness_0_10": 8.8,
+      "time_saved_0_10": 8.4,
+      "shortlist_impact_0_10": 7.6,
+      "procurement_effort_collapsed_0_10": 8.3,
+      "paid_service_readiness_0_10": 8.7,
+      "top_match_relevance_0_10": 5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "ready_for_beta",
+      "failure_category": "context issue",
+      "match_run": {
+        "status": "skipped",
+        "elapsedMs": 0,
+        "tenderMatches": null,
+        "grantMatches": null,
+        "actionableTopTenderCount": null,
+        "topTenders": [],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "proposal evidence vault is not complete enough for a paid draft"
+      ],
+      "highest_leverage_fix": "Carry assessment evidence, selected match, missing inputs and service-specific caveats into one work-order context packet.",
+      "missing_context_inputs": [
+        "proposal evidence vault is not complete enough for a paid draft"
+      ],
+      "critical_missing_context_inputs": [],
+      "prior_panel_status": "Not ready"
+    },
+    {
+      "panel_id": "VP-05",
+      "prospect_company": "AXIOM MONITORING AND EVALUATION LIMITED",
+      "source_row_id": "65",
+      "website": "https://axiom.co.ke",
+      "country": "Kenya",
+      "region": "Africa",
+      "sector": "Monitoring, Evaluation, and Research",
+      "sub_icp": "Third-party monitoring, evaluation, surveys and fragile-context research",
+      "ungm_status": "Yes - Level 1; UNGM ID 540038; UNHCR frame-agreement evidence in prospect DB",
+      "fit_class": "Strong-fit",
+      "service_track": "Proposal Draft",
+      "benchmark_tender_or_agency": "UNHCR/UNDP third-party monitoring, evaluation and survey services in fragile contexts",
+      "scenario_goal": "Test whether a complex M&E vendor gets a draft that reflects field deployment, ethics, sampling, quality assurance and donor logic.",
+      "assessment_quality_0_10": 9.2,
+      "dashboard_continuity_0_10": 6.9,
+      "service_context_completeness_0_10": 8.7,
+      "proposal_requirement_model_0_10": 9.7,
+      "proposal_requirement_model_status": "ready",
+      "proposal_fixture_title": "UNHCR Rwanda Terms of Reference - Results Monitoring Surveys",
+      "proposal_fixture_source_url": "https://www.unhcr.org/rw/sites/rw/files/2024-10/Annex%20B%20-%20Terms%20of%20Reference.pdf",
+      "service_output_quality_0_10": 8.7,
+      "trustworthiness_0_10": 8.6,
+      "time_saved_0_10": 8.3,
+      "shortlist_impact_0_10": 7.4,
+      "procurement_effort_collapsed_0_10": 8.1,
+      "paid_service_readiness_0_10": 8.5,
+      "top_match_relevance_0_10": 5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "ready_for_beta",
+      "failure_category": "context issue",
+      "match_run": {
+        "status": "skipped",
+        "elapsedMs": 0,
+        "tenderMatches": null,
+        "grantMatches": null,
+        "actionableTopTenderCount": null,
+        "topTenders": [],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "proposal evidence vault is not complete enough for a paid draft",
+        "risk/safeguarding evidence is missing for this proposal context"
+      ],
+      "highest_leverage_fix": "Carry assessment evidence, selected match, missing inputs and service-specific caveats into one work-order context packet.",
+      "missing_context_inputs": [
+        "proposal evidence vault is not complete enough for a paid draft",
+        "risk/safeguarding evidence is missing for this proposal context"
+      ],
+      "critical_missing_context_inputs": [],
+      "prior_panel_status": "Not ready"
+    },
+    {
+      "panel_id": "VP-06",
+      "prospect_company": "Farmhouse Productions Limited",
+      "source_row_id": "3",
+      "website": "https://www.farmhousegh.com",
+      "country": "Ghana",
+      "region": "Africa",
+      "sector": "Media Production",
+      "sub_icp": "Social and behavior change communication / edutainment production",
+      "ungm_status": "Yes - Level 1; UNGM ID 510548; USAID YOLO partner evidence in prospect DB",
+      "fit_class": "Adjacent-fit",
+      "service_track": "Proposal Draft",
+      "benchmark_tender_or_agency": "USAID/FHI 360 Ghana ASBC / YOLO social behavior change media production context",
+      "scenario_goal": "See if TenderPath gives conditional, gap-aware proposal guidance for an adjacent media/SBC vendor instead of treating it like generic consultancy.",
+      "assessment_quality_0_10": 8.6,
+      "dashboard_continuity_0_10": 7,
+      "service_context_completeness_0_10": 9.3,
+      "proposal_requirement_model_0_10": 9.5,
+      "proposal_requirement_model_status": "ready",
+      "proposal_fixture_title": "FHI 360 AHEAD RFP AHEAD-00139 - Social Behavior Change Messages and Radio PSAs",
+      "proposal_fixture_source_url": "https://download.acbar.org/files/files/7263153445.pdf",
+      "service_output_quality_0_10": 8.5,
+      "trustworthiness_0_10": 8.4,
+      "time_saved_0_10": 8,
+      "shortlist_impact_0_10": 7.1,
+      "procurement_effort_collapsed_0_10": 7.9,
+      "paid_service_readiness_0_10": 8.5,
+      "top_match_relevance_0_10": 5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "ready_for_beta",
+      "failure_category": "coverage issue",
+      "match_run": {
+        "status": "skipped",
+        "elapsedMs": 0,
+        "tenderMatches": null,
+        "grantMatches": null,
+        "actionableTopTenderCount": null,
+        "topTenders": [],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "risk/safeguarding evidence is missing for this proposal context"
+      ],
+      "highest_leverage_fix": "Carry assessment evidence, selected match, missing inputs and service-specific caveats into one work-order context packet.",
+      "missing_context_inputs": [
+        "risk/safeguarding evidence is missing for this proposal context"
+      ],
+      "critical_missing_context_inputs": [],
+      "prior_panel_status": "Not ready"
+    }
+  ]
+}

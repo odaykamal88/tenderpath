@@ -15,6 +15,7 @@ interface ProposalOutput {
   missing_information?: string[];
   next_steps?: string[];
   source_quality?: SourceQuality;
+  requirement_model?: RequirementModel;
   // roster-fast-track fields
   registration_checklist?: string[];
   capability_statement_draft?: string;
@@ -26,6 +27,32 @@ interface ComplianceItem {
   requirement: string;
   status: "compliant" | "partial" | "needs_action";
   evidence_or_action: string;
+  category?: RequirementCategory;
+  priority?: RequirementPriority;
+  source?: "tender_requirements" | "source_text" | "inferred_from_context";
+  evidence_snippet?: string;
+  response_section?: string;
+}
+
+type RequirementCategory =
+  | "eligibility"
+  | "technical"
+  | "document"
+  | "evaluation"
+  | "submission"
+  | "financial"
+  | "constraint";
+
+type RequirementPriority = "mandatory" | "weighted" | "recommended" | "unknown";
+
+interface RequirementModel {
+  status: "ready" | "needs_review" | "blocked";
+  score_0_10: number;
+  total_requirements: number;
+  mandatory_count: number;
+  weighted_count: number;
+  missing_categories?: RequirementCategory[];
+  warnings?: string[];
 }
 
 interface SourceQuality {
@@ -143,6 +170,7 @@ function ComplianceList({ items }: { items: Array<string | ComplianceItem> }) {
         const row = typeof item === "string"
           ? { requirement: item, status: "needs_action" as const, evidence_or_action: "Confirm evidence before submission." }
           : item;
+        const meta = [row.category, row.priority, row.response_section].filter(Boolean).join(" · ");
         return (
           <div key={i} className="rounded-sm border border-stone-200 bg-stone-50/50 p-3">
             <div className="flex flex-wrap items-start gap-2">
@@ -155,10 +183,28 @@ function ComplianceList({ items }: { items: Array<string | ComplianceItem> }) {
               >
                 {statusCopy[row.status]}
               </span>
+              {row.category && (
+                <span
+                  className="rounded-sm border border-stone-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500"
+                  style={{ fontFamily: MONO }}
+                >
+                  {row.category}
+                </span>
+              )}
               <p className="flex-1 text-[13.5px] font-medium leading-relaxed text-stone-800">{row.requirement}</p>
             </div>
+            {meta && (
+              <p className="mt-1.5 text-[11px] uppercase tracking-[0.12em] text-stone-400" style={{ fontFamily: MONO }}>
+                {meta}
+              </p>
+            )}
             {row.evidence_or_action && (
               <p className="mt-2 text-[12.5px] leading-relaxed text-stone-600">{row.evidence_or_action}</p>
+            )}
+            {row.evidence_snippet && (
+              <p className="mt-2 border-l border-stone-300 pl-3 text-[12px] leading-relaxed text-stone-500">
+                {row.evidence_snippet}
+              </p>
             )}
           </div>
         );
@@ -195,6 +241,46 @@ function SourceQualityBanner({ quality }: { quality?: SourceQuality }) {
           ))}
           {quality.warnings?.slice(0, 3).map((item) => (
             <div key={`w-${item}`}>{item}</div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function RequirementModelBanner({ model }: { model?: RequirementModel }) {
+  if (!model) return null;
+  const tone = model.status === "ready" ? "emerald" : model.status === "needs_review" ? "amber" : "red";
+  const cls = tone === "emerald"
+    ? "border-emerald-600 bg-emerald-50/40 text-emerald-950"
+    : tone === "amber"
+      ? "border-amber-600 bg-amber-50/40 text-amber-950"
+      : "border-red-600 bg-red-50/40 text-red-950";
+  return (
+    <div className={`mb-6 rounded-sm border-l-2 px-4 py-3 ${cls}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span
+          className="text-[10px] font-semibold uppercase tracking-[0.18em]"
+          style={{ fontFamily: MONO }}
+        >
+          Requirement model · {model.status}
+        </span>
+        <span className="text-[11px] font-semibold tabular-nums" style={{ fontFamily: MONO }}>
+          {model.score_0_10}/10 · {model.total_requirements} requirements
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2 text-[11px]" style={{ fontFamily: MONO }}>
+        <span>{model.mandatory_count} mandatory</span>
+        <span className="text-current/35">·</span>
+        <span>{model.weighted_count} weighted</span>
+      </div>
+      {(model.missing_categories?.length || model.warnings?.length) ? (
+        <div className="mt-2 space-y-1 text-[12px] leading-relaxed">
+          {model.missing_categories?.slice(0, 5).map((item) => (
+            <div key={`rm-${item}`}>Missing category: {item}</div>
+          ))}
+          {model.warnings?.slice(0, 3).map((item) => (
+            <div key={`rw-${item}`}>{item}</div>
           ))}
         </div>
       ) : null}
@@ -261,6 +347,8 @@ function ProposalDraftView({ output }: { output: ProposalOutput }) {
       <Section index="01" title="Executive summary">
         <TextBlock text={output.executive_summary} />
       </Section>
+
+      <RequirementModelBanner model={output.requirement_model} />
 
       <Section index="02" title="Technical approach">
         {output.technical_approach?.length ? (

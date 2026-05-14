@@ -30,6 +30,7 @@
 *.pem
 __pycache__/
 data/distribution/
+scripts/distribution/
 tenderpath_ungm_distribution.xlsx
 ungm_scraper_plan.md
 

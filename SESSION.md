@@ -86,6 +86,109 @@ Additional work done outside the prompt sequence:
 
 ## Current Status
 
+## Latest Session Update — 2026-05-14 (Sprint 4 started)
+
+- **Agent**: Codex
+- **Branch**: `codex/proposal-requirements-model`
+- **Scope Decision**: Continue the sprint numbering sequence with Sprint 4. Keep ICP broad while feedback collection continues. Defer the agency-by-agency readiness item until the remaining sprint items are finished.
+- **Task Completed**: Implemented paid-service dashboard error-message work for downloadable artifact failures.
+- **Files / Areas Changed**:
+  - `src/app/dashboard/work-orders/[id]/ArtifactGenerationNotice.tsx` — new shared user-safe notice for cases where dashboard output exists but the downloadable PDF/ZIP artifact failed to generate.
+  - `src/app/dashboard/work-orders/[id]/BidNoBidPanel.tsx` — shows the notice when `pdf_url` is null and `error_message` is present, with the existing regenerate path wired as the retry CTA.
+  - `src/app/dashboard/work-orders/[id]/ProposalPackagePanel.tsx` — same notice for missing proposal bundle artifacts.
+  - `src/app/dashboard/work-orders/[id]/RosterWorkspacePanel.tsx` — same notice for missing roster bundle artifacts.
+- **Behavioral Change**:
+  - When `pdf_url IS NULL` and `error_message IS NOT NULL`, the user now sees a small “download file unavailable” warning and a retry CTA instead of silent missing downloads.
+  - Stored `error_message` is used only as the condition for showing the notice; raw internal errors and stack traces are not rendered to users.
+  - Full generation-failure states now use user-safe copy and tell the user to retry or contact support, while preserving internal logged errors for support review.
+- **Verification Run**:
+  - `npx tsc --noEmit`
+  - `npx eslint src/app/dashboard/work-orders/[id]/ArtifactGenerationNotice.tsx src/app/dashboard/work-orders/[id]/BidNoBidPanel.tsx src/app/dashboard/work-orders/[id]/ProposalPackagePanel.tsx src/app/dashboard/work-orders/[id]/RosterWorkspacePanel.tsx`
+  - `npm run build` initially hit the local Webpack hash/cache issue, then after clearing `.next/cache` reached Google Fonts and failed because `fonts.googleapis.com` timed out / DNS failed.
+  - Offline production build passed with Next mocked Google font responses: `NEXT_FONT_GOOGLE_MOCKED_RESPONSES=/tmp/tenderpath-next-font-mocks.cjs npm run build`.
+- **Known Remaining Sprint Items**:
+  - Stripe live webhook `$1` test still requires a real live-mode charge.
+  - Agency-by-agency roster readiness can stay deferred until the current sprint backlog is reduced.
+- **Next Recommended Task**: Continue Sprint 4 with the next non-deferred dashboard/payment continuity item, or move into the next paid-service reliability slice once the user feedback is folded into the backlog.
+
+## Latest Session Update — 2026-05-14 (Sprint 3 continuation)
+
+- **Agent**: Codex
+- **Branch**: `codex/proposal-requirements-model`
+- **Task Completed**: Started the next Proposal Draft 8.5 sprint slice: requirement-level TOR/RFP extraction, compliance-model propagation, checkout readiness gating, artifact rendering, dashboard display, and validation scoring.
+- **Files / Areas Changed**:
+  - `src/lib/proposal-package/requirements-model.ts` — new deterministic requirement model builder for eligibility, technical, document, evaluation, submission, financial, and constraint coverage; includes priority, source snippets, response sections, conservative statuses, scoring, and guardrails.
+  - `src/lib/proposal-package/types.ts`, `llm.ts`, `generate-proposal.ts` — Proposal Draft generation now builds the requirement model, passes it into the LLM prompt, and merges it back into compliance output without overclaiming compliance when source coverage is weak.
+  - `src/lib/proposal-package/docx.ts`, `pdfDocs.tsx` — generated DOCX and compliance PDF now surface requirement-model status, missing categories, category/priority metadata, response sections, and source snippets.
+  - `src/app/dashboard/proposals/[workOrderId]/page.tsx`, `src/app/dashboard/work-orders/[id]/ProposalPackagePanel.tsx` — dashboard proposal views now expose requirement-model status and richer compliance rows.
+  - `src/lib/service-fulfillment-gates.ts` — Proposal Draft checkout readiness now includes deterministic requirement coverage without making an LLM call at checkout; weak requirement coverage blocks or routes to human QA.
+  - `scripts/paid-services-validation.ts` — validation version advanced to `sprint-3-proposal-requirement-model-v1` and adds `proposal_requirement_model_0_10`.
+- **Validation Outputs**:
+  - `outputs/paid-services-validation/sprint3-static-proposal-requirement-model.json`
+  - `outputs/paid-services-validation/sprint3-static-proposal-requirement-model.csv`
+  - `outputs/paid-services-validation/sprint3-static-after-proposal-requirement-model.json`
+  - `outputs/paid-services-validation/sprint3-static-after-proposal-requirement-model.csv`
+- **Verification Run**:
+  - `npx tsc --noEmit`
+  - Targeted ESLint for `src/lib/proposal-package`, `src/lib/service-fulfillment-gates.ts`, proposal dashboard views, and `scripts/paid-services-validation.ts`
+  - `rm -rf .next/cache && npm run build`
+  - Deterministic model smoke test via `npx tsx -e` returned `ready`, score `9.2/10`, 10 requirements on a complete synthetic TOR/RFP.
+  - Static validation slice VP-04 to VP-06: median paid-service readiness `6.8/10`, procurement effort collapsed `6.1/10`, requirement model `4.8/10`.
+  - Full static 15-vendor panel: median paid-service readiness `7.0/10`, procurement effort collapsed `6.3/10`, Proposal Draft requirement model `4.8/10`.
+- **Important Decision**: The new model intentionally scores the existing Proposal Draft panel low because the panel has benchmark contexts, not actual TOR/RFP text. That is desired; Proposal Draft should not look self-serve-ready without requirement-level source material.
+- **Known Local Artifacts Not Intended For This Sprint Change**:
+  - `scripts/distribution/` remains untracked and untouched.
+- **Next Recommended Task**: Add a real TOR/RFP fixture path for Proposal Draft validation (at least VP-04 to VP-06) so the requirement model can be tested against messy real tender documents instead of benchmark-only context. Then tune checkout copy and intake UX around the exact missing requirement categories.
+- **Recommended Agent**: Codex.
+
+### Sprint 3 Continuation — Proposal Fixtures Added
+
+- **Task Completed**: Added a source-derived Proposal Draft fixture path and reran validation against VP-04 to VP-06 with public TOR/RFP-derived requirement packs.
+- **Files / Areas Changed**:
+  - `data/validation/proposal-requirement-fixtures.json` — new compact public-source-derived fixtures for:
+    - VP-04: WHO Indonesia RFP 088-2021, health/public policy monitoring and enforcement systems.
+    - VP-05: UNHCR Rwanda Results Monitoring Surveys TOR.
+    - VP-06: FHI 360/AHEAD social behavior change messages and radio PSA RFP.
+  - `scripts/paid-services-validation.ts` — loads proposal fixtures by default, records fixture title/source URL, and scores Proposal Draft requirement-model readiness from actual fixture coverage instead of benchmark labels alone.
+  - `src/lib/proposal-package/requirements-model.ts` — fixed extraction ordering so submission instructions are preserved before broad document/constraint rows can consume the item budget.
+- **Validation Outputs**:
+  - `outputs/paid-services-validation/sprint3-static-proposal-fixtures-vp04-vp06.json`
+  - `outputs/paid-services-validation/sprint3-static-proposal-fixtures-vp04-vp06.csv`
+  - `outputs/paid-services-validation/sprint3-static-after-proposal-fixtures.json`
+  - `outputs/paid-services-validation/sprint3-static-after-proposal-fixtures.csv`
+- **Score Movement**:
+  - VP-04 to VP-06 Proposal Draft with fixtures: median paid-service readiness `8.5/10`, median procurement effort collapsed `8.1/10`, median requirement model `9.7/10`.
+  - Full static 15-vendor panel with fixtures: median paid-service readiness `7.8/10`, median procurement effort collapsed `7.4/10`.
+  - Proposal Draft track in full static panel: median paid-service readiness `8.5/10`, median requirement model `9.5/10`.
+- **Important Decision**: Proposal Draft now reaches the 8.5 target only when a real/source-derived TOR/RFP requirement pack is available. Remaining drag is evidence-vault depth, risk/safeguarding evidence, and vendor-specific proof, not the requirement parser itself.
+- **Verification Run**:
+  - `npx tsc --noEmit`
+  - Targeted ESLint for proposal package, service fulfillment gates, proposal dashboard views, and validation harness.
+  - `rm -rf .next/cache && npm run build`
+- **Next Recommended Task**: Wire the intake UX and checkout copy to the exact missing requirement categories and evidence-vault blockers so users know why a Proposal Draft is self-serve-ready, human-QA, or blocked.
+
+### Sprint 3 Closeout — Intake and Checkout UX Wired
+
+- **Task Completed**: Closed Sprint 3 by wiring the requirement-category model into user-facing Proposal Draft intake, saved tender text, and payment readiness copy.
+- **Files / Areas Changed**:
+  - `src/app/dashboard/services/ServiceIntakeForm.tsx` — Proposal Draft intake now asks for the exact requirement categories TenderPath scores: eligibility/mandatory fit, scope and deliverables, required documents, evaluation/scoring, and submission instructions. The fulfillment context panel now checks those categories directly, while still accepting an extractable TOR/RFP upload as the preferred path.
+  - `src/lib/service-orders.ts`, `src/lib/service-context.ts`, `src/lib/proposal-package/context.ts` — new requirement-category fields are preserved as long intake text, counted as user requirement context, and injected into `tenderText` so checkout gates and Proposal Draft generation can use them.
+  - `src/app/pay/page.tsx` — payment readiness now distinguishes overall readiness, source coverage, and requirement-model coverage; missing requirement categories are shown explicitly when checkout blocks or routes to human QA.
+  - `src/app/dashboard/services/[service]/page.tsx` — Proposal Draft service copy now describes the requirement-level compliance checklist and the exact TOR/RFP categories users should provide.
+- **Final Sprint 3 Validation Outputs**:
+  - `outputs/paid-services-validation/sprint3-static-proposal-fixtures-vp04-vp06.json`
+  - `outputs/paid-services-validation/sprint3-static-after-proposal-fixtures.json`
+- **Final Score Check**:
+  - VP-04 to VP-06 Proposal Draft with fixtures: median paid-service readiness `8.5/10`, median procurement effort collapsed `8.1/10`, median requirement model `9.7/10`.
+  - Full static 15-vendor panel with fixtures: median paid-service readiness `7.8/10`, median procurement effort collapsed `7.4/10`.
+  - Proposal Draft track in full static panel: median paid-service readiness `8.5/10`, median requirement model `9.5/10`.
+- **Verification Run**:
+  - `npx tsc --noEmit`
+  - Targeted ESLint for service intake, service detail, pay page, proposal package, service fulfillment gates, service context/order code, and validation harness.
+  - `rm -rf .next/cache && npm run build`
+- **Sprint 3 Verdict**: Complete. Proposal Draft can honestly reach the `8.5` target when a real/source-derived TOR/RFP requirement pack or equivalent pasted category context is available. The next ceiling is vendor evidence depth, not requirement parsing.
+- **Next Recommended Task**: Wait for product feedback, then choose Sprint 4 focus: evidence-vault depth, vendor proof checklists, or Roster Fast-Track category/agency packs.
+
 ## Latest Session Update — 2026-05-14
 
 - **Agent**: Codex

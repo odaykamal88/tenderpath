@@ -1,11 +1,36 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import ArtifactGenerationNotice from "./ArtifactGenerationNotice";
 
 interface ComplianceItem {
   requirement: string;
   status: "compliant" | "partial" | "needs_action";
   evidence_or_action: string;
+  category?: RequirementCategory;
+  priority?: RequirementPriority;
+  evidence_snippet?: string;
+  response_section?: string;
+}
+
+type RequirementCategory =
+  | "eligibility"
+  | "technical"
+  | "document"
+  | "evaluation"
+  | "submission"
+  | "financial"
+  | "constraint";
+
+type RequirementPriority = "mandatory" | "weighted" | "recommended" | "unknown";
+
+interface RequirementModel {
+  status: "ready" | "needs_review" | "blocked";
+  score_0_10: number;
+  total_requirements: number;
+  mandatory_count: number;
+  weighted_count: number;
+  missing_categories?: RequirementCategory[];
 }
 
 interface ProposalOutput {
@@ -17,6 +42,7 @@ interface ProposalOutput {
   financial_template_notes: string[];
   missing_information: string[];
   next_steps: string[];
+  requirement_model?: RequirementModel;
 }
 
 interface PackageRow {
@@ -180,7 +206,7 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
           Generation hit a snag
         </h2>
         <p className="mt-2 text-[13px] text-red-800">
-          {pkg.error_message ?? "We couldn’t finish drafting the proposal on the last attempt."}
+          We couldn&rsquo;t finish drafting the proposal on the last attempt. Retry generation; if it keeps failing, support can review the logged error.
         </p>
         <button
           type="button"
@@ -200,6 +226,8 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
   const compliant = out.compliance_checklist.filter((c) => c.status === "compliant").length;
   const partial = out.compliance_checklist.filter((c) => c.status === "partial").length;
   const gaps = out.compliance_checklist.filter((c) => c.status === "needs_action").length;
+  const requirementModel = out.requirement_model;
+  const fileGenerationFailed = !pkg.pdf_url && Boolean(pkg.error_message);
 
   return (
     <section className="rounded-md border-l-2 border-emerald-700 bg-white shadow-sm">
@@ -224,11 +252,26 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
           <p className="text-[11px] uppercase tracking-[0.16em] text-stone-500" style={{ fontFamily: MONO }}>
             Compliance · {compliant} compliant · {partial} partial · {gaps} gap{gaps === 1 ? "" : "s"}
           </p>
+          {requirementModel && (
+            <p className="text-[11px] uppercase tracking-[0.16em] text-stone-500" style={{ fontFamily: MONO }}>
+              Requirement model · {requirementModel.status} · {requirementModel.score_0_10}/10 · {requirementModel.total_requirements} rows
+            </p>
+          )}
         </div>
         <p className="mt-3 text-[14px] leading-relaxed text-stone-800" style={{ fontFamily: SERIF }}>
           {out.executive_summary}
         </p>
       </div>
+
+      {fileGenerationFailed && (
+        <ArtifactGenerationNotice
+          artifactLabel="the proposal bundle"
+          busy={regenBusy}
+          remainingRegenerations={remaining}
+          retryLabel="Retry bundle →"
+          onRetry={handleRegenerate}
+        />
+      )}
 
       <div className="p-5 border-b border-stone-100">
         <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-2" style={{ fontFamily: MONO }}>
@@ -254,9 +297,19 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
                   <span className={`text-[9px] uppercase tracking-[0.16em] font-semibold ${statusTint(c.status)}`} style={{ fontFamily: MONO }}>
                     {statusLabel(c.status)}
                   </span>
+                  {c.category && (
+                    <span className="text-[9px] uppercase tracking-[0.16em] font-semibold text-stone-400" style={{ fontFamily: MONO }}>
+                      {c.category}{c.priority ? `/${c.priority}` : ""}
+                    </span>
+                  )}
                   <span className="font-semibold leading-snug">{c.requirement}</span>
                 </div>
                 <p className="ml-[88px] text-[12px] text-stone-600 leading-relaxed">{c.evidence_or_action}</p>
+                {c.response_section && (
+                  <p className="ml-[88px] text-[11px] uppercase tracking-[0.12em] text-stone-400" style={{ fontFamily: MONO }}>
+                    {c.response_section}
+                  </p>
+                )}
               </li>
             ))}
           </ul>

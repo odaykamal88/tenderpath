@@ -1,0 +1,220 @@
+{
+  "checked_at": "2026-05-14T07:28:56.569Z",
+  "validation_version": "sprint-3-proposal-requirement-model-v1",
+  "panel": "/Users/odaykamal/Desktop/TENDERPATH/data/validation/paid-services-panel.csv",
+  "mode": {
+    "live_matching": false,
+    "include_grants": false,
+    "ids": [
+      "VP-04",
+      "VP-05",
+      "VP-06"
+    ],
+    "timeout_ms_per_profile": 12000
+  },
+  "summary": {
+    "checked": 3,
+    "ready_for_beta": 0,
+    "needs_human_review": 3,
+    "blocked": 0,
+    "median_paid_service_readiness_0_10": 6.8,
+    "median_procurement_effort_collapsed_0_10": 6.1,
+    "median_proposal_requirement_model_0_10": 4.8,
+    "status_counts": {
+      "needs_human_review": 3
+    },
+    "failure_category_counts": {
+      "service-output issue": 3
+    },
+    "track_summary": {
+      "Proposal Draft": {
+        "checked": 3,
+        "ready_for_beta": 0,
+        "needs_human_review": 3,
+        "blocked": 0,
+        "median_paid_service_readiness_0_10": 6.8,
+        "median_procurement_effort_collapsed_0_10": 6.1,
+        "median_proposal_requirement_model_0_10": 4.8
+      }
+    },
+    "top_blockers": [
+      {
+        "blocker": "actual TOR/RFP is missing or not parsed",
+        "count": 3
+      },
+      {
+        "blocker": "proposal evidence vault is not complete enough for a paid draft",
+        "count": 2
+      },
+      {
+        "blocker": "risk/safeguarding evidence is missing for this proposal context",
+        "count": 2
+      },
+      {
+        "blocker": "evaluation criteria, deliverables or submission format are missing",
+        "count": 1
+      }
+    ],
+    "sprint_0_gate_passed": true
+  },
+  "profiles": [
+    {
+      "panel_id": "VP-04",
+      "prospect_company": "INSIGHT HEALTH ADVISORS LIMITED",
+      "source_row_id": "4",
+      "website": "https://www.insighthealthadvisors.com/",
+      "country": "Kenya",
+      "region": "Africa",
+      "sector": "Health Systems Management and Financing",
+      "sub_icp": "Health systems strengthening, research and health financing",
+      "ungm_status": "Yes - Level 1; UNGM ID 587257; USAID-funded project participation in prospect DB",
+      "fit_class": "Strong-fit",
+      "service_track": "Proposal Draft",
+      "benchmark_tender_or_agency": "WHO/UNICEF health systems strengthening or health financing technical proposal",
+      "scenario_goal": "Generate an 80% proposal package for a health systems RFP using public company evidence and a benchmark TOR.",
+      "assessment_quality_0_10": 9.2,
+      "dashboard_continuity_0_10": 6.7,
+      "service_context_completeness_0_10": 8,
+      "proposal_requirement_model_0_10": 4.8,
+      "service_output_quality_0_10": 5.6,
+      "trustworthiness_0_10": 6,
+      "time_saved_0_10": 6.2,
+      "shortlist_impact_0_10": 5.8,
+      "procurement_effort_collapsed_0_10": 6.1,
+      "paid_service_readiness_0_10": 6.8,
+      "top_match_relevance_0_10": 5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "needs_human_review",
+      "failure_category": "service-output issue",
+      "match_run": {
+        "status": "skipped",
+        "elapsedMs": 0,
+        "tenderMatches": null,
+        "grantMatches": null,
+        "actionableTopTenderCount": null,
+        "topTenders": [],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "actual TOR/RFP is missing or not parsed",
+        "evaluation criteria, deliverables or submission format are missing",
+        "proposal evidence vault is not complete enough for a paid draft"
+      ],
+      "highest_leverage_fix": "Parse uploaded TOR/RFP documents into requirements before checkout and cap proposal output when source coverage is low.",
+      "missing_context_inputs": [
+        "actual TOR/RFP is missing or not parsed",
+        "evaluation criteria, deliverables or submission format are missing",
+        "proposal evidence vault is not complete enough for a paid draft"
+      ],
+      "critical_missing_context_inputs": [
+        "actual TOR/RFP is missing or not parsed",
+        "evaluation criteria, deliverables or submission format are missing"
+      ],
+      "prior_panel_status": "Not ready"
+    },
+    {
+      "panel_id": "VP-05",
+      "prospect_company": "AXIOM MONITORING AND EVALUATION LIMITED",
+      "source_row_id": "65",
+      "website": "https://axiom.co.ke",
+      "country": "Kenya",
+      "region": "Africa",
+      "sector": "Monitoring, Evaluation, and Research",
+      "sub_icp": "Third-party monitoring, evaluation, surveys and fragile-context research",
+      "ungm_status": "Yes - Level 1; UNGM ID 540038; UNHCR frame-agreement evidence in prospect DB",
+      "fit_class": "Strong-fit",
+      "service_track": "Proposal Draft",
+      "benchmark_tender_or_agency": "UNHCR/UNDP third-party monitoring, evaluation and survey services in fragile contexts",
+      "scenario_goal": "Test whether a complex M&E vendor gets a draft that reflects field deployment, ethics, sampling, quality assurance and donor logic.",
+      "assessment_quality_0_10": 9.2,
+      "dashboard_continuity_0_10": 6.7,
+      "service_context_completeness_0_10": 8,
+      "proposal_requirement_model_0_10": 4.8,
+      "service_output_quality_0_10": 5.6,
+      "trustworthiness_0_10": 6,
+      "time_saved_0_10": 6.2,
+      "shortlist_impact_0_10": 5.8,
+      "procurement_effort_collapsed_0_10": 6.1,
+      "paid_service_readiness_0_10": 6.8,
+      "top_match_relevance_0_10": 5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "needs_human_review",
+      "failure_category": "service-output issue",
+      "match_run": {
+        "status": "skipped",
+        "elapsedMs": 0,
+        "tenderMatches": null,
+        "grantMatches": null,
+        "actionableTopTenderCount": null,
+        "topTenders": [],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "actual TOR/RFP is missing or not parsed",
+        "proposal evidence vault is not complete enough for a paid draft",
+        "risk/safeguarding evidence is missing for this proposal context"
+      ],
+      "highest_leverage_fix": "Parse uploaded TOR/RFP documents into requirements before checkout and cap proposal output when source coverage is low.",
+      "missing_context_inputs": [
+        "actual TOR/RFP is missing or not parsed",
+        "proposal evidence vault is not complete enough for a paid draft",
+        "risk/safeguarding evidence is missing for this proposal context"
+      ],
+      "critical_missing_context_inputs": [
+        "actual TOR/RFP is missing or not parsed"
+      ],
+      "prior_panel_status": "Not ready"
+    },
+    {
+      "panel_id": "VP-06",
+      "prospect_company": "Farmhouse Productions Limited",
+      "source_row_id": "3",
+      "website": "https://www.farmhousegh.com",
+      "country": "Ghana",
+      "region": "Africa",
+      "sector": "Media Production",
+      "sub_icp": "Social and behavior change communication / edutainment production",
+      "ungm_status": "Yes - Level 1; UNGM ID 510548; USAID YOLO partner evidence in prospect DB",
+      "fit_class": "Adjacent-fit",
+      "service_track": "Proposal Draft",
+      "benchmark_tender_or_agency": "USAID/FHI 360 Ghana ASBC / YOLO social behavior change media production context",
+      "scenario_goal": "See if TenderPath gives conditional, gap-aware proposal guidance for an adjacent media/SBC vendor instead of treating it like generic consultancy.",
+      "assessment_quality_0_10": 8.6,
+      "dashboard_continuity_0_10": 6.8,
+      "service_context_completeness_0_10": 8.7,
+      "proposal_requirement_model_0_10": 4.8,
+      "service_output_quality_0_10": 5.6,
+      "trustworthiness_0_10": 6,
+      "time_saved_0_10": 6.2,
+      "shortlist_impact_0_10": 5.8,
+      "procurement_effort_collapsed_0_10": 6.2,
+      "paid_service_readiness_0_10": 6.9,
+      "top_match_relevance_0_10": 5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "needs_human_review",
+      "failure_category": "service-output issue",
+      "match_run": {
+        "status": "skipped",
+        "elapsedMs": 0,
+        "tenderMatches": null,
+        "grantMatches": null,
+        "actionableTopTenderCount": null,
+        "topTenders": [],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "actual TOR/RFP is missing or not parsed",
+        "risk/safeguarding evidence is missing for this proposal context"
+      ],
+      "highest_leverage_fix": "Parse uploaded TOR/RFP documents into requirements before checkout and cap proposal output when source coverage is low.",
+      "missing_context_inputs": [
+        "actual TOR/RFP is missing or not parsed",
+        "risk/safeguarding evidence is missing for this proposal context"
+      ],
+      "critical_missing_context_inputs": [
+        "actual TOR/RFP is missing or not parsed"
+      ],
+      "prior_panel_status": "Not ready"
+    }
+  ]
+}

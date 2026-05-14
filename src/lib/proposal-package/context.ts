@@ -109,8 +109,33 @@ export async function loadPipelineItem(pipelineItemId: number | null): Promise<P
   return rows[0] ?? null;
 }
 
+const USER_REQUIREMENT_CONTEXT_KEYS: Array<{ key: string; label: string }> = [
+  { key: "tender_context", label: "Tender context" },
+  { key: "requirement_eligibility", label: "Eligibility / mandatory requirements" },
+  { key: "requirement_scope", label: "Scope, deliverables, methodology requirements" },
+  { key: "requirement_documents", label: "Required documents" },
+  { key: "requirement_evaluation", label: "Evaluation / scoring criteria" },
+  { key: "requirement_submission", label: "Submission instructions" },
+  { key: "package_notes", label: "Package notes" },
+  { key: "additional_details", label: "Additional details" },
+];
+
+function buildUserRequirementContext(intake: Record<string, unknown> | null): string {
+  if (!intake) return "";
+  const lines = USER_REQUIREMENT_CONTEXT_KEYS
+    .map(({ key, label }) => {
+      const value = intake[key];
+      if (typeof value !== "string" || !value.trim()) return null;
+      return `${label}:\n${value.trim()}`;
+    })
+    .filter((line): line is string => Boolean(line));
+  if (!lines.length) return "";
+  return `USER-PROVIDED TENDER / REQUIREMENT CONTEXT:\n${lines.join("\n\n")}`;
+}
+
 export function buildTenderText(order: WorkOrderRow, pipelineItem: PipelineRow | null): string {
   const uploadedDocumentText = formatServiceDocumentsForTenderText(order.intake);
+  const userRequirementContext = buildUserRequirementContext(order.intake);
   if (pipelineItem) {
     return [
       `Title: ${pipelineItem.tender_title ?? order.tender_title ?? "Unknown"}`,
@@ -122,16 +147,15 @@ export function buildTenderText(order: WorkOrderRow, pipelineItem: PipelineRow |
       pipelineItem.tender_deadline && `Deadline: ${pipelineItem.tender_deadline}`,
       pipelineItem.t_description && `\nDescription:\n${pipelineItem.t_description}`,
       pipelineItem.eligibility_summary && `\nEligibility:\n${pipelineItem.eligibility_summary}`,
+      userRequirementContext,
       uploadedDocumentText,
     ].filter(Boolean).join("\n");
   }
-  const intakeContext = order.intake?.tender_context ?? order.intake?.package_notes;
-  const torText = typeof intakeContext === "string" ? intakeContext : "";
   return [
     order.tender_title && `Title: ${order.tender_title}`,
     order.agency && `Agency: ${order.agency}`,
     order.tender_url && `Source URL: ${order.tender_url}`,
-    torText && `\nProvided context:\n${torText}`,
+    userRequirementContext,
     uploadedDocumentText,
   ].filter(Boolean).join("\n") || "No tender details provided. The user supplied no tender URL, agency, title, or pasted terms of reference.";
 }

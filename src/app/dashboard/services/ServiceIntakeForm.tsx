@@ -38,6 +38,39 @@ interface UploadedFile {
 
 const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
 
+const PROPOSAL_REQUIREMENT_FIELDS = [
+  {
+    key: "requirement_eligibility",
+    label: "Eligibility / mandatory fit",
+    placeholder: "Paste mandatory eligibility, registration, license, experience, geography, or pass/fail requirements",
+    help: "eligibility and mandatory requirements",
+  },
+  {
+    key: "requirement_scope",
+    label: "Scope, deliverables, methodology",
+    placeholder: "Paste scope of work, deliverables, methodology, work plan, or team requirements",
+    help: "technical scope and deliverables",
+  },
+  {
+    key: "requirement_documents",
+    label: "Required documents",
+    placeholder: "Paste required forms, certificates, CVs, references, financial proposal, legal docs, or attachments",
+    help: "required document list",
+  },
+  {
+    key: "requirement_evaluation",
+    label: "Evaluation / scoring",
+    placeholder: "Paste evaluation criteria, points, weights, pass marks, best-value rules, or scoring method",
+    help: "evaluation criteria or scoring method",
+  },
+  {
+    key: "requirement_submission",
+    label: "Submission instructions",
+    placeholder: "Paste portal/email instructions, file naming, separate technical/financial submission, language, validity, deadline rules",
+    help: "submission format and instructions",
+  },
+] as const;
+
 const SERVICE_FIELDS: Record<ServiceSlug, Array<{ key: string; label: string; placeholder: string; required?: boolean; rows?: number }>> = {
   "bid-no-bid": [
     { key: "decision_deadline", label: "When do you need the decision?", placeholder: "e.g. Tomorrow, before the Friday bid meeting" },
@@ -50,6 +83,7 @@ const SERVICE_FIELDS: Record<ServiceSlug, Array<{ key: string; label: string; pl
   ],
   proposal: [
     { key: "submission_deadline", label: "Submission deadline", placeholder: "Date/time and timezone if known", required: true },
+    ...PROPOSAL_REQUIREMENT_FIELDS.map((field) => ({ ...field, rows: 3 })),
     { key: "additional_details", label: "Additional details we should know", placeholder: "Compliance concerns, required sections, pricing notes, partner roles, or anything else we should account for", rows: 4 },
   ],
   "lta-roster": [
@@ -71,6 +105,19 @@ function hasText(value: unknown): boolean {
 
 function hasList(value: unknown): boolean {
   return Array.isArray(value) && value.some((item) => hasText(item));
+}
+
+function proposalRequirementChecks(args: {
+  fields: Record<string, string>;
+  extractedRequirements: boolean;
+}): Array<{ label: string; ok: boolean; help: string }> {
+  return PROPOSAL_REQUIREMENT_FIELDS.map((field) => ({
+    label: field.label,
+    ok: args.extractedRequirements || hasText(args.fields[field.key]),
+    help: args.extractedRequirements
+      ? "TenderPath will extract this from the uploaded TOR/RFP after intake is saved."
+      : `Paste ${field.help}, or upload an extractable TOR/RFP above.`,
+  }));
 }
 
 function hasMatchEvidence(item: PipelineEvidenceContext | null): boolean {
@@ -132,6 +179,12 @@ function buildEvidenceReview(args: {
           ? "Upload an extractable PDF/DOCX/XLSX TOR or paste the TOR/RFP before checkout for a submission-ready draft."
           : "Paste criteria or upload an extractable PDF/DOCX/XLSX before checkout for a decisive memo.",
     });
+    if (args.service === "proposal") {
+      checks.push(...proposalRequirementChecks({
+        fields: args.fields,
+        extractedRequirements,
+      }));
+    }
     checks.push({
       label: "Deadline",
       ok: hasDeadline,

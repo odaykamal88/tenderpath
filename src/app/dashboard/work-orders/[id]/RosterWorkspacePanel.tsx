@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import ArtifactGenerationNotice from "./ArtifactGenerationNotice";
 
 interface DocumentRenameRule {
   document_type: string;
@@ -294,7 +295,7 @@ export default function RosterWorkspacePanel({ workOrderId, paymentStatus, initi
           Generation hit a snag
         </h2>
         <p className="mt-2 text-[13px] text-red-800">
-          {pkg.error_message ?? "We couldn’t finish your roster package on the last attempt."}
+          We couldn&rsquo;t finish your roster package on the last attempt. Retry generation; if it keeps failing, support can review the logged error.
         </p>
         <button
           type="button"
@@ -312,6 +313,7 @@ export default function RosterWorkspacePanel({ workOrderId, paymentStatus, initi
   const out = pkg.output;
   const remaining = data?.remaining_regenerations ?? 0;
   const isSubmitted = orderStatus === "submitted";
+  const fileGenerationFailed = !pkg.pdf_url && Boolean(pkg.error_message);
 
   return (
     <section className="rounded-md border-l-2 border-emerald-700 bg-white shadow-sm">
@@ -347,6 +349,16 @@ export default function RosterWorkspacePanel({ workOrderId, paymentStatus, initi
           Portal · {selectedAgency.portalLabel}
         </p>
       </div>
+
+      {fileGenerationFailed && (
+        <ArtifactGenerationNotice
+          artifactLabel="the roster bundle"
+          busy={regenBusy}
+          remainingRegenerations={remaining}
+          retryLabel="Retry bundle →"
+          onRetry={handleRegenerate}
+        />
+      )}
 
       <div className="p-5 border-b border-stone-100">
         <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-2" style={{ fontFamily: MONO }}>

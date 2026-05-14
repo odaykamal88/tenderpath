@@ -9,7 +9,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { matchGrants, matchTenders } from "../src/lib/assessment/match";
+import { buildProposalEvidenceProfile } from "../src/lib/proposal-package/evidence";
+import { buildProposalRequirementModel } from "../src/lib/proposal-package/requirements-model";
 import { AGENCY_PACKAGES, inferAgencySlug } from "../src/lib/proposal-package/roster-packages";
+import type { ProposalEvidenceProfile, ProposalRequirementModel, TenderRequirements } from "../src/lib/proposal-package/types";
 import type { AIAnalysis, MatchedGrant, MatchedTender, ReadinessDimensions } from "../src/lib/types";
 
 try {
@@ -23,7 +26,8 @@ try {
 } catch {}
 
 const DEFAULT_PANEL = "data/validation/paid-services-panel.csv";
-const VALIDATION_VERSION = "sprint-0-paid-services-v1";
+const DEFAULT_PROPOSAL_FIXTURES = "data/validation/proposal-requirement-fixtures.json";
+const VALIDATION_VERSION = "sprint-3-proposal-requirement-model-v1";
 const SUPPORTED_ROSTER_AGENCY_LABELS = new Set(AGENCY_PACKAGES.map((agency) => agency.label.toUpperCase()));
 
 type PanelRow = Record<string, string>;
@@ -50,6 +54,7 @@ type Args = {
   verbose: boolean;
   outPath: string | null;
   csvOutPath: string | null;
+  proposalFixturesPath: string | null;
 };
 
 type ContextCheck = {
@@ -71,6 +76,23 @@ type MatchRun = {
   error?: string;
 };
 
+type ProposalFixture = {
+  panel_id: string;
+  source_title: string;
+  agency: string;
+  source_url: string;
+  source_type: string;
+  derived_note?: string;
+  tender_text: string;
+  requirements: TenderRequirements;
+};
+
+type ProposalFixtureSignal = {
+  fixture: ProposalFixture;
+  evidenceProfile: ProposalEvidenceProfile;
+  requirementModel: ProposalRequirementModel;
+};
+
 type ProfileResult = {
   panel_id: string;
   prospect_company: string;
@@ -88,6 +110,10 @@ type ProfileResult = {
   assessment_quality_0_10: number;
   dashboard_continuity_0_10: number;
   service_context_completeness_0_10: number;
+  proposal_requirement_model_0_10: number | null;
+  proposal_requirement_model_status: string | null;
+  proposal_fixture_title: string | null;
+  proposal_fixture_source_url: string | null;
   service_output_quality_0_10: number;
   trustworthiness_0_10: number;
   time_saved_0_10: number;
@@ -119,6 +145,7 @@ function parseArgs(): Args {
   const positional = raw.find((arg, i) => !arg.startsWith("--") && raw[i - 1] !== "--panel" && raw[i - 1] !== "--out" && raw[i - 1] !== "--csv-out");
   const outPath = readValue("--out");
   const csvOutPath = readValue("--csv-out");
+  const proposalFixtures = readValue("--proposal-fixtures");
   return {
     panelPath: readValue("--panel") ?? positional ?? DEFAULT_PANEL,
     limit: Math.max(1, Number(readValue("--limit") ?? 15)),
@@ -130,6 +157,9 @@ function parseArgs(): Args {
     verbose: raw.includes("--verbose"),
     outPath,
     csvOutPath: csvOutPath ?? (outPath ? outPath.replace(/\.[^.]+$/, ".csv") : null),
+    proposalFixturesPath: proposalFixtures === "none"
+      ? null
+      : proposalFixtures ?? (fs.existsSync(DEFAULT_PROPOSAL_FIXTURES) ? DEFAULT_PROPOSAL_FIXTURES : null),
   };
 }
 
@@ -168,6 +198,72 @@ function parseCsv(text: string): PanelRow[] {
   return rows.map((values) => Object.fromEntries(headers.map((header, i) => [header, values[i]?.trim() ?? ""])));
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim())
+    : [];
+}
+
+function normalizeFixtureRequirements(value: unknown): TenderRequirements {
+  const record = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  return {
+    eligibility_criteria: stringArray(record.eligibility_criteria),
+    technical_requirements: stringArray(record.technical_requirements),
+    required_documents: stringArray(record.required_documents),
+    evaluation_criteria: stringArray(record.evaluation_criteria),
+    key_constraints: stringArray(record.key_constraints),
+    submission_format: typeof record.submission_format === "string" && record.submission_format.trim()
+      ? record.submission_format.trim()
+      : "unknown",
+  };
+}
+
+function loadProposalFixtures(filePath: string | null): Map<string, ProposalFixture> {
+  const fixtures = new Map<string, ProposalFixture>();
+  if (!filePath) return fixtures;
+
+  const resolved = path.resolve(filePath);
+  if (!fs.existsSync(resolved)) return fixtures;
+  const raw = JSON.parse(fs.readFileSync(resolved, "utf-8")) as { fixtures?: unknown[] };
+  for (const item of raw.fixtures ?? []) {
+    const record = item && typeof item === "object" && !Array.isArray(item)
+      ? item as Record<string, unknown>
+      : null;
+    if (!record) continue;
+    const panelId = typeof record.panel_id === "string" ? record.panel_id.trim() : "";
+    const tenderText = typeof record.tender_text === "string" ? record.tender_text.trim() : "";
+    const sourceUrl = typeof record.source_url === "string" ? record.source_url.trim() : "";
+    if (!panelId || !tenderText || !sourceUrl) continue;
+    fixtures.set(panelId.toLowerCase(), {
+      panel_id: panelId,
+      source_title: typeof record.source_title === "string" ? record.source_title.trim() : "Untitled proposal fixture",
+      agency: typeof record.agency === "string" ? record.agency.trim() : "",
+      source_url: sourceUrl,
+      source_type: typeof record.source_type === "string" ? record.source_type.trim() : "public_source",
+      derived_note: typeof record.derived_note === "string" ? record.derived_note.trim() : undefined,
+      tender_text: tenderText,
+      requirements: normalizeFixtureRequirements(record.requirements),
+    });
+  }
+  return fixtures;
+}
+
+function proposalFixtureSignal(fixture?: ProposalFixture): ProposalFixtureSignal | null {
+  if (!fixture) return null;
+  const evidenceProfile = buildProposalEvidenceProfile({
+    tenderText: fixture.tender_text,
+    intakeSummary: `proposal_fixture_source: ${fixture.source_url}`,
+  });
+  const requirementModel = buildProposalRequirementModel({
+    requirements: fixture.requirements,
+    tenderText: fixture.tender_text,
+    evidenceProfile,
+  });
+  return { fixture, evidenceProfile, requirementModel };
+}
+
 function csvEscape(value: string | number | null | undefined): string {
   const raw = value == null ? "" : String(value);
   return /[",\n\r]/.test(raw) ? `"${raw.replace(/"/g, "\"\"")}"` : raw;
@@ -184,6 +280,10 @@ function toCsv(results: ProfileResult[]): string {
     "assessment_quality_0_10",
     "dashboard_continuity_0_10",
     "service_context_completeness_0_10",
+    "proposal_requirement_model_0_10",
+    "proposal_requirement_model_status",
+    "proposal_fixture_title",
+    "proposal_fixture_source_url",
     "service_output_quality_0_10",
     "procurement_effort_collapsed_0_10",
     "paid_service_readiness_0_10",
@@ -208,6 +308,10 @@ function toCsv(results: ProfileResult[]): string {
       result.assessment_quality_0_10,
       result.dashboard_continuity_0_10,
       result.service_context_completeness_0_10,
+      result.proposal_requirement_model_0_10,
+      result.proposal_requirement_model_status,
+      result.proposal_fixture_title,
+      result.proposal_fixture_source_url,
       result.service_output_quality_0_10,
       result.procurement_effort_collapsed_0_10,
       result.paid_service_readiness_0_10,
@@ -675,7 +779,7 @@ function commonContextChecks(row: PanelRow, matchRun: MatchRun): ContextCheck[] 
   ];
 }
 
-function trackContextChecks(row: PanelRow): ContextCheck[] {
+function trackContextChecks(row: PanelRow, fixtureSignal?: ProposalFixtureSignal | null): ContextCheck[] {
   const serviceTrack = cell(row, "service_track").toLowerCase();
   const benchmark = cell(row, "benchmark_tender_or_agency");
   const missing = cell(row, "missing_inputs").toLowerCase();
@@ -712,17 +816,25 @@ function trackContextChecks(row: PanelRow): ContextCheck[] {
   }
 
   if (serviceTrack.includes("proposal")) {
+    const requirementModel = fixtureSignal?.requirementModel ?? null;
+    const hasFixtureTor = Boolean(fixtureSignal);
+    const hasTechnicalCoverage = (requirementModel?.category_counts.technical ?? 0) > 0;
+    const hasDocumentCoverage = (requirementModel?.category_counts.document ?? 0) > 0;
+    const hasEvaluationCoverage = (requirementModel?.category_counts.evaluation ?? 0) > 0;
+    const hasSubmissionCoverage = (requirementModel?.category_counts.submission ?? 0) > 0;
     return [
       {
         key: "actual_tor_or_rfp",
-        ok: !/actual (tor|rfp)|actual rfp|actual tor|tender-specific|evaluation criteria|financial template/.test(missing),
+        ok: hasFixtureTor || !/actual (tor|rfp)|actual rfp|actual tor|tender-specific|evaluation criteria|financial template/.test(missing),
         category: "service-output issue",
-        note: "actual TOR/RFP is missing or not parsed",
+        note: hasFixtureTor ? "proposal fixture TOR/RFP is parsed" : "actual TOR/RFP is missing or not parsed",
         critical: true,
       },
       {
         key: "evaluation_criteria",
-        ok: !/evaluation criteria|deliverables|submission format|financial template/.test(missing),
+        ok: hasTechnicalCoverage && hasDocumentCoverage && hasEvaluationCoverage && hasSubmissionCoverage
+          ? true
+          : !/evaluation criteria|deliverables|submission format|financial template/.test(missing),
         category: "service-output issue",
         note: "evaluation criteria, deliverables or submission format are missing",
         critical: true,
@@ -778,8 +890,8 @@ function trackContextChecks(row: PanelRow): ContextCheck[] {
   return [];
 }
 
-function contextResult(row: PanelRow, matchRun: MatchRun) {
-  const checks = [...commonContextChecks(row, matchRun), ...trackContextChecks(row)];
+function contextResult(row: PanelRow, matchRun: MatchRun, fixtureSignal?: ProposalFixtureSignal | null) {
+  const checks = [...commonContextChecks(row, matchRun), ...trackContextChecks(row, fixtureSignal)];
   const okCount = checks.filter((check) => check.ok).length;
   const missing = checks.filter((check) => !check.ok);
   return {
@@ -802,18 +914,58 @@ function matchQualityScore(row: PanelRow, matchRun: MatchRun): number {
   return clampScore(0.45 * actionability + 0.55 * relevance);
 }
 
-function projectedScores(row: PanelRow, matchRun: MatchRun, contextScore: number) {
+function proposalRequirementModelScore(
+  row: PanelRow,
+  contextScore: number,
+  fixtureSignal?: ProposalFixtureSignal | null,
+): number | null {
+  const serviceTrack = cell(row, "service_track").toLowerCase();
+  if (!serviceTrack.includes("proposal")) return null;
+  if (fixtureSignal) return fixtureSignal.requirementModel.score_0_10;
+
+  const missing = cell(row, "missing_inputs").toLowerCase();
+  const benchmark = cell(row, "benchmark_tender_or_agency");
+  const publicInputs = cell(row, "public_inputs_available").toLowerCase();
+  let score = contextScore;
+
+  if (/\b(rfp|tor|tender|notice|call|rfq|eoi)\b/i.test(benchmark)) score += 0.7;
+  if (/official/.test(publicInputs) && !/no official/.test(publicInputs)) score += 0.4;
+  if (/actual (tor|rfp)|actual rfp|actual tor|tender-specific/.test(missing)) score = Math.min(score, 4.8);
+  if (/evaluation criteria|deliverables|submission format/.test(missing)) score = Math.min(score, 6.1);
+  if (/required documents|financial template/.test(missing)) score = Math.min(score, 6.8);
+  if (/cvs|project references|capability statement|portfolio/.test(missing)) score = Math.min(score, 7.2);
+
+  return clampScore(score);
+}
+
+function projectedScores(
+  row: PanelRow,
+  matchRun: MatchRun,
+  contextScore: number,
+  fixtureSignal?: ProposalFixtureSignal | null,
+) {
   const assessmentScore = assessmentQuality(row);
   const matchScore = matchQualityScore(row, matchRun);
   const serviceTrack = cell(row, "service_track").toLowerCase();
   const fit = cell(row, "fit_class").toLowerCase();
   const fitScore = fit.includes("strong") ? 8.4 : fit.includes("adjacent") ? 6.4 : 3.8;
+  const requirementModelScore = proposalRequirementModelScore(row, contextScore, fixtureSignal);
   let serviceOutput = 0.32 * contextScore + 0.28 * assessmentScore + 0.22 * matchScore + 0.18 * fitScore;
   let trustworthiness = 0.38 * assessmentScore + 0.34 * contextScore + 0.18 * matchScore + 0.10 * fitScore;
   let timeSaved = 0.30 * contextScore + 0.28 * matchScore + 0.22 * assessmentScore + 0.20 * fitScore;
   let shortlistImpact = 0.36 * matchScore + 0.25 * assessmentScore + 0.22 * contextScore + 0.17 * fitScore;
 
-  if (serviceTrack.includes("proposal") && /actual (tor|rfp)|evaluation criteria|financial template/i.test(cell(row, "missing_inputs"))) {
+  if (requirementModelScore != null) {
+    serviceOutput = 0.55 * serviceOutput + 0.45 * requirementModelScore;
+    trustworthiness = 0.70 * trustworthiness + 0.30 * requirementModelScore;
+    timeSaved = 0.72 * timeSaved + 0.28 * requirementModelScore;
+    if (requirementModelScore < 5.5) {
+      serviceOutput = Math.min(serviceOutput, 5.6);
+      trustworthiness = Math.min(trustworthiness, 6.0);
+    }
+  }
+
+  if (!fixtureSignal && serviceTrack.includes("proposal") && /actual (tor|rfp)|evaluation criteria|financial template/i.test(cell(row, "missing_inputs"))) {
     serviceOutput = Math.min(serviceOutput, 5.8);
     timeSaved = Math.min(timeSaved, 6.2);
     shortlistImpact = Math.min(shortlistImpact, 5.8);
@@ -843,6 +995,7 @@ function projectedScores(row: PanelRow, matchRun: MatchRun, contextScore: number
     shortlistImpact: clampScore(shortlistImpact),
     procurementEffortCollapsed,
     paidReadiness,
+    requirementModelScore,
   };
 }
 
@@ -885,10 +1038,11 @@ function highestLeverageFix(row: PanelRow, failureCategory: FailureCategory, mis
   return "Carry assessment evidence, selected match, missing inputs and service-specific caveats into one work-order context packet.";
 }
 
-function validateProfile(row: PanelRow, matchRun: MatchRun): ProfileResult {
-  const context = contextResult(row, matchRun);
+function validateProfile(row: PanelRow, matchRun: MatchRun, fixture?: ProposalFixture): ProfileResult {
+  const fixtureSignal = proposalFixtureSignal(fixture);
+  const context = contextResult(row, matchRun, fixtureSignal);
   const relevance = topTenderRelevance(row, matchRun);
-  const scores = projectedScores(row, matchRun, context.score);
+  const scores = projectedScores(row, matchRun, context.score, fixtureSignal);
   const failure = dominantFailure(context.checks, matchRun);
   const status = readinessStatus(scores.paidReadiness, context.criticalMissing, failure);
   const failurePoints = unique([
@@ -914,6 +1068,10 @@ function validateProfile(row: PanelRow, matchRun: MatchRun): ProfileResult {
     assessment_quality_0_10: scores.assessmentScore,
     dashboard_continuity_0_10: scores.dashboardContinuity,
     service_context_completeness_0_10: context.score,
+    proposal_requirement_model_0_10: scores.requirementModelScore,
+    proposal_requirement_model_status: fixtureSignal?.requirementModel.status ?? null,
+    proposal_fixture_title: fixture?.source_title ?? null,
+    proposal_fixture_source_url: fixture?.source_url ?? null,
     service_output_quality_0_10: scores.serviceOutput,
     trustworthiness_0_10: scores.trustworthiness,
     time_saved_0_10: scores.timeSaved,
@@ -949,6 +1107,9 @@ function summarize(results: ProfileResult[]) {
       blocked: rows.filter((row) => row.readiness_status === "blocked").length,
       median_paid_service_readiness_0_10: median(rows.map((row) => row.paid_service_readiness_0_10)),
       median_procurement_effort_collapsed_0_10: median(rows.map((row) => row.procurement_effort_collapsed_0_10)),
+      median_proposal_requirement_model_0_10: rows.some((row) => row.proposal_requirement_model_0_10 != null)
+        ? median(rows.flatMap((row) => row.proposal_requirement_model_0_10 == null ? [] : [row.proposal_requirement_model_0_10]))
+        : null,
     },
   ]));
 
@@ -978,6 +1139,9 @@ function summarize(results: ProfileResult[]) {
     blocked: results.filter((result) => result.readiness_status === "blocked").length,
     median_paid_service_readiness_0_10: median(results.map((result) => result.paid_service_readiness_0_10)),
     median_procurement_effort_collapsed_0_10: median(results.map((result) => result.procurement_effort_collapsed_0_10)),
+    median_proposal_requirement_model_0_10: results.some((result) => result.proposal_requirement_model_0_10 != null)
+      ? median(results.flatMap((result) => result.proposal_requirement_model_0_10 == null ? [] : [result.proposal_requirement_model_0_10]))
+      : null,
     status_counts: Object.fromEntries(statusCounts.entries()),
     failure_category_counts: Object.fromEntries(failureCounts.entries()),
     track_summary: trackSummary,
@@ -999,6 +1163,7 @@ function ensureDir(filePath: string): void {
 async function main() {
   const args = parseArgs();
   const panelPath = path.resolve(args.panelPath);
+  const proposalFixtures = loadProposalFixtures(args.proposalFixturesPath);
   const requestedIds = args.ids ? new Set(args.ids.map((id) => id.toLowerCase())) : null;
   const rows = parseCsv(fs.readFileSync(panelPath, "utf-8"))
     .filter((row) => cell(row, "panel_id") && cell(row, "prospect_company"))
@@ -1015,7 +1180,7 @@ async function main() {
     console.error(`[paid-services-validation] ${cell(row, "panel_id")} ${cell(row, "prospect_company")} (${cell(row, "service_track")})`);
     const matchRun = await runLiveMatching(row, args);
     if (matchRun.status === "timed_out") sawTimedOutMatch = true;
-    results.push(validateProfile(row, matchRun));
+    results.push(validateProfile(row, matchRun, proposalFixtures.get(cell(row, "panel_id").toLowerCase())));
   }
 
   const output = {
@@ -1027,6 +1192,8 @@ async function main() {
       include_grants: args.includeGrants,
       ids: args.ids,
       timeout_ms_per_profile: args.timeoutMs,
+      proposal_fixtures: args.proposalFixturesPath ? path.resolve(args.proposalFixturesPath) : null,
+      proposal_fixtures_loaded: proposalFixtures.size,
     },
     summary: summarize(results),
     profiles: results,

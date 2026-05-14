@@ -26,6 +26,11 @@ const LONG_INTAKE_TEXT_KEYS = new Set([
   "additional_details",
   "package_notes",
   "supplementary_notes",
+  "requirement_eligibility",
+  "requirement_scope",
+  "requirement_documents",
+  "requirement_evaluation",
+  "requirement_submission",
 ]);
 
 function cleanIntake(value: unknown): Record<string, unknown> {

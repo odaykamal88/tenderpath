@@ -7,6 +7,7 @@ import {
 } from "./types";
 import { extractTenderRequirements, generateProposalDraft } from "./llm";
 import { buildProposalEvidenceProfile } from "./evidence";
+import { buildProposalRequirementModel } from "./requirements-model";
 import { renderProposalDocx, renderCoverLetterDocx } from "./docx";
 import { renderFinancialTemplateXlsx } from "./xlsx";
 import { renderComplianceMatrixPdf } from "./pdfDocs";
@@ -84,10 +85,16 @@ export async function generateProposalPackage({
   try {
     const evidenceProfile = buildProposalEvidenceProfile({ tenderText, intakeSummary });
     const requirements = await extractTenderRequirements(tenderText, evidenceProfile);
+    const requirementModel = buildProposalRequirementModel({
+      requirements,
+      tenderText,
+      evidenceProfile,
+    });
     const output = await generateProposalDraft(
       { tenderText, companyContext, intakeSummary },
       requirements,
       evidenceProfile,
+      requirementModel,
     );
 
     let zipUrl: string | null = null;

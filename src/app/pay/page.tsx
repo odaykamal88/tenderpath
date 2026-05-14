@@ -51,6 +51,7 @@ interface FulfillmentReadiness {
   warnings: string[];
   code: string | null;
   message: string;
+  metadata?: Record<string, string>;
 }
 
 function CopyBtn({ value }: { value: string }) {
@@ -75,6 +76,12 @@ function CopyBtn({ value }: { value: string }) {
 function ReadinessCard({ readiness }: { readiness: FulfillmentReadiness | null }) {
   if (!readiness || readiness.mode === "self_serve") return null;
   const blocked = !readiness.payment_allowed;
+  const requirementScore = readiness.metadata?.requirement_model_score;
+  const sourceScore = readiness.metadata?.source_quality_score;
+  const missingCategories = (readiness.metadata?.missing_requirement_categories ?? "")
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
   return (
     <div className={`rounded-sm border-l-2 px-3.5 py-3 text-[12px] leading-relaxed ${
       blocked ? "border-red-600 bg-red-50/40 text-red-800" : "border-amber-600 bg-amber-50/40 text-amber-950"
@@ -88,8 +95,26 @@ function ReadinessCard({ readiness }: { readiness: FulfillmentReadiness | null }
       <p className="mt-1">{readiness.message}</p>
       {readiness.score_0_10 != null && (
         <p className="mt-1 font-semibold tabular-nums" style={{ fontFamily: MONO }}>
-          Source score · {readiness.score_0_10}/10
+          Readiness score · {readiness.score_0_10}/10
         </p>
+      )}
+      {(sourceScore || requirementScore) && (
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]" style={{ fontFamily: MONO }}>
+          {sourceScore && <span>Source coverage {sourceScore}/10</span>}
+          {requirementScore && <span>Requirement model {requirementScore}/10</span>}
+        </div>
+      )}
+      {missingCategories.length > 0 && (
+        <div className="mt-2 rounded-sm bg-white/50 px-2.5 py-2">
+          <div className="font-semibold uppercase tracking-[0.14em]" style={{ fontFamily: MONO }}>
+            Missing requirement categories
+          </div>
+          <ul className="mt-1 space-y-0.5">
+            {missingCategories.slice(0, 5).map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
       )}
       {readiness.missing_inputs.length > 0 && (
         <ul className="mt-2 space-y-1">

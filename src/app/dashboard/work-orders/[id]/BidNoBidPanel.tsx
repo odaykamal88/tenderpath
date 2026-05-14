@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import ArtifactGenerationNotice from "./ArtifactGenerationNotice";
 
 interface BidGap {
   gap: string;
@@ -199,7 +200,7 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
           Generation hit a snag
         </h2>
         <p className="mt-2 text-[13px] text-red-800">
-          {pkg.error_message ?? "We couldn’t finish the analysis on the last attempt."}
+          We couldn&rsquo;t finish the analysis on the last attempt. Retry generation; if it keeps failing, support can review the logged error.
         </p>
         <button
           type="button"
@@ -216,6 +217,7 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
 
   const out = pkg.output;
   const remaining = data?.remaining_regenerations ?? 0;
+  const fileGenerationFailed = !pkg.pdf_url && Boolean(pkg.error_message);
 
   return (
     <section className={`rounded-md border-l-2 ${recBorder(out.recommendation)} bg-white shadow-sm`}>
@@ -254,6 +256,16 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
           {out.headline}
         </p>
       </div>
+
+      {fileGenerationFailed && (
+        <ArtifactGenerationNotice
+          artifactLabel="the Bid/No-Bid PDF"
+          busy={regenBusy}
+          remainingRegenerations={remaining}
+          retryLabel="Retry PDF →"
+          onRetry={handleRegenerate}
+        />
+      )}
 
       <div className="grid grid-cols-1 gap-5 p-5 lg:grid-cols-2">
         {out.fit_reasoning.length > 0 && (

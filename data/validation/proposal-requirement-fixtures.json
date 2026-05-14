@@ -1,0 +1,152 @@
+{
+  "description": "Source-derived Proposal Draft validation fixtures. These are compact requirement packs derived from public TOR/RFP documents so the validation harness can test requirement-level coverage without storing full copyrighted documents.",
+  "fixtures": [
+    {
+      "panel_id": "VP-04",
+      "source_title": "WHO Indonesia RFP 088-2021 - Strengthening National and Subnational Monitoring and Enforcement Systems",
+      "agency": "WHO",
+      "source_url": "https://cdn.who.int/media/docs/default-source/searo/indonesia/procurement/bidding-document-rfp-088-2021.pdf?sfvrsn=24336cea_5",
+      "source_type": "public_rfp_pdf",
+      "derived_note": "Derived from the public WHO RFP. Text below is a compact paraphrased fixture, not a full document copy.",
+      "tender_text": "Source URL: https://cdn.who.int/media/docs/default-source/searo/indonesia/procurement/bidding-document-rfp-088-2021.pdf?sfvrsn=24336cea_5\nTender context: WHO requires an institutional proposal to support national and subnational monitoring and enforcement systems for COVID-19 prevention protocols in public and workplaces.\nDeadline: Proposal deadline was 20 May 2021, 10:00 Jakarta time.\nEligibility: Bidder should be a not-for-profit institution operating in public administration, law, or public health, with proven expertise designing policy or legislation monitoring and enforcement systems and conducting capacity-building trainings.\nMandatory experience: review and design of national/subnational monitoring and enforcement systems for policy or legislation; work with government ministries, subnational government, and enforcement agencies; development of training tools and training delivery.\nTechnical requirements: review current guidelines, SOPs, policies, legislation, and international best practices; develop technical and policy recommendations; produce a detailed concept for an improved monitoring and enforcement system; build capacity of subnational government and enforcement agencies; develop training tools and conduct trainings.\nRequired documents: confidentiality undertaking, vendor information form, technical proposal, financial proposal using the budget template, self-declaration form, legal operating permit, and proposed team CVs/roles.\nEvaluation criteria: technical proposal is 80 points and financial proposal is 20 points. Technical scoring includes quality of approach to review existing systems, recommendations, capacity building, stakeholder consultation, Gantt chart, team composition, team roles, CV expertise, institutional experience, references, and government counterpart experience. Minimum technical pass threshold is 50.\nSubmission format: technical and financial proposals must be submitted separately by email with RFP 088-2021 in the subject; combining technical and financial proposals in one file is a rejection condition.\nFinancial context: financial proposal must be in IDR currency and follow the budget template with professional fees and other applicable components.\nConstraints: proposal must be in English; validity must be at least 90 calendar days; contact with WHO officials is restricted except through the clarification process.",
+      "requirements": {
+        "eligibility_criteria": [
+          "Bidder should be a not-for-profit institution in public administration, law, or public health.",
+          "Bidder must show experience designing monitoring and enforcement systems for policy or legislation.",
+          "Bidder must show experience working with government ministries, subnational government, and enforcement agencies.",
+          "Bidder must show experience developing training tools and conducting capacity-building trainings."
+        ],
+        "technical_requirements": [
+          "Review existing monitoring and enforcement systems, guidelines, SOPs, policies, and legislation.",
+          "Develop technical and policy recommendations to improve monitoring and enforcement systems.",
+          "Produce a detailed concept for an improved monitoring and enforcement system for subnational government and enforcement agencies.",
+          "Develop training materials and tools and conduct capacity-building trainings."
+        ],
+        "required_documents": [
+          "Technical proposal",
+          "Financial proposal using the budget template",
+          "Confidentiality undertaking",
+          "Vendor information form",
+          "Self-declaration form",
+          "Legal operating permit",
+          "Team CVs and role descriptions"
+        ],
+        "evaluation_criteria": [
+          "Technical proposal is weighted 80 points and financial proposal 20 points.",
+          "Quality of technical approach to objectives, stakeholder consultation, and Gantt chart is scored.",
+          "Team composition, roles, CV expertise, institutional experience, references, and government counterpart experience are scored.",
+          "Minimum technical pass threshold is 50 points."
+        ],
+        "key_constraints": [
+          "Technical and financial proposals must be submitted separately by email.",
+          "Proposal language must be English.",
+          "Proposal validity must be at least 90 calendar days.",
+          "Financial proposal must be in IDR and follow the budget template."
+        ],
+        "submission_format": "Submit technical and financial proposals separately by email with RFP 088-2021 in the subject line."
+      }
+    },
+    {
+      "panel_id": "VP-05",
+      "source_title": "UNHCR Rwanda Terms of Reference - Results Monitoring Surveys",
+      "agency": "UNHCR",
+      "source_url": "https://www.unhcr.org/rw/sites/rw/files/2024-10/Annex%20B%20-%20Terms%20of%20Reference.pdf",
+      "source_type": "public_tor_pdf",
+      "derived_note": "Derived from the public UNHCR Rwanda TOR. Text below is a compact paraphrased fixture, not a full document copy.",
+      "tender_text": "Source URL: https://www.unhcr.org/rw/sites/rw/files/2024-10/Annex%20B%20-%20Terms%20of%20Reference.pdf\nTender context: UNHCR requires a consultancy firm to conduct Results Monitoring Surveys and produce approved reporting outputs.\nDeadline: The TOR contains a deliverable schedule; the fixture uses requirement coverage rather than a live deadline.\nEligibility: tender responses must pass mandatory formal requirements before scoring. The firm must provide proof of registration in the country of operation and must be at least five years old. A joint venture lead must meet the age requirement.\nMandatory requirements: acceptance of UNHCR General Conditions, UN Supplier Code of Conduct, and data protection agreement; proof of tax compliance; bid security of 1,000,000 RWF or equivalent; joint-venture deed when applicable.\nTechnical requirements: design and implement results monitoring surveys; use quantitative and qualitative methods; manage fieldwork in complex environments; produce analytical findings and action-oriented recommendations; maintain report quality in format, language, coherence, technical analysis, and timeline.\nRequired documents: proof of registration, tax compliance proof, bid security, signed acceptances, joint-venture deed if relevant, past contracts, client reference letters, copies of final reports, team CVs, and evidence of similar assignments.\nEvaluation criteria: formal mandatory review first. Performance evaluation is 70 points, including methodology and responsiveness to the TOR, financial capacity, firm experience in similar work, contracts/references/reports, African and refugee-programming experience, large survey experience, and staff expertise. Financial evaluation is 30 points.\nTeam requirements: team leader with advanced relevant degree, at least ten years relevant experience, at least seven years evaluation experience, leadership of multiple studies, experience with large programmes from UNDP, FAO, WFP, UNHCR or similar organizations; quantitative expert, statistician/quantitative expert, and qualitative expert with relevant experience.\nSubmission format: submit a tender response that satisfies mandatory requirements and includes all technical, legal, financial, and team evidence.\nConstraints: proposed staff should not be changed during delivery; UNHCR may inspect staff work; performance guarantee may be required before bid security is released.",
+      "requirements": {
+        "eligibility_criteria": [
+          "Firm must be registered in the country of operation and at least five years old.",
+          "Firm must accept UNHCR General Conditions, UN Supplier Code of Conduct, and data protection agreement.",
+          "Firm must provide tax compliance proof and required bid security.",
+          "Firm must demonstrate similar evaluation, research, or survey assignments for UN or international development organizations."
+        ],
+        "technical_requirements": [
+          "Design and implement Results Monitoring Surveys using quantitative and qualitative methods.",
+          "Manage fieldwork in complex and remote environments.",
+          "Produce analytical findings and action-oriented recommendations for management and programming staff.",
+          "Maintain report quality across format, content, organization, language, coherence, technical analysis, and timeline."
+        ],
+        "required_documents": [
+          "Proof of registration",
+          "Tax compliance proof",
+          "Bid security",
+          "Accepted UNHCR/Fair conduct/data protection terms",
+          "Past contracts from contactable clients",
+          "Reference letters",
+          "Copies of final reports",
+          "Team CVs",
+          "Joint venture deed if applicable"
+        ],
+        "evaluation_criteria": [
+          "Mandatory formal requirements are pass/fail before scoring.",
+          "Performance evaluation is 70 points.",
+          "Methodology and responsiveness to the TOR is 20 marks.",
+          "Firm financial capacity is 10 marks.",
+          "Firm experience in similar services is 25 marks.",
+          "Staff expertise is 15 marks.",
+          "Financial evaluation is 30 points."
+        ],
+        "key_constraints": [
+          "Proposed staff must not be changed during contract delivery.",
+          "UNHCR may inspect assigned staff work during the project.",
+          "Performance guarantee of 10 percent of contract price may be required."
+        ],
+        "submission_format": "Submit complete technical, legal, financial, and team evidence in the tender response."
+      }
+    },
+    {
+      "panel_id": "VP-06",
+      "source_title": "FHI 360 AHEAD RFP AHEAD-00139 - Social Behavior Change Messages and Radio PSAs",
+      "agency": "FHI 360",
+      "source_url": "https://download.acbar.org/files/files/7263153445.pdf",
+      "source_type": "public_rfp_pdf",
+      "derived_note": "Derived from the public FHI 360/AHEAD RFP. Text below is a compact paraphrased fixture, not a full document copy.",
+      "tender_text": "Source URL: https://download.acbar.org/files/files/7263153445.pdf\nTender context: FHI 360/AHEAD solicits proposals from registered communications and media companies to develop social behavior change messages and radio PSAs.\nDeadline: RFP issue date was 13 July 2021 and offers were due by 26 July 2021.\nEligibility: offeror must have a valid business license, be a direct provider of communications and media services, have at least three years of experience developing and disseminating social behavior change messages through media outlets, have established local operations and office space, accept FHI 360 terms and conditions, not be identified as terrorist, be able to obtain a valid DUNS number, and provide 60-day bid validity.\nTechnical requirements: conduct a brainstorming meeting with stakeholder teams; finalize five messages; develop three radio PSAs in announcement, narrative, or drama format; broadcast each PSA twice a day for one month in named provinces; set up monitoring/support to evaluate audience involvement and reactions; provide a concise project approach.\nRequired documents: business license, complete technical proposal submission sheet, one-page organization overview, capability statement, proof of participatory radio campaign production skills, proof of three years behavior-change sensitization experience, two reference letters, proposed staff CVs/resumes, sample PSA, price proposal, and signed terms.\nEvaluation criteria: technical approach and methodology is 30 points; past performance and relevant experience is 20 points; references are 10 points; proposed personnel and organizational capacity is 10 points; total technical score is 60 and cost/price is 40.\nSubmission format: complete offers must be submitted electronically to the specified quotation email; submission to another email is a disqualification condition; RFP number and company name must be in the email subject.\nFinancial context: offerors must submit best and final price; cost is evaluated for best value.\nConstraints: late offers may be rejected; subcontracting the service is not allowed; site visit may verify vendor operations.",
+      "requirements": {
+        "eligibility_criteria": [
+          "Offeror must have a valid business license.",
+          "Offeror must be a direct provider of communications and media services with no subcontracting for the service.",
+          "Offeror must have at least three years of social behavior change message development and dissemination experience.",
+          "Offeror must have established local operations and office space.",
+          "Offeror must accept FHI 360 terms and be able to obtain a valid DUNS number."
+        ],
+        "technical_requirements": [
+          "Conduct brainstorming with stakeholder teams to develop SBC themes and messages.",
+          "Finalize five social behavior change messages.",
+          "Develop three radio PSAs in announcement, narrative, or drama format.",
+          "Broadcast each PSA twice daily for one month in the target provinces.",
+          "Set up monitoring and support to evaluate audience involvement and reactions."
+        ],
+        "required_documents": [
+          "Business license",
+          "Technical proposal submission sheet",
+          "Organization overview",
+          "Capability statement",
+          "Proof of participatory radio campaign production skills",
+          "Proof of behavior-change sensitization experience",
+          "Two reference letters",
+          "Staff CVs or resumes",
+          "Sample PSA",
+          "Price proposal",
+          "Signed terms and conditions"
+        ],
+        "evaluation_criteria": [
+          "Technical approach and methodology is 30 points.",
+          "Past performance and relevant experience is 20 points.",
+          "References are 10 points.",
+          "Proposed personnel and organizational capacity is 10 points.",
+          "Total technical score is 60 and cost/price is 40."
+        ],
+        "key_constraints": [
+          "Complete offers must be submitted electronically to the specified quotation email.",
+          "Submission to another email address is disqualifying.",
+          "RFP number and company name must be included in the email subject.",
+          "Bid validity must be 60 days.",
+          "Late offers may be rejected."
+        ],
+        "submission_format": "Submit the complete offer electronically to the specified quotation email with the RFP number and company name in the subject."
+      }
+    }
+  ]
+}

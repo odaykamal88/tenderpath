@@ -92,7 +92,7 @@ const SERVICES: Record<ServiceSlug, ServiceConfig> = {
     lead: "Use this for a live tender you already want to pursue. Tenderpath prepares the proposal structure so the team can review, price, and finalize faster.",
     output: [
       "Technical proposal draft",
-      "Compliance checklist",
+      "Requirement-level compliance checklist",
       "Cover letter and executive summary",
       "Financial template aligned to the tender",
     ],
@@ -102,7 +102,7 @@ const SERVICES: Record<ServiceSlug, ServiceConfig> = {
       "Complete checkout — the package is generated and ready for your review the same day",
     ],
     deliverySla: "Draft delivered within 2 hours of payment and intake confirmation",
-    intakePrompt: "Upload the TOR or RFP document if you have access to it. The more requirements and context you provide, the less revision the package will need before submission.",
+    intakePrompt: "Upload the TOR or RFP document if you have access to it, or paste the key requirement categories below: eligibility, scope/deliverables, required documents, evaluation criteria, and submission instructions.",
     caveat: "This does not submit on your behalf unless separately agreed; it prepares the working package for your review and sign-off.",
     cta: "Start proposal package",
     sampleLines: [
