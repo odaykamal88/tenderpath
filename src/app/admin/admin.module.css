@@ -419,6 +419,22 @@
 .woTabActive .woTabCount { opacity: 1; }
 .woNotify   { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--color-ink-3); }
 .woNotify input { width: 13px; height: 13px; accent-color: var(--color-accent); }
+.woFilterRow { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 10px; }
+.woFilter { display: flex; flex-direction: column; gap: 5px; font-family: var(--font-mono); font-size: 10px; color: var(--color-mute, var(--color-ink-3)); text-transform: uppercase; letter-spacing: 0.1em; }
+.woFilter select {
+  height: 34px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-ink-2);
+  background: var(--color-paper-3);
+  border: 1px solid var(--color-rule);
+  border-radius: 3px;
+  padding: 0 8px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.woFilter select:focus { outline: none; border-color: var(--color-accent); background: var(--color-paper); }
 
 .adminSearch {
   display: flex;
@@ -528,6 +544,20 @@
 .woColValue { font-size: 13px; color: var(--color-ink); word-break: break-word; }
 .woColMeta  { font-family: var(--font-mono); font-size: 11px; color: var(--color-mute, var(--color-ink-3)); margin-top: 4px; }
 .woStatusRow{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.woQaLine   { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; font-family: var(--font-mono); font-size: 10px; color: var(--color-mute, var(--color-ink-3)); }
+.woQaLine span { border: 1px solid var(--color-rule); background: var(--color-paper); border-radius: 3px; padding: 3px 5px; }
+.woContextLine {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--color-accent);
+  background: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--color-ink-2);
+}
+.woContextLine > div + div { margin-top: 3px; }
+.woErrorLine { margin-top: 7px; font-family: var(--font-mono); font-size: 10px; color: var(--color-red); line-height: 1.35; max-width: 260px; }
 .woSelect   {
   font-family: var(--font-mono); font-size: 11px;
   padding: 5px 8px;
@@ -559,6 +589,13 @@
   font-size: 11px;
   color: var(--color-accent);
   text-decoration: underline;
+}
+
+@media (max-width: 760px) {
+  .woFilterRow { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 520px) {
+  .woFilterRow { grid-template-columns: 1fr; }
 }
 .woTenderLink:hover { color: var(--color-ink); }
 .woIntake {

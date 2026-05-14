@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type ServiceSlug = "bid-no-bid" | "digest" | "proposal" | "lta-roster";
 
@@ -14,6 +14,26 @@ interface ServiceIntakeFormProps {
   docId?: string | null;
   initialTenderUrl?: string | null;
   label: string;
+}
+
+interface PipelineEvidenceContext {
+  id: number;
+  source_url: string | null;
+  manual_source_url?: string | null;
+  tender_deadline: string | null;
+  fit_score: number | null;
+  match_reasons: Record<string, unknown> | null;
+  has_broken_link: boolean | null;
+}
+
+interface UploadedFile {
+  name: string;
+  url: string;
+  extraction?: {
+    status: string;
+    charCount: number;
+    error: string | null;
+  };
 }
 
 const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
@@ -33,7 +53,7 @@ const SERVICE_FIELDS: Record<ServiceSlug, Array<{ key: string; label: string; pl
     { key: "additional_details", label: "Additional details we should know", placeholder: "Compliance concerns, required sections, pricing notes, partner roles, or anything else we should account for", rows: 4 },
   ],
   "lta-roster": [
-    { key: "target_agency", label: "Target agency or roster", placeholder: "e.g. WFP logistics LTA, UNICEF vendor registration", required: true },
+    { key: "target_agency", label: "Target agency or roster", placeholder: "e.g. UNOPS supplier registration, FAO agriculture roster, WHO e-tendering, WFP logistics LTA", required: true },
     { key: "additional_details", label: "Additional details we should know", placeholder: "Current registration status, product/service category, or anything specific to this application", rows: 4 },
   ],
 };
@@ -43,6 +63,110 @@ function authHeaders(): HeadersInit {
   return token
     ? { "content-type": "application/json", authorization: `Bearer ${token}` }
     : { "content-type": "application/json" };
+}
+
+function hasText(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasList(value: unknown): boolean {
+  return Array.isArray(value) && value.some((item) => hasText(item));
+}
+
+function hasMatchEvidence(item: PipelineEvidenceContext | null): boolean {
+  if (!item?.match_reasons) return false;
+  return hasList(item.match_reasons.summary)
+    || hasList(item.match_reasons.matchedSectors)
+    || hasList(item.match_reasons.matchedCapabilities)
+    || (typeof item.fit_score === "number" && item.fit_score > 0);
+}
+
+function buildEvidenceReview(args: {
+  service: ServiceSlug;
+  pipelineItemId?: string | null;
+  pipelineContext: PipelineEvidenceContext | null;
+  contextLoadError: string | null;
+  tenderUrl: string;
+  fields: Record<string, string>;
+  uploadedFile: UploadedFile | null;
+  docId?: string | null;
+}) {
+  if (args.service === "digest") return null;
+  const sourceAvailable = hasText(args.tenderUrl) || hasText(args.pipelineContext?.source_url) || hasText(args.pipelineContext?.manual_source_url);
+  const uploadedRequirements = Boolean(args.uploadedFile || args.docId);
+  const extractedRequirements = Boolean(
+    args.uploadedFile?.extraction?.status === "extracted"
+      && args.uploadedFile.extraction.charCount > 0,
+  );
+  const pastedRequirements = hasText(args.fields.tender_context) || hasText(args.fields.additional_details);
+  const hasRequirements = extractedRequirements || pastedRequirements;
+  const hasTargetAgency = hasText(args.fields.target_agency);
+  const matchEvidence = hasMatchEvidence(args.pipelineContext);
+  const hasDeadline = hasText(args.pipelineContext?.tender_deadline) || hasText(args.fields.submission_deadline);
+  const checks: Array<{ label: string; ok: boolean; help: string }> = [];
+
+  if (args.service === "bid-no-bid" || args.service === "proposal") {
+    checks.push({
+      label: "Pipeline tender",
+      ok: Boolean(args.pipelineItemId),
+      help: "Select a matched pipeline item so the service can use saved fit evidence.",
+    });
+  }
+  checks.push({
+    label: "Source URL",
+    ok: sourceAvailable,
+    help: "Add the tender, TOR, portal, or source page URL.",
+  });
+  checks.push({
+    label: "Dashboard match evidence",
+    ok: matchEvidence,
+    help: "Match reasons are missing, so fulfillment will need manual review.",
+  });
+  if (args.service === "bid-no-bid" || args.service === "proposal") {
+    checks.push({
+      label: args.service === "proposal" ? "TOR/RFP detail" : "Eligibility/evaluation criteria",
+      ok: hasRequirements,
+      help: uploadedRequirements && !extractedRequirements
+        ? "The uploaded document was not extractable yet; paste key criteria here so the automated output is grounded."
+        : args.service === "proposal"
+          ? "Upload an extractable PDF/DOCX/XLSX TOR or paste the TOR/RFP before checkout for a submission-ready draft."
+          : "Paste criteria or upload an extractable PDF/DOCX/XLSX before checkout for a decisive memo.",
+    });
+    checks.push({
+      label: "Deadline",
+      ok: hasDeadline,
+      help: "Add the deadline so effort and urgency are grounded.",
+    });
+  }
+  if (args.service === "lta-roster") {
+    checks.push({
+      label: "Target agency",
+      ok: hasTargetAgency,
+      help: "Confirm the roster, LTA, or agency before checkout.",
+    });
+    checks.push({
+      label: "Agency guide or call document",
+      ok: sourceAvailable || uploadedRequirements,
+      help: "Add a vendor guide, roster notice, or call document to avoid generic instructions.",
+    });
+  }
+  checks.push({
+    label: "Working source link",
+    ok: args.pipelineContext?.has_broken_link !== true,
+    help: "The saved source link is marked broken; paste a working URL if you have one.",
+  });
+
+  const missing = checks.filter((check) => !check.ok);
+  const status = args.contextLoadError
+    ? "needs review"
+    : missing.length === 0
+      ? "ready"
+      : missing.length <= 2
+        ? "needs context"
+        : "high risk";
+  const tone = status === "ready" ? "green" : status === "needs context" ? "amber" : "red";
+
+  return { status, tone, checks, missing };
 }
 
 function payHref(plan: string, context: {
@@ -76,23 +200,73 @@ export default function ServiceIntakeForm({
   const [fields, setFields] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [uploadedFile, setUploadedFile] = useState<{ name: string; url: string } | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [financialFile, setFinancialFile] = useState<{ name: string; url: string } | null>(null);
+  const [financialFile, setFinancialFile] = useState<UploadedFile | null>(null);
   const [uploadingFinancial, setUploadingFinancial] = useState(false);
+  const [pipelineContext, setPipelineContext] = useState<PipelineEvidenceContext | null>(null);
+  const [contextLoadError, setContextLoadError] = useState<string | null>(null);
 
-  async function uploadOne(file: File): Promise<{ name: string; url: string } | { error: string }> {
+  useEffect(() => {
+    if (!pipelineItemId) {
+      setPipelineContext(null);
+      setContextLoadError(null);
+      return;
+    }
+    let cancelled = false;
+    setContextLoadError(null);
+    fetch(`/api/dashboard/pipeline/${encodeURIComponent(pipelineItemId)}`, { headers: authHeaders() })
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as { item?: PipelineEvidenceContext; error?: string };
+        if (!res.ok || !data.item) throw new Error(data.error ?? "Could not load pipeline evidence");
+        if (!cancelled) setPipelineContext(data.item);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setPipelineContext(null);
+          setContextLoadError(err instanceof Error ? err.message : "Could not load pipeline evidence");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pipelineItemId]);
+
+  const evidenceReview = useMemo(() => buildEvidenceReview({
+    service,
+    pipelineItemId,
+    pipelineContext,
+    contextLoadError,
+    tenderUrl,
+    fields,
+    uploadedFile,
+    docId,
+  }), [contextLoadError, docId, fields, pipelineContext, pipelineItemId, service, tenderUrl, uploadedFile]);
+  const checkoutBlocked = Boolean(
+    evidenceReview
+      && (
+        (service === "proposal" && evidenceReview.status === "high risk")
+        || (service === "lta-roster" && evidenceReview.missing.some((item) => item.label === "Target agency"))
+      ),
+  );
+
+  async function uploadOne(file: File): Promise<UploadedFile | { error: string }> {
     const formData = new FormData();
     formData.append("file", file);
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
     const headers: HeadersInit = token ? { authorization: `Bearer ${token}` } : {};
     try {
       const res = await fetch("/api/dashboard/vault/upload", { method: "POST", headers, body: formData });
-      const data = (await res.json().catch(() => ({}))) as { url?: string; name?: string; error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        url?: string;
+        name?: string;
+        error?: string;
+        extraction?: UploadedFile["extraction"];
+      };
       if (!res.ok || !data.url) {
         return { error: data.error ?? "File upload failed. Try again or skip." };
       }
-      return { url: data.url, name: data.name ?? file.name };
+      return { url: data.url, name: data.name ?? file.name, extraction: data.extraction };
     } catch {
       return { error: "File upload failed. Try again or skip." };
     }
@@ -246,7 +420,13 @@ export default function ServiceIntakeForm({
                 <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
                 </svg>
-                <span className="flex-1 truncate">{uploadedFile.name} · uploaded</span>
+                <span className="flex-1 truncate">
+                  {uploadedFile.name} · {uploadedFile.extraction?.status === "extracted"
+                    ? `extracted ${uploadedFile.extraction.charCount.toLocaleString()} chars`
+                    : uploadedFile.extraction?.status
+                      ? `uploaded, extraction ${uploadedFile.extraction.status}`
+                      : "uploaded"}
+                </span>
                 <button
                   type="button"
                   onClick={() => setUploadedFile(null)}
@@ -293,7 +473,13 @@ export default function ServiceIntakeForm({
                 <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
                 </svg>
-                <span className="flex-1 truncate">{financialFile.name} · uploaded</span>
+                <span className="flex-1 truncate">
+                  {financialFile.name} · {financialFile.extraction?.status === "extracted"
+                    ? `extracted ${financialFile.extraction.charCount.toLocaleString()} chars`
+                    : financialFile.extraction?.status
+                      ? `uploaded, extraction ${financialFile.extraction.status}`
+                      : "uploaded"}
+                </span>
                 <button
                   type="button"
                   onClick={() => setFinancialFile(null)}
@@ -341,6 +527,51 @@ export default function ServiceIntakeForm({
         </div>
       ))}
 
+      {evidenceReview && (
+        <div
+          className={[
+            "rounded-sm border-l-2 px-3.5 py-3 text-[12px] leading-relaxed",
+            evidenceReview.tone === "green" && "border-emerald-600 bg-emerald-50/50 text-emerald-950",
+            evidenceReview.tone === "amber" && "border-amber-600 bg-amber-50/50 text-amber-950",
+            evidenceReview.tone === "red" && "border-red-600 bg-red-50/50 text-red-900",
+          ].filter(Boolean).join(" ")}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-semibold uppercase tracking-[0.16em]" style={{ fontFamily: MONO }}>
+              Fulfillment context · {evidenceReview.status}
+            </span>
+            {pipelineContext?.fit_score != null && (
+              <span className="font-semibold tabular-nums" style={{ fontFamily: MONO }}>
+                {pipelineContext.fit_score}% fit
+              </span>
+            )}
+          </div>
+          <div className="mt-2 grid grid-cols-1 gap-1.5">
+            {evidenceReview.checks.map((check) => (
+              <div key={check.label} className="flex gap-2">
+                <span className="shrink-0 font-semibold tabular-nums" style={{ fontFamily: MONO }}>
+                  {check.ok ? "OK" : "MISS"}
+                </span>
+                <span>
+                  <span className="font-medium">{check.label}</span>
+                  {!check.ok && <span className="text-current/80"> — {check.help}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+          {contextLoadError && (
+            <div className="mt-2 text-[11px]" style={{ fontFamily: MONO }}>
+              Pipeline evidence could not be loaded: {contextLoadError}
+            </div>
+          )}
+          {checkoutBlocked && (
+            <div className="mt-2 rounded-sm bg-white/50 px-2.5 py-2 text-[11.5px] font-medium">
+              Automated checkout is paused until the missing source context is added. This keeps the paid output out of false-confidence territory.
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Error */}
       {error && (
         <p className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3.5 py-2.5 text-[12px] text-red-700">
@@ -351,10 +582,10 @@ export default function ServiceIntakeForm({
       {/* Submit */}
       <button
         type="submit"
-        disabled={busy || requiresPipeline}
+        disabled={busy || requiresPipeline || checkoutBlocked}
         className="w-full rounded-sm bg-stone-900 px-4 py-3 text-[13px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {busy ? "Saving intake…" : `${label} →`}
+        {busy ? "Saving intake…" : checkoutBlocked ? "Add missing context to continue" : `${label} →`}
       </button>
     </form>
   );

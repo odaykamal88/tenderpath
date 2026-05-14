@@ -8,17 +8,31 @@ interface ProposalOutput {
   // proposal-draft fields
   executive_summary?: string;
   technical_approach?: string[];
-  compliance_checklist?: string[];
+  compliance_checklist?: Array<string | ComplianceItem>;
   required_documents?: string[];
   cover_letter_draft?: string;
   financial_template_notes?: string[];
   missing_information?: string[];
   next_steps?: string[];
+  source_quality?: SourceQuality;
   // roster-fast-track fields
   registration_checklist?: string[];
   capability_statement_draft?: string;
   organization_profile_notes?: string[];
   submission_guidance?: string[];
+}
+
+interface ComplianceItem {
+  requirement: string;
+  status: "compliant" | "partial" | "needs_action";
+  evidence_or_action: string;
+}
+
+interface SourceQuality {
+  status: "ready" | "needs_review" | "blocked";
+  score_0_10: number;
+  missing_inputs?: string[];
+  warnings?: string[];
 }
 
 interface ProposalPackage {
@@ -28,6 +42,9 @@ interface ProposalPackage {
   agency: string | null;
   output: ProposalOutput;
   created_at: string;
+  generation_status?: string | null;
+  error_message?: string | null;
+  pdf_url?: string | null;
 }
 
 type Stage = "loading" | "generating" | "ready" | "error";
@@ -108,6 +125,83 @@ function CheckList({ items }: { items: string[] }) {
   );
 }
 
+function ComplianceList({ items }: { items: Array<string | ComplianceItem> }) {
+  if (!items?.length) return <p className="text-[13px] text-stone-400 italic">None identified.</p>;
+  const statusCopy: Record<ComplianceItem["status"], string> = {
+    compliant: "Compliant",
+    partial: "Partial",
+    needs_action: "Needs action",
+  };
+  const statusCls: Record<ComplianceItem["status"], string> = {
+    compliant: "text-emerald-700 border-emerald-200 bg-emerald-50",
+    partial: "text-amber-700 border-amber-200 bg-amber-50",
+    needs_action: "text-red-700 border-red-200 bg-red-50",
+  };
+  return (
+    <div className="space-y-3">
+      {items.map((item, i) => {
+        const row = typeof item === "string"
+          ? { requirement: item, status: "needs_action" as const, evidence_or_action: "Confirm evidence before submission." }
+          : item;
+        return (
+          <div key={i} className="rounded-sm border border-stone-200 bg-stone-50/50 p-3">
+            <div className="flex flex-wrap items-start gap-2">
+              <span
+                className={[
+                  "rounded-sm border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
+                  statusCls[row.status],
+                ].join(" ")}
+                style={{ fontFamily: MONO }}
+              >
+                {statusCopy[row.status]}
+              </span>
+              <p className="flex-1 text-[13.5px] font-medium leading-relaxed text-stone-800">{row.requirement}</p>
+            </div>
+            {row.evidence_or_action && (
+              <p className="mt-2 text-[12.5px] leading-relaxed text-stone-600">{row.evidence_or_action}</p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SourceQualityBanner({ quality }: { quality?: SourceQuality }) {
+  if (!quality) return null;
+  const tone = quality.status === "ready" ? "emerald" : quality.status === "needs_review" ? "amber" : "red";
+  const cls = tone === "emerald"
+    ? "border-emerald-600 bg-emerald-50/40 text-emerald-950"
+    : tone === "amber"
+      ? "border-amber-600 bg-amber-50/40 text-amber-950"
+      : "border-red-600 bg-red-50/40 text-red-950";
+  return (
+    <div className={`mb-6 rounded-sm border-l-2 px-4 py-3 ${cls}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span
+          className="text-[10px] font-semibold uppercase tracking-[0.18em]"
+          style={{ fontFamily: MONO }}
+        >
+          Source quality · {quality.status}
+        </span>
+        <span className="text-[11px] font-semibold tabular-nums" style={{ fontFamily: MONO }}>
+          {quality.score_0_10}/10
+        </span>
+      </div>
+      {(quality.missing_inputs?.length || quality.warnings?.length) ? (
+        <div className="mt-2 space-y-1 text-[12px] leading-relaxed">
+          {quality.missing_inputs?.slice(0, 4).map((item) => (
+            <div key={`m-${item}`}>Missing: {item}</div>
+          ))}
+          {quality.warnings?.slice(0, 3).map((item) => (
+            <div key={`w-${item}`}>{item}</div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function WarningList({ items }: { items: string[] }) {
   if (!items?.length)
     return <p className="text-[13px] text-stone-400 italic">No gaps identified — review manually before submitting.</p>;
@@ -183,7 +277,7 @@ function ProposalDraftView({ output }: { output: ProposalOutput }) {
       </Section>
 
       <Section index="03" title="Compliance checklist">
-        <CheckList items={output.compliance_checklist ?? []} />
+        <ComplianceList items={output.compliance_checklist ?? []} />
       </Section>
 
       <Section index="04" title="Required documents">
@@ -492,6 +586,8 @@ export default function ProposalPackagePage() {
   const subtitle = pkg?.tender_title
     ? [pkg.tender_title, pkg.agency].filter(Boolean).join(" · ")
     : null;
+  const sourceQualityStatus = pkg?.output.source_quality?.status;
+  const packageStatusLabel = sourceQualityStatus && sourceQualityStatus !== "ready" ? "ready · source review required" : "ready";
 
   if (stage === "loading" || stage === "generating") {
     return (
@@ -613,12 +709,14 @@ export default function ProposalPackagePage() {
           className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700"
           style={{ fontFamily: MONO }}
         >
-          Status · ready
+          Status · {packageStatusLabel}
         </div>
         <p className="mt-0.5 text-[13px] text-emerald-900 leading-relaxed">
           Your {title.toLowerCase()} is ready. Review each section carefully and fill in any missing information before submission.
         </p>
       </div>
+
+      <SourceQualityBanner quality={pkg.output.source_quality} />
 
       {/* Sections */}
       {isProposal ? (

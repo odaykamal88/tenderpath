@@ -1,5 +1,6 @@
 import { sql } from "@/lib/db";
 import type { User } from "@/lib/types";
+import { buildServiceContextPacket, mergeServiceContextIntoIntake } from "@/lib/service-context";
 
 export type ServiceSlug = "bid-no-bid" | "digest" | "proposal" | "lta-roster";
 
@@ -20,11 +21,21 @@ function clean(value: unknown, max = 500): string | null {
   return trimmed ? trimmed.slice(0, max) : null;
 }
 
+const LONG_INTAKE_TEXT_KEYS = new Set([
+  "tender_context",
+  "additional_details",
+  "package_notes",
+  "supplementary_notes",
+]);
+
 function cleanIntake(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>).map(([key, raw]) => {
-      if (typeof raw === "string") return [key, raw.trim().slice(0, 2000)];
+      if (typeof raw === "string") {
+        const max = LONG_INTAKE_TEXT_KEYS.has(key) ? 12_000 : 2_000;
+        return [key, raw.trim().slice(0, max)];
+      }
       if (typeof raw === "boolean") return [key, raw];
       if (Array.isArray(raw)) {
         return [key, raw.filter((item) => typeof item === "string").map((item) => item.trim().slice(0, 300)).filter(Boolean)];
@@ -77,7 +88,17 @@ export async function createServiceWorkOrder(
   const agency = clean(body.agency) ?? pipelineItem?.tender_agency ?? null;
   const tenderUrl = clean(body.tender_url, 1000);
   const intake = cleanIntake(body.intake);
-  const intakeJson = JSON.stringify(intake);
+  const serviceContext = await buildServiceContextPacket({
+    userId: user.id,
+    userEmail: user.email,
+    serviceSlug: body.service,
+    pipelineItemId,
+    tenderTitle,
+    agency,
+    tenderUrl,
+    intake,
+  });
+  const intakeJson = JSON.stringify(mergeServiceContextIntoIntake(intake, serviceContext));
   const plan = SERVICE_TO_PLAN[body.service];
 
   const rows = await sql`

@@ -1,0 +1,158 @@
+{
+  "checked_at": "2026-05-13T20:33:12.431Z",
+  "validation_version": "sprint-0-paid-services-v1",
+  "panel": "/Users/odaykamal/Desktop/TENDERPATH/data/validation/paid-services-panel.csv",
+  "mode": {
+    "live_matching": true,
+    "include_grants": false,
+    "ids": [
+      "VP-02"
+    ],
+    "timeout_ms_per_profile": 15000
+  },
+  "summary": {
+    "checked": 1,
+    "ready_for_beta": 0,
+    "needs_human_review": 1,
+    "blocked": 0,
+    "median_paid_service_readiness_0_10": 8.6,
+    "median_procurement_effort_collapsed_0_10": 8.7,
+    "status_counts": {
+      "needs_human_review": 1
+    },
+    "failure_category_counts": {
+      "context issue": 1
+    },
+    "track_summary": {
+      "Bid/No-Bid": {
+        "checked": 1,
+        "ready_for_beta": 0,
+        "needs_human_review": 1,
+        "blocked": 0,
+        "median_paid_service_readiness_0_10": 8.6,
+        "median_procurement_effort_collapsed_0_10": 8.7
+      }
+    },
+    "top_blockers": [
+      {
+        "blocker": "bid/no-bid lacks a specific tender notice or source context",
+        "count": 1
+      },
+      {
+        "blocker": "eligibility/TOR requirements are not available to ground the decision",
+        "count": 1
+      },
+      {
+        "blocker": "vendor capacity/compliance evidence is missing",
+        "count": 1
+      }
+    ],
+    "sprint_0_gate_passed": true
+  },
+  "profiles": [
+    {
+      "panel_id": "VP-02",
+      "prospect_company": "Earth Link and Advanced Resources Development (ELARD) S.A.L.",
+      "source_row_id": "9",
+      "website": "https://www.elard-group.com",
+      "country": "Lebanon",
+      "region": "MENA",
+      "sector": "Environmental Consultancy & Engineering",
+      "sub_icp": "Environmental, HSE, water and engineering consulting",
+      "ungm_status": "Yes - Level 1; UNGM ID 245650; few public UN/USAID-adjacent wins in prospect DB",
+      "fit_class": "Strong-fit",
+      "service_track": "Bid/No-Bid",
+      "benchmark_tender_or_agency": "UNDP Lebanon environmental strategy, SESA, waste management or climate governance consultancy",
+      "scenario_goal": "Decide whether ELARD should bid an environmental assessment / SESA tender and identify proposal blockers.",
+      "assessment_quality_0_10": 9.2,
+      "dashboard_continuity_0_10": 8.8,
+      "service_context_completeness_0_10": 7.9,
+      "service_output_quality_0_10": 8.7,
+      "trustworthiness_0_10": 8.7,
+      "time_saved_0_10": 8.7,
+      "shortlist_impact_0_10": 8.8,
+      "procurement_effort_collapsed_0_10": 8.7,
+      "paid_service_readiness_0_10": 8.6,
+      "top_match_relevance_0_10": 10,
+      "relevant_top_tender_count": 5,
+      "readiness_status": "needs_human_review",
+      "failure_category": "context issue",
+      "match_run": {
+        "status": "completed",
+        "elapsedMs": 7108,
+        "tenderMatches": 12,
+        "grantMatches": null,
+        "actionableTopTenderCount": 5,
+        "topTenders": [
+          {
+            "score": 100,
+            "bucket": "Act Now",
+            "title": "Lebanon Green Agrifood Transformation for Economic Recovery (GATE)",
+            "agency": "World Bank",
+            "country": "Lebanon",
+            "deadline": "2026-05-25",
+            "source_url": "https://projects.worldbank.org/en/projects-operations/procurement-detail/OP00444230",
+            "reason": "Sector: Consulting Services, Environment & Climate"
+          },
+          {
+            "score": 100,
+            "bucket": "Act Now",
+            "title": "LRPS-2026-9203951- LTA for WASH Engineering Consulting Services",
+            "agency": "UNICEF",
+            "country": "Lebanon",
+            "deadline": "2026-06-03",
+            "source_url": "https://www.ungm.org/Public/Notice/300648",
+            "reason": "Sector: Engineering, Consulting Services, Water & Sanitation"
+          },
+          {
+            "score": 80,
+            "bucket": "Act Now",
+            "title": "LBN-CO-RFQ-88-26-Air-to-Water Heat Pumps",
+            "agency": "UNDP-LBN",
+            "country": "Lebanon",
+            "deadline": "2026-05-20",
+            "source_url": "https://procurement-notices.undp.org/view_negotiation.cfm?nego_id=44674",
+            "reason": "Sector: Water & Sanitation"
+          },
+          {
+            "score": 80,
+            "bucket": "Act Now",
+            "title": "Second Greater Beirut Water Supply Project",
+            "agency": "World Bank",
+            "country": "Lebanon",
+            "deadline": "2026-06-01",
+            "source_url": "https://projects.worldbank.org/en/projects-operations/procurement-detail/OP00443778",
+            "reason": "Sector: Water & Sanitation"
+          },
+          {
+            "score": 56,
+            "bucket": "Strategic Expansion",
+            "title": "Construction and commissioning of stormwater detention, flood‑mitigation, landscaping, MEP and irrig",
+            "agency": "UN Secretariat",
+            "country": "Jordan",
+            "deadline": "2026-05-18",
+            "source_url": "https://www.ungm.org/Public/Notice/299579",
+            "reason": "Sector: Water & Sanitation"
+          }
+        ],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision",
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "highest_leverage_fix": "Carry assessment evidence, selected match, missing inputs and service-specific caveats into one work-order context packet.",
+      "missing_context_inputs": [
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision",
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "critical_missing_context_inputs": [
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision"
+      ],
+      "prior_panel_status": "Useful but not wow"
+    }
+  ]
+}

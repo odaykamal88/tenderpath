@@ -79,6 +79,20 @@ export async function renderComplianceMatrixPdf(
         {masthead(ctx, "Compliance matrix", tag)}
         <View style={styles.ruleInk} />
 
+        {output.source_quality && (
+          <View style={[styles.section, { borderLeftWidth: 2, borderLeftColor: output.source_quality.status === "ready" ? GREEN : GOLD, paddingLeft: 12 }]}>
+            <Text style={[styles.label, { color: output.source_quality.status === "ready" ? GREEN : GOLD, marginBottom: 6 }]}>
+              Source quality · {output.source_quality.status} · {output.source_quality.score_0_10}/10
+            </Text>
+            {output.source_quality.missing_inputs.slice(0, 5).map((m, i) => (
+              <Text key={i} style={[styles.bullet, { color: INK2 }]}>· Missing: {m}</Text>
+            ))}
+            {output.source_quality.warnings.slice(0, 3).map((w, i) => (
+              <Text key={`w-${i}`} style={[styles.bullet, { color: INK2 }]}>· {w}</Text>
+            ))}
+          </View>
+        )}
+
         {output.compliance_checklist.length === 0 ? (
           <View>
             <Text style={[styles.label, { marginBottom: 6 }]}>No compliance items returned</Text>

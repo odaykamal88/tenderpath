@@ -182,3 +182,11 @@ Also read product strategy when working on flow, monetization, or dashboard dire
 - Contact, support, privacy, and security-reporting channels should be easy to find from the footer/resources area.
 - Legal/resource pages should reduce ambiguity, not create new promises or regulatory claims.
 - Unknown legal details must remain explicit placeholders until confirmed.
+
+## Shared TenderPath product principles
+- Only ask users for information they are likely to have on hand.
+- Only score based on evidence the system can actually access.
+- Only show progress UI when it reflects a real operational state.
+- Preserve workflow continuity from assessment → dashboard → service order → payment → fulfillment.
+- Prefer clarity, trust, and actionability over completeness or visual flourish.
+- Avoid generic SaaS patterns that do not map to procurement reality.

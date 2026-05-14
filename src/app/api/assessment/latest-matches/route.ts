@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
 import { matchGrants, matchTenders } from "@/lib/assessment/match";
 import type { AIAnalysis, MatchedTender } from "@/lib/types";
+import { normalizeAssessmentTenders, seedPipelineItems } from "@/lib/pipeline/seed";
 
 export async function GET(request: Request) {
   const guard = await requireAuth(request);
@@ -20,15 +21,11 @@ export async function GET(request: Request) {
   if (!rows.length) return NextResponse.json(null, { status: 404 });
 
   const row = rows[0];
-  const rawTenders = Array.isArray(row.matched_tenders) ? row.matched_tenders : [];
+  const rawTenders = row.matched_tenders;
   const matchedGrants = Array.isArray(row.matched_grants) ? row.matched_grants : [];
   const gaps = Array.isArray(row.gaps) ? row.gaps : [];
 
-  // Map MatchedTender.score → fit_score so seedPipeline uses per-tender scores
-  const matchedTenders = rawTenders.map((t: Record<string, unknown>) => ({
-    ...t,
-    fit_score: (t.fit_score as number | undefined) ?? (t.score as number | undefined),
-  }));
+  const matchedTenders = normalizeAssessmentTenders(rawTenders);
 
   return NextResponse.json({
     assessment_id: row.id,
@@ -41,78 +38,11 @@ export async function GET(request: Request) {
   });
 }
 
-async function seedPipelineItems(
-  userId: number,
-  assessmentId: number,
-  tenders: Array<MatchedTender & { fit_score?: number }>,
-): Promise<{ created: number; updated: number; skipped: number }> {
-  let created = 0;
-  let updated = 0;
-  let skipped = 0;
-
-  for (const t of tenders.slice(0, 20)) {
-    if (!t.title) {
-      skipped++;
-      continue;
-    }
-
-    const existing = t.id != null
-      ? await sql`
-          SELECT id, stage
-          FROM pipeline_items
-          WHERE user_id = ${userId} AND tender_id = ${t.id}
-          ORDER BY id ASC
-          LIMIT 1
-        `
-      : await sql`
-          SELECT id, stage
-          FROM pipeline_items
-          WHERE user_id = ${userId}
-            AND assessment_id = ${assessmentId}
-            AND tender_title = ${t.title}
-          ORDER BY id ASC
-          LIMIT 1
-        `;
-
-    const matchReasonsJson = t.structured_reasons ? JSON.stringify(t.structured_reasons) : null;
-
-    if (existing.length) {
-      await sql`
-        UPDATE pipeline_items SET
-          assessment_id = COALESCE(assessment_id, ${assessmentId}),
-          tender_title = ${t.title},
-          tender_agency = COALESCE(${t.agency ?? null}, tender_agency),
-          tender_deadline = COALESCE(${t.deadline ?? null}, tender_deadline),
-          tender_value = COALESCE(${typeof t.estimated_value === "string" ? t.estimated_value : null}, tender_value),
-          fit_score = GREATEST(fit_score, ${t.fit_score ?? t.score ?? 0}),
-          match_reasons = COALESCE(${matchReasonsJson}::jsonb, match_reasons),
-          updated_at = NOW()
-        WHERE id = ${existing[0].id as number}
-      `;
-      updated++;
-      continue;
-    }
-
-    await sql`
-      INSERT INTO pipeline_items
-        (user_id, tender_id, assessment_id, tender_title, tender_agency, tender_deadline,
-         tender_value, fit_score, stage, match_reasons)
-      VALUES
-        (${userId}, ${t.id ?? null}, ${assessmentId}, ${t.title}, ${t.agency ?? null},
-         ${t.deadline ?? null}, ${typeof t.estimated_value === "string" ? t.estimated_value : null},
-         ${t.fit_score ?? t.score ?? 0}, 'matched', ${matchReasonsJson}::jsonb)
-    `;
-    created++;
-  }
-
-  return { created, updated, skipped };
-}
-
 export async function POST(request: Request) {
   const guard = await requireAuth(request);
   if (!guard.authorized) return guard.response!;
   const user = guard.user!;
-  const body = await request.json().catch(() => ({})) as { seed_pipeline?: boolean };
+  const body = await request.json().catch(() => ({})) as { seed_pipeline?: boolean; refresh?: boolean };
 
   const rows = await sql`
     SELECT
@@ -127,6 +57,28 @@ export async function POST(request: Request) {
   if (!rows.length) return NextResponse.json(null, { status: 404 });
 
   const row = rows[0];
+  if (body.seed_pipeline && body.refresh === false) {
+    const matchedTenders = normalizeAssessmentTenders(row.matched_tenders);
+    const seed = await seedPipelineItems(user.id, row.id as number, matchedTenders);
+    console.log("[tp:assessment:pipeline_seeded_from_stored_matches]", {
+      userId: user.id,
+      assessmentId: row.id,
+      tenderCount: matchedTenders.length,
+      seeded: seed,
+    });
+    return NextResponse.json({
+      assessment_id: row.id,
+      company_name: row.company_name ?? "",
+      readiness_score: row.readiness_score ?? 0,
+      grant_readiness_score: row.grant_readiness_score ?? 0,
+      matched_tenders: matchedTenders,
+      matched_grants: Array.isArray(row.matched_grants) ? row.matched_grants : [],
+      gaps: Array.isArray(row.gaps) ? row.gaps : [],
+      refreshed: false,
+      pipeline_seed: seed,
+    });
+  }
+
   const analysis = row.ai_analysis as AIAnalysis | null;
   if (!analysis?.detected_industry) {
     return NextResponse.json({ error: "Latest assessment is missing analysis data and cannot be refreshed." }, { status: 422 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireDashboardAccess } from "@/lib/access";
+import { normalizeAssessmentTenders, seedPipelineItems, type PipelineSeedResult } from "@/lib/pipeline/seed";
 
 const STAGES = ["matched", "evaluating", "preparing", "submitted", "won", "lost"] as const;
 type Stage = (typeof STAGES)[number];
@@ -14,6 +15,57 @@ async function ensurePipelineColumns() {
   if (pipelineColumnsEnsured) return;
   await sql`ALTER TABLE pipeline_items ADD COLUMN IF NOT EXISTS source_url TEXT`;
   pipelineColumnsEnsured = true;
+}
+
+async function loadPipelineRows(userId: number, stageFilter: string | null) {
+  return sql`
+    SELECT
+      pi.id, pi.tender_id, pi.tender_title, pi.tender_agency, pi.tender_deadline,
+      pi.tender_value, pi.source_url AS manual_source_url, pi.fit_score, pi.stage, pi.position, pi.notes, pi.match_reasons,
+      pi.assessment_id, pi.updated_at,
+      t.source_name, COALESCE(t.source_url, pi.source_url) AS source_url,
+      t.opportunity_type, t.sector AS tender_sector,
+      t.created_at AS tender_created_at, t.updated_at AS tender_updated_at,
+      t.has_broken_link,
+      COALESCE(pi.tender_value, t.estimated_value) AS display_value
+    FROM pipeline_items pi
+    LEFT JOIN tenders t ON t.id = pi.tender_id
+    WHERE pi.user_id = ${userId}
+    ${stageFilter && isStage(stageFilter) ? sql`AND pi.stage = ${stageFilter}` : sql``}
+    ORDER BY pi.stage, pi.position, pi.id
+  `;
+}
+
+async function autoSeedPipelineIfEmpty(userId: number, email: string): Promise<PipelineSeedResult | null> {
+  const existing = await sql`
+    SELECT id
+    FROM pipeline_items
+    WHERE user_id = ${userId}
+    LIMIT 1
+  `;
+  if (existing.length > 0) return null;
+
+  const assessmentRows = await sql`
+    SELECT id, matched_tenders
+    FROM assessments
+    WHERE email = ${email}
+    ORDER BY created_at DESC
+    LIMIT 1
+  `;
+  const assessment = assessmentRows[0];
+  if (!assessment) return null;
+
+  const tenders = normalizeAssessmentTenders(assessment.matched_tenders);
+  if (!tenders.length) return null;
+
+  const seeded = await seedPipelineItems(userId, assessment.id as number, tenders);
+  console.log("[tp:pipeline:auto_seeded_from_assessment]", {
+    userId,
+    assessmentId: assessment.id,
+    tenderCount: tenders.length,
+    seeded,
+  });
+  return seeded;
 }
 
 export async function GET(request: Request) {
@@ -51,22 +103,14 @@ export async function GET(request: Request) {
   `;
   const dismissedTenderIds = new Set(feedbackRows.map((r) => r.tender_id as number));
 
-  const rows = await sql`
-    SELECT
-      pi.id, pi.tender_id, pi.tender_title, pi.tender_agency, pi.tender_deadline,
-      pi.tender_value, pi.source_url AS manual_source_url, pi.fit_score, pi.stage, pi.position, pi.notes, pi.match_reasons,
-      pi.assessment_id, pi.updated_at,
-      t.source_name, COALESCE(t.source_url, pi.source_url) AS source_url,
-      t.opportunity_type, t.sector AS tender_sector,
-      t.created_at AS tender_created_at, t.updated_at AS tender_updated_at,
-      t.has_broken_link,
-      COALESCE(pi.tender_value, t.estimated_value) AS display_value
-    FROM pipeline_items pi
-    LEFT JOIN tenders t ON t.id = pi.tender_id
-    WHERE pi.user_id = ${userId}
-    ${stageFilter && isStage(stageFilter) ? sql`AND pi.stage = ${stageFilter}` : sql``}
-    ORDER BY pi.stage, pi.position, pi.id
-  `;
+  let autoSeed: PipelineSeedResult | null = null;
+  let rows = await loadPipelineRows(userId, stageFilter);
+  if (rows.length === 0) {
+    autoSeed = await autoSeedPipelineIfEmpty(userId, guard.user!.email);
+    if (autoSeed && (autoSeed.created > 0 || autoSeed.updated > 0)) {
+      rows = await loadPipelineRows(userId, stageFilter);
+    }
+  }
 
   // Filter out items that have been dismissed via feedback (not_relevant)
   // Only applies to 'matched' stage items — active pipeline items are never hidden
@@ -86,7 +130,7 @@ export async function GET(request: Request) {
     });
   }
 
-  return NextResponse.json({ items, access: guard.access });
+  return NextResponse.json({ items, access: guard.access, pipeline_seed: autoSeed });
 }
 
 export async function POST(request: Request) {

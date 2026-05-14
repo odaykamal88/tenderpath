@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireDashboardAccess } from "@/lib/access";
+import { linkExtractionToVaultDocument } from "@/lib/documents/extract";
 
 const DOC_TYPES = ["certification", "financial", "cv", "past_performance", "other"] as const;
 type DocType = (typeof DOC_TYPES)[number];
@@ -43,6 +44,18 @@ export async function POST(request: Request) {
     VALUES (${guard.user!.id}, ${name}, ${type}, ${expiry_date}, ${file_url})
     RETURNING *
   `;
+
+  await linkExtractionToVaultDocument({
+    userId: guard.user!.id,
+    vaultDocumentId: rows[0].id as number,
+    fileUrl: file_url,
+  }).catch((err) => {
+    console.error("[tp:vault:extraction_link_failed]", {
+      userId: guard.user!.id,
+      documentId: rows[0].id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
 
   return NextResponse.json({ document: rows[0] }, { status: 201 });
 }

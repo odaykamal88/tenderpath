@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { getUserFromRequest } from "@/lib/auth";
 import { track } from "@/lib/telemetry/funnel";
+import { evaluateServiceFulfillmentGate } from "@/lib/service-fulfillment-gates";
 
 const SLUG_TO_PRICE_ENV: Record<string, string> = {
   "bid-no-bid":              "STRIPE_BIDNOBID_PRICE_ID",
@@ -64,6 +65,23 @@ export async function POST(request: Request) {
     const agency = metadataValue(body.agency);
     const pipelineItemId = metadataValue(String(body.pipeline_item_id ?? ""));
     const workOrderId = metadataValue(String(body.work_order_id ?? ""));
+    const parsedWorkOrderId = workOrderId && /^\d+$/.test(workOrderId) ? Number(workOrderId) : null;
+
+    const gate = await evaluateServiceFulfillmentGate({
+      plan,
+      workOrderId: parsedWorkOrderId,
+    });
+    if (!gate.payment_allowed) {
+      return NextResponse.json(
+        {
+          error: gate.message,
+          code: gate.code,
+          missing_inputs: gate.missing_inputs,
+          readiness: gate,
+        },
+        { status: 409 },
+      );
+    }
 
     const returnParams = new URLSearchParams({ plan });
     if (tender) returnParams.set("tender", tender);
@@ -82,6 +100,7 @@ export async function POST(request: Request) {
         agency,
         pipeline_item_id: pipelineItemId,
         work_order_id: workOrderId,
+        ...gate.metadata,
       },
     });
 
@@ -94,6 +113,9 @@ export async function POST(request: Request) {
         work_order_id: workOrderId || null,
         pipeline_item_id: pipelineItemId || null,
         stripe_session_id: session.id,
+        fulfillment_mode: gate.mode,
+        readiness_code: gate.code,
+        readiness_score: gate.score_0_10,
       },
       { userId: user?.id ?? null },
     );

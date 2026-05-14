@@ -6,6 +6,7 @@ import {
   type ProposalOutput,
 } from "./types";
 import { extractTenderRequirements, generateProposalDraft } from "./llm";
+import { buildProposalEvidenceProfile } from "./evidence";
 import { renderProposalDocx, renderCoverLetterDocx } from "./docx";
 import { renderFinancialTemplateXlsx } from "./xlsx";
 import { renderComplianceMatrixPdf } from "./pdfDocs";
@@ -81,10 +82,12 @@ export async function generateProposalPackage({
   const agency = pipelineItem?.tender_agency ?? order.agency;
 
   try {
-    const requirements = await extractTenderRequirements(tenderText);
+    const evidenceProfile = buildProposalEvidenceProfile({ tenderText, intakeSummary });
+    const requirements = await extractTenderRequirements(tenderText, evidenceProfile);
     const output = await generateProposalDraft(
       { tenderText, companyContext, intakeSummary },
       requirements,
+      evidenceProfile,
     );
 
     let zipUrl: string | null = null;

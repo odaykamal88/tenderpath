@@ -123,7 +123,9 @@ export async function generateRosterFastTrack({
     `Target agency: ${agency.label}`,
     `Portal: ${agency.portalLabel} (${agency.portalUrl})`,
     `Why register: ${agency.why}`,
+    `Registration steps: ${agency.submissionSteps.join(" | ")}`,
     `Required documents: ${agency.requiredDocuments.join("; ")}`,
+    `Agency notes: ${agency.notes.join(" | ")}`,
     `Suggested categories: ${agency.categoryHints.join("; ")}`,
   ].join("\n");
   const generatedAt = generatedAtLabel();

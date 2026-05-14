@@ -1,0 +1,346 @@
+{
+  "checked_at": "2026-05-13T14:34:33.837Z",
+  "validation_version": "sprint-0-paid-services-v1",
+  "panel": "/Users/odaykamal/Desktop/TENDERPATH/data/validation/paid-services-panel.csv",
+  "mode": {
+    "live_matching": true,
+    "include_grants": false,
+    "timeout_ms_per_profile": 15000
+  },
+  "summary": {
+    "checked": 3,
+    "ready_for_beta": 1,
+    "needs_human_review": 1,
+    "blocked": 1,
+    "median_paid_service_readiness_0_10": 8.4,
+    "median_procurement_effort_collapsed_0_10": 8,
+    "status_counts": {
+      "blocked": 1,
+      "needs_human_review": 1,
+      "ready_for_beta": 1
+    },
+    "failure_category_counts": {
+      "scoring issue": 1,
+      "context issue": 2
+    },
+    "track_summary": {
+      "Bid/No-Bid": {
+        "checked": 3,
+        "ready_for_beta": 1,
+        "needs_human_review": 1,
+        "blocked": 1,
+        "median_paid_service_readiness_0_10": 8.4,
+        "median_procurement_effort_collapsed_0_10": 8
+      }
+    },
+    "top_blockers": [
+      {
+        "blocker": "vendor capacity/compliance evidence is missing",
+        "count": 3
+      },
+      {
+        "blocker": "bid/no-bid lacks a specific tender notice or source context",
+        "count": 2
+      },
+      {
+        "blocker": "eligibility/TOR requirements are not available to ground the decision",
+        "count": 2
+      },
+      {
+        "blocker": "top live matches are actionable but off-profile for this validation scenario",
+        "count": 1
+      }
+    ],
+    "sprint_0_gate_passed": true
+  },
+  "profiles": [
+    {
+      "panel_id": "VP-01",
+      "prospect_company": "African Institute for Policy Research and Dialogue",
+      "source_row_id": "2",
+      "website": "https://www.afidep.org",
+      "country": "Kenya",
+      "region": "Africa",
+      "sector": "International Development & Policy Research",
+      "sub_icp": "Evidence-to-policy research and technical assistance",
+      "ungm_status": "Yes - Level 1; UNGM ID 378538; USAID partner evidence in prospect DB",
+      "fit_class": "Strong-fit",
+      "service_track": "Bid/No-Bid",
+      "benchmark_tender_or_agency": "UNICEF/UNFPA/UNDP policy research and evidence-to-policy technical assistance in Africa",
+      "scenario_goal": "Assess whether a policy-research RFP is worth pursuing and produce a decision memo tied to sector, geography, eligibility, evidence and effort.",
+      "assessment_quality_0_10": 9.2,
+      "dashboard_continuity_0_10": 6.3,
+      "service_context_completeness_0_10": 7.1,
+      "service_output_quality_0_10": 7.4,
+      "trustworthiness_0_10": 7.6,
+      "time_saved_0_10": 7.2,
+      "shortlist_impact_0_10": 7.1,
+      "procurement_effort_collapsed_0_10": 7.1,
+      "paid_service_readiness_0_10": 7.4,
+      "top_match_relevance_0_10": 2,
+      "relevant_top_tender_count": 1,
+      "readiness_status": "blocked",
+      "failure_category": "scoring issue",
+      "match_run": {
+        "status": "completed",
+        "elapsedMs": 4245,
+        "tenderMatches": 7,
+        "grantMatches": null,
+        "actionableTopTenderCount": 5,
+        "topTenders": [
+          {
+            "score": 95,
+            "bucket": "Strong Fit",
+            "title": "Technical Assistance for Public Financial Management Reform in Kenya",
+            "agency": "World Bank",
+            "country": "Kenya",
+            "deadline": "2026-06-15",
+            "source_url": "https://ungm.org/tenders/KE-001",
+            "reason": "Sector: Consulting Services"
+          },
+          {
+            "score": 49,
+            "bucket": "Watchlist",
+            "title": "Health Systems Assessment and Policy Advisory - East Africa Regional",
+            "agency": "WHO",
+            "country": "Kenya",
+            "deadline": "2026-06-30",
+            "source_url": "https://who.int/procurement/EA-003",
+            "reason": "Sector: Consulting Services"
+          },
+          {
+            "score": 49,
+            "bucket": "Watchlist",
+            "title": "Climate Change Adaptation and Resilience Building - Arid Counties Kenya",
+            "agency": "GIZ",
+            "country": "Kenya",
+            "deadline": "2026-07-10",
+            "source_url": "https://giz.de/procurement/KE-055",
+            "reason": "Sector: Consulting Services"
+          },
+          {
+            "score": 44,
+            "bucket": "Watchlist",
+            "title": "RFQ FY26-216: Transfer Pricing Analysis",
+            "agency": "Plan International",
+            "country": "Global",
+            "deadline": "2026-05-15",
+            "source_url": "https://reliefweb.int/job/4210230/rfq-fy26-216-transfer-pricing-analysis",
+            "reason": "Sector: Consulting Services"
+          },
+          {
+            "score": 27,
+            "bucket": "Adjacent Bet",
+            "title": "RFQ for the procurement of Training service on Point-of-Care Diagnostics Development: Molecular & Im",
+            "agency": "UNOPS",
+            "country": "Multiple destinations",
+            "deadline": "2026-05-13",
+            "source_url": "https://www.ungm.org/Public/Notice/299855",
+            "reason": "Adjacent: education"
+          }
+        ],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "top live matches are actionable but off-profile for this validation scenario",
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision",
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "highest_leverage_fix": "Add sector-specific scoring guardrails so adjacent and weak-fit vendors get conditional guidance instead of optimism.",
+      "missing_context_inputs": [
+        "top live matches are actionable but off-profile for this validation scenario",
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision",
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "critical_missing_context_inputs": [
+        "top live matches are actionable but off-profile for this validation scenario",
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision"
+      ],
+      "prior_panel_status": "Useful but not wow"
+    },
+    {
+      "panel_id": "VP-02",
+      "prospect_company": "Earth Link and Advanced Resources Development (ELARD) S.A.L.",
+      "source_row_id": "9",
+      "website": "https://www.elard-group.com",
+      "country": "Lebanon",
+      "region": "MENA",
+      "sector": "Environmental Consultancy & Engineering",
+      "sub_icp": "Environmental, HSE, water and engineering consulting",
+      "ungm_status": "Yes - Level 1; UNGM ID 245650; few public UN/USAID-adjacent wins in prospect DB",
+      "fit_class": "Strong-fit",
+      "service_track": "Bid/No-Bid",
+      "benchmark_tender_or_agency": "UNDP Lebanon environmental strategy, SESA, waste management or climate governance consultancy",
+      "scenario_goal": "Decide whether ELARD should bid an environmental assessment / SESA tender and identify proposal blockers.",
+      "assessment_quality_0_10": 9.2,
+      "dashboard_continuity_0_10": 8.4,
+      "service_context_completeness_0_10": 7.9,
+      "service_output_quality_0_10": 8.5,
+      "trustworthiness_0_10": 8.6,
+      "time_saved_0_10": 8.5,
+      "shortlist_impact_0_10": 8.6,
+      "procurement_effort_collapsed_0_10": 8.5,
+      "paid_service_readiness_0_10": 8.4,
+      "top_match_relevance_0_10": 8,
+      "relevant_top_tender_count": 4,
+      "readiness_status": "needs_human_review",
+      "failure_category": "context issue",
+      "match_run": {
+        "status": "completed",
+        "elapsedMs": 6982,
+        "tenderMatches": 19,
+        "grantMatches": null,
+        "actionableTopTenderCount": 5,
+        "topTenders": [
+          {
+            "score": 100,
+            "bucket": "Act Now",
+            "title": "Lebanon Green Agrifood Transformation for Economic Recovery (GATE)",
+            "agency": "World Bank",
+            "country": "Lebanon",
+            "deadline": "2026-05-25",
+            "source_url": "https://projects.worldbank.org/en/projects-operations/procurement-detail/OP00444230",
+            "reason": "Sector: Consulting Services, Environment & Climate"
+          },
+          {
+            "score": 100,
+            "bucket": "Act Now",
+            "title": "LRPS-2026-9203951- LTA for WASH Engineering Consulting Services",
+            "agency": "UNICEF",
+            "country": "Lebanon",
+            "deadline": "2026-06-03",
+            "source_url": "https://www.ungm.org/Public/Notice/300648",
+            "reason": "Sector: Engineering, Consulting Services, Water & Sanitation"
+          },
+          {
+            "score": 80,
+            "bucket": "Act Now",
+            "title": "LBN-CO-RFP-95-26-Consultancy Services for Value Chain Analysis/ Productive Inves",
+            "agency": "UNDP-LBN",
+            "country": "Lebanon",
+            "deadline": "2026-05-14",
+            "source_url": "https://procurement-notices.undp.org/view_negotiation.cfm?nego_id=44633",
+            "reason": "Sector: Consulting Services"
+          },
+          {
+            "score": 80,
+            "bucket": "Act Now",
+            "title": "LBN-CO-RFQ-88-26-Air-to-Water Heat Pumps",
+            "agency": "UNDP-LBN",
+            "country": "Lebanon",
+            "deadline": "2026-05-20",
+            "source_url": "https://procurement-notices.undp.org/view_negotiation.cfm?nego_id=44674",
+            "reason": "Sector: Water & Sanitation"
+          },
+          {
+            "score": 80,
+            "bucket": "Act Now",
+            "title": "Second Greater Beirut Water Supply Project",
+            "agency": "World Bank",
+            "country": "Lebanon",
+            "deadline": "2026-06-01",
+            "source_url": "https://projects.worldbank.org/en/projects-operations/procurement-detail/OP00443778",
+            "reason": "Sector: Water & Sanitation"
+          }
+        ],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision",
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "highest_leverage_fix": "Carry assessment evidence, selected match, missing inputs and service-specific caveats into one work-order context packet.",
+      "missing_context_inputs": [
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision",
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "critical_missing_context_inputs": [
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision"
+      ],
+      "prior_panel_status": "Useful but not wow"
+    },
+    {
+      "panel_id": "VP-03",
+      "prospect_company": "UNIFREIGHT CARGO HANDLING LTD",
+      "source_row_id": "13",
+      "website": "https://unifreightgroup.com/",
+      "country": "Uganda",
+      "region": "Africa",
+      "sector": "Transportation, Logistics, and Storage",
+      "sub_icp": "Freight forwarding, customs clearance and cargo handling",
+      "ungm_status": "Yes - Level 2; UNGM ID 204356; public MONUSCO freight award evidence in prospect DB",
+      "fit_class": "Strong-fit",
+      "service_track": "Bid/No-Bid",
+      "benchmark_tender_or_agency": "UNGM Notice 40678 - MONUSCO freight forwarding, customs clearance and related services",
+      "scenario_goal": "Test whether TenderPath can move from match to decisive bid/no-bid on a logistics tender with concrete agency context.",
+      "assessment_quality_0_10": 8.8,
+      "dashboard_continuity_0_10": 7.5,
+      "service_context_completeness_0_10": 9.3,
+      "service_output_quality_0_10": 8.2,
+      "trustworthiness_0_10": 8.4,
+      "time_saved_0_10": 8,
+      "shortlist_impact_0_10": 7.8,
+      "procurement_effort_collapsed_0_10": 8,
+      "paid_service_readiness_0_10": 8.5,
+      "top_match_relevance_0_10": 6.7,
+      "relevant_top_tender_count": 2,
+      "readiness_status": "ready_for_beta",
+      "failure_category": "context issue",
+      "match_run": {
+        "status": "completed",
+        "elapsedMs": 4580,
+        "tenderMatches": 3,
+        "grantMatches": null,
+        "actionableTopTenderCount": 3,
+        "topTenders": [
+          {
+            "score": 49,
+            "bucket": "Watchlist",
+            "title": "Provision of Customs Clearance, Freight Forwarding, Transportation and Other Related Services for th",
+            "agency": "UN Secretariat",
+            "country": "Multiple destinations",
+            "deadline": "2026-05-13",
+            "source_url": "https://www.ungm.org/Public/Notice/299439",
+            "reason": "Sector: Logistics & Supply Chain"
+          },
+          {
+            "score": 40,
+            "bucket": "Watchlist",
+            "title": "Governance and Institutional Strengthening Programme - Uganda",
+            "agency": "UNDP",
+            "country": "Uganda",
+            "deadline": "2026-07-01",
+            "source_url": "https://procurement-notices.undp.org/UG-015",
+            "reason": "Keywords: ungm, registration"
+          },
+          {
+            "score": 36,
+            "bucket": "Watchlist",
+            "title": "RFQ_ Supply, delivery, Installation Furniture, Shelving units  and Curtains for Yatta Vocational Sch",
+            "agency": "UNOPS",
+            "country": "Multiple destinations",
+            "deadline": "2026-05-13",
+            "source_url": "https://www.ungm.org/Public/Notice/299614",
+            "reason": "Sector: Logistics & Supply Chain"
+          }
+        ],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "highest_leverage_fix": "Carry assessment evidence, selected match, missing inputs and service-specific caveats into one work-order context packet.",
+      "missing_context_inputs": [
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "critical_missing_context_inputs": [],
+      "prior_panel_status": "Useful but not wow"
+    }
+  ]
+}

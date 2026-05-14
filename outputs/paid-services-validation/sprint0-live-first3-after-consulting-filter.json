@@ -1,0 +1,239 @@
+{
+  "checked_at": "2026-05-13T14:32:15.083Z",
+  "validation_version": "sprint-0-paid-services-v1",
+  "panel": "/Users/odaykamal/Desktop/TENDERPATH/data/validation/paid-services-panel.csv",
+  "mode": {
+    "live_matching": true,
+    "include_grants": false,
+    "timeout_ms_per_profile": 7000
+  },
+  "summary": {
+    "checked": 3,
+    "ready_for_beta": 0,
+    "needs_human_review": 1,
+    "blocked": 2,
+    "median_paid_service_readiness_0_10": 6.5,
+    "median_procurement_effort_collapsed_0_10": 5.9,
+    "status_counts": {
+      "blocked": 2,
+      "needs_human_review": 1
+    },
+    "failure_category_counts": {
+      "timeout": 3
+    },
+    "track_summary": {
+      "Bid/No-Bid": {
+        "checked": 3,
+        "ready_for_beta": 0,
+        "needs_human_review": 1,
+        "blocked": 2,
+        "median_paid_service_readiness_0_10": 6.5,
+        "median_procurement_effort_collapsed_0_10": 5.9
+      }
+    },
+    "top_blockers": [
+      {
+        "blocker": "fewer than two top tender matches have source URL, deadline, agency and match reasons",
+        "count": 3
+      },
+      {
+        "blocker": "live matching did not complete: timed out after 7000ms",
+        "count": 3
+      },
+      {
+        "blocker": "timed out after 7000ms",
+        "count": 3
+      },
+      {
+        "blocker": "bid/no-bid lacks a specific tender notice or source context",
+        "count": 2
+      },
+      {
+        "blocker": "eligibility/TOR requirements are not available to ground the decision",
+        "count": 2
+      },
+      {
+        "blocker": "vendor capacity/compliance evidence is missing",
+        "count": 1
+      }
+    ],
+    "sprint_0_gate_passed": false
+  },
+  "profiles": [
+    {
+      "panel_id": "VP-01",
+      "prospect_company": "African Institute for Policy Research and Dialogue",
+      "source_row_id": "2",
+      "website": "https://www.afidep.org",
+      "country": "Kenya",
+      "region": "Africa",
+      "sector": "International Development & Policy Research",
+      "sub_icp": "Evidence-to-policy research and technical assistance",
+      "ungm_status": "Yes - Level 1; UNGM ID 378538; USAID partner evidence in prospect DB",
+      "fit_class": "Strong-fit",
+      "service_track": "Bid/No-Bid",
+      "benchmark_tender_or_agency": "UNICEF/UNFPA/UNDP policy research and evidence-to-policy technical assistance in Africa",
+      "scenario_goal": "Assess whether a policy-research RFP is worth pursuing and produce a decision memo tied to sector, geography, eligibility, evidence and effort.",
+      "assessment_quality_0_10": 9.2,
+      "dashboard_continuity_0_10": 4.4,
+      "service_context_completeness_0_10": 6.4,
+      "service_output_quality_0_10": 6.5,
+      "trustworthiness_0_10": 6.8,
+      "time_saved_0_10": 6,
+      "shortlist_impact_0_10": 5.7,
+      "procurement_effort_collapsed_0_10": 5.9,
+      "paid_service_readiness_0_10": 6.5,
+      "top_match_relevance_0_10": 1.5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "blocked",
+      "failure_category": "timeout",
+      "match_run": {
+        "status": "timed_out",
+        "elapsedMs": 7003,
+        "tenderMatches": 0,
+        "grantMatches": 0,
+        "actionableTopTenderCount": 0,
+        "topTenders": [],
+        "topGrants": [],
+        "error": "timed out after 7000ms"
+      },
+      "key_failure_points": [
+        "fewer than two top tender matches have source URL, deadline, agency and match reasons",
+        "live matching did not complete: timed out after 7000ms",
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision",
+        "timed out after 7000ms"
+      ],
+      "highest_leverage_fix": "Bound matching queries by profile and cache top match context so validation cannot stall.",
+      "missing_context_inputs": [
+        "fewer than two top tender matches have source URL, deadline, agency and match reasons",
+        "live matching did not complete: timed out after 7000ms",
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision",
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "critical_missing_context_inputs": [
+        "fewer than two top tender matches have source URL, deadline, agency and match reasons",
+        "live matching did not complete: timed out after 7000ms",
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision"
+      ],
+      "prior_panel_status": "Useful but not wow"
+    },
+    {
+      "panel_id": "VP-02",
+      "prospect_company": "Earth Link and Advanced Resources Development (ELARD) S.A.L.",
+      "source_row_id": "9",
+      "website": "https://www.elard-group.com",
+      "country": "Lebanon",
+      "region": "MENA",
+      "sector": "Environmental Consultancy & Engineering",
+      "sub_icp": "Environmental, HSE, water and engineering consulting",
+      "ungm_status": "Yes - Level 1; UNGM ID 245650; few public UN/USAID-adjacent wins in prospect DB",
+      "fit_class": "Strong-fit",
+      "service_track": "Bid/No-Bid",
+      "benchmark_tender_or_agency": "UNDP Lebanon environmental strategy, SESA, waste management or climate governance consultancy",
+      "scenario_goal": "Decide whether ELARD should bid an environmental assessment / SESA tender and identify proposal blockers.",
+      "assessment_quality_0_10": 9.2,
+      "dashboard_continuity_0_10": 4.4,
+      "service_context_completeness_0_10": 6.4,
+      "service_output_quality_0_10": 6.5,
+      "trustworthiness_0_10": 6.8,
+      "time_saved_0_10": 6,
+      "shortlist_impact_0_10": 5.7,
+      "procurement_effort_collapsed_0_10": 5.9,
+      "paid_service_readiness_0_10": 6.5,
+      "top_match_relevance_0_10": 1.5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "blocked",
+      "failure_category": "timeout",
+      "match_run": {
+        "status": "timed_out",
+        "elapsedMs": 7002,
+        "tenderMatches": 0,
+        "grantMatches": 0,
+        "actionableTopTenderCount": 0,
+        "topTenders": [],
+        "topGrants": [],
+        "error": "timed out after 7000ms"
+      },
+      "key_failure_points": [
+        "fewer than two top tender matches have source URL, deadline, agency and match reasons",
+        "live matching did not complete: timed out after 7000ms",
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision",
+        "timed out after 7000ms"
+      ],
+      "highest_leverage_fix": "Bound matching queries by profile and cache top match context so validation cannot stall.",
+      "missing_context_inputs": [
+        "fewer than two top tender matches have source URL, deadline, agency and match reasons",
+        "live matching did not complete: timed out after 7000ms",
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision",
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "critical_missing_context_inputs": [
+        "fewer than two top tender matches have source URL, deadline, agency and match reasons",
+        "live matching did not complete: timed out after 7000ms",
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision"
+      ],
+      "prior_panel_status": "Useful but not wow"
+    },
+    {
+      "panel_id": "VP-03",
+      "prospect_company": "UNIFREIGHT CARGO HANDLING LTD",
+      "source_row_id": "13",
+      "website": "https://unifreightgroup.com/",
+      "country": "Uganda",
+      "region": "Africa",
+      "sector": "Transportation, Logistics, and Storage",
+      "sub_icp": "Freight forwarding, customs clearance and cargo handling",
+      "ungm_status": "Yes - Level 2; UNGM ID 204356; public MONUSCO freight award evidence in prospect DB",
+      "fit_class": "Strong-fit",
+      "service_track": "Bid/No-Bid",
+      "benchmark_tender_or_agency": "UNGM Notice 40678 - MONUSCO freight forwarding, customs clearance and related services",
+      "scenario_goal": "Test whether TenderPath can move from match to decisive bid/no-bid on a logistics tender with concrete agency context.",
+      "assessment_quality_0_10": 8.8,
+      "dashboard_continuity_0_10": 4.8,
+      "service_context_completeness_0_10": 7.9,
+      "service_output_quality_0_10": 6.8,
+      "trustworthiness_0_10": 7.1,
+      "time_saved_0_10": 6.4,
+      "shortlist_impact_0_10": 5.9,
+      "procurement_effort_collapsed_0_10": 6.3,
+      "paid_service_readiness_0_10": 7.1,
+      "top_match_relevance_0_10": 1.5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "needs_human_review",
+      "failure_category": "timeout",
+      "match_run": {
+        "status": "timed_out",
+        "elapsedMs": 7003,
+        "tenderMatches": 0,
+        "grantMatches": 0,
+        "actionableTopTenderCount": 0,
+        "topTenders": [],
+        "topGrants": [],
+        "error": "timed out after 7000ms"
+      },
+      "key_failure_points": [
+        "fewer than two top tender matches have source URL, deadline, agency and match reasons",
+        "live matching did not complete: timed out after 7000ms",
+        "vendor capacity/compliance evidence is missing",
+        "timed out after 7000ms"
+      ],
+      "highest_leverage_fix": "Bound matching queries by profile and cache top match context so validation cannot stall.",
+      "missing_context_inputs": [
+        "fewer than two top tender matches have source URL, deadline, agency and match reasons",
+        "live matching did not complete: timed out after 7000ms",
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "critical_missing_context_inputs": [
+        "fewer than two top tender matches have source URL, deadline, agency and match reasons",
+        "live matching did not complete: timed out after 7000ms"
+      ],
+      "prior_panel_status": "Useful but not wow"
+    }
+  ]
+}

@@ -6,6 +6,11 @@ import { generateBidNoBid, BID_PLAN } from "@/lib/bid-no-bid/generate";
 import { generateProposalPackage } from "@/lib/proposal-package/generate-proposal";
 import { generateRosterFastTrack } from "@/lib/proposal-package/generate-roster";
 import { PROPOSAL_PLAN, ROSTER_PLAN } from "@/lib/proposal-package/types";
+import { ensureWorkOrderServiceContext } from "@/lib/service-context";
+import {
+  evaluateServiceFulfillmentGate,
+  markWorkOrderForFulfillmentGate,
+} from "@/lib/service-fulfillment-gates";
 
 export const WORK_ORDER_PLANS = new Set([
   "bid-no-bid",
@@ -131,6 +136,26 @@ export async function createWorkOrderFromCheckout(
       `;
 
   const order = rows[0];
+  let fulfillmentGate: Awaited<ReturnType<typeof evaluateServiceFulfillmentGate>> | null = null;
+  if (order) {
+    try {
+      await ensureWorkOrderServiceContext(order.id as number, userId);
+      fulfillmentGate = await evaluateServiceFulfillmentGate({
+        plan: order.plan as string,
+        workOrderId: order.id as number,
+        ensureContext: false,
+      });
+      if (fulfillmentGate.mode !== "self_serve") {
+        await markWorkOrderForFulfillmentGate(order.id as number, fulfillmentGate);
+      }
+    } catch (err) {
+      console.error("[tp:service_context:ensure_failed]", {
+        workOrderId: order.id,
+        userId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
   const previousPaymentStatus = order?.previous_payment_status as string | null | undefined;
   if (order && session.payment_status === "paid" && previousPaymentStatus !== "paid") {
     const orderPlan = order.plan as string;
@@ -139,7 +164,10 @@ export async function createWorkOrderFromCheckout(
     // For auto-fulfilled plans the deliverable-ready email IS the paid
     // notification — skip the generic "we received your order" email to avoid
     // double-mailing. Subscription tiers still get the receive-confirmation.
-    if (!AUTO_FULFILLED_PLANS.has(orderPlan)) {
+    const autoFulfillAllowed = AUTO_FULFILLED_PLANS.has(orderPlan)
+      && (fulfillmentGate?.auto_fulfill_allowed ?? true);
+
+    if (!autoFulfillAllowed) {
       sendWorkOrderPaidNotifications({
         id: orderId,
         plan: orderPlan,
@@ -162,6 +190,10 @@ export async function createWorkOrderFromCheckout(
     // generator handles its own LLM call → file rendering → Blob upload →
     // email, and writes status into proposal_packages so the dashboard can
     // poll for "ready" without holding the webhook lambda open.
+    if (!autoFulfillAllowed) {
+      return;
+    }
+
     if (orderPlan === BID_PLAN) {
       after(async () => {
         try {

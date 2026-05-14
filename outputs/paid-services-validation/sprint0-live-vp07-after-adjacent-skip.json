@@ -1,0 +1,158 @@
+{
+  "checked_at": "2026-05-13T14:39:05.641Z",
+  "validation_version": "sprint-0-paid-services-v1",
+  "panel": "/Users/odaykamal/Desktop/TENDERPATH/data/validation/paid-services-panel.csv",
+  "mode": {
+    "live_matching": true,
+    "include_grants": false,
+    "ids": [
+      "VP-07"
+    ],
+    "timeout_ms_per_profile": 15000
+  },
+  "summary": {
+    "checked": 1,
+    "ready_for_beta": 0,
+    "needs_human_review": 1,
+    "blocked": 0,
+    "median_paid_service_readiness_0_10": 7,
+    "median_procurement_effort_collapsed_0_10": 6.4,
+    "status_counts": {
+      "needs_human_review": 1
+    },
+    "failure_category_counts": {
+      "scoring issue": 1
+    },
+    "track_summary": {
+      "Roster Fast-Track": {
+        "checked": 1,
+        "ready_for_beta": 0,
+        "needs_human_review": 1,
+        "blocked": 0,
+        "median_paid_service_readiness_0_10": 7,
+        "median_procurement_effort_collapsed_0_10": 6.4
+      }
+    },
+    "top_blockers": [
+      {
+        "blocker": "top live matches are actionable but off-profile for this validation scenario",
+        "count": 1
+      },
+      {
+        "blocker": "missing agency pack for FAO",
+        "count": 1
+      },
+      {
+        "blocker": "legal, financial, certification or product evidence is missing",
+        "count": 1
+      }
+    ],
+    "sprint_0_gate_passed": true
+  },
+  "profiles": [
+    {
+      "panel_id": "VP-07",
+      "prospect_company": "MEFOSA-MENA Food safety associates S.A.R.L",
+      "source_row_id": "7",
+      "website": "http://www.mefosa.com",
+      "country": "Lebanon",
+      "region": "MENA",
+      "sector": "Food Safety and Public Health",
+      "sub_icp": "Food safety compliance, Codex, quality systems and lab/testing advisory",
+      "ungm_status": "Yes - Level 1; UNGM ID 454934; USAID/UNDP-adjacent coaching evidence in prospect DB",
+      "fit_class": "Adjacent-fit",
+      "service_track": "Roster Fast-Track",
+      "benchmark_tender_or_agency": "WFP/FAO food safety, HACCP/ISO 22000 supplier and technical-assistance roster",
+      "scenario_goal": "Prepare roster/package guidance that routes MEFOSA toward the right food-safety procurement category and does not invent food-supply capacity.",
+      "assessment_quality_0_10": 8.6,
+      "dashboard_continuity_0_10": 6.1,
+      "service_context_completeness_0_10": 8,
+      "service_output_quality_0_10": 6.2,
+      "trustworthiness_0_10": 6.6,
+      "time_saved_0_10": 6.7,
+      "shortlist_impact_0_10": 6.4,
+      "procurement_effort_collapsed_0_10": 6.4,
+      "paid_service_readiness_0_10": 7,
+      "top_match_relevance_0_10": 0,
+      "relevant_top_tender_count": 0,
+      "readiness_status": "needs_human_review",
+      "failure_category": "scoring issue",
+      "match_run": {
+        "status": "completed",
+        "elapsedMs": 5634,
+        "tenderMatches": 14,
+        "grantMatches": null,
+        "actionableTopTenderCount": 5,
+        "topTenders": [
+          {
+            "score": 85,
+            "bucket": "Act Now",
+            "title": "Lebanon Green Agrifood Transformation for Economic Recovery (GATE)",
+            "agency": "World Bank",
+            "country": "Lebanon",
+            "deadline": "2026-05-18",
+            "source_url": "https://projects.worldbank.org/en/projects-operations/procurement-detail/OP00440545",
+            "reason": "Sector: Food & Nutrition"
+          },
+          {
+            "score": 75,
+            "bucket": "Act Now",
+            "title": "Food Parcels for Tyre area",
+            "agency": "UNRWA",
+            "country": "Lebanon",
+            "deadline": "2026-05-14",
+            "source_url": "https://www.ungm.org/Public/Notice/300394",
+            "reason": "Sector: Food & Nutrition"
+          },
+          {
+            "score": 68,
+            "bucket": "Strategic Expansion",
+            "title": "Global Communities Expression of Interest (EoI) Questionnaire 2026 for Syria Mission",
+            "agency": "Global Communities",
+            "country": "Syria",
+            "deadline": "2026-05-16",
+            "source_url": "https://reliefweb.int/job/4210494/global-communities-expression-interest-eoi-questionnaire-2026-syria-mission",
+            "reason": "Sector: Healthcare, Consulting Services, Information Technology"
+          },
+          {
+            "score": 53,
+            "bucket": "Strategic Expansion",
+            "title": "Request for Proposal For Psychological Support Jordan - Syria",
+            "agency": "War Child International",
+            "country": "Jordan",
+            "deadline": "2026-05-19",
+            "source_url": "https://reliefweb.int/job/4210602/request-proposal-psychological-support-jordan-syria",
+            "reason": "Sector: Healthcare"
+          },
+          {
+            "score": 53,
+            "bucket": "Watchlist",
+            "title": "RFQ/EM/JOR/05/03 Seasonal Influenza Vaccine Microplanning - All Governorates, Jordan from 1 June 202",
+            "agency": "WHO",
+            "country": "Jordan",
+            "deadline": "2026-05-23",
+            "source_url": "https://www.ungm.org/Public/Notice/300634",
+            "reason": "Sector: Healthcare"
+          }
+        ],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "top live matches are actionable but off-profile for this validation scenario",
+        "missing agency pack for FAO",
+        "legal, financial, certification or product evidence is missing"
+      ],
+      "highest_leverage_fix": "Add agency/category roster packs and force category narrowing before payment.",
+      "missing_context_inputs": [
+        "top live matches are actionable but off-profile for this validation scenario",
+        "missing agency pack for FAO",
+        "legal, financial, certification or product evidence is missing"
+      ],
+      "critical_missing_context_inputs": [
+        "top live matches are actionable but off-profile for this validation scenario",
+        "missing agency pack for FAO"
+      ],
+      "prior_panel_status": "Not ready"
+    }
+  ]
+}

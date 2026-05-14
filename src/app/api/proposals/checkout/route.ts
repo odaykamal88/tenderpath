@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
 import { getStripe } from "@/lib/stripe";
+import { evaluateServiceFulfillmentGate } from "@/lib/service-fulfillment-gates";
 
 const PLAN_CONFIG: Record<string, { priceEnv: string; label: string }> = {
   "proposal-draft": {
@@ -35,6 +36,21 @@ export async function POST(request: Request) {
   if (!work_order_id) {
     return NextResponse.json({ error: "work_order_id is required" }, { status: 400 });
   }
+  const gate = await evaluateServiceFulfillmentGate({
+    plan,
+    workOrderId: work_order_id,
+  });
+  if (!gate.payment_allowed) {
+    return NextResponse.json(
+      {
+        error: gate.message,
+        code: gate.code,
+        missing_inputs: gate.missing_inputs,
+        readiness: gate,
+      },
+      { status: 409 },
+    );
+  }
 
   const config = PLAN_CONFIG[plan];
   const priceId = process.env[config.priceEnv];
@@ -68,6 +84,7 @@ export async function POST(request: Request) {
         pipeline_item_id: pipeline_item_id ? String(pipeline_item_id) : "",
         tender_title: tender_title ?? "",
         agency: agency ?? "",
+        ...gate.metadata,
       },
     });
 

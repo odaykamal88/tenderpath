@@ -382,13 +382,13 @@ export default function AnalysisPage() {
           </div>
           <div className="flex flex-col gap-2 sm:flex-row shrink-0">
             <Link
-              href={`/pay?plan=proposal-draft&pipeline_item_id=${encodeURIComponent(pipelineItemId)}`}
+              href={`/dashboard/services/proposal?pipeline_item_id=${encodeURIComponent(pipelineItemId)}`}
               className="rounded-sm bg-stone-900 px-5 py-2.5 text-[12.5px] font-semibold text-white hover:bg-stone-800 text-center transition-colors"
             >
               Generate proposal package →
             </Link>
             <Link
-              href={`/pay?plan=roster-fast-track&pipeline_item_id=${encodeURIComponent(pipelineItemId)}`}
+              href={`/dashboard/services/lta-roster?pipeline_item_id=${encodeURIComponent(pipelineItemId)}`}
               className="rounded-sm border border-stone-300 px-5 py-2.5 text-[12.5px] font-semibold text-stone-700 hover:border-stone-700 hover:text-stone-900 text-center transition-colors"
             >
               Roster / LTA support

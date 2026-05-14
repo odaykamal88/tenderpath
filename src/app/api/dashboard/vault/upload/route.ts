@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireDashboardAccess } from "@/lib/access";
+import { extractDocumentText, persistDocumentExtraction } from "@/lib/documents/extract";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -39,6 +40,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const bytes = Buffer.from(await file.arrayBuffer());
+
     // Try Vercel Blob first, fall back to base64 data URL
     let fileUrl: string;
 
@@ -46,19 +49,36 @@ export async function POST(req: NextRequest) {
       // Attempt to use @vercel/blob if available
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { put } = require("@vercel/blob");
-      const blob = await put(`vault/${guard.user!.id}/${Date.now()}-${file.name}`, file, {
+      const blob = await put(`vault/${guard.user!.id}/${Date.now()}-${file.name}`, bytes, {
         access: "public",
         addRandomSuffix: true,
+        contentType: file.type,
       });
       fileUrl = blob.url;
     } catch {
       // Fallback: encode as base64 data URL (for dev / no blob token)
-      const bytes = await file.arrayBuffer();
-      const base64 = Buffer.from(bytes).toString("base64");
+      const base64 = bytes.toString("base64");
       fileUrl = `data:${file.type};base64,${base64}`;
     }
 
-    return NextResponse.json({ url: fileUrl, name: file.name });
+    const extraction = await extractDocumentText({
+      buffer: bytes,
+      mimeType: file.type,
+      fileName: file.name,
+    });
+    const persisted = await persistDocumentExtraction({
+      userId: guard.user!.id,
+      fileName: file.name,
+      fileUrl,
+      mimeType: file.type,
+      result: extraction,
+    });
+
+    return NextResponse.json({
+      url: fileUrl,
+      name: file.name,
+      extraction: persisted,
+    });
   } catch (err) {
     console.error("Upload error:", err);
     return NextResponse.json({ error: "Upload failed" }, { status: 500 });

@@ -42,6 +42,17 @@ interface PayContext {
   workOrderId: string | null;
 }
 
+interface FulfillmentReadiness {
+  mode: "self_serve" | "human_review" | "blocked";
+  payment_allowed: boolean;
+  auto_fulfill_allowed: boolean;
+  score_0_10: number | null;
+  missing_inputs: string[];
+  warnings: string[];
+  code: string | null;
+  message: string;
+}
+
 function CopyBtn({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -59,35 +70,39 @@ function CopyBtn({ value }: { value: string }) {
   );
 }
 
-function contextLines(c: PayContext): string[] {
-  return [
-    c.tender ? `Tender: ${c.tender}` : null,
-    c.agency ? `Agency: ${c.agency}` : null,
-    c.pipelineItemId ? `Pipeline item ID: ${c.pipelineItemId}` : null,
-  ].filter((line): line is string => Boolean(line));
-}
-
-function NotifyButton({ plan, context }: { plan: string; context: PayContext }) {
-  const subject = encodeURIComponent(`Payment sent – ${plan}`);
-  const lines = contextLines(context);
-  const body = encodeURIComponent(
-    `Hi TenderPath team,\n\nI have completed my payment for: ${plan}\nMy account email: [your email here]${
-      lines.length ? `\n\nWork context:\n${lines.join("\n")}` : ""
-    }\n\nI have attached my payment receipt / transaction ID.\n\nPlease activate my account.\n\nThank you.`
-  );
-  return (
-    <a
-      href={`mailto:${CONFIG.supportEmail}?subject=${subject}&body=${body}`}
-      className="mt-5 flex w-full items-center justify-center gap-2 rounded-sm bg-stone-900 px-4 py-3 text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors"
-    >
-      I&apos;ve sent payment — notify us →
-    </a>
-  );
-}
-
 /* ── Card / Stripe ─────────────────────────────────────────────────────── */
 
-function CardTab({ plan, context }: { plan: string | null; context: PayContext }) {
+function ReadinessCard({ readiness }: { readiness: FulfillmentReadiness | null }) {
+  if (!readiness || readiness.mode === "self_serve") return null;
+  const blocked = !readiness.payment_allowed;
+  return (
+    <div className={`rounded-sm border-l-2 px-3.5 py-3 text-[12px] leading-relaxed ${
+      blocked ? "border-red-600 bg-red-50/40 text-red-800" : "border-amber-600 bg-amber-50/40 text-amber-950"
+    }`}>
+      <div
+        className="text-[10px] font-semibold uppercase tracking-[0.18em]"
+        style={{ fontFamily: MONO }}
+      >
+        Fulfillment readiness · {readiness.mode.replace(/_/g, " ")}
+      </div>
+      <p className="mt-1">{readiness.message}</p>
+      {readiness.score_0_10 != null && (
+        <p className="mt-1 font-semibold tabular-nums" style={{ fontFamily: MONO }}>
+          Source score · {readiness.score_0_10}/10
+        </p>
+      )}
+      {readiness.missing_inputs.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {readiness.missing_inputs.slice(0, 5).map((item) => (
+            <li key={item}>Missing: {item}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function CardTab({ plan, context, disabledReason }: { plan: string | null; context: PayContext; disabledReason?: string }) {
   const [status, setStatus] = useState<"idle" | "loading" | "mounted" | "error">("idle");
   const [error, setError] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -99,6 +114,7 @@ function CardTab({ plan, context }: { plan: string | null; context: PayContext }
 
   async function startCheckout() {
     if (!plan) { setError("Select a plan first."); return; }
+    if (disabledReason) { setError(disabledReason); return; }
     if (!stripePromise) { setError("Stripe is not configured."); return; }
     setStatus("loading");
     setError("");
@@ -144,7 +160,7 @@ function CardTab({ plan, context }: { plan: string | null; context: PayContext }
           )}
           <button
             onClick={startCheckout}
-            disabled={status === "loading" || !plan}
+            disabled={status === "loading" || !plan || Boolean(disabledReason)}
             className="w-full rounded-sm bg-stone-900 px-4 py-3 text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           >
             {status === "loading" ? "Loading secure checkout…" : "Pay with card →"}
@@ -163,7 +179,7 @@ function CardTab({ plan, context }: { plan: string | null; context: PayContext }
 
 /* ── USDT ──────────────────────────────────────────────────────────────── */
 
-function UsdtTab({ plan, context }: { plan: string | null; context: PayContext }) {
+function UsdtTab({ plan, context, disabledReason }: { plan: string | null; context: PayContext; disabledReason?: string }) {
   const tier = TIERS.find((t) => t.slug === plan);
   const address = CONFIG.usdt.trc20;
   const [txid, setTxid] = useState("");
@@ -173,6 +189,7 @@ function UsdtTab({ plan, context }: { plan: string | null; context: PayContext }
 
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
+    if (disabledReason) { setVerifyMsg(disabledReason); setVerifyStatus("error"); return; }
     if (!context.workOrderId) { setVerifyMsg("No work order ID — please refresh and try again."); setVerifyStatus("error"); return; }
     setVerifyStatus("loading");
     setVerifyMsg("");
@@ -186,6 +203,14 @@ function UsdtTab({ plan, context }: { plan: string | null; context: PayContext }
       if (data.ok) { setVerifyStatus("done"); setVerifyMsg(data.message ?? "Verified!"); }
       else { setVerifyStatus("error"); setVerifyMsg(data.error ?? "Verification failed."); }
     } catch { setVerifyStatus("error"); setVerifyMsg("Network error. Please try again."); }
+  }
+
+  if (disabledReason) {
+    return (
+      <div className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3.5 py-3 text-[12px] text-red-800 leading-relaxed">
+        {disabledReason}
+      </div>
+    );
   }
 
   return (
@@ -328,7 +353,7 @@ function UsdtTab({ plan, context }: { plan: string | null; context: PayContext }
           )}
           <button
             type="submit"
-            disabled={verifyStatus === "loading" || !txid.trim()}
+            disabled={verifyStatus === "loading" || !txid.trim() || Boolean(disabledReason)}
             className="w-full rounded-sm bg-stone-900 px-4 py-2.5 text-[12px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {verifyStatus === "loading" ? "Verifying…" : "Verify transaction →"}
@@ -551,6 +576,36 @@ function PayPage() {
   };
   const [selectedSlug, setSelectedSlug] = useState<string | null>(planSlug);
   const [storedTab, setStoredTab] = useState<Tab>("card");
+  const [readiness, setReadiness] = useState<FulfillmentReadiness | null>(null);
+  const [readinessError, setReadinessError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedSlug) return;
+    let cancelled = false;
+    const params = new URLSearchParams({ plan: selectedSlug });
+    if (context.workOrderId) params.set("work_order_id", context.workOrderId);
+    fetch(`/api/pay/readiness?${params.toString()}`)
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as {
+          readiness?: FulfillmentReadiness;
+          error?: string;
+        };
+        if (!res.ok || !data.readiness) throw new Error(data.error ?? "Could not check fulfillment readiness.");
+        if (!cancelled) {
+          setReadiness(data.readiness);
+          setReadinessError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setReadiness(null);
+          setReadinessError(err instanceof Error ? err.message : "Could not check fulfillment readiness.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [context.workOrderId, selectedSlug]);
 
   // Wire payments cannot be auto-fulfilled today (manual proof review), so they
   // are hidden on one-time service plans where the user expects an immediate
@@ -569,6 +624,7 @@ function PayPage() {
     { id: "usdt", label: "USDT" },
     ...(hideWire ? [] : [{ id: "wire" as Tab, label: "Wire" }]),
   ];
+  const disabledReason = readiness && !readiness.payment_allowed ? readiness.message : undefined;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#fafaf7" }}>
@@ -613,6 +669,12 @@ function PayPage() {
         </div>
 
         <ContextCard context={context} />
+        <ReadinessCard readiness={readiness} />
+        {readinessError && (
+          <div className="rounded-sm border-l-2 border-amber-600 bg-amber-50/40 px-3.5 py-3 text-[12px] text-amber-900 leading-relaxed">
+            {readinessError}
+          </div>
+        )}
 
         {/* Step 1 — plan */}
         <div className="rounded-md border border-stone-200/70 bg-white p-4 sm:p-5">
@@ -712,8 +774,8 @@ function PayPage() {
           </div>
 
           {/* Tab body */}
-          {activeTab === "card" && <CardTab plan={selectedSlug} context={context} />}
-          {activeTab === "usdt" && <UsdtTab plan={selectedSlug} context={context} />}
+          {activeTab === "card" && <CardTab plan={selectedSlug} context={context} disabledReason={disabledReason} />}
+          {activeTab === "usdt" && <UsdtTab plan={selectedSlug} context={context} disabledReason={disabledReason} />}
           {activeTab === "wire" && <WireTab plan={selectedSlug} context={context} />}
         </div>
 

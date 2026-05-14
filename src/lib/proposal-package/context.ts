@@ -1,4 +1,5 @@
 import { sql } from "@/lib/db";
+import { formatServiceContextForPrompt, formatServiceDocumentsForTenderText } from "@/lib/service-context";
 import type { ProposalOutput, RosterOutput } from "./types";
 
 export interface WorkOrderRow {
@@ -109,6 +110,7 @@ export async function loadPipelineItem(pipelineItemId: number | null): Promise<P
 }
 
 export function buildTenderText(order: WorkOrderRow, pipelineItem: PipelineRow | null): string {
+  const uploadedDocumentText = formatServiceDocumentsForTenderText(order.intake);
   if (pipelineItem) {
     return [
       `Title: ${pipelineItem.tender_title ?? order.tender_title ?? "Unknown"}`,
@@ -120,6 +122,7 @@ export function buildTenderText(order: WorkOrderRow, pipelineItem: PipelineRow |
       pipelineItem.tender_deadline && `Deadline: ${pipelineItem.tender_deadline}`,
       pipelineItem.t_description && `\nDescription:\n${pipelineItem.t_description}`,
       pipelineItem.eligibility_summary && `\nEligibility:\n${pipelineItem.eligibility_summary}`,
+      uploadedDocumentText,
     ].filter(Boolean).join("\n");
   }
   const intakeContext = order.intake?.tender_context ?? order.intake?.package_notes;
@@ -129,6 +132,7 @@ export function buildTenderText(order: WorkOrderRow, pipelineItem: PipelineRow |
     order.agency && `Agency: ${order.agency}`,
     order.tender_url && `Source URL: ${order.tender_url}`,
     torText && `\nProvided context:\n${torText}`,
+    uploadedDocumentText,
   ].filter(Boolean).join("\n") || "No tender details provided. The user supplied no tender URL, agency, title, or pasted terms of reference.";
 }
 
@@ -151,6 +155,7 @@ export function buildCompanyContext(assessment: AssessmentRow | null): string {
 }
 
 const INTAKE_HIDDEN_KEYS = new Set([
+  "service_context",
   "vault_url",
   "vault_filename",
   "vault_doc_id",
@@ -160,8 +165,10 @@ const INTAKE_HIDDEN_KEYS = new Set([
 
 export function buildIntakeSummary(intake: Record<string, unknown> | null): string {
   if (!intake) return "";
+  const serviceContext = formatServiceContextForPrompt(intake);
   const entries = Object.entries(intake).filter(([k]) => !INTAKE_HIDDEN_KEYS.has(k));
   const lines = entries.map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`);
+  if (serviceContext) lines.unshift(serviceContext);
   if (intake.financial_documents_url) {
     lines.push(
       `financial_documents_provided: yes (${typeof intake.financial_documents_filename === "string" ? intake.financial_documents_filename : "uploaded"})`,

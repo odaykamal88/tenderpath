@@ -17,6 +17,7 @@ export interface ProposalOutput {
   financial_template_notes: string[];
   missing_information: string[];
   next_steps: string[];
+  source_quality?: ProposalEvidenceProfile;
 }
 
 export interface ComplianceItem {
@@ -50,6 +51,27 @@ export interface TenderRequirements {
   evaluation_criteria: string[];
   key_constraints: string[];
   submission_format: string;
+  source_quality?: ProposalEvidenceProfile;
+}
+
+export interface ProposalEvidenceProfile {
+  status: "ready" | "needs_review" | "blocked";
+  score_0_10: number;
+  source_text_chars: number;
+  uploaded_requirement_chars: number;
+  pasted_requirement_chars: number;
+  signals: {
+    has_source_url: boolean;
+    has_deadline: boolean;
+    has_scope_or_deliverables: boolean;
+    has_eligibility: boolean;
+    has_required_documents: boolean;
+    has_evaluation_criteria: boolean;
+    has_submission_format: boolean;
+    has_financial_context: boolean;
+  };
+  missing_inputs: string[];
+  warnings: string[];
 }
 
 export const DEFAULT_TENDER_REQUIREMENTS: TenderRequirements = {

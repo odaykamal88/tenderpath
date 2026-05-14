@@ -16,6 +16,9 @@ const PUBLIC_PATHS = new Set([
   "/api/assessment/public",
   "/api/assessment/preview",
   "/api/pay/checkout",
+  "/api/pay/readiness",
+  "/api/pay/verify-usdt",
+  "/api/pay/wire-proof",
   "/api/telegram/webhook",
 ]);
 

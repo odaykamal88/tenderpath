@@ -1,6 +1,7 @@
 import { put } from "@vercel/blob";
 import { sql } from "@/lib/db";
 import { sendBidNoBidReadyEmail } from "@/lib/email/sendBidNoBidNotification";
+import { formatServiceContextForPrompt, formatServiceDocumentsForTenderText } from "@/lib/service-context";
 import { track } from "@/lib/telemetry/funnel";
 import { renderBidNoBidPdf } from "./pdfDoc";
 import {
@@ -130,6 +131,7 @@ async function loadPipelineItem(pipelineItemId: number | null): Promise<Pipeline
 function buildTenderText(order: WorkOrderRow, pipelineItem: PipelineRow | null): string {
   const intakeContext = order.intake?.tender_context;
   const torText = typeof intakeContext === "string" ? intakeContext : "";
+  const uploadedDocumentText = formatServiceDocumentsForTenderText(order.intake);
 
   if (pipelineItem) {
     const sourceUrl = pipelineItem.t_source_url ?? pipelineItem.manual_source_url ?? order.tender_url;
@@ -145,6 +147,7 @@ function buildTenderText(order: WorkOrderRow, pipelineItem: PipelineRow | null):
       pipelineItem.t_description && `\nDescription:\n${pipelineItem.t_description}`,
       pipelineItem.eligibility_summary && `\nEligibility:\n${pipelineItem.eligibility_summary}`,
       torText && `\nPasted requirements:\n${torText}`,
+      uploadedDocumentText,
     ].filter(Boolean).join("\n");
   }
 
@@ -153,6 +156,7 @@ function buildTenderText(order: WorkOrderRow, pipelineItem: PipelineRow | null):
     order.agency && `Agency: ${order.agency}`,
     order.tender_url && `Source URL: ${order.tender_url}`,
     torText && `\nPasted requirements:\n${torText}`,
+    uploadedDocumentText,
   ].filter(Boolean).join("\n") || "No tender details provided. The user supplied no tender URL, agency, title, or pasted terms of reference.";
 }
 
@@ -175,6 +179,7 @@ function buildCompanyContext(assessment: AssessmentRow | null): string {
 }
 
 const INTAKE_HIDDEN_KEYS = new Set([
+  "service_context",
   "vault_url",
   "vault_filename",
   "vault_doc_id",
@@ -184,8 +189,10 @@ const INTAKE_HIDDEN_KEYS = new Set([
 
 function buildIntakeSummary(intake: Record<string, unknown> | null): string {
   if (!intake) return "";
+  const serviceContext = formatServiceContextForPrompt(intake);
   const entries = Object.entries(intake).filter(([k]) => !INTAKE_HIDDEN_KEYS.has(k));
   const lines = entries.map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`);
+  if (serviceContext) lines.unshift(serviceContext);
   if (intake.financial_documents_url) {
     lines.push(
       `financial_documents_provided: yes (${typeof intake.financial_documents_filename === "string" ? intake.financial_documents_filename : "uploaded"})`,

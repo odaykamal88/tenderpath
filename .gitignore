@@ -23,9 +23,15 @@
 # misc
 .DS_Store
 .cache/
+.claire/
+.claude/agent-sync/
 .claude/worktrees/
 .~lock*
 *.pem
+__pycache__/
+data/distribution/
+tenderpath_ungm_distribution.xlsx
+ungm_scraper_plan.md
 
 # debug
 npm-debug.log*

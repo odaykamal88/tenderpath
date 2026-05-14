@@ -140,6 +140,17 @@ function statusLabel(c: ComplianceItem): string {
   return "✕ Needs action";
 }
 
+function sourceQualityLabel(output: ProposalOutput): string | null {
+  const quality = output.source_quality;
+  if (!quality) return null;
+  return [
+    `Status: ${quality.status}`,
+    `Score: ${quality.score_0_10}/10`,
+    quality.missing_inputs.length ? `Missing: ${quality.missing_inputs.join("; ")}` : null,
+    quality.warnings.length ? `Warnings: ${quality.warnings.join("; ")}` : null,
+  ].filter(Boolean).join(" | ");
+}
+
 function buildSection(ctx: DocContext, paragraphs: Paragraph[], kind: string): ISectionOptions {
   return {
     properties: { page: { margin: { top: 1200, bottom: 1200, left: 1200, right: 1200 } } },
@@ -157,6 +168,12 @@ export async function renderProposalDocx(
 
   paragraphs.push(h2("Executive summary"));
   paragraphs.push(...output.executive_summary.split(/\n{2,}/).map((p) => body(p.trim())));
+
+  const sourceQuality = sourceQualityLabel(output);
+  if (sourceQuality) {
+    paragraphs.push(h2("Source quality"));
+    paragraphs.push(body(sourceQuality));
+  }
 
   paragraphs.push(h2("Technical approach"));
   output.technical_approach.forEach((p) => paragraphs.push(body(p)));

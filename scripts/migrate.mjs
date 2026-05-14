@@ -146,6 +146,33 @@ CREATE TABLE IF NOT EXISTS crawl_logs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS vault_documents (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name VARCHAR(255) NOT NULL,
+  type VARCHAR(64) NOT NULL,
+  expiry_date DATE,
+  file_url TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS document_extractions (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  vault_document_id INTEGER REFERENCES vault_documents(id) ON DELETE SET NULL,
+  file_name TEXT NOT NULL,
+  file_url TEXT NOT NULL,
+  mime_type TEXT,
+  status TEXT NOT NULL,
+  text_content TEXT,
+  char_count INTEGER DEFAULT 0,
+  error TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, file_url)
+);
+CREATE INDEX IF NOT EXISTS document_extractions_user_idx ON document_extractions (user_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS purchase_logs (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id),

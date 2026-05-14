@@ -6,6 +6,10 @@ import { generateBidNoBid, BID_PLAN } from "@/lib/bid-no-bid/generate";
 import { generateProposalPackage } from "@/lib/proposal-package/generate-proposal";
 import { generateRosterFastTrack } from "@/lib/proposal-package/generate-roster";
 import { PROPOSAL_PLAN, ROSTER_PLAN } from "@/lib/proposal-package/types";
+import {
+  evaluateServiceFulfillmentGate,
+  markWorkOrderForFulfillmentGate,
+} from "@/lib/service-fulfillment-gates";
 
 export const runtime = "nodejs";
 export const maxDuration = 20;
@@ -83,6 +87,18 @@ export async function POST(req: NextRequest) {
   if (!Number.isInteger(workOrderId) || workOrderId <= 0) {
     return NextResponse.json({ error: "Invalid work_order_id" }, { status: 400 });
   }
+  const gate = await evaluateServiceFulfillmentGate({ plan, workOrderId });
+  if (!gate.payment_allowed) {
+    return NextResponse.json(
+      {
+        error: gate.message,
+        code: gate.code,
+        missing_inputs: gate.missing_inputs,
+        readiness: gate,
+      },
+      { status: 409 },
+    );
+  }
 
   // Fetch TronScan
   let txData: TronScanResponse;
@@ -157,8 +173,9 @@ export async function POST(req: NextRequest) {
   // Decide downstream payment_status. Auto-fulfilled plans (bid-no-bid today)
   // go straight to "paid" because TronGrid has already confirmed the contract,
   // destination wallet, and minimum amount — no human in the loop.
-  const autoFulfilled = AUTO_FULFILLED_PLANS.has(plan);
-  const nextPaymentStatus = autoFulfilled ? "paid" : "pending_verification";
+  const autoPlan = AUTO_FULFILLED_PLANS.has(plan);
+  const autoFulfilled = autoPlan && gate.auto_fulfill_allowed;
+  const nextPaymentStatus = autoPlan ? "paid" : "pending_verification";
 
   const rows = await sql`
     UPDATE work_orders
@@ -176,6 +193,9 @@ export async function POST(req: NextRequest) {
   }
 
   const order = rows[0];
+  if (!gate.auto_fulfill_allowed) {
+    await markWorkOrderForFulfillmentGate(order.id as number, gate);
+  }
   sendOpsAlert(
     order.id as number,
     order.plan as string,
@@ -224,6 +244,8 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    message: "Transaction verified. We'll activate your order within 4 business hours.",
+    message: gate.mode === "human_review"
+      ? "Transaction verified. This order is in the human QA queue because the source package needs review before fulfillment."
+      : "Transaction verified. We'll activate your order within 4 business hours.",
   });
 }

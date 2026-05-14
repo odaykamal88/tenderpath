@@ -44,7 +44,9 @@ const STOPWORDS = new Set([
   // Generic tender/role vocabulary — these fire on nearly every UN notice
   // regardless of industry and drown out real capability signal.
   "management", "specialist", "coordinator", "project", "program", "programme",
-  "manager", "assistant", "consultant",
+  "manager", "assistant", "consultant", "technical", "assistance", "advisory",
+  "development", "capacity", "building", "registration", "ungm", "public",
+  "context", "systems", "governance",
   // Generic procurement verbs. "Supply and delivery of laptops" is an IT
   // goods tender, not a logistics-services tender.
   "supply", "delivery", "deliver", "procurement", "provision",
@@ -55,11 +57,145 @@ const GRANT_TOKEN_STOPWORDS = new Set([
   "grant", "grants", "fund", "funding", "assistance", "regional",
 ]);
 
+const GENERIC_CONSULTING_MATCH_TOKENS = new Set([
+  "advisory",
+  "analysis",
+  "assistance",
+  "assessment",
+  "capacity",
+  "consultancy",
+  "consulting",
+  "development",
+  "financial",
+  "governance",
+  "institutional",
+  "management",
+  "program",
+  "programme",
+  "project",
+  "public",
+  "reform",
+  "services",
+  "strategic",
+  "strategy",
+  "studies",
+  "study",
+  "support",
+  "technical",
+  "training",
+]);
+
+const DESCRIPTION_QUERY_STOPWORDS = new Set([
+  "advisory",
+  "climate",
+  "consultancy",
+  "consulting",
+  "data",
+  "digital",
+  "education",
+  "energy",
+  "environment",
+  "food",
+  "health",
+  "it ",
+  "medical",
+  "services",
+  "solar",
+  "system",
+  "technology",
+  "training",
+  "water",
+]);
+
+function descriptionKeywordsFor(keywords: string[]): string[] {
+  return keywords.filter((keyword) => {
+    const normalized = keyword.trim().toLowerCase();
+    return normalized.length >= 10
+      && !DESCRIPTION_QUERY_STOPWORDS.has(normalized)
+      && (normalized.includes(" ") || normalized.length >= 12);
+  });
+}
+
 function tokenize(text: string): string[] {
   return text
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((t) => t.length > 3 && !STOPWORDS.has(t));
+}
+
+type MatchDomain =
+  | "policy_research"
+  | "monitoring_evaluation"
+  | "health_systems"
+  | "environment_climate"
+  | "food_safety"
+  | "media_sbc"
+  | "cold_chain_monitoring"
+  | "energy_access"
+  | "finance_pfm";
+
+const DOMAIN_LABELS: Record<MatchDomain, string> = {
+  policy_research: "policy/research",
+  monitoring_evaluation: "monitoring & evaluation",
+  health_systems: "health systems",
+  environment_climate: "environment/climate",
+  food_safety: "food safety",
+  media_sbc: "SBC/media",
+  cold_chain_monitoring: "cold-chain monitoring",
+  energy_access: "energy access",
+  finance_pfm: "public financial management",
+};
+
+const NICHE_DOMAIN_GATES: MatchDomain[] = [
+  "policy_research",
+  "food_safety",
+  "cold_chain_monitoring",
+  "media_sbc",
+  "monitoring_evaluation",
+  "health_systems",
+];
+
+function detectMatchDomains(text: string): Set<MatchDomain> {
+  const normalized = text.toLowerCase();
+  const out = new Set<MatchDomain>();
+  if (/\b(evidence[- ]?to[- ]?policy|policy research|policy dialogue|policy advisory|research (?:and|&) policy|think tank|research institution)\b/.test(normalized)) {
+    out.add("policy_research");
+  }
+  if (/\b(monitoring and evaluation|monitoring & evaluation|\bm&e\b|third[- ]party monitoring|impact evaluation|external evaluation|baseline survey|endline survey|household survey|data collection)\b/.test(normalized)) {
+    out.add("monitoring_evaluation");
+  }
+  if (/\b(health systems?|health financing|health policy|public health|primary health|universal health coverage|uhc|health workforce)\b/.test(normalized)) {
+    out.add("health_systems");
+  }
+  if (/\b(environmental|environment|climate|biodiversity|waste management|sesa|strategic environmental|environmental impact|eia)\b/.test(normalized)) {
+    out.add("environment_climate");
+  }
+  if (/\b(food safety|haccp|codex|iso 22000|food quality|food compliance|food control|phytosanitary|sanitary standard|laboratory testing)\b/.test(normalized)) {
+    out.add("food_safety");
+  }
+  if (/\b(social and behavior change|social behaviour change|\bsbc\b|sbcc|edutainment|media production|communication campaign|behavior change communication|behaviour change communication)\b/.test(normalized)) {
+    out.add("media_sbc");
+  }
+  if (/\b(cold[- ]chain|vaccine carrier|vaccine monitoring|pqs|temperature monitor|remote monitoring|iot monitoring|data logger|refrigeration monitor)\b/.test(normalized)) {
+    out.add("cold_chain_monitoring");
+  }
+  if (/\b(mini[- ]grid|off[- ]grid|energy access|renewable energy|solar power|photovoltaic|solar station|hybrid solar)\b/.test(normalized)) {
+    out.add("energy_access");
+  }
+  if (/\b(public financial management|\bpfm\b|financial management and accountability|budget reform|treasury reform|public finance reform)\b/.test(normalized)) {
+    out.add("finance_pfm");
+  }
+  return out;
+}
+
+function domainsOverlap(profileDomains: Set<MatchDomain>, tenderDomains: Set<MatchDomain>): boolean {
+  for (const domain of profileDomains) {
+    if (tenderDomains.has(domain)) return true;
+    if (domain === "policy_research" && tenderDomains.has("monitoring_evaluation")) return true;
+    if (domain === "monitoring_evaluation" && tenderDomains.has("policy_research")) return true;
+    if (domain === "health_systems" && tenderDomains.has("policy_research")) return true;
+  }
+  return false;
 }
 
 // Country-name aliasing. User picks "Syria" but WB/UN post "Syrian Arab
@@ -173,12 +309,39 @@ function expandCountrySet(countries: string[]): Set<string> {
 // Contractor" rather than "Consultancy", so the type filter alone misses them.
 // Pattern is conservative — substrings that only appear in recruitment.
 const INDIVIDUAL_ROLE_RE = /\b(individual contractor|individual consultant|ssa \d|special service agreement|short[- ]term expert|long[- ]term expert|roster of experts?|roster of consultants?|expert(s)? roster|consultant roster|national consultant|international consultant|junior consultant|senior consultant|home[- ]based consultant|un volunteer|unv [a-z]+|request for cv|call for cv|call for experts?|national professional officer)\b|(?:^|[-_/])ic[-_/]/i;
+const RELIEFWEB_JOB_SOURCE_RE = /reliefweb\.int\/job\//i;
+const INSTITUTIONAL_TENDER_RE = /\b(request for proposals?|rfp|request for quotation|rfq|invitation to bid|itb|expression of interest|eoi|tender|service provider|consulting firm|consultancy firm|company|companies|vendor|supplier|consortium|framework|long[- ]term agreement|\blta\b|pre[- ]?qualification)\b/i;
+const ROLE_LIKE_CONSULTANCY_RE = /\b(specialist|officer|coordinator|assistant|manager|advisor|adviser|expert|trainer|facilitator|consultant|enumerator|analyst|lead|role|position)\b/i;
 
 const LANGUAGE_B2B_RE = /\b(translat(?:e|ed|ing|ion|or)|interpret(?:ation|er|ing)?|linguistic|language service|locali[sz]ation|proofreading|editing|subtitling|voice[- ]over|dubbing|multilingual)\b/i;
 const B2B_TENDER_RE = /\b(call for tenders?|request for proposals?|rfp|rfq|provision of|services?|lta|framework|translation\/revision)\b/i;
 
 function isLanguageB2BTender(userSlugs: Set<SectorSlug>, text: string): boolean {
   return userSlugs.has("language_services") && LANGUAGE_B2B_RE.test(text) && B2B_TENDER_RE.test(text);
+}
+
+function isLikelyIndividualConsultancy(args: {
+  title: string;
+  opportunityType: string | null;
+  sourceName: string | null;
+  sourceUrl: string | null;
+  description: string;
+  requirements: string[];
+  languageB2B: boolean;
+}): boolean {
+  if (args.languageB2B) return false;
+
+  const text = `${args.title} ${args.opportunityType ?? ""} ${args.description.slice(0, 700)} ${args.requirements.join(" ")}`;
+  const source = `${args.sourceName ?? ""} ${args.sourceUrl ?? ""}`;
+  if (RELIEFWEB_JOB_SOURCE_RE.test(source)) {
+    return true;
+  }
+  if (INSTITUTIONAL_TENDER_RE.test(text)) return false;
+
+  if (INDIVIDUAL_ROLE_RE.test(args.title)) return true;
+  if (/\bindividual contractor|individual consultant|consultant roster|request for cv|call for experts?\b/i.test(args.opportunityType ?? "")) return true;
+  if (RELIEFWEB_JOB_SOURCE_RE.test(source)) return true;
+  return /\bconsult/i.test(args.opportunityType ?? "") && ROLE_LIKE_CONSULTANCY_RE.test(args.title);
 }
 
 function isGeoOpenCountry(country: string): boolean {
@@ -204,11 +367,16 @@ const OPPORTUNITY_BUCKET_META: Record<OpportunityBucket, { label: string; priori
 };
 
 const HARD_LOGISTICS_RE = /\b(logistics?|supply chain|warehous(?:e|ing)|freight|transport(?:ation)?(?: services?| of)?|shipping|distribution services?|last[- ]mile|fleet|customs|cargo|supply and delivery|procurement and delivery|procurement services?|delivery of goods|supply of goods|supply of basic goods|general goods|non[- ]specialized goods|non[- ]food items?|nfi|relief items?|hygiene kits?|spare parts?|replacement parts?|furniture|office supplies|school furniture|accommodation|lodging|hotel venue|stockpil(?:e|ing)|preposition(?:ing)?|pre-position(?:ing)?|clearing agent|clearance service|storage service|cold chain|cold storage|distribution cent(?:er|re)|3pl|third-party logistic|stevedoring|port handling|cargo handling|cross-dock|material handling|packing service|courier service|parcel deliver(?:y)?|inventory storage|records storage|archive storage|document storage|storage facilit(?:y|ies)|warehousing services|storage space|temporary storage|container depot|bulk storage|secure storage|yard management|fulfillment cent(?:er|re))\b/i;
+const OFFICE_EQUIPMENT_RE = /\b(photocopiers?|printers?|scanners?|toner|office equipment|office machines?)\b/i;
+const HARD_ENGINEERING_RE = /\b(mechanical|electrical|civil works?|infrastructure|construction|structural|hvac|generator|solar|photovoltaic|pump(?:ing)?|water supply|wastewater|borehole|commissioning|technical design|production line)\b/i;
 
 function refineTenderSlugs(slugs: Set<SectorSlug>, evidenceText: string): Set<SectorSlug> {
   const refined = new Set(slugs);
   if (refined.has("logistics") && !HARD_LOGISTICS_RE.test(evidenceText)) {
     refined.delete("logistics");
+  }
+  if (refined.has("engineering") && OFFICE_EQUIPMENT_RE.test(evidenceText) && !HARD_ENGINEERING_RE.test(evidenceText)) {
+    refined.delete("engineering");
   }
   return refined;
 }
@@ -656,7 +824,19 @@ async function loadFeedbackProfile(email: string | null | undefined): Promise<Fe
 export async function matchTenders(
   analysis: AIAnalysis,
   countries: string[],
-  options?: { includeConsultancies?: boolean; userEmail?: string; adjacentSectorLabels?: string[]; orgType?: string | null },
+  options?: {
+    includeConsultancies?: boolean;
+    includeIndividualConsultancies?: boolean;
+    skipEnrichment?: boolean;
+    skipAdjacent?: boolean;
+    userEmail?: string;
+    adjacentSectorLabels?: string[];
+    orgType?: string | null;
+    candidateLimitPerSlug?: number;
+    geographyCandidateLimit?: number;
+    baselineCandidateLimit?: number;
+    adjacentCandidateLimit?: number;
+  },
 ): Promise<MatchedTender[]> {
   // Expand user country list through alias table so "Syria" matches tenders
   // posted as "Syrian Arab Republic", "Palestine" matches "West Bank and Gaza",
@@ -684,6 +864,10 @@ export async function matchTenders(
       AND LOWER(country) = ANY(${countryArr}::text[])`;
   const strictPoolSize = Number(strictProbe?.[0]?.n ?? 0);
   const autoGeoOpen = !acceptsGlobal && strictPoolSize < 25;
+  const perSlugLimit = Math.min(300, Math.max(25, options?.candidateLimitPerSlug ?? 150));
+  const geographyCandidateLimit = Math.min(600, Math.max(50, options?.geographyCandidateLimit ?? 400));
+  const baselineCandidateLimit = Math.min(500, Math.max(50, options?.baselineCandidateLimit ?? 300));
+  const adjacentCandidateLimit = Math.min(200, Math.max(25, options?.adjacentCandidateLimit ?? 100));
 
   const userSlugs = userSectorSlugs(analysis.detected_industry, analysis.sectors);
   const explicitAdjacentSlugs = userSectorSlugs(null, options?.adjacentSectorLabels ?? []);
@@ -709,6 +893,9 @@ export async function matchTenders(
   // User may explicitly opt in to consultancy-style tenders (e.g. sole traders,
   // individuals bidding as consultants). Default is OFF for org/company flows.
   const allowConsultancies = (userIsConsulting && !userIsNgo) || (options?.includeConsultancies ?? false);
+  const normalizedOrgType = (options?.orgType ?? "").toLowerCase();
+  const profileCanBidIndividualConsultancies = /\b(individual|freelance|freelancer|sole|independent)\b/.test(normalizedOrgType);
+  const allowIndividualConsultancies = options?.includeIndividualConsultancies ?? profileCanBidIndividualConsultancies;
 
   // Pool per slug instead of a single deadline-sorted LIMIT 600 — otherwise a
   // heavy sector (M&E / consulting) dominates the candidate window and starves
@@ -819,6 +1006,8 @@ export async function matchTenders(
     for (const slug of effectiveUserSlugs) {
       const kws = slugKeywordMap[slug] ?? [slug.replace(/_/g, " ")];
       const patterns = kws.map((k) => `%${k}%`);
+      const descKws = descriptionKeywordsFor(kws);
+      const descPatterns = descKws.length ? descKws.map((k) => `%${k}%`) : ["__tp_no_description_match__"];
       const rows = await sql`
         SELECT id, title, description, agency, deadline, country, sector,
                reference_id, requirements, experience_level, opportunity_type,
@@ -829,10 +1018,10 @@ export async function matchTenders(
           AND (
             title ILIKE ANY(${patterns}::text[])
             OR sector ILIKE ANY(${patterns}::text[])
-            OR COALESCE(description, '') ILIKE ANY(${patterns}::text[])
+            OR (${descKws.length > 0} AND COALESCE(description, '') ILIKE ANY(${descPatterns}::text[]))
           )
         ORDER BY deadline ASC
-        LIMIT 150
+        LIMIT ${perSlugLimit}
       `;
       for (const r of rows) byId.set(r.id as number, r as Row);
     }
@@ -848,7 +1037,7 @@ export async function matchTenders(
         AND deadline >= CURRENT_DATE
         AND LOWER(country) = ANY(${countryArr}::text[])
       ORDER BY deadline ASC
-      LIMIT 400
+      LIMIT ${geographyCandidateLimit}
     `;
     for (const r of strictCountryRows) if (!byId.has(r.id as number)) byId.set(r.id as number, r as Row);
   }
@@ -863,7 +1052,7 @@ export async function matchTenders(
         AND deadline >= CURRENT_DATE
         AND LOWER(country) = ANY(${regionalArr}::text[])
       ORDER BY deadline ASC
-      LIMIT 400
+      LIMIT ${geographyCandidateLimit}
     `;
     for (const r of regionalCountryRows) if (!byId.has(r.id as number)) byId.set(r.id as number, r as Row);
   }
@@ -880,7 +1069,7 @@ export async function matchTenders(
       WHERE status = 'open'
         AND deadline >= CURRENT_DATE
       ORDER BY deadline ASC
-      LIMIT 300
+      LIMIT ${baselineCandidateLimit}
     `;
     for (const r of baseline) if (!byId.has(r.id as number)) byId.set(r.id as number, r as Row);
   }
@@ -898,6 +1087,16 @@ export async function matchTenders(
   ]);
   const userTokens = new Set<string>([...capabilityTokens, ...serviceTokens]);
   const sparseProfile = (analysis.services ?? []).length === 0 && (analysis.capabilities ?? []).length === 0;
+  const profileDomainText = [
+    analysis.detected_industry,
+    ...(analysis.sectors ?? []),
+    ...(analysis.services ?? []),
+    ...(analysis.capabilities ?? []),
+    ...(analysis.strengths ?? []),
+    analysis.summary,
+  ].filter(Boolean).join(" ");
+  const profileDomains = detectMatchDomains(profileDomainText);
+  const profileHasNicheDomainGate = NICHE_DOMAIN_GATES.some((domain) => profileDomains.has(domain));
 
   type Scored = MatchedTender & { _strict: boolean; _regional: boolean; _geoOpen: boolean; _sectorScore: number };
   const scored: Scored[] = [];
@@ -907,15 +1106,6 @@ export async function matchTenders(
     if (!isEnglishTitle(rawTitle, t.submission_language as string | null)) continue;
     const earlyEvidenceText = `${rawTitle} ${t.sector ?? ""}`;
     const languageB2B = isLanguageB2BTender(effectiveUserSlugs, earlyEvidenceText);
-
-    // Drop individual-consultant recruitments (ReliefWeb jobs feed, UN rosters)
-    // unless the user is itself a consulting firm or has opted in explicitly.
-    if (!allowConsultancies && (t.opportunity_type as string | null) === "Consultancy" && !languageB2B) continue;
-
-    // Second line of defence: many crawlers tag individual-contractor/roster
-    // postings as plain "RFP" or "Individual Contractor" rather than
-    // "Consultancy". Catch those by title pattern.
-    if (!allowConsultancies && INDIVIDUAL_ROLE_RE.test(rawTitle) && !languageB2B) continue;
 
     // Gate sources per configurable rules (e.g. SAM.gov for non-US companies).
     if (feedbackProfile.dismissedTenderIds.has(t.id as number)) continue;
@@ -931,6 +1121,21 @@ export async function matchTenders(
     const tAgency = (t.agency as string ?? "");
     const tDescription = (t.description as string | null) ?? "";
     const reqs = (t.requirements as string[] | null) ?? [];
+    const likelyIndividualConsultancy = isLikelyIndividualConsultancy({
+      title: rawTitle,
+      opportunityType: tOpportunityType,
+      sourceName: tSourceName,
+      sourceUrl: tSourceUrl,
+      description: tDescription,
+      requirements: reqs,
+      languageB2B,
+    });
+
+    // Institutional service firms can bid consulting procurements, but they
+    // should not see job-feed / individual-consultant roles as paid-service
+    // matches unless the profile explicitly represents an individual.
+    if (likelyIndividualConsultancy && !allowIndividualConsultancies) continue;
+    if (!allowConsultancies && tOpportunityType === "Consultancy" && !languageB2B) continue;
 
     const isGeoOpen = isGeoOpenCountry(tCountry);
     const strictGeoMatch = countrySet.has(tCountry);
@@ -948,6 +1153,9 @@ export async function matchTenders(
       new Set<SectorSlug>(normalizeSector(tSector, tTitle, `${reqs.join(" ")} ${tDescription}`.trim())),
       evidenceText,
     );
+    const tenderDomains = detectMatchDomains(evidenceText);
+    const matchedDomains = [...profileDomains].filter((domain) => tenderDomains.has(domain));
+    const domainAligned = profileDomains.size === 0 || domainsOverlap(profileDomains, tenderDomains);
     if (LANGUAGE_B2B_RE.test(evidenceText) && !userWantsLanguageServices) {
       continue;
     }
@@ -980,8 +1188,9 @@ export async function matchTenders(
       ...tokenize(reqs.join(" ")),
       ...tokenize(tDescription),
     ]);
-    let tokenHits = 0;
-    for (const tok of userTokens) if (tenderTokens.has(tok)) tokenHits++;
+    const matchedUserTokens = [...userTokens].filter((tok) => tenderTokens.has(tok));
+    const distinctiveTokenHits = matchedUserTokens.filter((tok) => !GENERIC_CONSULTING_MATCH_TOKENS.has(tok)).length;
+    const tokenHits = matchedUserTokens.length;
     const tokenScore = Math.min(25, tokenHits * 5);
 
     // Agency name overlap — captures "UN Women" matching a gender-focused consultancy.
@@ -1004,6 +1213,11 @@ export async function matchTenders(
     feedbackScore = Math.min(10, feedbackScore);
 
     let total = sectorScore + tokenScore + agencyScore + geoScore + feedbackScore;
+    const matchedSlugs = [...effectiveUserSlugs].filter((s) => tSlugs.has(s));
+    const onlyConsultingSectorMatch = matchedSlugs.length === 1 && matchedSlugs[0] === "consulting";
+    const broadConsultingOnlyMatch =
+      primarySlug === "consulting"
+      && onlyConsultingSectorMatch;
 
     // Value × company-size sanity check. A 2-person freelance outfit has no
     // realistic path to bid on a $50M WB civil-works contract. Parse the
@@ -1020,15 +1234,21 @@ export async function matchTenders(
     // Lower threshold vs before — with canonical sector slugs even a partial
     // match should carry real signal. Token-only matches score ~25-30.
     if (sectorScore === 0 && tokenHits === 0) continue;
+    if (sectorScore === 0 && distinctiveTokenHits < 2) continue;
     if (sectorScore > 0 && primarySlug && !tSlugs.has(primarySlug) && tokenHits === 0) continue;
+    if (onlyConsultingSectorMatch && profileDomains.size > 0 && !domainAligned) continue;
+    if (profileHasNicheDomainGate && !domainAligned) continue;
+    if (broadConsultingOnlyMatch && distinctiveTokenHits === 0) continue;
+    if (broadConsultingOnlyMatch && distinctiveTokenHits < 2) total = Math.min(total, 49);
+    if (onlyConsultingSectorMatch && distinctiveTokenHits < 2) total = Math.min(total, 49);
     if (total < 15) continue;
 
     // Flat match_reasons (legacy compat)
     const matchReasons: string[] = [];
-    const matchedSlugs = [...effectiveUserSlugs].filter((s) => tSlugs.has(s));
     if (matchedSlugs.length) matchReasons.push(`Sector: ${matchedSlugs.map((s) => SECTOR_LABELS[s] || s.replace(/_/g, " ")).join(", ")}`);
+    if (matchedDomains.length) matchReasons.push(`Domain: ${matchedDomains.map((domain) => DOMAIN_LABELS[domain]).join(", ")}`);
     if (tokenHits > 0) {
-      const matchedTokens = [...userTokens].filter((tok) => tenderTokens.has(tok)).slice(0, 3);
+      const matchedTokens = matchedUserTokens.slice(0, 3);
       if (matchedTokens.length) matchReasons.push(`Keywords: ${matchedTokens.join(", ")}`);
     }
     if (strictGeoMatch) matchReasons.push(`Country: ${t.country}`);
@@ -1058,6 +1278,8 @@ export async function matchTenders(
     const evidenceQuality: "rich" | "thin" = tDescription.length >= 250 || reqs.length > 0 ? "rich" : "thin";
     if (evidenceQuality === "thin") srCaveats.push("Tender evidence is thin; verify the source notice before committing.");
     if (sectorScore === 0 && tokenHits > 0) srCaveats.push("Keyword-only match; sector alignment is weak.");
+    if (broadConsultingOnlyMatch && distinctiveTokenHits < 2) srCaveats.push("Consulting is a broad sector; verify the tender's exact domain before shortlisting.");
+    if (profileDomains.size > 0 && matchedDomains.length === 0) srCaveats.push("Domain evidence is weak; verify the tender scope before shortlisting.");
     if (autoGeoOpen && !strictGeoMatch) srCaveats.push("Geography widened beyond your selected countries.");
     if (sparseProfile) srCaveats.push("Company profile based on limited website content.");
     const deadline = new Date(t.deadline as string);
@@ -1068,6 +1290,7 @@ export async function matchTenders(
 
     const srSummary: string[] = [];
     if (srSectorNames.length) srSummary.push(`Matched on ${srSectorNames.join(", ")} sector${srSectorNames.length > 1 ? "s" : ""}.`);
+    if (matchedDomains.length) srSummary.push(`Domain fit: ${matchedDomains.map((domain) => DOMAIN_LABELS[domain]).join(", ")}.`);
     if (srCaps.length) srSummary.push(`Capabilities: ${srCaps.join(", ")}.`);
     else if (srKws.length) srSummary.push(`Keywords: ${srKws.join(", ")}.`);
     if (procurement.estimatedValue) srSummary.push(`Estimated value: ${procurement.estimatedValue}.`);
@@ -1176,11 +1399,14 @@ export async function matchTenders(
   for (const slug of explicitAdjacentSlugs) {
     if (!effectiveUserSlugs.has(slug)) adjacentSlugs.add(slug);
   }
-  if (adjacentSlugs.size) {
+  const shouldRunAdjacent = !options?.skipAdjacent && adjacentSlugs.size > 0 && (out.length < 8 || explicitAdjacentSlugs.size > 0);
+  if (shouldRunAdjacent) {
     const adjacentById = new Map<number, Row>();
     for (const slug of adjacentSlugs) {
       const kws = slugKeywordMap[slug] ?? [slug.replace(/_/g, " ")];
       const patterns = kws.map((k) => `%${k}%`);
+      const descKws = descriptionKeywordsFor(kws);
+      const descPatterns = descKws.length ? descKws.map((k) => `%${k}%`) : ["__tp_no_description_match__"];
       const rows = await sql`
         SELECT id, title, description, agency, deadline, country, sector,
                reference_id, requirements, experience_level, opportunity_type,
@@ -1191,10 +1417,10 @@ export async function matchTenders(
           AND (
             title ILIKE ANY(${patterns}::text[])
             OR sector ILIKE ANY(${patterns}::text[])
-            OR COALESCE(description, '') ILIKE ANY(${patterns}::text[])
+            OR (${descKws.length > 0} AND COALESCE(description, '') ILIKE ANY(${descPatterns}::text[]))
           )
         ORDER BY deadline ASC
-        LIMIT 100
+        LIMIT ${adjacentCandidateLimit}
       `;
       for (const r of rows) {
         const rid = r.id as number;
@@ -1209,8 +1435,6 @@ export async function matchTenders(
       const earlyEvidenceText = `${rawTitle} ${t.sector ?? ""}`;
       const languageB2B = isLanguageB2BTender(effectiveUserSlugs, earlyEvidenceText);
       if (feedbackProfile.dismissedTenderIds.has(t.id as number)) continue;
-      if (!allowConsultancies && (t.opportunity_type as string | null) === "Consultancy" && !languageB2B) continue;
-      if (!allowConsultancies && INDIVIDUAL_ROLE_RE.test(rawTitle) && !languageB2B) continue;
 
       const adjSourceUrl = (t.source_url as string | null) ?? "";
       if (shouldSuppressSource(adjSourceUrl, countrySet)) continue;
@@ -1223,6 +1447,17 @@ export async function matchTenders(
       const tAgency = (t.agency as string ?? "");
       const tDescription = (t.description as string | null) ?? "";
       const reqs = (t.requirements as string[] | null) ?? [];
+      const likelyIndividualConsultancy = isLikelyIndividualConsultancy({
+        title: rawTitle,
+        opportunityType: tOpportunityType,
+        sourceName: tSourceName,
+        sourceUrl: adjSourceUrl,
+        description: tDescription,
+        requirements: reqs,
+        languageB2B,
+      });
+      if (likelyIndividualConsultancy && !allowIndividualConsultancies) continue;
+      if (!allowConsultancies && tOpportunityType === "Consultancy" && !languageB2B) continue;
 
       const isGeoOpen = isGeoOpenCountry(tCountry);
       const strictGeoMatch = countrySet.has(tCountry);
@@ -1234,6 +1469,9 @@ export async function matchTenders(
         new Set<SectorSlug>(normalizeSector(tSector, tTitle, `${reqs.join(" ")} ${tDescription}`.trim())),
         adjEvidenceText,
       );
+      const adjTenderDomains = detectMatchDomains(adjEvidenceText);
+      const matchedAdjDomains = [...profileDomains].filter((domain) => adjTenderDomains.has(domain));
+      const adjDomainAligned = profileDomains.size === 0 || domainsOverlap(profileDomains, adjTenderDomains);
       if (LANGUAGE_B2B_RE.test(adjEvidenceText) && !userWantsLanguageServices) {
         continue;
       }
@@ -1288,6 +1526,7 @@ export async function matchTenders(
       feedbackScore = Math.min(10, feedbackScore);
 
       if (sectorScore === 0 && tokenHits === 0) continue;
+      if (profileHasNicheDomainGate && !adjDomainAligned) continue;
       if (!matchedExplicitAdjSlugs.length && tokenHits === 0) continue;
       const total = Math.round((sectorScore + tokenScore + agencyScore + geoScore + feedbackScore) * 0.6);
       if (total < 10) continue;
@@ -1298,6 +1537,7 @@ export async function matchTenders(
           `${matchedExplicitAdjSlugs.length ? "Requested adjacent" : "Adjacent"}: ${matchedAdjSlugs.map((s) => s.replace(/_/g, " ")).join(", ")}`
         );
       }
+      if (matchedAdjDomains.length) adjMatchReasons.push(`Domain: ${matchedAdjDomains.map((domain) => DOMAIN_LABELS[domain]).join(", ")}`);
       if (tokenHits > 0) {
         const matchedTokens = [...userTokens].filter((tok) => tenderTokens.has(tok)).slice(0, 3);
         if (matchedTokens.length) adjMatchReasons.push(`Keywords: ${matchedTokens.join(", ")}`);
@@ -1325,6 +1565,7 @@ export async function matchTenders(
           : "Adjacent sector match inferred from your profile.",
       ];
       if (adjSectorNames.length) adjSummary.push(`Near-sector: ${adjSectorNames.join(", ")}.`);
+      if (matchedAdjDomains.length) adjSummary.push(`Domain fit: ${matchedAdjDomains.map((domain) => DOMAIN_LABELS[domain]).join(", ")}.`);
       if (adjCaps.length) adjSummary.push(`Capabilities: ${adjCaps.join(", ")}.`);
       else if (adjKws.length) adjSummary.push(`Keywords: ${adjKws.join(", ")}.`);
       if (feedbackScore > 0) adjSummary.push("Boosted by your prior tender feedback.");
@@ -1389,7 +1630,8 @@ export async function matchTenders(
     for (const s of adjOut.slice(0, 50)) out.push(s);
   }
 
-  const finalOut = await enrichTopMatches(assignOpportunityBuckets(dedupeFinalMatches(out)));
+  const bucketedOut = assignOpportunityBuckets(dedupeFinalMatches(out));
+  const finalOut = options?.skipEnrichment ? bucketedOut : await enrichTopMatches(bucketedOut);
 
   // EPIC E: confidence distribution observability
   const confidenceDist = finalOut.reduce((acc, t) => {

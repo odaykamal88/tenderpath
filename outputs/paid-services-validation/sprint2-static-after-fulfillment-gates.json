@@ -1,0 +1,535 @@
+{
+  "checked_at": "2026-05-14T07:00:23.817Z",
+  "validation_version": "sprint-0-paid-services-v1",
+  "panel": "/Users/odaykamal/Desktop/TENDERPATH/data/validation/paid-services-panel.csv",
+  "mode": {
+    "live_matching": false,
+    "include_grants": false,
+    "ids": null,
+    "timeout_ms_per_profile": 12000
+  },
+  "summary": {
+    "checked": 9,
+    "ready_for_beta": 1,
+    "needs_human_review": 8,
+    "blocked": 0,
+    "median_paid_service_readiness_0_10": 7.8,
+    "median_procurement_effort_collapsed_0_10": 7.4,
+    "status_counts": {
+      "needs_human_review": 8,
+      "ready_for_beta": 1
+    },
+    "failure_category_counts": {
+      "context issue": 6,
+      "service-output issue": 3
+    },
+    "track_summary": {
+      "Bid/No-Bid": {
+        "checked": 3,
+        "ready_for_beta": 1,
+        "needs_human_review": 2,
+        "blocked": 0,
+        "median_paid_service_readiness_0_10": 7.8,
+        "median_procurement_effort_collapsed_0_10": 7.4
+      },
+      "Proposal Draft": {
+        "checked": 3,
+        "ready_for_beta": 0,
+        "needs_human_review": 3,
+        "blocked": 0,
+        "median_paid_service_readiness_0_10": 7.3,
+        "median_procurement_effort_collapsed_0_10": 6.6
+      },
+      "Roster Fast-Track": {
+        "checked": 3,
+        "ready_for_beta": 0,
+        "needs_human_review": 3,
+        "blocked": 0,
+        "median_paid_service_readiness_0_10": 8.1,
+        "median_procurement_effort_collapsed_0_10": 7.5
+      }
+    },
+    "top_blockers": [
+      {
+        "blocker": "vendor capacity/compliance evidence is missing",
+        "count": 3
+      },
+      {
+        "blocker": "actual TOR/RFP is missing or not parsed",
+        "count": 3
+      },
+      {
+        "blocker": "legal, financial, certification or product evidence is missing",
+        "count": 3
+      },
+      {
+        "blocker": "bid/no-bid lacks a specific tender notice or source context",
+        "count": 2
+      },
+      {
+        "blocker": "eligibility/TOR requirements are not available to ground the decision",
+        "count": 2
+      },
+      {
+        "blocker": "proposal evidence vault is not complete enough for a paid draft",
+        "count": 2
+      },
+      {
+        "blocker": "risk/safeguarding evidence is missing for this proposal context",
+        "count": 2
+      },
+      {
+        "blocker": "evaluation criteria, deliverables or submission format are missing",
+        "count": 1
+      }
+    ],
+    "sprint_0_gate_passed": true
+  },
+  "profiles": [
+    {
+      "panel_id": "VP-01",
+      "prospect_company": "African Institute for Policy Research and Dialogue",
+      "source_row_id": "2",
+      "website": "https://www.afidep.org",
+      "country": "Kenya",
+      "region": "Africa",
+      "sector": "International Development & Policy Research",
+      "sub_icp": "Evidence-to-policy research and technical assistance",
+      "ungm_status": "Yes - Level 1; UNGM ID 378538; USAID partner evidence in prospect DB",
+      "fit_class": "Strong-fit",
+      "service_track": "Bid/No-Bid",
+      "benchmark_tender_or_agency": "UNICEF/UNFPA/UNDP policy research and evidence-to-policy technical assistance in Africa",
+      "scenario_goal": "Assess whether a policy-research RFP is worth pursuing and produce a decision memo tied to sector, geography, eligibility, evidence and effort.",
+      "assessment_quality_0_10": 9.2,
+      "dashboard_continuity_0_10": 6.6,
+      "service_context_completeness_0_10": 7.9,
+      "service_output_quality_0_10": 7.7,
+      "trustworthiness_0_10": 7.9,
+      "time_saved_0_10": 7.5,
+      "shortlist_impact_0_10": 7.3,
+      "procurement_effort_collapsed_0_10": 7.4,
+      "paid_service_readiness_0_10": 7.8,
+      "top_match_relevance_0_10": 5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "needs_human_review",
+      "failure_category": "context issue",
+      "match_run": {
+        "status": "skipped",
+        "elapsedMs": 0,
+        "tenderMatches": null,
+        "grantMatches": null,
+        "actionableTopTenderCount": null,
+        "topTenders": [],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision",
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "highest_leverage_fix": "Carry assessment evidence, selected match, missing inputs and service-specific caveats into one work-order context packet.",
+      "missing_context_inputs": [
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision",
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "critical_missing_context_inputs": [
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision"
+      ],
+      "prior_panel_status": "Useful but not wow"
+    },
+    {
+      "panel_id": "VP-02",
+      "prospect_company": "Earth Link and Advanced Resources Development (ELARD) S.A.L.",
+      "source_row_id": "9",
+      "website": "https://www.elard-group.com",
+      "country": "Lebanon",
+      "region": "MENA",
+      "sector": "Environmental Consultancy & Engineering",
+      "sub_icp": "Environmental, HSE, water and engineering consulting",
+      "ungm_status": "Yes - Level 1; UNGM ID 245650; few public UN/USAID-adjacent wins in prospect DB",
+      "fit_class": "Strong-fit",
+      "service_track": "Bid/No-Bid",
+      "benchmark_tender_or_agency": "UNDP Lebanon environmental strategy, SESA, waste management or climate governance consultancy",
+      "scenario_goal": "Decide whether ELARD should bid an environmental assessment / SESA tender and identify proposal blockers.",
+      "assessment_quality_0_10": 9.2,
+      "dashboard_continuity_0_10": 6.6,
+      "service_context_completeness_0_10": 7.9,
+      "service_output_quality_0_10": 7.7,
+      "trustworthiness_0_10": 7.9,
+      "time_saved_0_10": 7.5,
+      "shortlist_impact_0_10": 7.3,
+      "procurement_effort_collapsed_0_10": 7.4,
+      "paid_service_readiness_0_10": 7.8,
+      "top_match_relevance_0_10": 5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "needs_human_review",
+      "failure_category": "context issue",
+      "match_run": {
+        "status": "skipped",
+        "elapsedMs": 0,
+        "tenderMatches": null,
+        "grantMatches": null,
+        "actionableTopTenderCount": null,
+        "topTenders": [],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision",
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "highest_leverage_fix": "Carry assessment evidence, selected match, missing inputs and service-specific caveats into one work-order context packet.",
+      "missing_context_inputs": [
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision",
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "critical_missing_context_inputs": [
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision"
+      ],
+      "prior_panel_status": "Useful but not wow"
+    },
+    {
+      "panel_id": "VP-03",
+      "prospect_company": "UNIFREIGHT CARGO HANDLING LTD",
+      "source_row_id": "13",
+      "website": "https://unifreightgroup.com/",
+      "country": "Uganda",
+      "region": "Africa",
+      "sector": "Transportation, Logistics, and Storage",
+      "sub_icp": "Freight forwarding, customs clearance and cargo handling",
+      "ungm_status": "Yes - Level 2; UNGM ID 204356; public MONUSCO freight award evidence in prospect DB",
+      "fit_class": "Strong-fit",
+      "service_track": "Bid/No-Bid",
+      "benchmark_tender_or_agency": "UNGM Notice 40678 - MONUSCO freight forwarding, customs clearance and related services",
+      "scenario_goal": "Test whether TenderPath can move from match to decisive bid/no-bid on a logistics tender with concrete agency context.",
+      "assessment_quality_0_10": 8.8,
+      "dashboard_continuity_0_10": 7.1,
+      "service_context_completeness_0_10": 9.3,
+      "service_output_quality_0_10": 8.1,
+      "trustworthiness_0_10": 8.2,
+      "time_saved_0_10": 7.8,
+      "shortlist_impact_0_10": 7.5,
+      "procurement_effort_collapsed_0_10": 7.8,
+      "paid_service_readiness_0_10": 8.3,
+      "top_match_relevance_0_10": 5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "ready_for_beta",
+      "failure_category": "context issue",
+      "match_run": {
+        "status": "skipped",
+        "elapsedMs": 0,
+        "tenderMatches": null,
+        "grantMatches": null,
+        "actionableTopTenderCount": null,
+        "topTenders": [],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "highest_leverage_fix": "Carry assessment evidence, selected match, missing inputs and service-specific caveats into one work-order context packet.",
+      "missing_context_inputs": [
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "critical_missing_context_inputs": [],
+      "prior_panel_status": "Useful but not wow"
+    },
+    {
+      "panel_id": "VP-04",
+      "prospect_company": "INSIGHT HEALTH ADVISORS LIMITED",
+      "source_row_id": "4",
+      "website": "https://www.insighthealthadvisors.com/",
+      "country": "Kenya",
+      "region": "Africa",
+      "sector": "Health Systems Management and Financing",
+      "sub_icp": "Health systems strengthening, research and health financing",
+      "ungm_status": "Yes - Level 1; UNGM ID 587257; USAID-funded project participation in prospect DB",
+      "fit_class": "Strong-fit",
+      "service_track": "Proposal Draft",
+      "benchmark_tender_or_agency": "WHO/UNICEF health systems strengthening or health financing technical proposal",
+      "scenario_goal": "Generate an 80% proposal package for a health systems RFP using public company evidence and a benchmark TOR.",
+      "assessment_quality_0_10": 9.2,
+      "dashboard_continuity_0_10": 6.7,
+      "service_context_completeness_0_10": 8,
+      "service_output_quality_0_10": 5.8,
+      "trustworthiness_0_10": 8,
+      "time_saved_0_10": 6.2,
+      "shortlist_impact_0_10": 5.8,
+      "procurement_effort_collapsed_0_10": 6.6,
+      "paid_service_readiness_0_10": 7.3,
+      "top_match_relevance_0_10": 5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "needs_human_review",
+      "failure_category": "service-output issue",
+      "match_run": {
+        "status": "skipped",
+        "elapsedMs": 0,
+        "tenderMatches": null,
+        "grantMatches": null,
+        "actionableTopTenderCount": null,
+        "topTenders": [],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "actual TOR/RFP is missing or not parsed",
+        "evaluation criteria, deliverables or submission format are missing",
+        "proposal evidence vault is not complete enough for a paid draft"
+      ],
+      "highest_leverage_fix": "Parse uploaded TOR/RFP documents into requirements before checkout and cap proposal output when source coverage is low.",
+      "missing_context_inputs": [
+        "actual TOR/RFP is missing or not parsed",
+        "evaluation criteria, deliverables or submission format are missing",
+        "proposal evidence vault is not complete enough for a paid draft"
+      ],
+      "critical_missing_context_inputs": [
+        "actual TOR/RFP is missing or not parsed",
+        "evaluation criteria, deliverables or submission format are missing"
+      ],
+      "prior_panel_status": "Not ready"
+    },
+    {
+      "panel_id": "VP-05",
+      "prospect_company": "AXIOM MONITORING AND EVALUATION LIMITED",
+      "source_row_id": "65",
+      "website": "https://axiom.co.ke",
+      "country": "Kenya",
+      "region": "Africa",
+      "sector": "Monitoring, Evaluation, and Research",
+      "sub_icp": "Third-party monitoring, evaluation, surveys and fragile-context research",
+      "ungm_status": "Yes - Level 1; UNGM ID 540038; UNHCR frame-agreement evidence in prospect DB",
+      "fit_class": "Strong-fit",
+      "service_track": "Proposal Draft",
+      "benchmark_tender_or_agency": "UNHCR/UNDP third-party monitoring, evaluation and survey services in fragile contexts",
+      "scenario_goal": "Test whether a complex M&E vendor gets a draft that reflects field deployment, ethics, sampling, quality assurance and donor logic.",
+      "assessment_quality_0_10": 9.2,
+      "dashboard_continuity_0_10": 6.7,
+      "service_context_completeness_0_10": 8,
+      "service_output_quality_0_10": 5.8,
+      "trustworthiness_0_10": 8,
+      "time_saved_0_10": 6.2,
+      "shortlist_impact_0_10": 5.8,
+      "procurement_effort_collapsed_0_10": 6.6,
+      "paid_service_readiness_0_10": 7.3,
+      "top_match_relevance_0_10": 5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "needs_human_review",
+      "failure_category": "service-output issue",
+      "match_run": {
+        "status": "skipped",
+        "elapsedMs": 0,
+        "tenderMatches": null,
+        "grantMatches": null,
+        "actionableTopTenderCount": null,
+        "topTenders": [],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "actual TOR/RFP is missing or not parsed",
+        "proposal evidence vault is not complete enough for a paid draft",
+        "risk/safeguarding evidence is missing for this proposal context"
+      ],
+      "highest_leverage_fix": "Parse uploaded TOR/RFP documents into requirements before checkout and cap proposal output when source coverage is low.",
+      "missing_context_inputs": [
+        "actual TOR/RFP is missing or not parsed",
+        "proposal evidence vault is not complete enough for a paid draft",
+        "risk/safeguarding evidence is missing for this proposal context"
+      ],
+      "critical_missing_context_inputs": [
+        "actual TOR/RFP is missing or not parsed"
+      ],
+      "prior_panel_status": "Not ready"
+    },
+    {
+      "panel_id": "VP-06",
+      "prospect_company": "Farmhouse Productions Limited",
+      "source_row_id": "3",
+      "website": "https://www.farmhousegh.com",
+      "country": "Ghana",
+      "region": "Africa",
+      "sector": "Media Production",
+      "sub_icp": "Social and behavior change communication / edutainment production",
+      "ungm_status": "Yes - Level 1; UNGM ID 510548; USAID YOLO partner evidence in prospect DB",
+      "fit_class": "Adjacent-fit",
+      "service_track": "Proposal Draft",
+      "benchmark_tender_or_agency": "USAID/FHI 360 Ghana ASBC / YOLO social behavior change media production context",
+      "scenario_goal": "See if TenderPath gives conditional, gap-aware proposal guidance for an adjacent media/SBC vendor instead of treating it like generic consultancy.",
+      "assessment_quality_0_10": 8.6,
+      "dashboard_continuity_0_10": 6.8,
+      "service_context_completeness_0_10": 8.7,
+      "service_output_quality_0_10": 5.8,
+      "trustworthiness_0_10": 7.8,
+      "time_saved_0_10": 6.2,
+      "shortlist_impact_0_10": 5.8,
+      "procurement_effort_collapsed_0_10": 6.6,
+      "paid_service_readiness_0_10": 7.3,
+      "top_match_relevance_0_10": 5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "needs_human_review",
+      "failure_category": "service-output issue",
+      "match_run": {
+        "status": "skipped",
+        "elapsedMs": 0,
+        "tenderMatches": null,
+        "grantMatches": null,
+        "actionableTopTenderCount": null,
+        "topTenders": [],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "actual TOR/RFP is missing or not parsed",
+        "risk/safeguarding evidence is missing for this proposal context"
+      ],
+      "highest_leverage_fix": "Parse uploaded TOR/RFP documents into requirements before checkout and cap proposal output when source coverage is low.",
+      "missing_context_inputs": [
+        "actual TOR/RFP is missing or not parsed",
+        "risk/safeguarding evidence is missing for this proposal context"
+      ],
+      "critical_missing_context_inputs": [
+        "actual TOR/RFP is missing or not parsed"
+      ],
+      "prior_panel_status": "Not ready"
+    },
+    {
+      "panel_id": "VP-07",
+      "prospect_company": "MEFOSA-MENA Food safety associates S.A.R.L",
+      "source_row_id": "7",
+      "website": "http://www.mefosa.com",
+      "country": "Lebanon",
+      "region": "MENA",
+      "sector": "Food Safety and Public Health",
+      "sub_icp": "Food safety compliance, Codex, quality systems and lab/testing advisory",
+      "ungm_status": "Yes - Level 1; UNGM ID 454934; USAID/UNDP-adjacent coaching evidence in prospect DB",
+      "fit_class": "Adjacent-fit",
+      "service_track": "Roster Fast-Track",
+      "benchmark_tender_or_agency": "WFP/FAO food safety, HACCP/ISO 22000 supplier and technical-assistance roster",
+      "scenario_goal": "Prepare roster/package guidance that routes MEFOSA toward the right food-safety procurement category and does not invent food-supply capacity.",
+      "assessment_quality_0_10": 8.6,
+      "dashboard_continuity_0_10": 7,
+      "service_context_completeness_0_10": 9.3,
+      "service_output_quality_0_10": 7.6,
+      "trustworthiness_0_10": 8,
+      "time_saved_0_10": 7.4,
+      "shortlist_impact_0_10": 7.1,
+      "procurement_effort_collapsed_0_10": 7.5,
+      "paid_service_readiness_0_10": 8.1,
+      "top_match_relevance_0_10": 5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "needs_human_review",
+      "failure_category": "context issue",
+      "match_run": {
+        "status": "skipped",
+        "elapsedMs": 0,
+        "tenderMatches": null,
+        "grantMatches": null,
+        "actionableTopTenderCount": null,
+        "topTenders": [],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "legal, financial, certification or product evidence is missing"
+      ],
+      "highest_leverage_fix": "Carry assessment evidence, selected match, missing inputs and service-specific caveats into one work-order context packet.",
+      "missing_context_inputs": [
+        "legal, financial, certification or product evidence is missing"
+      ],
+      "critical_missing_context_inputs": [],
+      "prior_panel_status": "Not ready"
+    },
+    {
+      "panel_id": "VP-08",
+      "prospect_company": "POWERGEN RENEWABLE ENERGY EAST AFRICA LIMITED",
+      "source_row_id": "5",
+      "website": "https://powergen-renewable-energy.com",
+      "country": "Kenya",
+      "region": "Africa",
+      "sector": "Renewable Energy Power Generation",
+      "sub_icp": "Distributed renewable energy, mini-grid and energy access platform",
+      "ungm_status": "Yes - Level 1; UNGM ID 263073; USAID Power Africa / DFI evidence in prospect DB",
+      "fit_class": "Adjacent-fit",
+      "service_track": "Roster Fast-Track",
+      "benchmark_tender_or_agency": "UNDP/UNOPS renewable energy access, mini-grid and solar supplier/partner roster",
+      "scenario_goal": "Test whether the roster path separates investor/project-developer fit from supplier-registration readiness.",
+      "assessment_quality_0_10": 8.6,
+      "dashboard_continuity_0_10": 7,
+      "service_context_completeness_0_10": 9.3,
+      "service_output_quality_0_10": 7.6,
+      "trustworthiness_0_10": 8,
+      "time_saved_0_10": 7.4,
+      "shortlist_impact_0_10": 7.1,
+      "procurement_effort_collapsed_0_10": 7.5,
+      "paid_service_readiness_0_10": 8.1,
+      "top_match_relevance_0_10": 5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "needs_human_review",
+      "failure_category": "context issue",
+      "match_run": {
+        "status": "skipped",
+        "elapsedMs": 0,
+        "tenderMatches": null,
+        "grantMatches": null,
+        "actionableTopTenderCount": null,
+        "topTenders": [],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "legal, financial, certification or product evidence is missing"
+      ],
+      "highest_leverage_fix": "Carry assessment evidence, selected match, missing inputs and service-specific caveats into one work-order context packet.",
+      "missing_context_inputs": [
+        "legal, financial, certification or product evidence is missing"
+      ],
+      "critical_missing_context_inputs": [],
+      "prior_panel_status": "Not ready"
+    },
+    {
+      "panel_id": "VP-09",
+      "prospect_company": "Beyond Wireless Technology (Proprietary) Limited",
+      "source_row_id": "44",
+      "website": "https://www.beyond.co.za",
+      "country": "South Africa",
+      "region": "Africa",
+      "sector": "IoT Remote Monitoring & Telecommunications",
+      "sub_icp": "WHO PQS vaccine cold-chain remote monitoring technology",
+      "ungm_status": "Yes - Level 1; UNGM ID 183484; WHO PQS / global health evidence in public sources",
+      "fit_class": "Adjacent-fit",
+      "service_track": "Roster Fast-Track",
+      "benchmark_tender_or_agency": "UNICEF/WHO vaccine cold-chain remote monitoring supplier registration and PQS device context",
+      "scenario_goal": "Test a product/technology supplier where evidence is strong but target-agency routing matters.",
+      "assessment_quality_0_10": 8.6,
+      "dashboard_continuity_0_10": 7,
+      "service_context_completeness_0_10": 9.3,
+      "service_output_quality_0_10": 7.6,
+      "trustworthiness_0_10": 8,
+      "time_saved_0_10": 7.4,
+      "shortlist_impact_0_10": 7.1,
+      "procurement_effort_collapsed_0_10": 7.5,
+      "paid_service_readiness_0_10": 8.1,
+      "top_match_relevance_0_10": 5,
+      "relevant_top_tender_count": null,
+      "readiness_status": "needs_human_review",
+      "failure_category": "context issue",
+      "match_run": {
+        "status": "skipped",
+        "elapsedMs": 0,
+        "tenderMatches": null,
+        "grantMatches": null,
+        "actionableTopTenderCount": null,
+        "topTenders": [],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "legal, financial, certification or product evidence is missing"
+      ],
+      "highest_leverage_fix": "Carry assessment evidence, selected match, missing inputs and service-specific caveats into one work-order context packet.",
+      "missing_context_inputs": [
+        "legal, financial, certification or product evidence is missing"
+      ],
+      "critical_missing_context_inputs": [],
+      "prior_panel_status": "Useful but not wow"
+    }
+  ]
+}

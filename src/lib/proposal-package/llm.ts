@@ -3,10 +3,16 @@ import {
   type ProposalOutput,
   type RosterOutput,
   type TenderRequirements,
+  type ProposalEvidenceProfile,
   DEFAULT_PROPOSAL_OUTPUT,
   DEFAULT_ROSTER_OUTPUT,
   DEFAULT_TENDER_REQUIREMENTS,
 } from "./types";
+import {
+  applyProposalEvidenceGuardrails,
+  attachEvidenceProfileToRequirements,
+  formatProposalEvidenceProfile,
+} from "./evidence";
 
 let _anthropic: Anthropic | null = null;
 function getClient(): Anthropic {
@@ -44,8 +50,12 @@ export interface GenerationInputs {
   rosterAgencyContext?: string;
 }
 
-export async function extractTenderRequirements(tenderText: string): Promise<TenderRequirements> {
+export async function extractTenderRequirements(
+  tenderText: string,
+  evidenceProfile?: ProposalEvidenceProfile,
+): Promise<TenderRequirements> {
   const client = getClient();
+  const sourceQuality = evidenceProfile ? formatProposalEvidenceProfile(evidenceProfile) : "";
   const response = await client.messages.create({
     model: HAIKU_MODEL,
     max_tokens: 1500,
@@ -58,6 +68,8 @@ export async function extractTenderRequirements(tenderText: string): Promise<Ten
 TENDER/OPPORTUNITY:
 ${tenderText}
 
+${sourceQuality ? `SOURCE QUALITY CHECK:\n${sourceQuality}\n` : ""}
+
 Return a JSON object with:
 - "eligibility_criteria": string[] — who is eligible
 - "technical_requirements": string[] — technical/delivery scope
@@ -66,20 +78,27 @@ Return a JSON object with:
 - "key_constraints": string[] — budget limits, geography, language, timeline
 - "submission_format": string — portal, email, physical, or unknown
 
+Rules:
+- Extract only what is present in the tender/source text.
+- If a section is not present, return an empty array or "unknown"; do not infer it from generic procurement practice.
+
 Return ONLY valid JSON.`,
       },
     ],
   });
 
   const text = response.content[0]?.type === "text" ? response.content[0].text : "{}";
-  return safeParseJSON(text, DEFAULT_TENDER_REQUIREMENTS, "tender_requirements");
+  const parsed = safeParseJSON(text, DEFAULT_TENDER_REQUIREMENTS, "tender_requirements");
+  return evidenceProfile ? attachEvidenceProfileToRequirements(parsed, evidenceProfile) : parsed;
 }
 
 export async function generateProposalDraft(
   inputs: GenerationInputs,
   requirements: TenderRequirements,
+  evidenceProfile?: ProposalEvidenceProfile,
 ): Promise<ProposalOutput> {
   const client = getClient();
+  const sourceQuality = evidenceProfile ? formatProposalEvidenceProfile(evidenceProfile) : "";
   const response = await client.messages.create({
     model: SONNET_MODEL,
     max_tokens: 4500,
@@ -95,6 +114,8 @@ ${inputs.companyContext}
 
 TENDER REQUIREMENTS (extracted):
 ${JSON.stringify(requirements, null, 2)}
+
+${sourceQuality ? `SOURCE QUALITY CHECK:\n${sourceQuality}\n` : ""}
 
 TENDER SUMMARY:
 ${inputs.tenderText}
@@ -119,6 +140,8 @@ Return a strict-shape JSON object with EXACTLY these keys:
 Rules:
 - Use the company's actual capabilities, geography, and certifications. Reference them by name.
 - Do NOT invent facts. If evidence is thin, flag it in missing_information.
+- If source quality is "needs_review" or "blocked", produce a conservative draft scaffold and mark uncertain compliance items as "partial" or "needs_action"; do not claim a requirement is compliant without company/source evidence.
+- Treat missing evaluation criteria, required documents, submission format, or TOR scope as explicit missing_information.
 - Cover letter must be a complete draft — no [bracketed placeholders] except the date and salutation.
 - compliance_checklist.status MUST be one of the three exact strings: "compliant", "partial", "needs_action".
 - Return ONLY valid JSON, no prose around it.`,
@@ -128,7 +151,8 @@ Rules:
 
   const text = response.content[0]?.type === "text" ? response.content[0].text : "{}";
   const parsed = safeParseJSON(text, DEFAULT_PROPOSAL_OUTPUT, "proposal");
-  return normalizeProposal(parsed);
+  const normalized = normalizeProposal(parsed);
+  return evidenceProfile ? applyProposalEvidenceGuardrails(normalized, requirements, evidenceProfile) : normalized;
 }
 
 export async function generateRosterPackage(

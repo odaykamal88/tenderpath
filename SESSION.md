@@ -86,6 +86,50 @@ Additional work done outside the prompt sequence:
 
 ## Current Status
 
+## Latest Session Update — 2026-05-14
+
+- **Agent**: Codex
+- **Date**: 2026-05-14
+- **Task Completed**: TenderPath paid-services validation sprint and release checkpoint. Implemented the operating sheet/validation harness, service-context continuity, document extraction, paid-output generation hardening, Proposal Draft source-quality guardrails, roster agency packs, match relevance fixes, and enforceable paid fulfillment gates.
+- **Primary Product Result**:
+  - Bid/No-Bid is closest to paid beta. Final first-wave live checkpoint: median readiness `8.6/10`.
+  - Proposal Draft improved but remains concierge-backed. Static checkpoint after source-quality guardrails and fulfillment gates: median readiness `7.3/10`.
+  - Roster Fast-Track improved materially with supported agency packs, but still needs evidence depth for premium self-serve. Static checkpoint: median readiness `8.1/10`.
+  - Overall VP-01 to VP-09 static checkpoint after fulfillment gates: median paid-service readiness `7.8/10`, median procurement effort collapsed `7.4/10`.
+- **Files / Areas Changed**:
+  - `scripts/paid-services-validation.ts` and `data/validation/paid-services-panel.csv` — repeatable paid-services validation harness and 15-vendor panel fixture.
+  - `src/lib/service-context.ts`, `src/lib/service-orders.ts`, `src/lib/work-orders.ts` — assessment, match, tender, intake, and document context now persist into paid work orders.
+  - `src/lib/documents/extract.ts`, vault upload/list APIs, and migration helpers — PDF/DOCX/XLSX extraction persisted into service context.
+  - `src/lib/proposal-package/*` — Proposal Draft and Roster package generation now use source-quality profiles, extracted documents, compliance warnings, richer artifacts, and supported agency packs.
+  - `src/lib/service-fulfillment-gates.ts`, `src/app/api/pay/*`, `src/app/api/proposals/*`, `src/app/pay/page.tsx` — checkout/payment/auto-generation now block or route to human QA when paid fulfillment context is insufficient.
+  - `src/lib/assessment/match.ts` and `scripts/paid-services-validation.ts` — first-wave matching guardrails for broad consulting, job-feed noise, office-equipment false positives, domain-specific profiles, and validation-time runtime bounds.
+  - Admin work-order UI/API — filters and QA visibility for paid-service work orders.
+  - `docs/paid-services-sprint-wave-2026-05.md` — sprint wave plan and checkpoints.
+- **Validation Outputs**:
+  - `outputs/paid-services-validation/sprint0-live-first9-final-sprint0-checkpoint.json`
+  - `outputs/paid-services-validation/sprint1-static-after-proposal-evidence-guardrails.json`
+  - `outputs/paid-services-validation/sprint2-static-after-fulfillment-gates.json`
+  - `outputs/tenderpath-validation-sprint/tenderpath-paid-services-validation-panel.xlsx`
+- **Tests / Verification Run**:
+  - Targeted ESLint across touched paid-service, payment, proposal, roster, matching, document, admin, and dashboard files.
+  - `npx tsc --noEmit --pretty false`
+  - `rm -rf .next/cache && npx -y -p node@22 -c 'node node_modules/next/dist/bin/next build --webpack'`
+  - `npm run validation:paid-services -- --limit=9 --timeout-ms=15000 --out=outputs/paid-services-validation/sprint0-live-first9-final-sprint0-checkpoint.json`
+  - `npm run validation:paid-services -- --skip-live-matching --limit=9 --out=outputs/paid-services-validation/sprint2-static-after-fulfillment-gates.json`
+  - Browser sanity check: `/pay?plan=proposal-draft` now shows blocked fulfillment readiness without a work order and disables card payment.
+- **Important Decisions**:
+  - Proposal Draft must remain concierge-backed until real TOR/RFP extraction and evidence-vault depth consistently push VP-04 to VP-06 over the 8.5 target.
+  - Weak or incomplete paid-service inputs should be blocked or routed to human QA, not hidden behind optimistic automated generation.
+  - Vercel/Next build occasionally fails on stale `.next/cache` webpack hash entries; clearing generated cache before production build resolves it.
+- **Known Local Artifacts Not Intended For Release**:
+  - `.claire/`
+  - `.claude/agent-sync/`
+  - `data/distribution/`
+  - `tenderpath_ungm_distribution.xlsx`
+  - `ungm_scraper_plan.md`
+- **Next Recommended Task**: Start the next sprint on true Proposal Draft 8.5 work: requirement-level extraction from parsed TOR/RFP text into a structured compliance model, then wire that model into checkout readiness, generated DOCX/PDF artifacts, and validation scoring.
+- **Recommended Agent**: Codex.
+
 All six prompts complete and committed. Activation reliability audit complete.
 
 Two silent failures in `seedPipeline()` found and fixed (`src/app/dashboard/page.tsx`):

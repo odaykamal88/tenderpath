@@ -183,7 +183,116 @@ const IOM: AgencyPackage = {
   ],
 };
 
-export const AGENCY_PACKAGES: AgencyPackage[] = [UNGM, WFP, UNICEF, UNDP, IOM];
+const FAO: AgencyPackage = {
+  slug: "fao",
+  label: "FAO",
+  why: "Food and Agriculture Organization — procurement is heavily relevant for food systems, agriculture, logistics, equipment, field services, and technical assistance suppliers.",
+  portalLabel: "FAO Vendor Registration / UNGM",
+  portalUrl: "https://www.fao.org/unfao/procurement/vendor-registration/vendorregistration/en",
+  submissionSteps: [
+    "Create or update your UNGM supplier account and complete Basic Registration.",
+    "Under Coding, select UNSPSC codes that accurately describe your products or services.",
+    "Under UN Organizations, select Food and Agriculture Organization of the United Nations (FAO) and submit your registration to FAO.",
+    "Upload company profile, registration, financial, tax, quality, and relevant experience documents.",
+    "For food, agriculture inputs, equipment, or field-service categories, attach product specifications, quality certificates, and delivery/geographic coverage evidence.",
+    "Monitor FAO procurement notices and keep the UNGM profile current; registration does not guarantee invitation to tender.",
+  ],
+  requiredDocuments: [
+    "UNGM Basic Registration confirmation with FAO selected",
+    "Certificate of incorporation / business registration",
+    "Tax registration certificate",
+    "Audited financial statements or financial capacity evidence",
+    "Company profile / capability statement",
+    "Relevant product specifications or technical data sheets",
+    "Quality certifications (e.g. ISO, HACCP, organic/food safety where relevant)",
+    "Past performance references for agriculture, food systems, logistics, or field delivery",
+    "UN Supplier Code of Conduct acknowledgement",
+    "Anti-fraud / anti-corruption policy or signed declaration",
+  ],
+  notes: [
+    "FAO's public vendor guidance says its vendor registration system is interfaced with UNGM and is the primary source used to identify vendors for invitations.",
+    "FAO evaluates experience, ability to supply/perform, financial soundness, and relevance of offered goods or services.",
+    "Classification matters: inaccurate UNSPSC/product coding can keep a relevant supplier invisible to FAO buyers.",
+  ],
+  categoryHints: [
+    "Agriculture inputs, seeds, fertilizers, livestock, irrigation, food processing, rural infrastructure, agritech, technical assistance",
+    "Add exact product and service codes; avoid only broad agriculture or consulting categories",
+  ],
+};
+
+const UNOPS: AgencyPackage = {
+  slug: "unops",
+  label: "UNOPS",
+  why: "United Nations Office for Project Services — major procurement implementer for infrastructure, engineering, health, vehicles, equipment, operations, and project services.",
+  portalLabel: "UNOPS Supplier Resource Centre / UNGM",
+  portalUrl: "https://www.unops.org/business-opportunities/supplier-resource-centre",
+  submissionSteps: [
+    "Register as a supplier on UNGM and complete your company profile, declarations, and UNSPSC coding.",
+    "Use UNOPS Supplier Resource Centre guidance to align your profile with UNOPS procurement categories and eligibility expectations.",
+    "Subscribe to UNGM tender alerts for UNOPS and the countries where you can deliver.",
+    "Prepare technical evidence for infrastructure, engineering, procurement, logistics, health, or project-service categories as relevant.",
+    "Keep financial, legal, and past-performance documents current so you can respond quickly when a UNOPS solicitation opens.",
+  ],
+  requiredDocuments: [
+    "UNGM supplier registration confirmation",
+    "Certificate of incorporation / business registration",
+    "Tax registration certificate",
+    "Audited financial statements or financial capacity evidence",
+    "Company profile / capability statement",
+    "Past performance references and completion certificates",
+    "Quality, health, safety, and environmental policies where relevant",
+    "Technical licenses, professional registrations, or manufacturer authorizations",
+    "Insurance certificates for works/logistics where relevant",
+    "UN Supplier Code of Conduct acknowledgement",
+  ],
+  notes: [
+    "UNOPS uses UNGM and publishes supplier guidance through its Supplier Resource Centre.",
+    "UNOPS work often has strong compliance, safety, and delivery-evidence requirements; do not rely on a generic company profile.",
+    "For infrastructure and technical supply categories, past performance and licensing evidence are often decisive.",
+  ],
+  categoryHints: [
+    "Infrastructure, engineering, construction supervision, health equipment, vehicles, project operations, procurement services, logistics",
+    "Map categories to specific UNSPSC families and countries, not only global capability statements",
+  ],
+};
+
+const WHO: AgencyPackage = {
+  slug: "who",
+  label: "WHO",
+  why: "World Health Organization — relevant for health commodities, diagnostics, equipment, public-health services, research support, ICT, and country-office procurement.",
+  portalLabel: "WHO Procurement / UNGM / WHO e-Tendering",
+  portalUrl: "https://www.who.int/about/accountability/procurement/become-a-supplier",
+  submissionSteps: [
+    "Register on UNGM so WHO tender documentation and UNGM-published opportunities are accessible.",
+    "Review WHO's supplier guidance and create the required account for WHO's electronic tendering process when a relevant tender requires it.",
+    "Map your products/services to health-specific categories and the countries or regions where you can deliver.",
+    "Prepare product registrations, quality certificates, technical specifications, and cold-chain or regulatory evidence where applicable.",
+    "For local or regional supply, identify the relevant WHO regional/country office and monitor their procurement pages alongside UNGM.",
+  ],
+  requiredDocuments: [
+    "UNGM supplier registration confirmation",
+    "Certificate of incorporation / business registration",
+    "Tax registration certificate",
+    "Audited financial statements or financial capacity evidence",
+    "Company profile / capability statement",
+    "Product technical specifications / data sheets",
+    "Quality and regulatory certifications (e.g. ISO, GMP, CE, WHO prequalification where applicable)",
+    "Past performance references in health, public sector, donor, or emergency-response work",
+    "Anti-corruption / code of conduct declaration",
+    "Insurance or delivery-capacity evidence where relevant",
+  ],
+  notes: [
+    "WHO public procurement guidance says suppliers interested in WHO tenders must register on UNGM to see tender documentation and participate.",
+    "WHO procurement can happen at global, regional, and country-office levels; one registration workflow is not enough for every opportunity.",
+    "Health products often require regulatory and quality evidence. Generic supplier registration does not replace product eligibility.",
+  ],
+  categoryHints: [
+    "Medical equipment, diagnostics, laboratory supplies, health ICT, research support, emergency health logistics, public-health consulting",
+    "Flag any WHO prequalification, GMP, ISO, CE, or national regulatory registrations explicitly",
+  ],
+};
+
+export const AGENCY_PACKAGES: AgencyPackage[] = [UNGM, WFP, UNICEF, UNDP, IOM, FAO, UNOPS, WHO];
 
 export function findAgencyPackage(slug: string | null | undefined): AgencyPackage | null {
   if (!slug) return null;
@@ -203,5 +312,8 @@ export function inferAgencySlug(targetAgency: string | null | undefined): string
   if (/(unicef)/.test(t)) return "unicef";
   if (/(undp|development programme)/.test(t)) return "undp";
   if (/(\biom\b|migration)/.test(t)) return "iom";
+  if (/(\bfao\b|food and agriculture)/.test(t)) return "fao";
+  if (/(unops|project services)/.test(t)) return "unops";
+  if (/(\bwho\b|world health)/.test(t)) return "who";
   return null;
 }

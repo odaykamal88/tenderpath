@@ -1,0 +1,162 @@
+{
+  "checked_at": "2026-05-13T14:32:44.845Z",
+  "validation_version": "sprint-0-paid-services-v1",
+  "panel": "/Users/odaykamal/Desktop/TENDERPATH/data/validation/paid-services-panel.csv",
+  "mode": {
+    "live_matching": true,
+    "include_grants": false,
+    "timeout_ms_per_profile": 15000
+  },
+  "summary": {
+    "checked": 1,
+    "ready_for_beta": 0,
+    "needs_human_review": 0,
+    "blocked": 1,
+    "median_paid_service_readiness_0_10": 7.3,
+    "median_procurement_effort_collapsed_0_10": 6.9,
+    "status_counts": {
+      "blocked": 1
+    },
+    "failure_category_counts": {
+      "scoring issue": 1
+    },
+    "track_summary": {
+      "Bid/No-Bid": {
+        "checked": 1,
+        "ready_for_beta": 0,
+        "needs_human_review": 0,
+        "blocked": 1,
+        "median_paid_service_readiness_0_10": 7.3,
+        "median_procurement_effort_collapsed_0_10": 6.9
+      }
+    },
+    "top_blockers": [
+      {
+        "blocker": "top live matches are actionable but off-profile for this validation scenario",
+        "count": 1
+      },
+      {
+        "blocker": "bid/no-bid lacks a specific tender notice or source context",
+        "count": 1
+      },
+      {
+        "blocker": "eligibility/TOR requirements are not available to ground the decision",
+        "count": 1
+      },
+      {
+        "blocker": "vendor capacity/compliance evidence is missing",
+        "count": 1
+      }
+    ],
+    "sprint_0_gate_passed": true
+  },
+  "profiles": [
+    {
+      "panel_id": "VP-01",
+      "prospect_company": "African Institute for Policy Research and Dialogue",
+      "source_row_id": "2",
+      "website": "https://www.afidep.org",
+      "country": "Kenya",
+      "region": "Africa",
+      "sector": "International Development & Policy Research",
+      "sub_icp": "Evidence-to-policy research and technical assistance",
+      "ungm_status": "Yes - Level 1; UNGM ID 378538; USAID partner evidence in prospect DB",
+      "fit_class": "Strong-fit",
+      "service_track": "Bid/No-Bid",
+      "benchmark_tender_or_agency": "UNICEF/UNFPA/UNDP policy research and evidence-to-policy technical assistance in Africa",
+      "scenario_goal": "Assess whether a policy-research RFP is worth pursuing and produce a decision memo tied to sector, geography, eligibility, evidence and effort.",
+      "assessment_quality_0_10": 9.2,
+      "dashboard_continuity_0_10": 5.9,
+      "service_context_completeness_0_10": 7.1,
+      "service_output_quality_0_10": 7.3,
+      "trustworthiness_0_10": 7.5,
+      "time_saved_0_10": 7,
+      "shortlist_impact_0_10": 6.8,
+      "procurement_effort_collapsed_0_10": 6.9,
+      "paid_service_readiness_0_10": 7.3,
+      "top_match_relevance_0_10": 0,
+      "relevant_top_tender_count": 0,
+      "readiness_status": "blocked",
+      "failure_category": "scoring issue",
+      "match_run": {
+        "status": "completed",
+        "elapsedMs": 3996,
+        "tenderMatches": 16,
+        "grantMatches": null,
+        "actionableTopTenderCount": 5,
+        "topTenders": [
+          {
+            "score": 87,
+            "bucket": "Act Now",
+            "title": "Terms of Reference for Graphic Design Services",
+            "agency": "ChildFund International",
+            "country": "Kenya",
+            "deadline": "2026-05-16",
+            "source_url": "https://reliefweb.int/job/4209560/terms-reference-graphic-design-services",
+            "reason": "Sector: Consulting Services"
+          },
+          {
+            "score": 80,
+            "bucket": "Act Now",
+            "title": "INSTITUTIONAL CONSULTANCY TO PROVIDE TECHNICAL SUPPORT TO KAKUMA, KALOBEYEI, LETEIYA AND LOPUR WATER",
+            "agency": "UNICEF",
+            "country": "Kenya",
+            "deadline": "2026-05-25",
+            "source_url": "https://www.ungm.org/Public/Notice/299706",
+            "reason": "Sector: Consulting Services"
+          },
+          {
+            "score": 75,
+            "bucket": "Act Now",
+            "title": "Consultancy services for To design and support early-stage operationalisation of an insightdriven, i",
+            "agency": "UNICEF",
+            "country": "Kenya",
+            "deadline": "2026-05-14",
+            "source_url": "https://www.ungm.org/Public/Notice/297850",
+            "reason": "Sector: Consulting Services"
+          },
+          {
+            "score": 75,
+            "bucket": "Act Now",
+            "title": "National Consultancy for field data analysis, report writing & proposal developm",
+            "agency": "UNDP-KEN",
+            "country": "Kenya",
+            "deadline": "2026-05-18",
+            "source_url": "https://procurement-notices.undp.org/view_negotiation.cfm?nego_id=45314",
+            "reason": "Sector: Consulting Services"
+          },
+          {
+            "score": 75,
+            "bucket": "Act Now",
+            "title": "For the provision of Independent Project Risk Management and Risk Control Consultancy Services for t",
+            "agency": "UN Secretariat",
+            "country": "Kenya",
+            "deadline": "2026-05-28",
+            "source_url": "https://www.ungm.org/Public/Notice/299911",
+            "reason": "Sector: Consulting Services"
+          }
+        ],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "top live matches are actionable but off-profile for this validation scenario",
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision",
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "highest_leverage_fix": "Add sector-specific scoring guardrails so adjacent and weak-fit vendors get conditional guidance instead of optimism.",
+      "missing_context_inputs": [
+        "top live matches are actionable but off-profile for this validation scenario",
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision",
+        "vendor capacity/compliance evidence is missing"
+      ],
+      "critical_missing_context_inputs": [
+        "top live matches are actionable but off-profile for this validation scenario",
+        "bid/no-bid lacks a specific tender notice or source context",
+        "eligibility/TOR requirements are not available to ground the decision"
+      ],
+      "prior_panel_status": "Useful but not wow"
+    }
+  ]
+}

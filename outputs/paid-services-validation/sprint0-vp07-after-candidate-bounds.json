@@ -1,0 +1,92 @@
+{
+  "checked_at": "2026-05-13T20:34:59.938Z",
+  "validation_version": "sprint-0-paid-services-v1",
+  "panel": "/Users/odaykamal/Desktop/TENDERPATH/data/validation/paid-services-panel.csv",
+  "mode": {
+    "live_matching": true,
+    "include_grants": false,
+    "ids": [
+      "VP-07"
+    ],
+    "timeout_ms_per_profile": 15000
+  },
+  "summary": {
+    "checked": 1,
+    "ready_for_beta": 0,
+    "needs_human_review": 1,
+    "blocked": 0,
+    "median_paid_service_readiness_0_10": 7.3,
+    "median_procurement_effort_collapsed_0_10": 6,
+    "status_counts": {
+      "needs_human_review": 1
+    },
+    "failure_category_counts": {
+      "context issue": 1
+    },
+    "track_summary": {
+      "Roster Fast-Track": {
+        "checked": 1,
+        "ready_for_beta": 0,
+        "needs_human_review": 1,
+        "blocked": 0,
+        "median_paid_service_readiness_0_10": 7.3,
+        "median_procurement_effort_collapsed_0_10": 6
+      }
+    },
+    "top_blockers": [
+      {
+        "blocker": "legal, financial, certification or product evidence is missing",
+        "count": 1
+      }
+    ],
+    "sprint_0_gate_passed": true
+  },
+  "profiles": [
+    {
+      "panel_id": "VP-07",
+      "prospect_company": "MEFOSA-MENA Food safety associates S.A.R.L",
+      "source_row_id": "7",
+      "website": "http://www.mefosa.com",
+      "country": "Lebanon",
+      "region": "MENA",
+      "sector": "Food Safety and Public Health",
+      "sub_icp": "Food safety compliance, Codex, quality systems and lab/testing advisory",
+      "ungm_status": "Yes - Level 1; UNGM ID 454934; USAID/UNDP-adjacent coaching evidence in prospect DB",
+      "fit_class": "Adjacent-fit",
+      "service_track": "Roster Fast-Track",
+      "benchmark_tender_or_agency": "WFP/FAO food safety, HACCP/ISO 22000 supplier and technical-assistance roster",
+      "scenario_goal": "Prepare roster/package guidance that routes MEFOSA toward the right food-safety procurement category and does not invent food-supply capacity.",
+      "assessment_quality_0_10": 8.6,
+      "dashboard_continuity_0_10": 4.6,
+      "service_context_completeness_0_10": 9.3,
+      "service_output_quality_0_10": 6.6,
+      "trustworthiness_0_10": 7.1,
+      "time_saved_0_10": 6,
+      "shortlist_impact_0_10": 5.3,
+      "procurement_effort_collapsed_0_10": 6,
+      "paid_service_readiness_0_10": 7.3,
+      "top_match_relevance_0_10": 0,
+      "relevant_top_tender_count": 0,
+      "readiness_status": "needs_human_review",
+      "failure_category": "context issue",
+      "match_run": {
+        "status": "completed",
+        "elapsedMs": 8804,
+        "tenderMatches": 0,
+        "grantMatches": null,
+        "actionableTopTenderCount": 0,
+        "topTenders": [],
+        "topGrants": []
+      },
+      "key_failure_points": [
+        "legal, financial, certification or product evidence is missing"
+      ],
+      "highest_leverage_fix": "Carry assessment evidence, selected match, missing inputs and service-specific caveats into one work-order context packet.",
+      "missing_context_inputs": [
+        "legal, financial, certification or product evidence is missing"
+      ],
+      "critical_missing_context_inputs": [],
+      "prior_panel_status": "Not ready"
+    }
+  ]
+}
