@@ -1,6 +1,6 @@
 import React from "react";
 import { Document, Page, Text, View, StyleSheet, pdf } from "@react-pdf/renderer";
-import type { BidNoBidOutput, Severity } from "./types";
+import type { BidNoBidOutput, BidRequirement, Severity } from "./types";
 
 const GOLD = "#b08530";
 const INK = "#1a1a1a";
@@ -51,6 +51,41 @@ const BulletList = ({ items, maxItems = 12 }: { items: string[]; maxItems?: numb
       <View key={i} style={{ flexDirection: "row", marginBottom: 4 }}>
         <Text style={[styles.bullet, { width: 12, color: GOLD }]}>·</Text>
         <Text style={[styles.bullet, { flex: 1 }]}>{item}</Text>
+      </View>
+    ))}
+  </View>
+);
+
+const mandatoryDocs = (output: BidNoBidOutput): BidRequirement[] =>
+  output.document_checklist?.mandatory?.length ? output.document_checklist.mandatory : output.required_documents;
+
+const recommendedDocs = (output: BidNoBidOutput): BidRequirement[] =>
+  output.document_checklist?.recommended ?? [];
+
+const DocumentRows = ({ docs }: { docs: BidRequirement[] }) => (
+  <View>
+    {docs.map((doc, i) => (
+      <View
+        key={i}
+        style={{
+          flexDirection: "row",
+          paddingVertical: 6,
+          borderBottomWidth: 1,
+          borderBottomColor: RULE,
+        }}
+      >
+        <Text style={[styles.mono, { fontSize: 8, color: INK3, width: 24 }]}>
+          {String(i + 1).padStart(2, "0")}
+        </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", color: INK }}>{doc.document}</Text>
+          {doc.why_needed && (
+            <Text style={{ fontSize: 9, color: INK2, marginTop: 2, lineHeight: 1.4 }}>{doc.why_needed}</Text>
+          )}
+        </View>
+        <Text style={[styles.mono, { fontSize: 8, color: INK3, marginLeft: 8 }]}>
+          {doc.estimated_effort_hours != null ? `${doc.estimated_effort_hours}h` : "—"}
+        </Text>
       </View>
     ))}
   </View>
@@ -113,6 +148,16 @@ const BidPdf = ({
               <Text style={{ fontSize: 9, color: INK3 }}> · decision to submit</Text>
             </Text>
           </View>
+          <View style={{ marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: RULE }}>
+            <Text style={[styles.label, { marginBottom: 2 }]}>Tender type</Text>
+            <Text style={{ fontSize: 13, fontFamily: "Helvetica-Bold", color: INK }}>
+              {output.tender_type.label}
+              <Text style={{ fontSize: 9, color: INK3 }}> · {output.tender_type.effort_level} effort</Text>
+            </Text>
+            <Text style={{ fontSize: 8.5, color: INK2, lineHeight: 1.35, marginTop: 3 }}>
+              {output.tender_type.guidance}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -138,6 +183,45 @@ const BidPdf = ({
           <Text style={[styles.label, { color: RED, marginBottom: 6 }]}>Red flags</Text>
           {output.red_flags.map((f, i) => (
             <Text key={i} style={[styles.bullet, { color: RED, marginBottom: 3 }]}>· {f}</Text>
+          ))}
+        </View>
+      )}
+
+      {/* Commercial terms */}
+      {output.commercial_terms.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.h2}>Commercial terms to check</Text>
+          {output.commercial_terms.slice(0, 5).map((term, i) => (
+            <View key={i} style={{ marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: RULE }}>
+              <View style={{ flexDirection: "row", alignItems: "baseline", marginBottom: 2 }}>
+                <Text style={[styles.mono, { fontSize: 7, color: term.risk === "high" ? RED : term.risk === "medium" ? GOLD : INK3, letterSpacing: 1, marginRight: 8, textTransform: "uppercase" }]}>
+                  {term.risk}
+                </Text>
+                <Text style={{ fontSize: 10.5, fontFamily: "Helvetica-Bold", color: INK, flex: 1 }}>{term.label}</Text>
+              </View>
+              <Text style={{ fontSize: 9, lineHeight: 1.35, color: INK2, marginLeft: 44 }}>{term.value}</Text>
+              {term.note && (
+                <Text style={{ fontSize: 8.5, lineHeight: 1.3, color: INK3, marginLeft: 44, marginTop: 2 }}>{term.note}</Text>
+              )}
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Eligibility actions */}
+      {output.eligibility_actions.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.h2}>Eligibility action</Text>
+          {output.eligibility_actions.slice(0, 4).map((action, i) => (
+            <View key={i} style={{ marginBottom: 8 }}>
+              <Text style={{ fontSize: 10.5, fontFamily: "Helvetica-Bold", color: sevColor(action.severity), marginBottom: 2 }}>
+                {action.label}
+              </Text>
+              <Text style={{ fontSize: 9, color: INK, lineHeight: 1.35 }}>{action.requirement}</Text>
+              {action.rationale && (
+                <Text style={{ fontSize: 8.5, color: INK2, lineHeight: 1.3, marginTop: 2 }}>{action.rationale}</Text>
+              )}
+            </View>
           ))}
         </View>
       )}
@@ -174,35 +258,16 @@ const BidPdf = ({
       <View style={styles.ruleInk} />
 
       {/* Required documents */}
-      {output.required_documents.length > 0 && (
+      {(mandatoryDocs(output).length > 0 || recommendedDocs(output).length > 0) && (
         <View style={styles.section}>
-          <Text style={styles.h2}>Required documents</Text>
-          <View>
-            {output.required_documents.map((doc, i) => (
-              <View
-                key={i}
-                style={{
-                  flexDirection: "row",
-                  paddingVertical: 6,
-                  borderBottomWidth: 1,
-                  borderBottomColor: RULE,
-                }}
-              >
-                <Text style={[styles.mono, { fontSize: 8, color: INK3, width: 24 }]}>
-                  {String(i + 1).padStart(2, "0")}
-                </Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", color: INK }}>{doc.document}</Text>
-                  {doc.why_needed && (
-                    <Text style={{ fontSize: 9, color: INK2, marginTop: 2, lineHeight: 1.4 }}>{doc.why_needed}</Text>
-                  )}
-                </View>
-                <Text style={[styles.mono, { fontSize: 8, color: INK3, marginLeft: 8 }]}>
-                  {doc.estimated_effort_hours != null ? `${doc.estimated_effort_hours}h` : "—"}
-                </Text>
-              </View>
-            ))}
-          </View>
+          <Text style={styles.h2}>Mandatory documents</Text>
+          <DocumentRows docs={mandatoryDocs(output)} />
+          {recommendedDocs(output).length > 0 && (
+            <View style={{ marginTop: 14 }}>
+              <Text style={[styles.h2, { fontSize: 13 }]}>Recommended support</Text>
+              <DocumentRows docs={recommendedDocs(output)} />
+            </View>
+          )}
         </View>
       )}
 

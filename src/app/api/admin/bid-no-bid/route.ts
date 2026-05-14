@@ -5,6 +5,8 @@ import {
   generateBidNoBidAnalysis,
 } from "@/lib/bid-no-bid/llm";
 import { renderBidNoBidPdf } from "@/lib/bid-no-bid/pdfDoc";
+import { enrichBidNoBidOutput } from "@/lib/bid-no-bid/surfacing";
+import { buildProposalRequirementModel } from "@/lib/proposal-package/requirements-model";
 import { sendBidNoBidReadyEmail } from "@/lib/email/sendBidNoBidNotification";
 
 export interface AdminBidNoBidRequest {
@@ -105,10 +107,21 @@ export async function POST(request: Request) {
 
   try {
     const requirements = await extractTenderRequirements(tenderText);
-    const output = await generateBidNoBidAnalysis(
+    const requirementModel = buildProposalRequirementModel({
+      requirements,
+      tenderText,
+      maxItems: 18,
+    });
+    const generatedOutput = await generateBidNoBidAnalysis(
       { tenderText, companyContext, intakeSummary },
       requirements
     );
+    const output = enrichBidNoBidOutput({
+      output: generatedOutput,
+      requirements,
+      requirementModel,
+      tenderText,
+    });
 
     let emailSent = false;
     if (body.send_to) {

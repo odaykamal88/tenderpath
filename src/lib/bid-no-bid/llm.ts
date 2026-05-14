@@ -64,6 +64,8 @@ Return a JSON object with:
 - "evaluation_criteria": string[] — how submissions will be scored
 - "key_constraints": string[] — budget limits, geography, language, timeline
 - "submission_format": string — portal, email, physical, or unknown
+- "tender_type": string — RFQ, ITB, RFP, EOI, LTA, roster, or unknown
+- "commercial_terms": string[] — payment terms, bid security, performance bond, bid validity, retention, advance payment, currency, completion period, or other commercial/pricing constraints found
 
 Return ONLY valid JSON.`,
       },
@@ -106,6 +108,13 @@ Return a Bid/No-Bid analysis as a JSON object with this exact shape:
   "recommendation": "bid" | "no-bid" | "conditional",
   "win_probability_band": "<10%" | "10-25%" | "25-50%" | "50-75%" | ">75%",
   "headline": string — one declarative sentence summarising the call (max 160 chars),
+  "tender_type": {
+    "code": "rfq" | "itb" | "rfp" | "eoi" | "lta" | "roster" | "unknown",
+    "label": string,
+    "effort_level": "low" | "medium" | "high" | "unknown",
+    "guidance": string,
+    "evidence": string | null
+  },
   "fit_reasoning": string[] — 4-6 bullets explaining alignment between company and tender,
                               citing the company's capabilities or geography specifically,
   "gap_analysis": [
@@ -114,6 +123,22 @@ Return a Bid/No-Bid analysis as a JSON object with this exact shape:
   "required_documents": [
     { "document": string, "why_needed": string, "estimated_effort_hours": number }
   ] — 6-12 items,
+  "document_checklist": {
+    "mandatory": [{ "document": string, "why_needed": string, "estimated_effort_hours": number }],
+    "recommended": [{ "document": string, "why_needed": string, "estimated_effort_hours": number }]
+  },
+  "eligibility_actions": [
+    {
+      "requirement": string,
+      "action": "collect_proof" | "jv_partner" | "subcontract" | "supplier_authorization" | "clarify_with_buyer" | "no_bid",
+      "label": string,
+      "rationale": string,
+      "severity": "high" | "medium" | "low"
+    }
+  ],
+  "commercial_terms": [
+    { "label": string, "value": string, "risk": "low" | "medium" | "high" | "unknown", "note": string }
+  ],
   "effort_estimate_hours": number — total hours from "decision to submit",
   "red_flags": string[] — 0-4 items, e.g. ineligibility, geographic mismatch, unrealistic deadline,
   "conditions_for_bid": string[] — only when recommendation === "conditional",
@@ -130,6 +155,9 @@ Rules:
 - Be specific. Reference the company's actual capabilities, geography, and certifications.
 - Do NOT invent facts about the company; if evidence is thin, say so in red_flags.
 - Severity high = blocks bid; medium = costs days; low = cosmetic.
+- Required documents must separate mandatory/pass-fail documents from recommended/supporting documents.
+- Eligibility actions must say whether to bid directly, bring in a JV/local partner, subcontract, get supplier authorization, collect proof, clarify, or no-bid.
+- Commercial terms must be concrete. If payment terms, bid security, performance bond, bid validity, retention, completion period, or currency are absent, leave them out rather than inventing them.
 - effort_estimate_hours must be realistic for an SME vendor.
 - recommendation "bid" only when fit is strong and no high-severity gaps remain.
 - recommendation "conditional" only when one specific change unlocks the bid.
@@ -162,6 +190,49 @@ function normalize(raw: Partial<BidNoBidOutput>): BidNoBidOutput {
     why_needed: String(d.why_needed ?? ""),
     estimated_effort_hours: typeof d.estimated_effort_hours === "number" ? d.estimated_effort_hours : null,
   })).filter((d) => d.document.trim().length > 0);
+  out.document_checklist = {
+    mandatory: (out.document_checklist?.mandatory ?? []).slice(0, 12).map((d) => ({
+      document: String(d.document ?? ""),
+      why_needed: String(d.why_needed ?? ""),
+      estimated_effort_hours: typeof d.estimated_effort_hours === "number" ? d.estimated_effort_hours : null,
+    })).filter((d) => d.document.trim().length > 0),
+    recommended: (out.document_checklist?.recommended ?? []).slice(0, 8).map((d) => ({
+      document: String(d.document ?? ""),
+      why_needed: String(d.why_needed ?? ""),
+      estimated_effort_hours: typeof d.estimated_effort_hours === "number" ? d.estimated_effort_hours : null,
+    })).filter((d) => d.document.trim().length > 0),
+  };
+  out.eligibility_actions = (out.eligibility_actions ?? []).slice(0, 8).map((action) => ({
+    requirement: String(action.requirement ?? ""),
+    action: ([
+      "collect_proof",
+      "jv_partner",
+      "subcontract",
+      "supplier_authorization",
+      "clarify_with_buyer",
+      "no_bid",
+    ] as const).includes(action.action) ? action.action : "collect_proof",
+    label: String(action.label ?? "Collect proof before bidding"),
+    rationale: String(action.rationale ?? ""),
+    severity: (["high", "medium", "low"] as const).includes(action.severity) ? action.severity : "medium",
+  })).filter((action) => action.requirement.trim().length > 0);
+  out.commercial_terms = (out.commercial_terms ?? []).slice(0, 8).map((term) => ({
+    label: String(term.label ?? ""),
+    value: String(term.value ?? ""),
+    risk: (["low", "medium", "high", "unknown"] as const).includes(term.risk) ? term.risk : "unknown",
+    note: String(term.note ?? ""),
+  })).filter((term) => term.label.trim().length > 0 && term.value.trim().length > 0);
+  out.tender_type = {
+    ...DEFAULT_BID_OUTPUT.tender_type,
+    ...(out.tender_type ?? {}),
+    code: (["rfq", "itb", "rfp", "eoi", "lta", "roster", "unknown"] as const).includes(out.tender_type?.code)
+      ? out.tender_type.code
+      : "unknown",
+    effort_level: (["low", "medium", "high", "unknown"] as const).includes(out.tender_type?.effort_level)
+      ? out.tender_type.effort_level
+      : "unknown",
+    evidence: typeof out.tender_type?.evidence === "string" ? out.tender_type.evidence.slice(0, 160) : null,
+  };
   out.red_flags = (out.red_flags ?? []).filter((s) => typeof s === "string" && s.trim().length > 0).slice(0, 6);
   out.conditions_for_bid = (out.conditions_for_bid ?? []).filter((s) => typeof s === "string" && s.trim().length > 0).slice(0, 6);
   out.next_steps = (out.next_steps ?? []).filter((s) => typeof s === "string" && s.trim().length > 0).slice(0, 6);

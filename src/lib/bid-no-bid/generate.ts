@@ -4,6 +4,8 @@ import { sendBidNoBidReadyEmail } from "@/lib/email/sendBidNoBidNotification";
 import { formatServiceContextForPrompt, formatServiceDocumentsForTenderText } from "@/lib/service-context";
 import { track } from "@/lib/telemetry/funnel";
 import { renderBidNoBidPdf } from "./pdfDoc";
+import { buildProposalRequirementModel } from "@/lib/proposal-package/requirements-model";
+import { enrichBidNoBidOutput } from "./surfacing";
 import {
   extractTenderRequirements,
   generateBidNoBidAnalysis,
@@ -300,8 +302,19 @@ export async function generateBidNoBid({
 
   try {
     const requirements = await extractTenderRequirements(tenderText);
+    const requirementModel = buildProposalRequirementModel({
+      requirements,
+      tenderText,
+      maxItems: 18,
+    });
     const inputs: BidGenerationInputs = { tenderText, companyContext, intakeSummary };
-    const output = await generateBidNoBidAnalysis(inputs, requirements);
+    const generatedOutput = await generateBidNoBidAnalysis(inputs, requirements);
+    const output = enrichBidNoBidOutput({
+      output: generatedOutput,
+      requirements,
+      requirementModel,
+      tenderText,
+    });
 
     let pdfUrl: string | null = null;
     let pdfPathname: string | null = null;

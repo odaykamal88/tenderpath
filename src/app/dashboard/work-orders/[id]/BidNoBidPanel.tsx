@@ -15,13 +15,45 @@ interface BidRequirement {
   estimated_effort_hours: number | null;
 }
 
+interface TenderTypeSummary {
+  code: string;
+  label: string;
+  effort_level: "low" | "medium" | "high" | "unknown";
+  guidance: string;
+  evidence: string | null;
+}
+
+interface BidDocumentChecklist {
+  mandatory: BidRequirement[];
+  recommended: BidRequirement[];
+}
+
+interface BidEligibilityAction {
+  requirement: string;
+  action: string;
+  label: string;
+  rationale: string;
+  severity: "high" | "medium" | "low";
+}
+
+interface CommercialTerm {
+  label: string;
+  value: string;
+  risk: "low" | "medium" | "high" | "unknown";
+  note: string;
+}
+
 interface BidOutput {
   recommendation: "bid" | "no-bid" | "conditional";
   win_probability_band: string;
   headline: string;
+  tender_type?: TenderTypeSummary;
   fit_reasoning: string[];
   gap_analysis: BidGap[];
   required_documents: BidRequirement[];
+  document_checklist?: BidDocumentChecklist;
+  eligibility_actions?: BidEligibilityAction[];
+  commercial_terms?: CommercialTerm[];
   effort_estimate_hours: number;
   red_flags: string[];
   conditions_for_bid: string[];
@@ -81,6 +113,13 @@ function recBorder(rec: BidOutput["recommendation"]): string {
 function sevTint(sev: BidGap["severity"]): string {
   if (sev === "high") return "text-red-700";
   if (sev === "medium") return "text-amber-700";
+  return "text-stone-500";
+}
+
+function riskTint(risk: CommercialTerm["risk"]): string {
+  if (risk === "high") return "text-red-700";
+  if (risk === "medium") return "text-amber-700";
+  if (risk === "low") return "text-emerald-700";
   return "text-stone-500";
 }
 
@@ -218,6 +257,13 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
   const out = pkg.output;
   const remaining = data?.remaining_regenerations ?? 0;
   const fileGenerationFailed = !pkg.pdf_url && Boolean(pkg.error_message);
+  const tenderType = out.tender_type;
+  const mandatoryDocs = out.document_checklist?.mandatory?.length
+    ? out.document_checklist.mandatory
+    : out.required_documents;
+  const recommendedDocs = out.document_checklist?.recommended ?? [];
+  const eligibilityActions = out.eligibility_actions ?? [];
+  const commercialTerms = out.commercial_terms ?? [];
 
   return (
     <section className={`rounded-md border-l-2 ${recBorder(out.recommendation)} bg-white shadow-sm`}>
@@ -255,6 +301,19 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
         <p className="mt-3 text-[15px] leading-relaxed text-stone-800" style={{ fontFamily: SERIF }}>
           {out.headline}
         </p>
+        {tenderType && (
+          <div className="mt-4 border-t border-stone-100 pt-3">
+            <div className="flex flex-col gap-1.5 lg:flex-row lg:items-baseline lg:gap-3">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700" style={{ fontFamily: MONO }}>
+                {tenderType.label}
+              </span>
+              <span className="text-[11px] uppercase tracking-[0.14em] text-stone-500" style={{ fontFamily: MONO }}>
+                {tenderType.effort_level} effort
+              </span>
+            </div>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-stone-700">{tenderType.guidance}</p>
+          </div>
+        )}
       </div>
 
       {fileGenerationFailed && (
@@ -306,6 +365,28 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
         )}
       </div>
 
+      {commercialTerms.length > 0 && (
+        <div className="border-t border-stone-100 p-5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-2" style={{ fontFamily: MONO }}>
+            Commercial terms to check
+          </div>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {commercialTerms.slice(0, 6).map((term, i) => (
+              <div key={i} className="border-l border-stone-200 pl-3">
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-[9px] uppercase tracking-[0.16em] font-semibold ${riskTint(term.risk)}`} style={{ fontFamily: MONO }}>
+                    {term.risk}
+                  </span>
+                  <span className="text-[13px] font-semibold text-stone-900">{term.label}</span>
+                </div>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-stone-700">{term.value}</p>
+                {term.note && <p className="mt-1 text-[11.5px] leading-relaxed text-stone-500">{term.note}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {out.red_flags.length > 0 && (
         <div className="border-t border-stone-100 bg-red-50/40 p-5">
           <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-red-700 mb-1.5" style={{ fontFamily: MONO }}>
@@ -316,6 +397,68 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
               <li key={i}>· {f}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {eligibilityActions.length > 0 && (
+        <div className="border-t border-stone-100 p-5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-2" style={{ fontFamily: MONO }}>
+            Eligibility action
+          </div>
+          <ul className="space-y-3 text-[13px] text-stone-800">
+            {eligibilityActions.slice(0, 5).map((action, i) => (
+              <li key={i}>
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-[9px] uppercase tracking-[0.16em] font-semibold ${sevTint(action.severity)}`} style={{ fontFamily: MONO }}>
+                    {action.severity}
+                  </span>
+                  <span className="font-semibold leading-snug">{action.label}</span>
+                </div>
+                <p className="ml-12 text-[12px] text-stone-600 leading-relaxed">{action.requirement}</p>
+                {action.rationale && <p className="ml-12 text-[11.5px] text-stone-500 leading-relaxed">{action.rationale}</p>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {(mandatoryDocs.length > 0 || recommendedDocs.length > 0) && (
+        <div className="border-t border-stone-100 p-5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-2" style={{ fontFamily: MONO }}>
+            Documents to prepare
+          </div>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <div>
+              <div className="text-[9px] font-semibold uppercase tracking-[0.16em] text-red-700 mb-2" style={{ fontFamily: MONO }}>
+                Mandatory
+              </div>
+              <ul className="space-y-2 text-[12.5px] text-stone-800">
+                {mandatoryDocs.slice(0, 10).map((doc, i) => (
+                  <li key={i}>
+                    <span className="font-semibold">{doc.document}</span>
+                    {doc.why_needed && <p className="mt-0.5 text-[11.5px] text-stone-500 leading-relaxed">{doc.why_needed}</p>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <div className="text-[9px] font-semibold uppercase tracking-[0.16em] text-stone-500 mb-2" style={{ fontFamily: MONO }}>
+                Recommended
+              </div>
+              {recommendedDocs.length > 0 ? (
+                <ul className="space-y-2 text-[12.5px] text-stone-800">
+                  {recommendedDocs.slice(0, 8).map((doc, i) => (
+                    <li key={i}>
+                      <span className="font-semibold">{doc.document}</span>
+                      {doc.why_needed && <p className="mt-0.5 text-[11.5px] text-stone-500 leading-relaxed">{doc.why_needed}</p>}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-[12.5px] text-stone-500">No optional support documents were extracted from the available tender text.</p>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

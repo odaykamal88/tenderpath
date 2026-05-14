@@ -106,6 +106,23 @@ Additional work done outside the prompt sequence:
 - **Sprint 5 Status**: In progress. The free assessment is now visibly public-data-first; deeper evidence and financial proof remain in paid work-order intake where users have exchanged value.
 - **Next Recommended Task**: Continue with the next feedback-driven product slice: surface requirement-model outputs inside Bid/No-Bid artifacts and dashboard, starting with tender type, mandatory/recommended documents, eligibility gap action, and commercial terms.
 
+### Sprint 5 Continuation — Bid/No-Bid Requirement Surfacing
+
+- **Task Completed**: Added requirement-level surfacing to Bid/No-Bid so the paid output feels more like a procurement decision memo.
+- **Files / Areas Changed**:
+  - `src/lib/bid-no-bid/types.ts` — extended stored output with tender type summary, mandatory/recommended document checklist, eligibility actions, and commercial terms.
+  - `src/lib/bid-no-bid/llm.ts` — extraction prompt now asks for tender type and commercial terms; generation prompt now asks for document split, eligibility action, and commercial term fields.
+  - `src/lib/bid-no-bid/surfacing.ts` — new deterministic enrichment layer that derives tender type, document split, eligibility action guidance, and commercial terms from extracted requirements and source text when the LLM omits or under-specifies them.
+  - `src/lib/bid-no-bid/generate.ts`, `src/app/api/admin/bid-no-bid/route.ts` — generation and admin workbench now run the enrichment layer before PDF/email output.
+  - `src/lib/bid-no-bid/pdfDoc.tsx` — PDF now surfaces tender type guidance, commercial terms to check, eligibility action, and mandatory vs recommended documents.
+  - `src/app/dashboard/work-orders/[id]/BidNoBidPanel.tsx` — dashboard now shows the same decision-critical blocks: tender type, commercial terms, eligibility action, and document split.
+- **Verification Run**:
+  - `npx tsc --noEmit`
+  - `npx eslint src/lib/bid-no-bid/types.ts src/lib/bid-no-bid/llm.ts src/lib/bid-no-bid/surfacing.ts src/lib/bid-no-bid/generate.ts src/lib/bid-no-bid/pdfDoc.tsx src/app/dashboard/work-orders/[id]/BidNoBidPanel.tsx src/app/api/admin/bid-no-bid/route.ts`
+  - `rm -rf .next/cache && NEXT_FONT_GOOGLE_MOCKED_RESPONSES=/tmp/tenderpath-next-font-mocks.cjs npm run build`
+- **Sprint 5 Status**: In progress. Free assessment friction is reduced and Bid/No-Bid now exposes the contractor-style procurement details that matter for a real bid/no-bid decision.
+- **Next Recommended Task**: Run the paid-services static validation again and compare Bid/No-Bid readiness/procurement-effort-collapsed movement; if scoring does not move, update the validation rubric to explicitly score tender-type, document split, eligibility action, and commercial-term surfacing.
+
 ## Latest Session Update — 2026-05-14 (Sprint 4 started)
 
 - **Agent**: Codex
