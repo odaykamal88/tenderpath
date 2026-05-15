@@ -139,8 +139,9 @@ function buildEvidenceReview(args: {
   docId?: string | null;
 }) {
   if (args.service === "digest") return null;
-  const sourceAvailable = hasText(args.tenderUrl) || hasText(args.pipelineContext?.source_url) || hasText(args.pipelineContext?.manual_source_url);
   const uploadedRequirements = Boolean(args.uploadedFile || args.docId);
+  const sourceUrlAvailable = hasText(args.tenderUrl) || hasText(args.pipelineContext?.source_url) || hasText(args.pipelineContext?.manual_source_url);
+  const sourceAvailable = sourceUrlAvailable || (args.service === "bid-no-bid" && uploadedRequirements);
   const extractedRequirements = Boolean(
     args.uploadedFile?.extraction?.status === "extracted"
       && args.uploadedFile.extraction.charCount > 0,
@@ -160,9 +161,11 @@ function buildEvidenceReview(args: {
     });
   }
   checks.push({
-    label: "Source URL",
+    label: args.service === "bid-no-bid" ? "Tender source" : "Source URL",
     ok: sourceAvailable,
-    help: "Add the tender, TOR, portal, or source page URL.",
+    help: args.service === "bid-no-bid"
+      ? "Paste the tender source URL or upload the TOR/RFP before checkout."
+      : "Add the tender, TOR, portal, or source page URL.",
   });
   checks.push({
     label: "Dashboard match evidence",
@@ -298,7 +301,8 @@ export default function ServiceIntakeForm({
   const checkoutBlocked = Boolean(
     evidenceReview
       && (
-        (service === "proposal" && evidenceReview.status === "high risk")
+        (service === "bid-no-bid" && evidenceReview.missing.some((item) => item.label === "Pipeline tender" || item.label === "Tender source"))
+        || (service === "proposal" && evidenceReview.status === "high risk")
         || (service === "lta-roster" && evidenceReview.missing.some((item) => item.label === "Target agency"))
       ),
   );
@@ -418,14 +422,14 @@ export default function ServiceIntakeForm({
   const requiresPipeline = service === "bid-no-bid" && !pipelineItemId;
 
   const uploadLabel: Record<ServiceSlug, string> = {
-    "bid-no-bid": "Upload your documents",
+    "bid-no-bid": "Upload tender / TOR",
     "proposal": "Upload TOR / RFP / call document",
     "lta-roster": "Upload vendor guide / call for applications",
     "digest": "",
   };
 
   const uploadHint: Record<ServiceSlug, string> = {
-    "bid-no-bid": "PDF or Word — paste the eligibility criteria, evaluation criteria, or TOR excerpt so the analysis is grounded",
+    "bid-no-bid": "PDF or Word tender notice, TOR, RFP, or eligibility page extract",
     "proposal": "PDF, Word, or Excel up to 10 MB",
     "lta-roster": "PDF, Word, or Excel up to 10 MB",
     "digest": "",

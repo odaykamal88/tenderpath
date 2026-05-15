@@ -39,7 +39,7 @@ export interface PipelineRow {
   opportunity_type: string | null;
   sector: string | null;
   eligibility_summary: string | null;
-  t_source_url: string | null;
+  source_url: string | null;
 }
 
 export interface ExistingPackage {
@@ -100,7 +100,7 @@ export async function loadPipelineItem(pipelineItemId: number | null): Promise<P
       t.opportunity_type,
       t.sector,
       t.eligibility_summary,
-      t.source_url AS t_source_url
+      COALESCE(t.source_url, pi.source_url) AS source_url
     FROM pipeline_items pi
     LEFT JOIN tenders t ON t.id = pi.tender_id
     WHERE pi.id = ${pipelineItemId}
@@ -141,6 +141,7 @@ export function buildTenderText(order: WorkOrderRow, pipelineItem: PipelineRow |
       `Title: ${pipelineItem.tender_title ?? order.tender_title ?? "Unknown"}`,
       (pipelineItem.tender_agency ?? order.agency) && `Agency: ${pipelineItem.tender_agency ?? order.agency}`,
       pipelineItem.source_name && `Source: ${pipelineItem.source_name}`,
+      pipelineItem.source_url && `Source URL: ${pipelineItem.source_url}`,
       pipelineItem.opportunity_type && `Opportunity type: ${pipelineItem.opportunity_type}`,
       pipelineItem.sector && `Sector: ${pipelineItem.sector}`,
       pipelineItem.tender_value && `Estimated value: ${pipelineItem.tender_value}`,

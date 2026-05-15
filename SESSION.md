@@ -145,6 +145,28 @@ Additional work done outside the prompt sequence:
 - **Important Decision**: Bid/No-Bid only reaches the 8.5 target when the user or pipeline carries a real selected tender/source context into the paid service. Strong vendor fit alone is not enough.
 - **Next Recommended Task**: Continue Sprint 5 with the intake/work-order continuity needed to require or carry the selected tender/TOR into Bid/No-Bid checkout, then use the same decision-surface fields as the user-facing readiness explanation.
 
+### Sprint 5 Continuation — Bid/No-Bid Checkout Gate
+
+- **Task Completed**: Wired the Bid/No-Bid decision-surface requirement into intake, saved work-order context, checkout readiness, and generation context.
+- **Files / Areas Changed**:
+  - `src/app/dashboard/services/ServiceIntakeForm.tsx` — Bid/No-Bid intake now treats the tender source as a hard checkout input: users need a selected pipeline tender plus either a source URL or uploaded tender/TOR. The upload label and readiness checklist now make this explicit.
+  - `src/lib/service-context.ts` — service context now distinguishes tender/TOR documents from financial documents; financial uploads no longer satisfy tender-source coverage. Bid/No-Bid context records source coverage, tender-document coverage, pipeline eligibility summaries, and requirement-context availability.
+  - `src/lib/service-fulfillment-gates.ts` — Bid/No-Bid checkout now computes a decision-surface score, blocks payment when the selected pipeline tender or tender source/TOR is missing, and routes incomplete criteria to human QA instead of auto-fulfillment.
+  - `src/app/pay/page.tsx` — checkout readiness now exposes Bid/No-Bid decision-surface score, status, ready components, and remaining gaps.
+  - `src/lib/proposal-package/context.ts`, `src/lib/proposal-package/generate-proposal.ts` — shared pipeline context now carries `source_url` consistently into proposal/tender text.
+  - `src/app/dashboard/services/[service]/page.tsx` — Bid/No-Bid service copy now states that selected tender source/TOR coverage is required before checkout.
+- **Behavioral Change**:
+  - Strong vendor fit alone no longer gets a user into a false-confidence Bid/No-Bid checkout.
+  - Missing selected pipeline tender or missing source URL/TOR blocks checkout.
+  - Source present but weak eligibility/evaluation criteria can still be paid, but is marked human-review rather than auto-generated.
+- **Verification Run**:
+  - `npx tsc --noEmit`
+  - `npx eslint src/lib/service-context.ts src/lib/service-fulfillment-gates.ts src/lib/proposal-package/context.ts src/lib/proposal-package/generate-proposal.ts src/app/dashboard/services/ServiceIntakeForm.tsx src/app/pay/page.tsx src/app/dashboard/services/[service]/page.tsx`
+  - `rm -rf .next/cache && NEXT_FONT_GOOGLE_MOCKED_RESPONSES=/tmp/tenderpath-next-font-mocks.cjs npm run build`
+  - `npm run validation:paid-services -- --skip-live-matching --limit=9 --out=/tmp/tenderpath-sprint5-bid-gating-validation.json`
+- **Sprint 5 Status**: Bid/No-Bid now has the same product discipline as the validation rubric: it can be strong when a real selected tender is present, but it stops or slows down when the source context is too weak.
+- **Next Recommended Task**: Move to the next paid-service gap: Roster Fast-Track agency/category readiness, especially FAO, WHO/PQS, UNOPS energy, and product-vs-advisory category guardrails.
+
 ## Latest Session Update — 2026-05-14 (Sprint 4 started)
 
 - **Agent**: Codex

@@ -121,6 +121,21 @@ function hasUploadedDocument(intake: JsonRecord | null | undefined): boolean {
   );
 }
 
+function hasTenderDocument(intake: JsonRecord | null | undefined): boolean {
+  if (!intake) return false;
+  return Boolean(
+    cleanText(intake.vault_url, 50)
+      || cleanText(intake.vault_doc_id, 50)
+      || (typeof intake.vault_doc_id === "number" && Number.isFinite(intake.vault_doc_id)),
+  );
+}
+
+function hasTenderRequirementContext(intake: JsonRecord | null | undefined, pipeline: PipelineContextRow | null): boolean {
+  return hasIntakeText(intake, ["tender_context", "additional_details"])
+    || Boolean(cleanText(pipeline?.eligibility_summary, 80))
+    || Boolean(cleanText(pipeline?.required_registrations, 80));
+}
+
 async function loadDocumentExtraction(userId: number, fileUrl: string): Promise<DocumentExtractionRow | null> {
   try {
     const rows = await sql`
@@ -339,16 +354,18 @@ function missingInputs(args: BuildServiceContextArgs, pipeline: PipelineContextR
   const intake = args.intake ?? {};
   const missing: string[] = [];
   const sourceUrl = cleanText(args.tenderUrl, 1000) ?? cleanText(pipeline?.source_url, 1000) ?? cleanText(pipeline?.manual_source_url, 1000);
+  const isBidNoBid = args.serviceSlug === "bid-no-bid";
+  const hasSourceContext = Boolean(sourceUrl) || (isBidNoBid && hasTenderDocument(intake));
 
   if (args.pipelineItemId && !pipeline) missing.push("pipeline item could not be loaded for this user");
   if (!args.pipelineItemId) missing.push("selected dashboard pipeline item");
-  if (!sourceUrl) missing.push("primary tender or roster source URL");
+  if (!hasSourceContext) missing.push(isBidNoBid ? "primary tender source URL or uploaded TOR/RFP" : "primary tender or roster source URL");
   if (pipeline && !pipeline.match_reasons) missing.push("saved dashboard match reasons");
   if (pipeline && !pipeline.tender_deadline) missing.push("deadline");
   if (!assessment) missing.push("linked company assessment profile");
   if (pipeline?.has_broken_link) missing.push("working source link");
 
-  if (args.serviceSlug === "bid-no-bid" && !hasIntakeText(intake, ["tender_context", "additional_details"]) && !hasUploadedDocument(intake)) {
+  if (isBidNoBid && !hasTenderRequirementContext(intake, pipeline)) {
     missing.push("eligibility/evaluation criteria or TOR excerpt");
   }
   if ((args.serviceSlug === "proposal" || args.serviceSlug === "proposal-draft") && !hasUploadedDocument(intake) && !hasIntakeText(intake, ["tender_context", "package_notes", "additional_details"])) {
@@ -363,12 +380,19 @@ function missingInputs(args: BuildServiceContextArgs, pipeline: PipelineContextR
 
 function qualityScore(args: BuildServiceContextArgs, pipeline: PipelineContextRow | null, assessment: JsonRecord | null, missing: string[]): number {
   const intake = args.intake ?? {};
+  const isBidNoBid = args.serviceSlug === "bid-no-bid";
+  const hasSourceContext = Boolean(
+    cleanText(args.tenderUrl, 1000)
+      ?? cleanText(pipeline?.source_url, 1000)
+      ?? cleanText(pipeline?.manual_source_url, 1000),
+  ) || (isBidNoBid && hasTenderDocument(intake));
   let score = 4;
   if (pipeline) score += 1.5;
-  if (cleanText(args.tenderUrl, 1000) ?? cleanText(pipeline?.source_url, 1000) ?? cleanText(pipeline?.manual_source_url, 1000)) score += 1;
+  if (hasSourceContext) score += 1;
   if (pipeline?.match_reasons || (pipeline?.fit_score ?? 0) > 0) score += 1;
   if (assessment) score += 1;
   if (hasUploadedDocument(intake) || hasIntakeText(intake, ["tender_context", "additional_details", "target_agency"])) score += 1;
+  if (isBidNoBid && hasTenderRequirementContext(intake, pipeline)) score += 0.7;
   if (pipeline?.has_broken_link) score -= 1.5;
   if (missing.length >= 3) score -= 1;
   return Math.max(0, Math.min(10, Math.round(score * 10) / 10));
@@ -385,6 +409,7 @@ export async function buildServiceContextPacket(args: BuildServiceContextArgs): 
   const sourceUrl = cleanText(args.tenderUrl, 1000) ?? cleanText(pipeline?.source_url, 1000) ?? cleanText(pipeline?.manual_source_url, 1000);
   const match = matchContext(pipeline?.match_reasons, pipeline?.fit_score ?? null);
   const matchSummary = asStringArray(match.summary, 4, 220);
+  const isBidNoBid = args.serviceSlug === "bid-no-bid";
 
   return {
     version: PACKET_VERSION,
@@ -417,10 +442,14 @@ export async function buildServiceContextPacket(args: BuildServiceContextArgs): 
     input_coverage: {
       has_pipeline_item: Boolean(pipeline),
       has_source_url: Boolean(sourceUrl),
+      has_tender_source_context: Boolean(sourceUrl) || (isBidNoBid && hasTenderDocument(args.intake)),
       has_match_reasons: matchSummary.length > 0,
       has_assessment: Boolean(assessment),
       has_uploaded_document: hasUploadedDocument(args.intake),
+      has_uploaded_tender_document: hasTenderDocument(args.intake),
       has_extracted_document_text: documents.some((doc) => doc.extraction_status === "extracted" && cleanText(doc.text_excerpt, 20)),
+      has_pipeline_eligibility_summary: Boolean(cleanText(pipeline?.eligibility_summary, 80)),
+      has_bid_requirements_context: isBidNoBid ? hasTenderRequirementContext(args.intake, pipeline) : null,
       has_user_requirements: hasIntakeText(args.intake, [
         "tender_context",
         "additional_details",

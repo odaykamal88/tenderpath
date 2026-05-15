@@ -78,6 +78,16 @@ function ReadinessCard({ readiness }: { readiness: FulfillmentReadiness | null }
   const blocked = !readiness.payment_allowed;
   const requirementScore = readiness.metadata?.requirement_model_score;
   const sourceScore = readiness.metadata?.source_quality_score;
+  const bidSurfaceScore = readiness.metadata?.bid_decision_surface_score;
+  const bidSurfaceStatus = readiness.metadata?.bid_decision_surface_status;
+  const bidSurfaceComponents = (readiness.metadata?.bid_decision_surface_components ?? "")
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const bidSurfaceGaps = (readiness.metadata?.bid_decision_surface_gaps ?? "")
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
   const missingCategories = (readiness.metadata?.missing_requirement_categories ?? "")
     .split("|")
     .map((item) => item.trim())
@@ -102,6 +112,30 @@ function ReadinessCard({ readiness }: { readiness: FulfillmentReadiness | null }
         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]" style={{ fontFamily: MONO }}>
           {sourceScore && <span>Source coverage {sourceScore}/10</span>}
           {requirementScore && <span>Requirement model {requirementScore}/10</span>}
+        </div>
+      )}
+      {bidSurfaceScore && (
+        <div className="mt-2 rounded-sm bg-white/50 px-2.5 py-2">
+          <div className="font-semibold uppercase tracking-[0.14em]" style={{ fontFamily: MONO }}>
+            Bid decision surface · {bidSurfaceScore}/10
+          </div>
+          {bidSurfaceStatus && (
+            <p className="mt-1" style={{ fontFamily: MONO }}>
+              {bidSurfaceStatus.replace(/_/g, " ")}
+            </p>
+          )}
+          {bidSurfaceComponents.length > 0 && (
+            <p className="mt-1">
+              Ready context: {bidSurfaceComponents.slice(0, 4).join(", ")}
+            </p>
+          )}
+          {bidSurfaceGaps.length > 0 && (
+            <ul className="mt-1 space-y-0.5">
+              {bidSurfaceGaps.slice(0, 4).map((item) => (
+                <li key={item}>Still needed: {item}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
       {missingCategories.length > 0 && (

@@ -140,7 +140,7 @@ export async function generateProposalPackage({
       plan: PROPOSAL_PLAN,
       tenderTitle,
       agency,
-      tenderUrl: order.tender_url ?? pipelineItem?.t_source_url ?? null,
+      tenderUrl: order.tender_url ?? pipelineItem?.source_url ?? null,
       intake: order.intake ?? {},
       stripeSessionId: order.stripe_session_id,
       output,

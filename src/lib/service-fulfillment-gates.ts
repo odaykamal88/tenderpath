@@ -111,6 +111,24 @@ function contextMissing(order: WorkOrderRow): string[] {
   return asStringArray(asRecord(context)?.missing_inputs, 10, 180);
 }
 
+function contextInputCoverage(order: WorkOrderRow): JsonRecord | null {
+  const context = serviceContextFromIntake(order.intake);
+  return asRecord(asRecord(context)?.input_coverage);
+}
+
+function contextTender(order: WorkOrderRow): JsonRecord | null {
+  const context = serviceContextFromIntake(order.intake);
+  return asRecord(asRecord(context)?.tender);
+}
+
+function truthyFlag(value: unknown): boolean {
+  return value === true || value === "true";
+}
+
+function metadataList(items: string[]): string {
+  return items.slice(0, 8).join(" | ");
+}
+
 function requirementCategoryMissing(categories: string[]): string[] {
   return categories.map((category) => `${category} requirements or instructions`);
 }
@@ -286,14 +304,160 @@ function rosterGate(order: WorkOrderRow): ServiceFulfillmentGate {
   };
 }
 
+function bidDecisionSurface(order: WorkOrderRow, missing: string[]) {
+  const inputCoverage = contextInputCoverage(order);
+  const tender = contextTender(order);
+  const intake = order.intake ?? {};
+  const hasUploadedTenderDocument = Boolean(
+    clean(intake.vault_url, 1000)
+      || clean(intake.vault_doc_id, 80)
+      || (typeof intake.vault_doc_id === "number" && Number.isFinite(intake.vault_doc_id)),
+  );
+  const hasPipeline = Boolean(order.pipeline_item_id || truthyFlag(inputCoverage?.has_pipeline_item));
+  const hasTenderSource = Boolean(
+    clean(order.tender_url, 1000)
+      || clean(tender?.source_url, 1000)
+      || hasUploadedTenderDocument
+      || truthyFlag(inputCoverage?.has_tender_source_context),
+  );
+  const hasRequirements = Boolean(
+    truthyFlag(inputCoverage?.has_bid_requirements_context)
+      || truthyFlag(inputCoverage?.has_extracted_document_text)
+      || truthyFlag(inputCoverage?.has_pipeline_eligibility_summary)
+      || clean(intake.tender_context, 80)
+      || clean(intake.additional_details, 80),
+  );
+  const hasMatchEvidence = truthyFlag(inputCoverage?.has_match_reasons);
+  const hasAssessment = truthyFlag(inputCoverage?.has_assessment);
+  const hasDeadline = Boolean(clean(tender?.deadline, 80));
+  const hasValue = Boolean(clean(tender?.value, 120));
+  const tenderTypeText = [
+    clean(tender?.title, 500),
+    clean(tender?.opportunity_type, 80),
+    clean(order.tender_title, 500),
+    clean(intake.tender_context, 1000),
+  ].filter(Boolean).join(" ");
+  const hasTenderTypeCue = /\b(notice|rfp|request for proposals|rfq|request for quotation|itb|invitation to bid|eoi|expression of interest|tender|lta|framework|call)\b|\b\d{4,}\b/i.test(tenderTypeText);
+  const components: string[] = [];
+  const gaps: string[] = [];
+  let score = 1.4;
+
+  if (hasPipeline) {
+    score += 1.2;
+    components.push("selected dashboard tender");
+  } else {
+    gaps.push("selected dashboard pipeline item");
+  }
+
+  if (hasTenderSource) {
+    score += 1.8;
+    components.push("tender source or TOR carried into checkout");
+  } else {
+    gaps.push("primary tender source URL or uploaded TOR/RFP");
+  }
+
+  if (hasTenderTypeCue) {
+    score += 0.8;
+    components.push("tender type/source cue");
+  } else {
+    gaps.push("tender type or notice reference");
+  }
+
+  if (hasRequirements) {
+    score += 2.2;
+    components.push("eligibility/evaluation requirements available");
+  } else {
+    gaps.push("eligibility/evaluation criteria or TOR excerpt");
+  }
+
+  if (hasMatchEvidence) {
+    score += 1.0;
+    components.push("dashboard match reasons");
+  } else {
+    gaps.push("saved dashboard match reasons");
+  }
+
+  if (hasAssessment) {
+    score += 0.9;
+    components.push("company assessment profile");
+  } else {
+    gaps.push("linked company assessment profile");
+  }
+
+  if (hasDeadline) {
+    score += 0.5;
+    components.push("deadline context");
+  } else {
+    gaps.push("deadline");
+  }
+
+  if (hasValue) {
+    score += 0.3;
+    components.push("value/commercial context");
+  }
+
+  if (missing.includes("working source link")) {
+    score = Math.min(score, 6.0);
+    gaps.push("working source link");
+  }
+  if (!hasTenderSource) score = Math.min(score, 5.4);
+  if (!hasPipeline) score = Math.min(score, 5.8);
+  if (hasTenderSource && !hasRequirements) score = Math.min(score, 7.2);
+
+  const finalScore = Math.max(0, Math.min(10, Math.round(score * 10) / 10));
+  const status = finalScore >= 8.5
+    ? "decision_surface_ready"
+    : finalScore >= 7
+      ? "usable_with_human_qa"
+      : finalScore >= 5.8
+        ? "needs_tender_source_or_human_review"
+        : "blocked";
+
+  return {
+    score_0_10: finalScore,
+    status,
+    components: unique(components),
+    gaps: unique(gaps),
+  };
+}
+
 function bidNoBidGate(order: WorkOrderRow): ServiceFulfillmentGate {
   const missing = contextMissing(order);
   const quality = contextQuality(order);
-  const score = typeof quality?.score_0_10 === "number" ? quality.score_0_10 : null;
-  const hasPipeline = Boolean(order.pipeline_item_id);
-  const hasSource = Boolean(clean(order.tender_url, 1000) || !missing.includes("primary tender or roster source URL"));
+  const contextScore = typeof quality?.score_0_10 === "number" ? quality.score_0_10 : null;
+  const surface = bidDecisionSurface(order, missing);
+  const score = surface.score_0_10;
+  const hardMissing = surface.gaps.filter((item) =>
+    item === "selected dashboard pipeline item" || item === "primary tender source URL or uploaded TOR/RFP",
+  );
+  const allMissing = unique([...hardMissing, ...surface.gaps, ...missing]).slice(0, 12);
 
-  if (!hasPipeline || !hasSource) {
+  if (hardMissing.length > 0) {
+    return {
+      plan: BID_PLAN,
+      work_order_id: order.id,
+      mode: "blocked",
+      payment_allowed: false,
+      auto_fulfill_allowed: false,
+      score_0_10: score,
+      missing_inputs: allMissing,
+      warnings: [],
+      code: "BID_SOURCE_REQUIRED",
+      message: "Bid/No-Bid needs a selected dashboard tender plus a source URL or uploaded TOR/RFP before checkout.",
+      metadata: {
+        fulfillment_mode: "blocked",
+        readiness_code: "BID_SOURCE_REQUIRED",
+        readiness_score: String(score),
+        context_quality_score: contextScore != null ? String(contextScore) : "",
+        bid_decision_surface_score: String(score),
+        bid_decision_surface_status: surface.status,
+        bid_decision_surface_components: metadataList(surface.components),
+        bid_decision_surface_gaps: metadataList(allMissing),
+      },
+    };
+  }
+
+  if (surface.status !== "decision_surface_ready" || missing.length > 0) {
     return {
       plan: BID_PLAN,
       work_order_id: order.id,
@@ -301,18 +465,19 @@ function bidNoBidGate(order: WorkOrderRow): ServiceFulfillmentGate {
       payment_allowed: true,
       auto_fulfill_allowed: false,
       score_0_10: score,
-      missing_inputs: unique([
-        ...(!hasPipeline ? ["selected dashboard pipeline item"] : []),
-        ...(!hasSource ? ["primary tender source URL"] : []),
-        ...missing,
-      ]),
-      warnings: ["Bid/No-Bid can be paid, but automated fulfillment needs a selected tender and source context."],
+      missing_inputs: allMissing,
+      warnings: ["Bid/No-Bid can proceed, but this memo should enter human QA until the tender criteria are fully grounded."],
       code: "BID_REVIEW_REQUIRED",
-      message: "Payment can proceed, but this Bid/No-Bid memo should enter human QA because selected tender/source context is incomplete.",
+      message: "Payment can proceed, but this Bid/No-Bid memo should enter human QA because the decision surface is incomplete.",
       metadata: {
         fulfillment_mode: "human_review",
         readiness_code: "BID_REVIEW_REQUIRED",
-        readiness_score: score != null ? String(score) : "",
+        readiness_score: String(score),
+        context_quality_score: contextScore != null ? String(contextScore) : "",
+        bid_decision_surface_score: String(score),
+        bid_decision_surface_status: surface.status,
+        bid_decision_surface_components: metadataList(surface.components),
+        bid_decision_surface_gaps: metadataList(allMissing),
       },
     };
   }
@@ -327,11 +492,15 @@ function bidNoBidGate(order: WorkOrderRow): ServiceFulfillmentGate {
     missing_inputs: missing,
     warnings: [],
     code: null,
-    message: "Bid/No-Bid context is strong enough for automated fulfillment.",
+    message: "Bid/No-Bid decision surface is strong enough for automated fulfillment.",
     metadata: {
       fulfillment_mode: "self_serve",
       readiness_code: "READY",
-      readiness_score: score != null ? String(score) : "",
+      readiness_score: String(score),
+      context_quality_score: contextScore != null ? String(contextScore) : "",
+      bid_decision_surface_score: String(score),
+      bid_decision_surface_status: surface.status,
+      bid_decision_surface_components: metadataList(surface.components),
     },
   };
 }

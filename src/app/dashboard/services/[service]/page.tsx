@@ -27,7 +27,7 @@ const SERVICES: Record<ServiceSlug, ServiceConfig> = {
     tierSlug: "bid-no-bid",
     eyebrow: "Per-tender decision",
     title: "Bid/no-bid analysis",
-    lead: "Use this before the team spends serious time on a proposal. Tenderpath checks the tender against your saved profile, match evidence, deadline pressure, and likely blockers.",
+    lead: "Use this before the team spends serious time on a proposal. Tenderpath checks the selected tender or TOR against your saved profile, match evidence, deadline pressure, and likely blockers.",
     output: [
       "Pursue / skip recommendation with reasoning",
       "Fit evidence and risk flags",
@@ -36,12 +36,13 @@ const SERVICES: Record<ServiceSlug, ServiceConfig> = {
     ],
     workflow: [
       "Confirm the selected tender from your pipeline",
-      "Paste in any requirements or TOR excerpts you have — the more context, the sharper the analysis",
-      "Complete checkout — the analysis runs instantly on confirmation",
+      "Add the source URL, TOR, or RFP so eligibility, documents, and commercial checks are grounded",
+      "Paste any capacity constraints or requirements you already know",
+      "Complete checkout — ready cases run instantly; incomplete decision surfaces route to human QA",
     ],
-    deliverySla: "Analysis delivered instantly after payment",
-    intakePrompt: "The analysis is grounded in the tender data we already have plus whatever you add below. If the tender description on the source page is thin, paste key eligibility criteria or evaluation criteria here — otherwise the recommendation will be too general to act on.",
-    caveat: "Best when the tender has enough requirements or source detail for a grounded recommendation. Adding context in the form below significantly improves output quality.",
+    deliverySla: "Ready decision surfaces run instantly; QA cases are reviewed before delivery",
+    intakePrompt: "Bid/No-Bid requires a selected dashboard tender plus a tender source URL or uploaded TOR/RFP before checkout. If the source page is thin, paste key eligibility, document, evaluation, or commercial terms so the recommendation is decisive.",
+    caveat: "Strong vendor fit is not enough on its own. Without a selected tender source or TOR, checkout pauses rather than producing a false-confidence memo.",
     cta: "Start bid/no-bid",
     sampleLines: [
       "RECOMMENDATION: Pursue — Strong fit",
