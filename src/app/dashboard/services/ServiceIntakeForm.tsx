@@ -2,6 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import {
+  buildServiceEvidencePack,
+  type EvidenceRequirementKey,
+  type ServiceEvidencePack,
+} from "@/lib/service-evidence-pack";
 
 type ServiceSlug = "bid-no-bid" | "digest" | "proposal" | "lta-roster";
 
@@ -29,11 +34,27 @@ interface PipelineEvidenceContext {
 interface UploadedFile {
   name: string;
   url: string;
+  vaultDocumentId?: number | null;
+  documentType?: string | null;
   extraction?: {
     status: string;
     charCount: number;
     error: string | null;
   };
+}
+
+type ProofFileMap = Partial<Record<EvidenceRequirementKey, UploadedFile>>;
+
+interface VaultDocument {
+  id: number;
+  name: string;
+  type: "certification" | "financial" | "cv" | "past_performance" | "other";
+  expiry_date: string | null;
+  file_url: string;
+  created_at: string;
+  extraction_status: string | null;
+  extraction_char_count: number | null;
+  extraction_error: string | null;
 }
 
 const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
@@ -137,15 +158,20 @@ function buildEvidenceReview(args: {
   tenderUrl: string;
   fields: Record<string, string>;
   uploadedFile: UploadedFile | null;
+  proofFiles: ProofFileMap;
   docId?: string | null;
 }) {
   if (args.service === "digest") return null;
-  const uploadedRequirements = Boolean(args.uploadedFile || args.docId);
+  const attachedSourceProof = args.proofFiles.tender_source || args.proofFiles.tor_rfp || args.proofFiles.agency_guide;
+  const uploadedRequirements = Boolean(args.uploadedFile || args.docId || attachedSourceProof);
   const sourceUrlAvailable = hasText(args.tenderUrl) || hasText(args.pipelineContext?.source_url) || hasText(args.pipelineContext?.manual_source_url);
-  const sourceAvailable = sourceUrlAvailable || (args.service === "bid-no-bid" && uploadedRequirements);
+  const sourceAvailable = sourceUrlAvailable || uploadedRequirements;
   const extractedRequirements = Boolean(
     args.uploadedFile?.extraction?.status === "extracted"
       && args.uploadedFile.extraction.charCount > 0,
+  ) || Boolean(
+    attachedSourceProof?.extraction?.status === "extracted"
+      && attachedSourceProof.extraction.charCount > 0,
   );
   const pastedRequirements = hasText(args.fields.tender_context) || hasText(args.fields.additional_details);
   const hasRequirements = extractedRequirements || pastedRequirements;
@@ -232,6 +258,112 @@ function buildEvidenceReview(args: {
   return { status, tone, checks, missing };
 }
 
+function evidencePackDocuments(proofFiles: ProofFileMap) {
+  return Object.fromEntries(
+    Object.entries(proofFiles).map(([key, file]) => [
+      key,
+      {
+        vault_document_id: file?.vaultDocumentId ?? null,
+        document_type: file?.documentType ?? null,
+        file_name: file?.name ?? null,
+        file_url: file?.url ?? null,
+        extraction_status: file?.extraction?.status ?? null,
+        char_count: file?.extraction?.charCount ?? 0,
+        error: file?.extraction?.error ?? null,
+      },
+    ]),
+  );
+}
+
+function uploadedFileFromVaultDocument(doc: VaultDocument): UploadedFile {
+  return {
+    name: doc.name,
+    url: doc.file_url,
+    vaultDocumentId: doc.id,
+    documentType: doc.type,
+    extraction: doc.extraction_status
+      ? {
+        status: doc.extraction_status,
+        charCount: doc.extraction_char_count ?? 0,
+        error: doc.extraction_error ?? null,
+      }
+      : undefined,
+  };
+}
+
+function vaultDocRelevanceScore(key: EvidenceRequirementKey, doc: VaultDocument): number {
+  const text = `${doc.name} ${doc.type}`.toLowerCase();
+  if (key === "financial_capacity") return doc.type === "financial" ? 10 : /audit|financial|bank|turnover|statement|balance/.test(text) ? 8 : 1;
+  if (key === "past_performance") return doc.type === "past_performance" ? 10 : /reference|past|performance|portfolio|completion|contract|case stud/.test(text) ? 8 : 1;
+  if (key === "team_cvs") return doc.type === "cv" ? 10 : /\bcv\b|resume|expert|team|personnel/.test(text) ? 8 : 1;
+  if (key === "certifications_licenses") return doc.type === "certification" ? 10 : /cert|license|licence|iso|haccp|pqs|insurance|quality|tax|registration/.test(text) ? 8 : 1;
+  if (key === "company_registration") return /registration|incorporation|tax|legal|articles|commercial/.test(text) ? 9 : doc.type === "certification" ? 5 : 1;
+  if (key === "product_datasheets") return /datasheet|catalog|catalogue|product|sku|spec|technical|test report/.test(text) ? 9 : 1;
+  if (key === "manufacturer_authorization") return /manufacturer|authorization|authorisation|authorized|authorised|distributor|dealer|reseller/.test(text) ? 9 : 1;
+  if (key === "support_warranty") return /warranty|support|maintenance|service coverage|after-sales|after sales/.test(text) ? 9 : 1;
+  if (key === "operational_capacity") return /capacity|fleet|warehouse|route|production|delivery|distribution|equipment|facility/.test(text) ? 9 : 1;
+  if (key === "capability_statement") return /capability|company profile|profile|statement|brochure|service catalog/.test(text) ? 9 : 1;
+  if (key === "tender_source" || key === "tor_rfp" || key === "agency_guide") return /tor|rfp|tender|terms|reference|call|guide|roster|agency|lta|eoi|rfq/.test(text) ? 9 : 1;
+  return 1;
+}
+
+function rankedVaultDocsForRequirement(docs: VaultDocument[], key: EvidenceRequirementKey): VaultDocument[] {
+  return [...docs].sort((a, b) => {
+    const scoreDiff = vaultDocRelevanceScore(key, b) - vaultDocRelevanceScore(key, a);
+    if (scoreDiff !== 0) return scoreDiff;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+}
+
+function buildEvidencePackPreview(args: {
+  service: ServiceSlug;
+  tenderUrl: string;
+  fields: Record<string, string>;
+  uploadedFile: UploadedFile | null;
+  financialFile: UploadedFile | null;
+  proofFiles: ProofFileMap;
+  pipelineContext: PipelineEvidenceContext | null;
+  docId?: string | null;
+  tenderTitle?: string | null;
+  agency?: string | null;
+}): ServiceEvidencePack | null {
+  if (args.service === "digest") return null;
+  const intake = {
+    ...args.fields,
+    ...(args.uploadedFile ? { vault_url: args.uploadedFile.url, vault_filename: args.uploadedFile.name } : {}),
+    ...(args.financialFile ? { financial_documents_url: args.financialFile.url, financial_documents_filename: args.financialFile.name } : {}),
+    ...(args.docId ? { vault_doc_id: args.docId } : {}),
+    evidence_pack_documents: evidencePackDocuments(args.proofFiles),
+  };
+  return buildServiceEvidencePack({
+    serviceSlug: args.service,
+    intake,
+    tenderSourceAvailable: hasText(args.tenderUrl) || hasText(args.pipelineContext?.source_url) || hasText(args.pipelineContext?.manual_source_url),
+    targetAgency: args.fields.target_agency || args.agency,
+    targetCategory: args.fields.target_category,
+    contextText: [
+      args.tenderTitle,
+      args.agency,
+      args.fields.target_agency,
+      args.fields.target_category,
+      args.fields.tender_context,
+      args.fields.additional_details,
+      args.fields.requirement_eligibility,
+      args.fields.requirement_scope,
+      args.fields.requirement_documents,
+      args.fields.requirement_evaluation,
+      args.fields.requirement_submission,
+    ].filter(Boolean).join(" "),
+  });
+}
+
+const EXISTING_UPLOAD_KEYS = new Set<EvidenceRequirementKey>([
+  "tender_source",
+  "tor_rfp",
+  "agency_guide",
+  "financial_capacity",
+]);
+
 function payHref(plan: string, context: {
   tenderTitle?: string | null;
   agency?: string | null;
@@ -267,6 +399,11 @@ export default function ServiceIntakeForm({
   const [uploading, setUploading] = useState(false);
   const [financialFile, setFinancialFile] = useState<UploadedFile | null>(null);
   const [uploadingFinancial, setUploadingFinancial] = useState(false);
+  const [proofFiles, setProofFiles] = useState<ProofFileMap>({});
+  const [uploadingProofKey, setUploadingProofKey] = useState<EvidenceRequirementKey | null>(null);
+  const [vaultDocs, setVaultDocs] = useState<VaultDocument[]>([]);
+  const [vaultLoading, setVaultLoading] = useState(false);
+  const [vaultError, setVaultError] = useState<string | null>(null);
   const [pipelineContext, setPipelineContext] = useState<PipelineEvidenceContext | null>(null);
   const [contextLoadError, setContextLoadError] = useState<string | null>(null);
 
@@ -295,6 +432,35 @@ export default function ServiceIntakeForm({
     };
   }, [pipelineItemId]);
 
+  useEffect(() => {
+    if (service === "digest") {
+      setVaultDocs([]);
+      setVaultError(null);
+      return;
+    }
+    let cancelled = false;
+    setVaultLoading(true);
+    setVaultError(null);
+    fetch("/api/dashboard/vault", { headers: authHeaders() })
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as { documents?: VaultDocument[]; error?: string };
+        if (!res.ok) throw new Error(data.error ?? "Could not load vault documents");
+        if (!cancelled) setVaultDocs(data.documents ?? []);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setVaultDocs([]);
+          setVaultError(err instanceof Error ? err.message : "Could not load vault documents");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setVaultLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [service]);
+
   const evidenceReview = useMemo(() => buildEvidenceReview({
     service,
     pipelineItemId,
@@ -303,8 +469,21 @@ export default function ServiceIntakeForm({
     tenderUrl,
     fields,
     uploadedFile,
+    proofFiles,
     docId,
-  }), [contextLoadError, docId, fields, pipelineContext, pipelineItemId, service, tenderUrl, uploadedFile]);
+  }), [contextLoadError, docId, fields, pipelineContext, pipelineItemId, proofFiles, service, tenderUrl, uploadedFile]);
+  const evidencePackPreview = useMemo(() => buildEvidencePackPreview({
+    service,
+    tenderUrl,
+    fields,
+    uploadedFile,
+    financialFile,
+    proofFiles,
+    pipelineContext,
+    docId,
+    tenderTitle,
+    agency,
+  }), [agency, docId, fields, financialFile, pipelineContext, proofFiles, service, tenderTitle, tenderUrl, uploadedFile]);
   const checkoutBlocked = Boolean(
     evidenceReview
       && (
@@ -358,6 +537,24 @@ export default function ServiceIntakeForm({
     setUploadingFinancial(false);
   }
 
+  async function handleProofFileChange(key: EvidenceRequirementKey, file: File | undefined) {
+    if (!file) return;
+    setUploadingProofKey(key);
+    setError(null);
+    const result = await uploadOne(file);
+    if ("error" in result) setError(result.error);
+    else setProofFiles((prev) => ({ ...prev, [key]: result }));
+    setUploadingProofKey(null);
+  }
+
+  function attachVaultDocument(key: EvidenceRequirementKey, rawId: string) {
+    const id = Number(rawId);
+    if (!Number.isInteger(id)) return;
+    const doc = vaultDocs.find((item) => item.id === id);
+    if (!doc) return;
+    setProofFiles((prev) => ({ ...prev, [key]: uploadedFileFromVaultDocument(doc) }));
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -368,6 +565,7 @@ export default function ServiceIntakeForm({
         ...fields,
         ...(uploadedFile ? { vault_url: uploadedFile.url, vault_filename: uploadedFile.name } : {}),
         ...(financialFile ? { financial_documents_url: financialFile.url, financial_documents_filename: financialFile.name } : {}),
+        ...(Object.keys(proofFiles).length ? { evidence_pack_documents: evidencePackDocuments(proofFiles) } : {}),
         ...(docId ? { vault_doc_id: docId } : {}),
       };
 
@@ -631,6 +829,133 @@ export default function ServiceIntakeForm({
           {checkoutBlocked && (
             <div className="mt-2 rounded-sm bg-white/50 px-2.5 py-2 text-[11.5px] font-medium">
               Automated checkout is paused until the missing source context is added. This keeps the paid output out of false-confidence territory.
+            </div>
+          )}
+        </div>
+      )}
+
+      {evidencePackPreview && (
+        <div className="rounded-sm border border-stone-200/80 bg-stone-50/40 px-3.5 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <span
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+              style={{ fontFamily: MONO }}
+            >
+              Evidence pack · {evidencePackPreview.status.replace(/_/g, " ")}
+            </span>
+            <span className="text-[11px] font-semibold tabular-nums text-stone-700" style={{ fontFamily: MONO }}>
+              {evidencePackPreview.score_0_10}/10
+            </span>
+          </div>
+          <div className="mt-2 space-y-2">
+            {evidencePackPreview.requirements.map((requirement) => {
+              const proof = proofFiles[requirement.key];
+              const handledAbove = EXISTING_UPLOAD_KEYS.has(requirement.key);
+              const rankedVaultDocs = rankedVaultDocsForRequirement(vaultDocs, requirement.key);
+              const attachedVaultDoc = proof?.vaultDocumentId
+                ? vaultDocs.find((doc) => doc.id === proof.vaultDocumentId)
+                : null;
+              const vaultChoices = attachedVaultDoc && !rankedVaultDocs.slice(0, 12).some((doc) => doc.id === attachedVaultDoc.id)
+                ? [attachedVaultDoc, ...rankedVaultDocs.slice(0, 11)]
+                : rankedVaultDocs.slice(0, 12);
+              const attachedVaultId = proof?.vaultDocumentId ? String(proof.vaultDocumentId) : "";
+              return (
+                <div key={requirement.key} className="rounded-sm border border-stone-200 bg-white px-3 py-2.5">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span
+                          className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                            requirement.satisfied ? "text-emerald-700" : requirement.required ? "text-red-700" : "text-amber-700"
+                          }`}
+                          style={{ fontFamily: MONO }}
+                        >
+                          {requirement.satisfied ? "on file" : requirement.required ? "needed" : "optional"}
+                        </span>
+                        <span className="text-[12.5px] font-semibold text-stone-900">
+                          {requirement.label}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11.5px] leading-relaxed text-stone-600">
+                        {requirement.satisfied
+                          ? `Source: ${requirement.sources.slice(0, 2).join(", ")}`
+                          : requirement.missing_reason}
+                      </p>
+                      {!requirement.satisfied && (
+                        <p className="mt-1 text-[11px] leading-relaxed text-stone-500">
+                          Examples: {requirement.examples.slice(0, 3).join(", ")}
+                        </p>
+                      )}
+                    </div>
+                    <div className="shrink-0 space-y-1.5 sm:w-[220px]">
+                      {vaultDocs.length > 0 ? (
+                        <select
+                          value={attachedVaultId}
+                          onChange={(e) => attachVaultDocument(requirement.key, e.target.value)}
+                          className="w-full rounded-sm border border-stone-300 bg-white px-2.5 py-2 text-[11px] text-stone-700 focus:border-stone-700 focus:outline-none"
+                          style={{ fontFamily: MONO }}
+                        >
+                          <option value="">Attach from vault...</option>
+                          {vaultChoices.map((doc) => (
+                            <option key={doc.id} value={doc.id}>
+                              {doc.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <p className="rounded-sm border border-stone-200 bg-stone-50 px-2.5 py-2 text-[11px] leading-relaxed text-stone-500">
+                          {vaultLoading
+                            ? "Loading vault..."
+                            : vaultError
+                              ? "Vault unavailable here"
+                              : "No vault docs yet"}
+                        </p>
+                      )}
+                      {proof ? (
+                        <div
+                          className="flex items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50/60 px-2.5 py-2 text-[11px] text-emerald-800"
+                          style={{ fontFamily: MONO }}
+                        >
+                          <span className="min-w-0 flex-1 truncate">{proof.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setProofFiles((prev) => {
+                              const next = { ...prev };
+                              delete next[requirement.key];
+                              return next;
+                            })}
+                            className="shrink-0 underline underline-offset-2 hover:text-emerald-900"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : handledAbove ? (
+                        <p className="text-[11px] leading-relaxed text-stone-500">
+                          New files use the matching upload field above.
+                        </p>
+                      ) : (
+                        <label className="flex cursor-pointer justify-center rounded-sm border border-dashed border-stone-300 px-2.5 py-2 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-stone-500 hover:border-stone-700 hover:text-stone-800 transition-colors">
+                          <span style={{ fontFamily: MONO }}>
+                            {uploadingProofKey === requirement.key ? "Uploading..." : "Upload proof"}
+                          </span>
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx,.xls,.xlsx"
+                            className="sr-only"
+                            disabled={uploadingProofKey === requirement.key}
+                            onChange={(e) => handleProofFileChange(requirement.key, e.target.files?.[0])}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {evidencePackPreview.status !== "ready" && (
+            <div className="mt-2 rounded-sm bg-white px-2.5 py-2 text-[11.5px] leading-relaxed text-stone-600">
+              Missing proof does not hide the service. It routes the order through human QA and keeps automated output from overclaiming readiness.
             </div>
           )}
         </div>

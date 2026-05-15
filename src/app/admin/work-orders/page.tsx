@@ -1,6 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  buildServiceEvidencePack,
+  type EvidenceRequirementState,
+  type ServiceEvidencePack,
+} from "@/lib/service-evidence-pack";
 import styles from "../admin.module.css";
 import { StatusDot, StatusTag } from "../_components/StatusTag";
 
@@ -74,6 +79,7 @@ const QA_FILTERS = [
   ["delivered", "Delivered"],
   ["no_package", "No package"],
 ] as const;
+const PAID_SERVICE_PLANS = new Set(["bid-no-bid", "proposal", "proposal-draft", "lta-roster", "roster-fast-track"]);
 
 function authHeaders(): HeadersInit {
   const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
@@ -93,6 +99,9 @@ function stringList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
 }
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
 function money(cents: number | null, currency: string | null): string {
   if (cents == null) return "—";
   return new Intl.NumberFormat("en-US", {
@@ -110,7 +119,7 @@ function fmtDate(value: string | null): string {
 function intakePreview(intake: Record<string, unknown> | null): Array<[string, string]> {
   if (!intake) return [];
   return Object.entries(intake)
-    .filter(([key]) => key !== "service_context")
+    .filter(([key]) => key !== "service_context" && key !== "evidence_pack_documents" && key !== "evidence_pack")
     .map<[string, string]>(([key, value]) => {
       const labelText = label(key);
       if (Array.isArray(value)) return [labelText, value.join(", ")];
@@ -121,6 +130,61 @@ function intakePreview(intake: Record<string, unknown> | null): Array<[string, s
     })
     .filter(([, v]) => v.trim().length > 0)
     .slice(0, 4);
+}
+function isEvidencePack(value: unknown): value is ServiceEvidencePack {
+  const record = asRecord(value);
+  return Boolean(
+    record
+      && record.version === "sprint6-service-evidence-pack-v1"
+      && Array.isArray(record.requirements),
+  );
+}
+function evidencePackForOrder(order: WorkOrder): ServiceEvidencePack | null {
+  const service = order.service_slug ?? order.plan;
+  if (!PAID_SERVICE_PLANS.has(service)) return null;
+
+  const intake = order.intake ?? null;
+  const serviceContext = asRecord(intake?.service_context);
+  const storedPack = serviceContext?.evidence_pack ?? intake?.evidence_pack;
+  if (isEvidencePack(storedPack)) return storedPack;
+
+  return buildServiceEvidencePack({
+    serviceSlug: service,
+    intake,
+    tenderSourceAvailable: Boolean(order.tender_url),
+    targetAgency: stringOrNull(intake?.target_agency) ?? order.agency,
+    targetCategory: stringOrNull(intake?.target_category),
+    contextText: [
+      order.tender_title,
+      order.agency,
+      order.tender_url,
+      stringOrNull(intake?.tender_context),
+      stringOrNull(intake?.requirement_scope),
+      stringOrNull(intake?.additional_details),
+    ].filter(Boolean).join(" "),
+  });
+}
+function evidenceStatusLabel(pack: ServiceEvidencePack): string {
+  return `${label(pack.status)} · ${pack.score_0_10}/10`;
+}
+function requirementNames(requirements: EvidenceRequirementState[], max = 4): string {
+  return requirements.map((item) => item.label).slice(0, max).join("; ");
+}
+function fulfillmentNoteForEvidencePack(pack: ServiceEvidencePack): string {
+  const missingRequired = requirementNames(pack.missing_required, 5);
+  const missingRecommended = requirementNames(pack.missing_recommended, 3);
+  const requiredNote = missingRequired
+    ? `Request required proof: ${missingRequired}.`
+    : "Required proof is on file.";
+  const recommendedNote = missingRecommended
+    ? ` Useful extras: ${missingRecommended}.`
+    : "";
+  return `Evidence pack ${evidenceStatusLabel(pack)}. ${requiredNote}${recommendedNote}`;
+}
+function evidenceActionLabel(pack: ServiceEvidencePack): string {
+  if (pack.status === "ready") return "Ready for fulfillment QA";
+  if (pack.status === "blocked") return "Client proof needed before fulfillment";
+  return "QA can proceed with caveats";
 }
 function serviceContextPreview(intake: Record<string, unknown> | null) {
   const context = asRecord(intake?.service_context);
@@ -274,6 +338,8 @@ export default function WorkOrdersPage() {
           {orders.map((o) => {
             const intake = intakePreview(o.intake);
             const serviceContext = serviceContextPreview(o.intake);
+            const evidencePack = evidencePackForOrder(o);
+            const evidenceBlocked = Boolean(evidencePack && evidencePack.status !== "ready");
             return (
               <article key={o.id} className={styles.woCard}>
                 <div className={styles.woCardRail}>
@@ -376,6 +442,51 @@ export default function WorkOrdersPage() {
                           )}
                         </div>
                       )}
+                      {evidencePack && (
+                        <div className={`${styles.woEvidenceLine} ${evidenceBlocked ? styles.woEvidenceLineWarn : styles.woEvidenceLineOk}`}>
+                          <div className={styles.woEvidenceHead}>
+                            <span>Evidence {evidenceStatusLabel(evidencePack)}</span>
+                            <span>{evidenceActionLabel(evidencePack)}</span>
+                          </div>
+                          {evidencePack.missing_required.length > 0 ? (
+                            <div>Required: {requirementNames(evidencePack.missing_required)}</div>
+                          ) : (
+                            <div>Required proof complete.</div>
+                          )}
+                          {evidencePack.missing_recommended.length > 0 && (
+                            <div>Helpful: {requirementNames(evidencePack.missing_recommended, 3)}</div>
+                          )}
+                          {evidencePack.warnings.length > 0 && (
+                            <div>Warnings: {evidencePack.warnings.slice(0, 2).join(" | ")}</div>
+                          )}
+                          <div className={styles.woEvidenceActions}>
+                            <button
+                              type="button"
+                              className={styles.woMiniButton}
+                              disabled={savingId === o.id}
+                              onClick={() => updateOrder(o.id, {
+                                fulfillment_notes: fulfillmentNoteForEvidencePack(evidencePack),
+                              })}
+                            >
+                              Seed note
+                            </button>
+                            {evidenceBlocked && o.status !== "waiting_on_client" && (
+                              <button
+                                type="button"
+                                className={styles.woMiniButton}
+                                disabled={savingId === o.id}
+                                onClick={() => updateOrder(o.id, {
+                                  status: "waiting_on_client",
+                                  fulfillment_notes: fulfillmentNoteForEvidencePack(evidencePack),
+                                  notify_customer: notify,
+                                })}
+                              >
+                                Wait on client
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
                       {o.package_error_message && (
                         <div className={styles.woErrorLine}>{o.package_error_message}</div>
                       )}
@@ -384,6 +495,7 @@ export default function WorkOrdersPage() {
                     <div>
                       <div className={styles.woColLabel}>Fulfillment notes</div>
                       <textarea
+                        key={`${o.id}:${o.fulfillment_notes ?? ""}`}
                         className={styles.woNotes}
                         rows={3}
                         defaultValue={o.fulfillment_notes ?? ""}

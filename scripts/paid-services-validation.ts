@@ -9,6 +9,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { matchGrants, matchTenders } from "../src/lib/assessment/match";
+import { buildServiceEvidencePack } from "../src/lib/service-evidence-pack";
 import { buildProposalEvidenceProfile } from "../src/lib/proposal-package/evidence";
 import { buildProposalRequirementModel } from "../src/lib/proposal-package/requirements-model";
 import { AGENCY_PACKAGES, inferAgencySlug } from "../src/lib/proposal-package/roster-packages";
@@ -27,7 +28,7 @@ try {
 
 const DEFAULT_PANEL = "data/validation/paid-services-panel.csv";
 const DEFAULT_PROPOSAL_FIXTURES = "data/validation/proposal-requirement-fixtures.json";
-const VALIDATION_VERSION = "sprint-5-roster-category-surface-v1";
+const VALIDATION_VERSION = "sprint-6-service-evidence-pack-v1";
 const SUPPORTED_ROSTER_AGENCY_LABELS = new Set(AGENCY_PACKAGES.map((agency) => agency.label.toUpperCase()));
 
 type PanelRow = Record<string, string>;
@@ -107,6 +108,13 @@ type RosterCategorySurfaceSignal = {
   missing: string[];
 };
 
+type EvidencePackSurfaceSignal = {
+  score: number;
+  status: string;
+  components: string[];
+  missing: string[];
+};
+
 type ProfileResult = {
   panel_id: string;
   prospect_company: string;
@@ -134,6 +142,10 @@ type ProfileResult = {
   roster_category_surface_status: string | null;
   roster_category_surface_components: string[];
   roster_category_surface_gaps: string[];
+  paid_service_evidence_pack_0_10: number | null;
+  paid_service_evidence_pack_status: string | null;
+  paid_service_evidence_pack_components: string[];
+  paid_service_evidence_pack_gaps: string[];
   proposal_fixture_title: string | null;
   proposal_fixture_source_url: string | null;
   service_output_quality_0_10: number;
@@ -312,6 +324,10 @@ function toCsv(results: ProfileResult[]): string {
     "roster_category_surface_status",
     "roster_category_surface_components",
     "roster_category_surface_gaps",
+    "paid_service_evidence_pack_0_10",
+    "paid_service_evidence_pack_status",
+    "paid_service_evidence_pack_components",
+    "paid_service_evidence_pack_gaps",
     "proposal_fixture_title",
     "proposal_fixture_source_url",
     "service_output_quality_0_10",
@@ -348,6 +364,10 @@ function toCsv(results: ProfileResult[]): string {
       result.roster_category_surface_status,
       result.roster_category_surface_components.join(" | "),
       result.roster_category_surface_gaps.join(" | "),
+      result.paid_service_evidence_pack_0_10,
+      result.paid_service_evidence_pack_status,
+      result.paid_service_evidence_pack_components.join(" | "),
+      result.paid_service_evidence_pack_gaps.join(" | "),
       result.proposal_fixture_title,
       result.proposal_fixture_source_url,
       result.service_output_quality_0_10,
@@ -1173,6 +1193,95 @@ function rosterCategorySurfaceSignal(row: PanelRow): RosterCategorySurfaceSignal
   };
 }
 
+function serviceSlugForValidation(row: PanelRow): string | null {
+  const track = cell(row, "service_track").toLowerCase();
+  if (track.includes("bid")) return "bid-no-bid";
+  if (track.includes("proposal")) return "proposal-draft";
+  if (track.includes("roster")) return "roster-fast-track";
+  return null;
+}
+
+function expectedEvidenceKeys(row: PanelRow, fixtureSignal?: ProposalFixtureSignal | null): string[] {
+  const service = serviceSlugForValidation(row);
+  const missing = cell(row, "missing_inputs").toLowerCase();
+  const benchmark = cell(row, "benchmark_tender_or_agency").toLowerCase();
+  const text = `${missing} ${benchmark} ${cell(row, "sector")} ${cell(row, "sub_icp")}`.toLowerCase();
+  const keys: string[] = [];
+  const add = (key: string) => keys.push(key);
+
+  if (service === "bid-no-bid") add("tender_source");
+  if (service === "proposal-draft") add("tor_rfp");
+  if (service === "roster-fast-track") add("agency_guide");
+  if (/financial|audited|turnover|bank|balance sheet|commercial|pricing/.test(text)) add("financial_capacity");
+  if (/legal|registration|tax|incorporation|entity/.test(text)) add("company_registration");
+  if (/certification|certificate|license|licence|insurance|iso|haccp|pqs|quality|regulatory/.test(text)) add("certifications_licenses");
+  if (/reference|past performance|similar contract|portfolio|completion|experience/.test(text)) add("past_performance");
+  if (/cv|expert|team|personnel/.test(text)) add("team_cvs");
+  if (/capability statement|company profile/.test(text)) add("capability_statement");
+  if (/capacity|fleet|warehouse|route|production|distribution|delivery|dangerous-goods|dangerous goods/.test(text)) add("operational_capacity");
+  if (/product|sku|datasheet|catalog|catalogue|technical data|test report|device|equipment/.test(text)) add("product_datasheets");
+  if (/manufacturer|authorization|authorisation|authorized|authorised|distributor|reseller|dealer/.test(text)) add("manufacturer_authorization");
+  if (/warranty|support|maintenance|after-sales|service coverage/.test(text)) add("support_warranty");
+
+  if (fixtureSignal && service === "proposal-draft") add("tor_rfp");
+  return unique(keys);
+}
+
+function evidencePackSurfaceSignal(row: PanelRow, fixtureSignal?: ProposalFixtureSignal | null): EvidencePackSurfaceSignal | null {
+  const service = serviceSlugForValidation(row);
+  if (!service) return null;
+
+  const benchmark = cell(row, "benchmark_tender_or_agency");
+  const hasSpecificSource = Boolean(fixtureSignal)
+    || /\b(notice|rfp|rfq|itb|eoi|tender|lta|framework|call)\b|\b\d{4,}\b/i.test(benchmark);
+  const pack = buildServiceEvidencePack({
+    serviceSlug: service,
+    intake: {
+      ...(fixtureSignal ? { tender_context: fixtureSignal.fixture.tender_text } : {}),
+      target_agency: benchmark,
+      target_category: cell(row, "sub_icp"),
+    },
+    tenderSourceAvailable: hasSpecificSource,
+    targetAgency: benchmark,
+    targetCategory: cell(row, "sub_icp"),
+    contextText: [
+      benchmark,
+      cell(row, "sector"),
+      cell(row, "sub_icp"),
+      cell(row, "scenario_goal"),
+      cell(row, "missing_inputs"),
+    ].join(" "),
+  });
+  const requirementKeys = new Set<string>(pack.requirements.map((item) => item.key));
+  const expected = expectedEvidenceKeys(row, fixtureSignal);
+  const coveredExpected = expected.filter((key) => requirementKeys.has(key));
+  const coverage = expected.length ? coveredExpected.length / expected.length : 1;
+  const requiredProofCount = pack.requirements.filter((item) => item.required).length;
+  const sourceReady = pack.requirements.some((item) =>
+    ["tender_source", "tor_rfp", "agency_guide"].includes(item.key) && item.satisfied,
+  );
+  let score = 4.8 + coverage * 4.2;
+  if (sourceReady) score += 0.4;
+  if (requiredProofCount >= 4) score += 0.3;
+  if (coverage < 1) score = Math.min(score, 7.4);
+  if (pack.missing_required.length > 0) score = Math.min(score, 8.8);
+  const finalScore = clampScore(score);
+
+  return {
+    score: finalScore,
+    status: finalScore >= 8.5
+      ? "evidence_pack_surface_ready"
+      : finalScore >= 7.0
+      ? "evidence_pack_needs_tuning"
+      : "evidence_pack_not_ready",
+    components: pack.requirements
+      .filter((item) => item.required)
+      .map((item) => item.label)
+      .slice(0, 8),
+    missing: pack.missing_required.map((item) => item.label).slice(0, 8),
+  };
+}
+
 function projectedScores(
   row: PanelRow,
   matchRun: MatchRun,
@@ -1187,6 +1296,7 @@ function projectedScores(
   const requirementModelScore = proposalRequirementModelScore(row, contextScore, fixtureSignal);
   const bidSurface = bidDecisionSurfaceSignal(row);
   const rosterSurface = rosterCategorySurfaceSignal(row);
+  const evidencePack = evidencePackSurfaceSignal(row, fixtureSignal);
   let serviceOutput = 0.32 * contextScore + 0.28 * assessmentScore + 0.22 * matchScore + 0.18 * fitScore;
   let trustworthiness = 0.38 * assessmentScore + 0.34 * contextScore + 0.18 * matchScore + 0.10 * fitScore;
   let timeSaved = 0.30 * contextScore + 0.28 * matchScore + 0.22 * assessmentScore + 0.20 * fitScore;
@@ -1225,6 +1335,16 @@ function projectedScores(
     }
   }
 
+  if (evidencePack) {
+    serviceOutput = 0.82 * serviceOutput + 0.18 * evidencePack.score;
+    trustworthiness = 0.86 * trustworthiness + 0.14 * evidencePack.score;
+    timeSaved = 0.80 * timeSaved + 0.20 * evidencePack.score;
+    if (evidencePack.score < 7.0) {
+      serviceOutput = Math.min(serviceOutput, 6.9);
+      trustworthiness = Math.min(trustworthiness, 7.0);
+    }
+  }
+
   if (!fixtureSignal && serviceTrack.includes("proposal") && /actual (tor|rfp)|evaluation criteria|financial template/i.test(cell(row, "missing_inputs"))) {
     serviceOutput = Math.min(serviceOutput, 5.8);
     timeSaved = Math.min(timeSaved, 6.2);
@@ -1258,6 +1378,7 @@ function projectedScores(
     requirementModelScore,
     bidSurface,
     rosterSurface,
+    evidencePack,
   };
 }
 
@@ -1343,6 +1464,10 @@ function validateProfile(row: PanelRow, matchRun: MatchRun, fixture?: ProposalFi
     roster_category_surface_status: scores.rosterSurface?.status ?? null,
     roster_category_surface_components: scores.rosterSurface?.components ?? [],
     roster_category_surface_gaps: scores.rosterSurface?.missing ?? [],
+    paid_service_evidence_pack_0_10: scores.evidencePack?.score ?? null,
+    paid_service_evidence_pack_status: scores.evidencePack?.status ?? null,
+    paid_service_evidence_pack_components: scores.evidencePack?.components ?? [],
+    paid_service_evidence_pack_gaps: scores.evidencePack?.missing ?? [],
     proposal_fixture_title: fixture?.source_title ?? null,
     proposal_fixture_source_url: fixture?.source_url ?? null,
     service_output_quality_0_10: scores.serviceOutput,
@@ -1389,6 +1514,9 @@ function summarize(results: ProfileResult[]) {
       median_roster_category_surface_0_10: rows.some((row) => row.roster_category_surface_0_10 != null)
         ? median(rows.flatMap((row) => row.roster_category_surface_0_10 == null ? [] : [row.roster_category_surface_0_10]))
         : null,
+      median_paid_service_evidence_pack_0_10: rows.some((row) => row.paid_service_evidence_pack_0_10 != null)
+        ? median(rows.flatMap((row) => row.paid_service_evidence_pack_0_10 == null ? [] : [row.paid_service_evidence_pack_0_10]))
+        : null,
     },
   ]));
 
@@ -1426,6 +1554,9 @@ function summarize(results: ProfileResult[]) {
       : null,
     median_roster_category_surface_0_10: results.some((result) => result.roster_category_surface_0_10 != null)
       ? median(results.flatMap((result) => result.roster_category_surface_0_10 == null ? [] : [result.roster_category_surface_0_10]))
+      : null,
+    median_paid_service_evidence_pack_0_10: results.some((result) => result.paid_service_evidence_pack_0_10 != null)
+      ? median(results.flatMap((result) => result.paid_service_evidence_pack_0_10 == null ? [] : [result.paid_service_evidence_pack_0_10]))
       : null,
     status_counts: Object.fromEntries(statusCounts.entries()),
     failure_category_counts: Object.fromEntries(failureCounts.entries()),

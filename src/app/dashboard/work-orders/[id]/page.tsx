@@ -2,6 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import {
+  buildServiceEvidencePack,
+  type EvidenceRequirementState,
+  type ServiceEvidencePack,
+} from "@/lib/service-evidence-pack";
 import BidNoBidPanel from "./BidNoBidPanel";
 import ProposalPackagePanel from "./ProposalPackagePanel";
 import RosterWorkspacePanel from "./RosterWorkspacePanel";
@@ -61,6 +66,11 @@ function orderRef(id: number): string {
 const BID_SLUG = "bid-no-bid";
 const PROPOSAL_SLUG = "proposal-draft";
 const ROSTER_SLUG = "roster-fast-track";
+const HIDDEN_INTAKE_KEYS = new Set([
+  "service_context",
+  "evidence_pack",
+  "evidence_pack_documents",
+]);
 
 function isBidNoBidOrder(order: WorkOrder): boolean {
   return order.plan === BID_SLUG || order.service_slug === BID_SLUG;
@@ -72,6 +82,183 @@ function isProposalOrder(order: WorkOrder): boolean {
 
 function isRosterOrder(order: WorkOrder): boolean {
   return order.plan === ROSTER_SLUG || order.service_slug === ROSTER_SLUG;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function formatIntakeValue(value: unknown): string {
+  if (Array.isArray(value)) return value.map(formatIntakeValue).filter(Boolean).join(", ");
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (value == null) return "";
+  if (typeof value === "object") return JSON.stringify(value, null, 2);
+  return String(value);
+}
+
+function isEvidencePack(value: unknown): value is ServiceEvidencePack {
+  const record = asRecord(value);
+  return Boolean(
+    record
+      && record.version === "sprint6-service-evidence-pack-v1"
+      && Array.isArray(record.requirements),
+  );
+}
+
+function evidencePackForOrder(order: WorkOrder): ServiceEvidencePack {
+  const intake = order.intake ?? null;
+  const serviceContext = asRecord(intake?.service_context);
+  const storedPack = serviceContext?.evidence_pack ?? intake?.evidence_pack;
+  if (isEvidencePack(storedPack)) return storedPack;
+
+  return buildServiceEvidencePack({
+    serviceSlug: order.service_slug ?? order.plan,
+    intake,
+    tenderSourceAvailable: Boolean(order.tender_url),
+    targetAgency: stringOrNull(intake?.target_agency) ?? order.agency,
+    targetCategory: stringOrNull(intake?.target_category),
+    contextText: [
+      order.tender_title,
+      order.agency,
+      order.tender_url,
+      stringOrNull(intake?.tender_context),
+      stringOrNull(intake?.requirement_scope),
+      stringOrNull(intake?.additional_details),
+    ].filter(Boolean).join(" "),
+  });
+}
+
+function evidenceStatusClasses(status: ServiceEvidencePack["status"]): string {
+  if (status === "ready") return "border-emerald-200 bg-emerald-50/70 text-emerald-800";
+  if (status === "blocked") return "border-red-200 bg-red-50/70 text-red-800";
+  return "border-amber-200 bg-amber-50/70 text-amber-800";
+}
+
+function requirementStatusClasses(requirement: EvidenceRequirementState): string {
+  if (requirement.satisfied) return "text-emerald-700";
+  if (requirement.required) return "text-red-700";
+  return "text-amber-700";
+}
+
+function requirementStatusLabel(requirement: EvidenceRequirementState): string {
+  if (requirement.satisfied) return "On file";
+  if (requirement.required) return "Needed";
+  return "Useful";
+}
+
+function EvidencePackPanel({ pack }: { pack: ServiceEvidencePack }) {
+  const required = pack.requirements.filter((requirement) => requirement.required);
+  const satisfiedRequired = required.filter((requirement) => requirement.satisfied).length;
+  const missingRequired = pack.missing_required.length;
+  const missingRecommended = pack.missing_recommended.length;
+
+  return (
+    <section className="mt-6 rounded-md border border-stone-200/70 bg-white p-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h2
+            className="text-[20px] font-medium text-stone-900"
+            style={{ fontFamily: SERIF }}
+          >
+            <span
+              className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle"
+              style={{ fontFamily: MONO }}
+            >
+              Proof ·
+            </span>
+            Evidence pack readiness
+          </h2>
+          <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-stone-600">
+            The order can move cleanly only when the source, eligibility, and vendor proof are visible here. Missing required proof routes the work through human QA instead of letting automation overstate readiness.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`rounded-sm border px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${evidenceStatusClasses(pack.status)}`}
+            style={{ fontFamily: MONO }}
+          >
+            {pack.status.replace(/_/g, " ")}
+          </span>
+          <span
+            className="rounded-sm border border-stone-200 bg-stone-50 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-700"
+            style={{ fontFamily: MONO }}
+          >
+            {pack.score_0_10}/10
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="rounded-sm bg-stone-50 px-3 py-2">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-400" style={{ fontFamily: MONO }}>
+            Required proof
+          </div>
+          <div className="mt-1 text-[18px] font-medium tabular-nums text-stone-900" style={{ fontFamily: SERIF }}>
+            {satisfiedRequired}/{required.length}
+          </div>
+        </div>
+        <div className="rounded-sm bg-stone-50 px-3 py-2">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-400" style={{ fontFamily: MONO }}>
+            Missing required
+          </div>
+          <div className="mt-1 text-[18px] font-medium tabular-nums text-stone-900" style={{ fontFamily: SERIF }}>
+            {missingRequired}
+          </div>
+        </div>
+        <div className="rounded-sm bg-stone-50 px-3 py-2">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-400" style={{ fontFamily: MONO }}>
+            Useful extras
+          </div>
+          <div className="mt-1 text-[18px] font-medium tabular-nums text-stone-900" style={{ fontFamily: SERIF }}>
+            {missingRecommended}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {pack.requirements.map((requirement) => (
+          <div key={requirement.key} className="rounded-sm border border-stone-200 bg-stone-50/40 px-3.5 py-3">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span
+                className={`text-[10px] font-semibold uppercase tracking-[0.15em] ${requirementStatusClasses(requirement)}`}
+                style={{ fontFamily: MONO }}
+              >
+                {requirementStatusLabel(requirement)}
+              </span>
+              <span className="text-[13px] font-semibold text-stone-900">{requirement.label}</span>
+              {requirement.critical && (
+                <span className="rounded-sm bg-stone-900 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-white" style={{ fontFamily: MONO }}>
+                  Critical
+                </span>
+              )}
+            </div>
+            <p className="mt-1.5 text-[12px] leading-relaxed text-stone-600">
+              {requirement.satisfied
+                ? `Source: ${requirement.sources.slice(0, 3).join(", ")}`
+                : requirement.missing_reason}
+            </p>
+            {!requirement.satisfied && (
+              <p className="mt-1 text-[11.5px] leading-relaxed text-stone-500">
+                Examples: {requirement.examples.slice(0, 3).join(", ")}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {pack.warnings.length > 0 && (
+        <div className="mt-3 rounded-sm border border-amber-200 bg-amber-50/60 px-3 py-2 text-[12px] leading-relaxed text-amber-800">
+          {pack.warnings.slice(0, 3).join(" · ")}
+        </div>
+      )}
+    </section>
+  );
 }
 
 export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -103,18 +290,15 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   const intakeRows = useMemo(() => {
     if (!order?.intake) return [];
     return Object.entries(order.intake)
+      .filter(([key]) => !HIDDEN_INTAKE_KEYS.has(key))
       .map(([key, value]) => {
-        const rendered = Array.isArray(value)
-          ? value.join(", ")
-          : typeof value === "boolean"
-            ? value ? "Yes" : "No"
-            : value == null
-              ? ""
-              : String(value);
+        const rendered = formatIntakeValue(value);
         return [label(key), rendered] as const;
       })
       .filter(([, value]) => value.trim().length > 0);
   }, [order]);
+
+  const evidencePack = useMemo(() => order ? evidencePackForOrder(order) : null, [order]);
 
   if (loading) {
     return (
@@ -209,6 +393,8 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
           />
         </div>
       )}
+
+      {evidencePack && <EvidencePackPanel pack={evidencePack} />}
 
       {/* Two-column: Intake + Tender context */}
       <div className="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]">

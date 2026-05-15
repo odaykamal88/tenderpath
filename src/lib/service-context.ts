@@ -1,4 +1,8 @@
 import { sql } from "@/lib/db";
+import {
+  buildServiceEvidencePack,
+  evidencePackDocumentsFromIntake,
+} from "@/lib/service-evidence-pack";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -114,19 +118,25 @@ function hasIntakeText(intake: JsonRecord | null | undefined, keys: string[]): b
 
 function hasUploadedDocument(intake: JsonRecord | null | undefined): boolean {
   if (!intake) return false;
+  const evidenceDocs = evidencePackDocumentsFromIntake(intake);
   return Boolean(
     cleanText(intake.vault_url, 50)
       || cleanText(intake.financial_documents_url, 50)
-      || cleanText(intake.vault_doc_id, 50),
+      || cleanText(intake.vault_doc_id, 50)
+      || Object.values(evidenceDocs).some((doc) => cleanText(doc.file_url, 50) || cleanText(doc.file_name, 50)),
   );
 }
 
 function hasTenderDocument(intake: JsonRecord | null | undefined): boolean {
   if (!intake) return false;
+  const evidenceDocs = evidencePackDocumentsFromIntake(intake);
   return Boolean(
     cleanText(intake.vault_url, 50)
       || cleanText(intake.vault_doc_id, 50)
-      || (typeof intake.vault_doc_id === "number" && Number.isFinite(intake.vault_doc_id)),
+      || (typeof intake.vault_doc_id === "number" && Number.isFinite(intake.vault_doc_id))
+      || cleanText(evidenceDocs.tender_source?.file_url, 50)
+      || cleanText(evidenceDocs.tor_rfp?.file_url, 50)
+      || cleanText(evidenceDocs.agency_guide?.file_url, 50),
   );
 }
 
@@ -188,6 +198,7 @@ async function loadVaultDocumentExtraction(userId: number, documentId: number): 
 
 async function uploadedDocumentContexts(userId: number, intake: JsonRecord | null | undefined): Promise<JsonRecord[]> {
   if (!intake) return [];
+  const evidenceDocs = evidencePackDocumentsFromIntake(intake);
   const candidates = [
     {
       kind: "requirements",
@@ -201,16 +212,28 @@ async function uploadedDocumentContexts(userId: number, intake: JsonRecord | nul
       fileName: cleanText(intake.financial_documents_filename, 255),
       documentId: null,
     },
+    ...Object.entries(evidenceDocs).map(([key, doc]) => ({
+      kind: `evidence_pack:${key}`,
+      url: cleanText(doc.file_url, 2000),
+      fileName: cleanText(doc.file_name, 255),
+      documentId: intOrNull(doc.vault_document_id),
+    })),
   ].filter((item) => item.url || item.documentId);
 
   const documents: JsonRecord[] = [];
+  const seen = new Set<string>();
   for (const candidate of candidates) {
+    const candidateKey = `${candidate.kind}:${candidate.url ?? candidate.documentId ?? ""}`;
+    if (seen.has(candidateKey)) continue;
+    seen.add(candidateKey);
     const extraction = candidate.url
       ? await loadDocumentExtraction(userId, candidate.url)
       : candidate.documentId
         ? await loadVaultDocumentExtraction(userId, candidate.documentId)
         : null;
-    const excerptMax = candidate.kind === "requirements" ? 14_000 : 5_000;
+    const excerptMax = candidate.kind === "requirements" || candidate.kind.startsWith("evidence_pack:")
+      ? 14_000
+      : 5_000;
     documents.push({
       kind: candidate.kind,
       file_name: candidate.fileName ?? extraction?.file_name ?? null,
@@ -413,6 +436,25 @@ export async function buildServiceContextPacket(args: BuildServiceContextArgs): 
   const match = matchContext(pipeline?.match_reasons, pipeline?.fit_score ?? null);
   const matchSummary = asStringArray(match.summary, 4, 220);
   const isBidNoBid = args.serviceSlug === "bid-no-bid";
+  const evidencePack = buildServiceEvidencePack({
+    serviceSlug: args.serviceSlug,
+    intake: args.intake,
+    tenderSourceAvailable: Boolean(sourceUrl),
+    targetAgency: cleanText(args.intake?.target_agency, 220) ?? cleanText(args.agency, 200) ?? cleanText(pipeline?.tender_agency, 200),
+    targetCategory: cleanText(args.intake?.target_category, 220),
+    contextText: [
+      args.tenderTitle,
+      args.agency,
+      pipeline?.tender_title,
+      pipeline?.tender_agency,
+      pipeline?.opportunity_type,
+      pipeline?.tender_sector,
+      pipeline?.eligibility_summary,
+      pipeline?.required_registrations,
+      args.intake?.additional_details,
+      args.intake?.tender_context,
+    ].filter(Boolean).join(" "),
+  });
 
   return {
     version: PACKET_VERSION,
@@ -442,6 +484,7 @@ export async function buildServiceContextPacket(args: BuildServiceContextArgs): 
     match,
     assessment,
     documents,
+    evidence_pack: evidencePack,
     input_coverage: {
       has_pipeline_item: Boolean(pipeline),
       has_source_url: Boolean(sourceUrl),
@@ -465,6 +508,7 @@ export async function buildServiceContextPacket(args: BuildServiceContextArgs): 
         "requirement_evaluation",
         "requirement_submission",
       ]),
+      has_service_evidence_pack: evidencePack.satisfied_keys.length > 0,
     },
     missing_inputs: missing,
     context_quality: {
@@ -500,7 +544,15 @@ export function formatServiceContextForPrompt(intake: JsonRecord | null | undefi
     ? context.documents.map(asRecord).filter((doc): doc is JsonRecord => Boolean(doc))
     : [];
   const missing = asStringArray(context.missing_inputs, 6, 160);
+  const evidencePack = asRecord(context.evidence_pack);
   const extractedDocs = documents.filter((doc) => doc.extraction_status === "extracted" && cleanText(doc.text_excerpt, 20));
+  const evidenceRequirements = Array.isArray(evidencePack?.requirements)
+    ? evidencePack.requirements.map(asRecord).filter((item): item is JsonRecord => Boolean(item))
+    : [];
+  const missingEvidence = evidenceRequirements
+    .filter((item) => item.satisfied !== true && item.required === true)
+    .map((item) => cleanText(item.label, 160))
+    .filter((item): item is string => Boolean(item));
 
   const lines = [
     "TenderPath saved service context:",
@@ -515,6 +567,10 @@ export function formatServiceContextForPrompt(intake: JsonRecord | null | undefi
     assessment?.company_name ? `Company profile: ${cleanText(assessment.company_name, 255)}` : null,
     assessment?.readiness_score != null ? `Readiness score: ${assessment.readiness_score}` : null,
     asStringArray(assessment?.capabilities, 6, 120).length ? `Capabilities: ${asStringArray(assessment?.capabilities, 6, 120).join(", ")}` : null,
+    evidencePack
+      ? `Evidence pack: ${cleanText(evidencePack.status, 40) ?? "unknown"}${evidencePack.score_0_10 != null ? ` (${evidencePack.score_0_10}/10)` : ""}`
+      : null,
+    missingEvidence.length ? `Missing proof evidence: ${missingEvidence.slice(0, 6).join(" | ")}` : null,
     extractedDocs.length ? `Uploaded document excerpts:\n${extractedDocs.map((doc) => [
       `File: ${cleanText(doc.file_name, 255) ?? "uploaded document"} (${cleanText(doc.kind, 80) ?? "document"})`,
       cleanText(doc.text_excerpt, 2500),
@@ -540,6 +596,7 @@ export function formatServiceDocumentsForTenderText(intake: JsonRecord | null | 
   const extractedDocs = documents.filter((doc) => {
     const kind = cleanText(doc.kind, 80);
     return kind !== "financial"
+      && kind !== "evidence_pack:financial_capacity"
       && doc.extraction_status === "extracted"
       && cleanText(doc.text_excerpt, 20);
   });

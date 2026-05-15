@@ -1,5 +1,6 @@
 import { sql } from "@/lib/db";
 import { formatServiceContextForPrompt, formatServiceDocumentsForTenderText } from "@/lib/service-context";
+import { evidencePackDocumentsFromIntake } from "@/lib/service-evidence-pack";
 import type { ProposalOutput, RosterOutput } from "./types";
 
 export interface WorkOrderRow {
@@ -186,17 +187,19 @@ const INTAKE_HIDDEN_KEYS = new Set([
   "vault_doc_id",
   "financial_documents_url",
   "financial_documents_filename",
+  "evidence_pack_documents",
 ]);
 
 export function buildIntakeSummary(intake: Record<string, unknown> | null): string {
   if (!intake) return "";
   const serviceContext = formatServiceContextForPrompt(intake);
+  const evidenceDocs = evidencePackDocumentsFromIntake(intake);
   const entries = Object.entries(intake).filter(([k]) => !INTAKE_HIDDEN_KEYS.has(k));
   const lines = entries.map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`);
   if (serviceContext) lines.unshift(serviceContext);
-  if (intake.financial_documents_url) {
+  if (intake.financial_documents_url || evidenceDocs.financial_capacity?.file_url) {
     lines.push(
-      `financial_documents_provided: yes (${typeof intake.financial_documents_filename === "string" ? intake.financial_documents_filename : "uploaded"})`,
+      `financial_documents_provided: yes (${typeof intake.financial_documents_filename === "string" ? intake.financial_documents_filename : evidenceDocs.financial_capacity?.file_name ?? "uploaded"})`,
     );
   }
   return lines.join("\n");

@@ -13,10 +13,27 @@ export async function GET(request: Request) {
   if (!guard.authorized) return guard.response!;
 
   const rows = await sql`
-    SELECT id, name, type, expiry_date, file_url, created_at
-    FROM vault_documents
-    WHERE user_id = ${guard.user!.id}
-    ORDER BY created_at DESC
+    SELECT
+      vd.id,
+      vd.name,
+      vd.type,
+      vd.expiry_date,
+      vd.file_url,
+      vd.created_at,
+      de.status AS extraction_status,
+      de.char_count AS extraction_char_count,
+      de.error AS extraction_error
+    FROM vault_documents vd
+    LEFT JOIN LATERAL (
+      SELECT status, char_count, error
+      FROM document_extractions
+      WHERE user_id = vd.user_id
+        AND (vault_document_id = vd.id OR file_url = vd.file_url)
+      ORDER BY updated_at DESC NULLS LAST
+      LIMIT 1
+    ) de ON TRUE
+    WHERE vd.user_id = ${guard.user!.id}
+    ORDER BY vd.created_at DESC
   `;
 
   return NextResponse.json({ documents: rows });

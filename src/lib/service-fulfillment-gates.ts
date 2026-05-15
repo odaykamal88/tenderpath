@@ -1,5 +1,10 @@
 import { sql } from "@/lib/db";
 import {
+  buildServiceEvidencePack,
+  serviceEvidencePackMetadata,
+  type ServiceEvidencePack,
+} from "@/lib/service-evidence-pack";
+import {
   ensureWorkOrderServiceContext,
   serviceContextFromIntake,
 } from "@/lib/service-context";
@@ -129,6 +134,27 @@ function metadataList(items: string[]): string {
   return items.slice(0, 8).join(" | ");
 }
 
+function evidencePackMissing(pack: ServiceEvidencePack): string[] {
+  return pack.missing_required.map((item) => `proof: ${item.label}`);
+}
+
+function evidencePackForOrder(
+  order: WorkOrderRow,
+  serviceSlug: string,
+  contextText: string,
+  tenderSourceAvailable = false,
+): ServiceEvidencePack {
+  const tender = contextTender(order);
+  return buildServiceEvidencePack({
+    serviceSlug,
+    intake: order.intake,
+    tenderSourceAvailable: tenderSourceAvailable || Boolean(clean(order.tender_url, 1000) || clean(tender?.source_url, 1000)),
+    targetAgency: clean(order.intake?.target_agency, 220) ?? clean(order.agency, 220) ?? clean(tender?.agency, 220),
+    targetCategory: clean(order.intake?.target_category, 220),
+    contextText,
+  });
+}
+
 function requirementCategoryMissing(categories: string[]): string[] {
   return categories.map((category) => `${category} requirements or instructions`);
 }
@@ -147,6 +173,8 @@ async function proposalGate(order: WorkOrderRow): Promise<ServiceFulfillmentGate
   const pipeline = await loadPipelineItem(order.pipeline_item_id);
   const tenderText = buildTenderText(order, pipeline);
   const intakeSummary = buildIntakeSummary(order.intake);
+  const evidencePack = evidencePackForOrder(order, PROPOSAL_PLAN, `${tenderText}\n${intakeSummary}`, Boolean(tenderText.trim()));
+  const evidenceMetadata = serviceEvidencePackMetadata(evidencePack);
   const profile = buildProposalEvidenceProfile({ tenderText, intakeSummary });
   const requirementModel = buildProposalRequirementModel({
     requirements: DEFAULT_TENDER_REQUIREMENTS,
@@ -158,10 +186,12 @@ async function proposalGate(order: WorkOrderRow): Promise<ServiceFulfillmentGate
     ...profile.missing_inputs,
     ...requirementCategoryMissing(requirementModel.missing_categories),
     ...contextMissing(order),
+    ...evidencePackMissing(evidencePack),
   ]).slice(0, 12);
   const warnings = unique([
     ...profile.warnings,
     ...requirementModel.warnings,
+    ...evidencePack.warnings,
   ]).slice(0, 8);
 
   if (profile.status === "blocked" || requirementModel.status === "blocked") {
@@ -184,11 +214,12 @@ async function proposalGate(order: WorkOrderRow): Promise<ServiceFulfillmentGate
         requirement_model_score: String(requirementModel.score_0_10),
         requirement_model_status: requirementModel.status,
         missing_requirement_categories: requirementModel.missing_categories.join(" | "),
+        ...evidenceMetadata,
       },
     };
   }
 
-  if (profile.status === "needs_review" || requirementModel.status === "needs_review") {
+  if (profile.status === "needs_review" || requirementModel.status === "needs_review" || evidencePack.status !== "ready") {
     return {
       plan: PROPOSAL_PLAN,
       work_order_id: order.id,
@@ -198,16 +229,19 @@ async function proposalGate(order: WorkOrderRow): Promise<ServiceFulfillmentGate
       score_0_10: readinessScore,
       missing_inputs: missing,
       warnings,
-      code: "HUMAN_REVIEW_REQUIRED",
-      message: "Payment can proceed, but this Proposal Draft should enter human QA because requirement coverage is incomplete.",
+      code: evidencePack.status !== "ready" ? "PROPOSAL_EVIDENCE_REVIEW_REQUIRED" : "HUMAN_REVIEW_REQUIRED",
+      message: evidencePack.status !== "ready"
+        ? "Payment can proceed, but this Proposal Draft should enter human QA until the required proof evidence is attached."
+        : "Payment can proceed, but this Proposal Draft should enter human QA because requirement coverage is incomplete.",
       metadata: {
         fulfillment_mode: "human_review",
-        readiness_code: "HUMAN_REVIEW_REQUIRED",
+        readiness_code: evidencePack.status !== "ready" ? "PROPOSAL_EVIDENCE_REVIEW_REQUIRED" : "HUMAN_REVIEW_REQUIRED",
         readiness_score: String(readinessScore),
         source_quality_score: String(profile.score_0_10),
         requirement_model_score: String(requirementModel.score_0_10),
         requirement_model_status: requirementModel.status,
         missing_inputs: missing.slice(0, 5).join(" | "),
+        ...evidenceMetadata,
       },
     };
   }
@@ -230,6 +264,7 @@ async function proposalGate(order: WorkOrderRow): Promise<ServiceFulfillmentGate
       source_quality_score: String(profile.score_0_10),
       requirement_model_score: String(requirementModel.score_0_10),
       requirement_model_status: requirementModel.status,
+      ...evidenceMetadata,
     },
   };
 }
@@ -281,9 +316,18 @@ function rosterGate(order: WorkOrderRow): ServiceFulfillmentGate {
     };
   }
   const status = clean(quality?.status, 40);
+  const evidencePack = evidencePackForOrder(
+    order,
+    ROSTER_PLAN,
+    `${agency.label} ${clean(order.intake?.target_agency, 220) ?? ""} ${clean(order.intake?.target_category, 220) ?? ""} ${clean(order.intake?.additional_details, 1000) ?? ""}`,
+    Boolean(clean(order.tender_url, 1000)),
+  );
+  const evidenceMetadata = serviceEvidencePackMetadata(evidencePack);
+  const evidenceMissing = evidencePackMissing(evidencePack);
   const needsReview = status === "blocked" || (score != null && score < 7);
 
-  if (needsReview) {
+  if (needsReview || evidencePack.status !== "ready") {
+    const missingWithEvidence = unique([...missing, ...evidenceMissing]).slice(0, 12);
     return {
       plan: ROSTER_PLAN,
       work_order_id: order.id,
@@ -291,15 +335,23 @@ function rosterGate(order: WorkOrderRow): ServiceFulfillmentGate {
       payment_allowed: true,
       auto_fulfill_allowed: false,
       score_0_10: score,
-      missing_inputs: missing,
-      warnings: [`${agency.label} is supported, but the intake needs ops review before fulfillment.`],
-      code: "ROSTER_REVIEW_REQUIRED",
-      message: `${agency.label} is supported, but this roster order should enter human QA because the company/source context is incomplete.`,
+      missing_inputs: missingWithEvidence,
+      warnings: [
+        evidencePack.status !== "ready"
+          ? `${agency.label} is supported, but required proof evidence is still missing.`
+          : `${agency.label} is supported, but the intake needs ops review before fulfillment.`,
+        ...evidencePack.warnings,
+      ],
+      code: evidencePack.status !== "ready" ? "ROSTER_EVIDENCE_REVIEW_REQUIRED" : "ROSTER_REVIEW_REQUIRED",
+      message: evidencePack.status !== "ready"
+        ? `${agency.label} is supported, but this roster order should enter human QA until legal, financial, category and reference proof is attached.`
+        : `${agency.label} is supported, but this roster order should enter human QA because the company/source context is incomplete.`,
       metadata: {
         fulfillment_mode: "human_review",
-        readiness_code: "ROSTER_REVIEW_REQUIRED",
+        readiness_code: evidencePack.status !== "ready" ? "ROSTER_EVIDENCE_REVIEW_REQUIRED" : "ROSTER_REVIEW_REQUIRED",
         readiness_score: score != null ? String(score) : "",
         agency_slug: agency.slug,
+        ...evidenceMetadata,
       },
     };
   }
@@ -320,6 +372,7 @@ function rosterGate(order: WorkOrderRow): ServiceFulfillmentGate {
       readiness_code: "READY",
       readiness_score: score != null ? String(score) : "",
       agency_slug: agency.slug,
+      ...evidenceMetadata,
     },
   };
 }
@@ -446,11 +499,27 @@ function bidNoBidGate(order: WorkOrderRow): ServiceFulfillmentGate {
   const quality = contextQuality(order);
   const contextScore = typeof quality?.score_0_10 === "number" ? quality.score_0_10 : null;
   const surface = bidDecisionSurface(order, missing);
+  const tender = contextTender(order);
+  const evidencePack = evidencePackForOrder(
+    order,
+    BID_PLAN,
+    [
+      clean(tender?.title, 500),
+      clean(tender?.agency, 220),
+      clean(tender?.opportunity_type, 120),
+      clean(tender?.eligibility_summary, 500),
+      clean(tender?.required_registrations, 300),
+      clean(order.intake?.tender_context, 1000),
+      clean(order.intake?.additional_details, 1000),
+    ].filter(Boolean).join(" "),
+    surface.components.includes("tender source or TOR carried into checkout"),
+  );
+  const evidenceMetadata = serviceEvidencePackMetadata(evidencePack);
   const score = surface.score_0_10;
   const hardMissing = surface.gaps.filter((item) =>
     item === "selected dashboard pipeline item" || item === "primary tender source URL or uploaded TOR/RFP",
   );
-  const allMissing = unique([...hardMissing, ...surface.gaps, ...missing]).slice(0, 12);
+  const allMissing = unique([...hardMissing, ...surface.gaps, ...missing, ...evidencePackMissing(evidencePack)]).slice(0, 12);
 
   if (hardMissing.length > 0) {
     return {
@@ -473,11 +542,12 @@ function bidNoBidGate(order: WorkOrderRow): ServiceFulfillmentGate {
         bid_decision_surface_status: surface.status,
         bid_decision_surface_components: metadataList(surface.components),
         bid_decision_surface_gaps: metadataList(allMissing),
+        ...evidenceMetadata,
       },
     };
   }
 
-  if (surface.status !== "decision_surface_ready" || missing.length > 0) {
+  if (surface.status !== "decision_surface_ready" || missing.length > 0 || evidencePack.status !== "ready") {
     return {
       plan: BID_PLAN,
       work_order_id: order.id,
@@ -486,18 +556,26 @@ function bidNoBidGate(order: WorkOrderRow): ServiceFulfillmentGate {
       auto_fulfill_allowed: false,
       score_0_10: score,
       missing_inputs: allMissing,
-      warnings: ["Bid/No-Bid can proceed, but this memo should enter human QA until the tender criteria are fully grounded."],
-      code: "BID_REVIEW_REQUIRED",
-      message: "Payment can proceed, but this Bid/No-Bid memo should enter human QA because the decision surface is incomplete.",
+      warnings: [
+        evidencePack.status !== "ready"
+          ? "Bid/No-Bid can proceed, but the memo should enter human QA until required proof evidence is attached."
+          : "Bid/No-Bid can proceed, but this memo should enter human QA until the tender criteria are fully grounded.",
+        ...evidencePack.warnings,
+      ],
+      code: evidencePack.status !== "ready" ? "BID_EVIDENCE_REVIEW_REQUIRED" : "BID_REVIEW_REQUIRED",
+      message: evidencePack.status !== "ready"
+        ? "Payment can proceed, but this Bid/No-Bid memo should enter human QA until capacity, financial and reference proof is attached."
+        : "Payment can proceed, but this Bid/No-Bid memo should enter human QA because the decision surface is incomplete.",
       metadata: {
         fulfillment_mode: "human_review",
-        readiness_code: "BID_REVIEW_REQUIRED",
+        readiness_code: evidencePack.status !== "ready" ? "BID_EVIDENCE_REVIEW_REQUIRED" : "BID_REVIEW_REQUIRED",
         readiness_score: String(score),
         context_quality_score: contextScore != null ? String(contextScore) : "",
         bid_decision_surface_score: String(score),
         bid_decision_surface_status: surface.status,
         bid_decision_surface_components: metadataList(surface.components),
         bid_decision_surface_gaps: metadataList(allMissing),
+        ...evidenceMetadata,
       },
     };
   }
@@ -521,6 +599,7 @@ function bidNoBidGate(order: WorkOrderRow): ServiceFulfillmentGate {
       bid_decision_surface_score: String(score),
       bid_decision_surface_status: surface.status,
       bid_decision_surface_components: metadataList(surface.components),
+      ...evidenceMetadata,
     },
   };
 }

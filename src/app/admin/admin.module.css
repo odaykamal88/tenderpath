@@ -557,6 +557,46 @@
   color: var(--color-ink-2);
 }
 .woContextLine > div + div { margin-top: 3px; }
+.woEvidenceLine {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--color-accent);
+  background: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--color-ink-2);
+}
+.woEvidenceLine > div + div { margin-top: 3px; }
+.woEvidenceLineWarn { border-left-color: var(--color-red); }
+.woEvidenceLineOk { border-left-color: var(--color-green); }
+.woEvidenceHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--color-ink);
+  font-weight: 600;
+}
+.woEvidenceActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+.woMiniButton {
+  border: 1px solid var(--color-rule);
+  background: var(--color-paper-3);
+  color: var(--color-ink-2);
+  border-radius: 3px;
+  padding: 4px 7px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.woMiniButton:hover { border-color: var(--color-ink-3); color: var(--color-ink); }
+.woMiniButton:disabled { opacity: 0.55; cursor: wait; }
 .woErrorLine { margin-top: 7px; font-family: var(--font-mono); font-size: 10px; color: var(--color-red); line-height: 1.35; max-width: 260px; }
 .woSelect   {
   font-family: var(--font-mono); font-size: 11px;

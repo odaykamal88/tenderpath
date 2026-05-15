@@ -86,6 +86,126 @@ Additional work done outside the prompt sequence:
 
 ## Current Status
 
+## Latest Session Update — 2026-05-15 (Sprint 6 started)
+
+- **Agent**: Codex
+- **Branch**: `codex/proposal-requirements-model`
+- **Task Completed**: Started Sprint 6 by adding a paid-service evidence pack/checklist across intake, service context, checkout readiness, and validation scoring.
+- **Files / Areas Changed**:
+  - `src/lib/service-evidence-pack.ts` — new shared evidence-pack model for Bid/No-Bid, Proposal Draft, and Roster Fast-Track. It defines required/optional proof categories, source satisfaction, missing proof reasons, completion score, and ready / needs-review / blocked status.
+  - `src/app/dashboard/services/ServiceIntakeForm.tsx` — paid-service intake now shows a live evidence-pack checklist and lets users upload proof files for missing legal, reference, certification, product, authorization, capacity, CV, warranty, and capability-statement evidence. Existing tender/TOR and financial uploads satisfy the relevant proof slots.
+  - `src/lib/service-context.ts` — work-order service context now carries the evidence pack and pulls evidence-pack upload excerpts into fulfillment prompts.
+  - `src/lib/service-fulfillment-gates.ts`, `src/app/pay/page.tsx` — checkout readiness now exposes evidence-pack score/status and routes missing required proof to human QA instead of claiming fully automated fulfillment.
+  - `src/lib/proposal-package/context.ts`, `src/lib/bid-no-bid/generate.ts` — hidden intake summary keys updated so raw evidence-pack upload JSON does not leak into prompts while structured context remains available.
+  - `scripts/paid-services-validation.ts` — validation version advanced to `sprint-6-service-evidence-pack-v1`; added `paid_service_evidence_pack_0_10`, status, components, gaps, and summary medians.
+- **Validation Outputs**:
+  - `outputs/paid-services-validation/sprint6-static-service-evidence-pack.json`
+  - `outputs/paid-services-validation/sprint6-static-service-evidence-pack.csv`
+- **Score Movement**:
+  - Full first wave VP-01 to VP-09: median paid-service readiness `8.4/10`, median procurement effort collapsed `7.8/10`, median evidence-pack surface `7.4/10`.
+  - Proposal Draft: median paid-service readiness `8.5/10`; the service is now at beta target when a real TOR/RFP fixture exists, but proof docs still decide whether fulfillment is self-serve or QA.
+  - Roster Fast-Track: median paid-service readiness `8.4/10`, category surface `8.7/10`, evidence-pack surface `8.8/10`; still needs actual legal/financial/product proof from users before fully automated fulfillment is honest.
+  - Bid/No-Bid: median paid-service readiness `7.3/10`; still bottlenecked by selected tender/TOR context for VP-01/VP-02, while VP-03 remains ready with a concrete MONUSCO notice.
+- **Verification Run**:
+  - `npx tsc --noEmit`
+  - `npx eslint src/lib/service-evidence-pack.ts src/lib/service-context.ts src/lib/service-fulfillment-gates.ts src/lib/proposal-package/context.ts src/lib/bid-no-bid/generate.ts src/app/dashboard/services/ServiceIntakeForm.tsx src/app/pay/page.tsx scripts/paid-services-validation.ts`
+  - `npm run validation:paid-services -- --skip-live-matching --limit=9 --out=outputs/paid-services-validation/sprint6-static-service-evidence-pack.json`
+  - `rm -rf .next/cache && NEXT_FONT_GOOGLE_MOCKED_RESPONSES=/tmp/tenderpath-next-font-mocks.cjs npm run build`
+  - Local dev server smoke check reached the protected service route and redirected to login with no browser console errors; auth-gated intake UI was not visually inspected because no credentials were used.
+- **Sprint 6 Status**: In progress. Evidence-pack discipline is now in the product path, but the next slice should make existing vault documents selectable/attachable to evidence-pack slots so returning users are not forced to re-upload proof.
+- **Next Recommended Task**: Add “attach from vault” support to evidence-pack slots and surface evidence-pack status inside the work-order detail page after checkout.
+
+### Sprint 6 Continuation — Vault Attachments for Evidence Pack
+
+- **Task Completed**: Existing Vault documents can now be attached directly to paid-service evidence-pack slots.
+- **Files / Areas Changed**:
+  - `src/app/api/dashboard/vault/route.ts` — Vault list now includes the latest document-extraction status, char count, and extraction error via a lateral lookup, while preserving existing fields used by the Vault page.
+  - `src/app/dashboard/services/ServiceIntakeForm.tsx` — paid-service intake now fetches the user's Vault documents, ranks likely matches per proof slot, and exposes an “Attach from vault” selector beside each evidence requirement. Users can still upload new proof where a dedicated top-level upload field does not already exist.
+  - `src/lib/service-evidence-pack.ts` — evidence-pack documents now preserve Vault document IDs and document type metadata.
+  - `src/lib/service-context.ts` — attached Vault TOR/RFP, tender source, or agency-guide documents now count as tender/source evidence and flow into service prompt excerpts; attached financial proof is excluded from tender text but still satisfies the evidence pack.
+  - `src/lib/proposal-package/context.ts`, `src/lib/bid-no-bid/generate.ts` — financial proof attached through an evidence-pack slot now registers as financial evidence in intake summaries.
+- **Validation Outputs**:
+  - `outputs/paid-services-validation/sprint6-static-vault-attach-evidence-pack.json`
+  - `outputs/paid-services-validation/sprint6-static-vault-attach-evidence-pack.csv`
+- **Verification Run**:
+  - `npx tsc --noEmit`
+  - `npx eslint src/app/api/dashboard/vault/route.ts src/app/dashboard/services/ServiceIntakeForm.tsx src/lib/service-evidence-pack.ts src/lib/service-context.ts src/lib/proposal-package/context.ts src/lib/bid-no-bid/generate.ts`
+  - `npm run validation:paid-services -- --skip-live-matching --limit=9 --out=outputs/paid-services-validation/sprint6-static-vault-attach-evidence-pack.json`
+  - `rm -rf .next/cache && NEXT_FONT_GOOGLE_MOCKED_RESPONSES=/tmp/tenderpath-next-font-mocks.cjs npm run build`
+  - Browser smoke check against `/dashboard/services/proposal` redirected to login as expected and reported no console errors.
+- **Score Movement**:
+  - Static validation remains: median paid-service readiness `8.4/10`, procurement effort collapsed `7.8/10`, evidence-pack surface `7.4/10`.
+  - No score jump expected from this slice because the static panel does not model returning users with Vault documents; the user-facing workflow is materially better for real accounts with reusable proof.
+- **Next Recommended Task**: Surface evidence-pack status and attached/missing proof on the work-order detail page after checkout, so users and ops share the same fulfillment checklist.
+
+### Sprint 6 Continuation — Work-Order Evidence Pack Surface
+
+- **Task Completed**: Work-order detail pages now surface the paid-service evidence pack after checkout, giving users and ops the same proof-readiness checklist during fulfillment.
+- **Files / Areas Changed**:
+  - `src/app/dashboard/work-orders/[id]/page.tsx` — imports the shared evidence-pack model, reads a stored pack from `intake.service_context.evidence_pack` when available, and falls back to rebuilding one from order/intake context for older orders.
+  - `src/app/dashboard/work-orders/[id]/page.tsx` — added an “Evidence pack readiness” panel with status, score, required-proof count, missing-required count, useful extras, requirement-level source/missing-reason copy, examples, and extraction warnings.
+  - `src/app/dashboard/work-orders/[id]/page.tsx` — hides raw internal evidence-pack/service-context JSON from the generic intake list and formats any remaining object values as JSON instead of `[object Object]`.
+- **Verification Run**:
+  - `npm exec eslint -- src/app/dashboard/work-orders/[id]/page.tsx`
+  - `npx tsc --noEmit`
+  - `rm -rf .next/cache`
+  - `NEXT_FONT_GOOGLE_MOCKED_RESPONSES=/tmp/tenderpath-next-font-mocks.cjs npm run build` — clean after clearing stale webpack cache; the first cached attempt failed inside webpack hashing before any app-level error.
+  - Browser smoke with a read-only DB lookup plus temporary local JWT opened `/dashboard/work-orders/13`: HTTP 200, evidence panel present, no `[object Object]` intake leak, and only normal Fast Refresh logs in dev.
+- **Score Movement**:
+  - No static validation movement expected; this is a continuity/fulfillment surface change rather than a scoring-model change.
+- **Sprint 6 Status**: Evidence-pack discipline now spans intake, Vault attach, checkout readiness, fulfillment context, and post-checkout work-order visibility.
+- **Next Recommended Task**: Either close Sprint 6 and ship, or continue into the next paid-service bridge: operator-facing fulfillment notes/actions for missing proof.
+
+### Sprint 6 Continuation — Admin Fulfillment Actions for Missing Proof
+
+- **Task Completed**: Admin work orders now turn evidence-pack gaps into operator actions instead of only passive notes.
+- **Files / Areas Changed**:
+  - `src/app/admin/work-orders/page.tsx` — derives each paid-service order's evidence pack from stored service context when available, with the same fallback rebuild used on the customer work-order page.
+  - `src/app/admin/work-orders/page.tsx` — adds a compact Evidence block to each paid-service work order showing status, score, required proof gaps, helpful extras, and extraction warnings.
+  - `src/app/admin/work-orders/page.tsx` — adds “Seed note” to populate fulfillment notes from the evidence-pack gaps, plus “Wait on client” to move blocked orders into `waiting_on_client` with the same note and optional customer notification.
+  - `src/app/admin/work-orders/page.tsx` — hides raw evidence-pack internals from the intake preview and remounts the fulfillment-notes textarea when notes are programmatically seeded.
+  - `src/app/admin/admin.module.css` — added compact evidence/action styling for the admin work-order cards.
+- **Verification Run**:
+  - `npm exec eslint -- src/app/admin/work-orders/page.tsx`
+  - `npx tsc --noEmit`
+  - `git diff --check`
+  - `rm -rf .next/cache && NEXT_FONT_GOOGLE_MOCKED_RESPONSES=/tmp/tenderpath-next-font-mocks.cjs npm run build`
+  - Browser smoke with a temporary local admin JWT opened `/admin/work-orders`: HTTP 200, evidence block present, action buttons rendered, no `[object Object]` leakage, no browser console errors.
+- **Score Movement**:
+  - No static validation movement expected; this closes an ops-continuity gap by making missing proof actionable in fulfillment.
+- **Sprint 6 Status**: Evidence pack now spans customer intake, Vault attach, checkout gate, fulfillment context, customer work-order detail, and admin fulfillment triage.
+- **Next Recommended Task**: Close Sprint 6 with a final validation/build pass, then ship/deploy/commit when the user is ready. Sprint 7 candidate: fulfillment loop that lets customers upload/attach missing proof directly from the work-order detail page after checkout.
+
+### Sprint 6 Closeout — Evidence-Pack Chain Ready to Ship
+
+- **Task Completed**: Closed Sprint 6 and prepared the evidence-pack chain for production shipment.
+- **Final Scope Included**:
+  - Shared paid-service evidence-pack model.
+  - Paid-service intake checklist and proof upload slots.
+  - Vault attach support for evidence-pack proof slots.
+  - Checkout/readiness evidence-pack gating.
+  - Fulfillment context/prompt handoff for attached evidence.
+  - Customer work-order evidence-pack visibility after checkout.
+  - Admin work-order evidence triage, seed-note action, and wait-on-client action.
+  - Sprint 6 static validation outputs.
+- **Final Verification Run**:
+  - `npx tsc --noEmit`
+  - `npm exec eslint -- scripts/paid-services-validation.ts src/app/admin/work-orders/page.tsx src/app/api/dashboard/vault/route.ts src/app/dashboard/services/ServiceIntakeForm.tsx src/app/dashboard/work-orders/[id]/page.tsx src/app/pay/page.tsx src/lib/bid-no-bid/generate.ts src/lib/proposal-package/context.ts src/lib/service-context.ts src/lib/service-fulfillment-gates.ts src/lib/service-evidence-pack.ts`
+  - `npm run validation:paid-services -- --skip-live-matching --limit=9 --out=outputs/paid-services-validation/sprint6-static-vault-attach-evidence-pack.json`
+  - `rm -rf .next/cache && NEXT_FONT_GOOGLE_MOCKED_RESPONSES=/tmp/tenderpath-next-font-mocks.cjs npm run build`
+  - Full `npm run lint` was attempted but stopped because ESLint traversed historical `.claude/worktrees/.next` generated bundles; targeted source lint passed cleanly.
+- **Final Static Validation Score**:
+  - Checked `9`
+  - Ready for beta `6`
+  - Needs human review `3`
+  - Blocked `0`
+  - Median paid-service readiness `8.4/10`
+  - Median procurement effort collapsed `7.8/10`
+  - Median evidence-pack surface `7.4/10`
+  - Track medians: Bid/No-Bid `7.3`, Proposal Draft `8.5`, Roster Fast-Track `8.4`
+- **Sprint 6 Status**: Ready to ship.
+- **Next Recommended Task**: Start Sprint 7 after deployment: customer missing-proof loop on `/dashboard/work-orders/[id]`, allowing users to upload or attach proof after checkout and automatically move an order back from `waiting_on_client` to `in_progress` when required proof is complete.
+
 ## Latest Session Update — 2026-05-14 (Sprint 5 started)
 
 - **Agent**: Codex

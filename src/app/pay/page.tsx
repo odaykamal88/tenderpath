@@ -88,6 +88,16 @@ function ReadinessCard({ readiness }: { readiness: FulfillmentReadiness | null }
     .split("|")
     .map((item) => item.trim())
     .filter(Boolean);
+  const evidencePackScore = readiness.metadata?.evidence_pack_score;
+  const evidencePackStatus = readiness.metadata?.evidence_pack_status;
+  const evidencePackSatisfied = (readiness.metadata?.evidence_pack_satisfied ?? "")
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const evidencePackMissing = (readiness.metadata?.evidence_pack_missing_required ?? "")
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
   const missingCategories = (readiness.metadata?.missing_requirement_categories ?? "")
     .split("|")
     .map((item) => item.trim())
@@ -133,6 +143,30 @@ function ReadinessCard({ readiness }: { readiness: FulfillmentReadiness | null }
             <ul className="mt-1 space-y-0.5">
               {bidSurfaceGaps.slice(0, 4).map((item) => (
                 <li key={item}>Still needed: {item}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {evidencePackScore && (
+        <div className="mt-2 rounded-sm bg-white/50 px-2.5 py-2">
+          <div className="font-semibold uppercase tracking-[0.14em]" style={{ fontFamily: MONO }}>
+            Evidence pack · {evidencePackScore}/10
+          </div>
+          {evidencePackStatus && (
+            <p className="mt-1" style={{ fontFamily: MONO }}>
+              {evidencePackStatus.replace(/_/g, " ")}
+            </p>
+          )}
+          {evidencePackSatisfied.length > 0 && (
+            <p className="mt-1">
+              On file: {evidencePackSatisfied.slice(0, 4).join(", ")}
+            </p>
+          )}
+          {evidencePackMissing.length > 0 && (
+            <ul className="mt-1 space-y-0.5">
+              {evidencePackMissing.slice(0, 5).map((item) => (
+                <li key={item}>Proof needed: {item}</li>
               ))}
             </ul>
           )}
