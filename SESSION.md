@@ -189,6 +189,27 @@ Additional work done outside the prompt sequence:
 - **Sprint 5 Status**: Bid/No-Bid and Roster Fast-Track now both enforce the core context needed to avoid false-confidence paid outputs.
 - **Next Recommended Task**: Update the paid-services validation harness to add an explicit roster category-surface score, the same way Bid/No-Bid now has a decision-surface score.
 
+### Sprint 5 Continuation — Roster Validation Rubric
+
+- **Task Completed**: Updated the paid-services validation harness so Roster Fast-Track category discipline is measured directly.
+- **Files / Areas Changed**:
+  - `scripts/paid-services-validation.ts` — validation version advanced to `sprint-5-roster-category-surface-v1`; added `roster_category_surface_0_10`, status, components, and gaps to JSON/CSV outputs and track summaries.
+  - Roster scoring now measures supported agency pack, target category specificity, category guardrail availability, product-vs-advisory evidence lane, public company evidence, and UNGM handoff.
+  - Roster output, trust, time saved, and shortlist impact now incorporate the category-surface score while preserving document/proof gaps as blockers.
+- **Validation Outputs**:
+  - `outputs/paid-services-validation/sprint5-static-after-roster-category-surface.json`
+  - `outputs/paid-services-validation/sprint5-static-after-roster-category-surface.csv`
+- **Score Movement**:
+  - Full first wave VP-01 to VP-09: median paid-service readiness `8.3/10`, median procurement effort collapsed `7.7/10`.
+  - Roster Fast-Track track: median paid-service readiness `8.3/10`, median procurement effort collapsed `7.7/10`, median category surface `8.7/10`.
+  - VP-07 to VP-09 all now show supported agency/category guardrails and the correct product/advisory lane, but still retain the legal/financial/product proof gap.
+- **Verification Run**:
+  - `npx tsc --noEmit`
+  - `npx eslint scripts/paid-services-validation.ts`
+  - `npm run validation:paid-services -- --skip-live-matching --limit=9 --out=outputs/paid-services-validation/sprint5-static-after-roster-category-surface.json`
+- **Important Decision**: Roster Fast-Track is now close to 8.5 on category intelligence, but not fully 8.5 overall until legal/financial/product evidence collection is turned into a guided evidence pack.
+- **Next Recommended Task**: Add a paid-service evidence pack/checklist that collects the exact legal, financial, certification, product datasheet, manufacturer authorization, and reference proof needed for Bid/No-Bid and Roster fulfillment.
+
 ## Latest Session Update — 2026-05-14 (Sprint 4 started)
 
 - **Agent**: Codex

@@ -27,7 +27,7 @@ try {
 
 const DEFAULT_PANEL = "data/validation/paid-services-panel.csv";
 const DEFAULT_PROPOSAL_FIXTURES = "data/validation/proposal-requirement-fixtures.json";
-const VALIDATION_VERSION = "sprint-5-bid-decision-surface-v1";
+const VALIDATION_VERSION = "sprint-5-roster-category-surface-v1";
 const SUPPORTED_ROSTER_AGENCY_LABELS = new Set(AGENCY_PACKAGES.map((agency) => agency.label.toUpperCase()));
 
 type PanelRow = Record<string, string>;
@@ -100,6 +100,13 @@ type BidDecisionSurfaceSignal = {
   missing: string[];
 };
 
+type RosterCategorySurfaceSignal = {
+  score: number;
+  status: string;
+  components: string[];
+  missing: string[];
+};
+
 type ProfileResult = {
   panel_id: string;
   prospect_company: string;
@@ -123,6 +130,10 @@ type ProfileResult = {
   bid_decision_surface_status: string | null;
   bid_decision_surface_components: string[];
   bid_decision_surface_gaps: string[];
+  roster_category_surface_0_10: number | null;
+  roster_category_surface_status: string | null;
+  roster_category_surface_components: string[];
+  roster_category_surface_gaps: string[];
   proposal_fixture_title: string | null;
   proposal_fixture_source_url: string | null;
   service_output_quality_0_10: number;
@@ -297,6 +308,10 @@ function toCsv(results: ProfileResult[]): string {
     "bid_decision_surface_status",
     "bid_decision_surface_components",
     "bid_decision_surface_gaps",
+    "roster_category_surface_0_10",
+    "roster_category_surface_status",
+    "roster_category_surface_components",
+    "roster_category_surface_gaps",
     "proposal_fixture_title",
     "proposal_fixture_source_url",
     "service_output_quality_0_10",
@@ -329,6 +344,10 @@ function toCsv(results: ProfileResult[]): string {
       result.bid_decision_surface_status,
       result.bid_decision_surface_components.join(" | "),
       result.bid_decision_surface_gaps.join(" | "),
+      result.roster_category_surface_0_10,
+      result.roster_category_surface_status,
+      result.roster_category_surface_components.join(" | "),
+      result.roster_category_surface_gaps.join(" | "),
       result.proposal_fixture_title,
       result.proposal_fixture_source_url,
       result.service_output_quality_0_10,
@@ -1067,6 +1086,93 @@ function bidDecisionSurfaceSignal(row: PanelRow): BidDecisionSurfaceSignal | nul
   };
 }
 
+function rosterCategorySurfaceSignal(row: PanelRow): RosterCategorySurfaceSignal | null {
+  const serviceTrack = cell(row, "service_track").toLowerCase();
+  if (!serviceTrack.includes("roster")) return null;
+
+  const benchmark = cell(row, "benchmark_tender_or_agency");
+  const subIcp = cell(row, "sub_icp");
+  const sector = cell(row, "sector");
+  const missing = cell(row, "missing_inputs").toLowerCase();
+  const publicInputs = cell(row, "public_inputs_available").toLowerCase();
+  const text = `${benchmark} ${subIcp} ${sector}`;
+  const rosterAgencies = targetRosterAgencies(benchmark);
+  const unsupported = rosterAgencies.filter((agency) => !SUPPORTED_ROSTER_AGENCY_LABELS.has(agency));
+  const categorySpecific = subIcp.length >= 24
+    && /\b(category|supplier|registration|roster|pqs|haccp|iso 22000|mini-grid|cold-chain|cold chain|food safety|electromechanical|remote monitoring|advisory|technical assistance|energy access|equipment|product|device|lab|testing|o&m|epc)\b/i.test(text);
+  const guardrailCue = /\b(food safety|haccp|iso 22000|commodity|advisory|lab|testing|pqs|cold-chain|cold chain|device|sku|warranty|support|mini-grid|energy|epc|o&m|developer|equipment|product|supplier|technical assistance)\b/i.test(text);
+  const productEvidenceCue = /\b(product|device|sku|datasheet|technical data|pqs|certification|manufacturer|authorization|warranty|support|equipment)\b/i.test(`${text} ${missing}`);
+  const advisoryCue = /\b(advisory|technical assistance|consulting|training|quality systems|food safety|policy|inspection|lab|testing)\b/i.test(text);
+  const legalDocsMissing = /\b(legal|financial|audited|certificates?|licenses?|product catalog|manufacturer|datasheets?|authorizations?)\b/.test(missing);
+  const components: string[] = [];
+  const gaps: string[] = [];
+  let score = 2.0;
+
+  if (rosterAgencies.length > 0 && unsupported.length === 0) {
+    score += 2.0;
+    components.push(`supported agency pack: ${rosterAgencies.join("/")}`);
+  } else if (rosterAgencies.length > 0) {
+    score += 0.6;
+    gaps.push(`unsupported agency pack: ${unsupported.join("/")}`);
+  } else {
+    gaps.push("target agency not explicit");
+  }
+
+  if (categorySpecific) {
+    score += 2.0;
+    components.push("specific roster/category lane");
+  } else {
+    score += 0.4;
+    gaps.push("target product/service category is too broad");
+  }
+
+  if (guardrailCue) {
+    score += 1.7;
+    components.push("category guardrails apply");
+  } else {
+    gaps.push("product-vs-service guardrail cue missing");
+  }
+
+  if (productEvidenceCue || advisoryCue) {
+    score += 1.1;
+    components.push(productEvidenceCue ? "product evidence lane identified" : "advisory/service lane identified");
+  } else {
+    gaps.push("category evidence lane not clear");
+  }
+
+  if (/official/.test(publicInputs) && !/no official/.test(publicInputs)) {
+    score += 0.6;
+    components.push("public company evidence handoff");
+  }
+  if (/yes/i.test(cell(row, "ungm_status"))) {
+    score += 0.6;
+    components.push("UNGM status handoff");
+  }
+
+  if (legalDocsMissing) {
+    score = Math.min(score, 8.7);
+    gaps.push("legal/financial/product proof still needed");
+  }
+  if (unsupported.length > 0 || rosterAgencies.length === 0) score = Math.min(score, 6.5);
+  if (!categorySpecific) score = Math.min(score, 6.9);
+
+  const finalScore = clampScore(score);
+  const status = finalScore >= 8.5
+    ? "category_surface_ready"
+    : finalScore >= 7.0
+    ? "usable_with_document_gaps"
+    : finalScore >= 5.8
+    ? "needs_category_or_agency_review"
+    : "not_ready";
+
+  return {
+    score: finalScore,
+    status,
+    components: unique(components),
+    missing: unique(gaps),
+  };
+}
+
 function projectedScores(
   row: PanelRow,
   matchRun: MatchRun,
@@ -1080,6 +1186,7 @@ function projectedScores(
   const fitScore = fit.includes("strong") ? 8.4 : fit.includes("adjacent") ? 6.4 : 3.8;
   const requirementModelScore = proposalRequirementModelScore(row, contextScore, fixtureSignal);
   const bidSurface = bidDecisionSurfaceSignal(row);
+  const rosterSurface = rosterCategorySurfaceSignal(row);
   let serviceOutput = 0.32 * contextScore + 0.28 * assessmentScore + 0.22 * matchScore + 0.18 * fitScore;
   let trustworthiness = 0.38 * assessmentScore + 0.34 * contextScore + 0.18 * matchScore + 0.10 * fitScore;
   let timeSaved = 0.30 * contextScore + 0.28 * matchScore + 0.22 * assessmentScore + 0.20 * fitScore;
@@ -1104,6 +1211,17 @@ function projectedScores(
       serviceOutput = Math.min(serviceOutput, 6.7);
       trustworthiness = Math.min(trustworthiness, 6.9);
       timeSaved = Math.min(timeSaved, 7.0);
+    }
+  }
+
+  if (rosterSurface) {
+    serviceOutput = 0.58 * serviceOutput + 0.42 * rosterSurface.score;
+    trustworthiness = 0.72 * trustworthiness + 0.28 * rosterSurface.score;
+    timeSaved = 0.70 * timeSaved + 0.30 * rosterSurface.score;
+    shortlistImpact = 0.82 * shortlistImpact + 0.18 * rosterSurface.score;
+    if (rosterSurface.score < 7.0) {
+      serviceOutput = Math.min(serviceOutput, 6.8);
+      trustworthiness = Math.min(trustworthiness, 7.0);
     }
   }
 
@@ -1139,6 +1257,7 @@ function projectedScores(
     paidReadiness,
     requirementModelScore,
     bidSurface,
+    rosterSurface,
   };
 }
 
@@ -1220,6 +1339,10 @@ function validateProfile(row: PanelRow, matchRun: MatchRun, fixture?: ProposalFi
     bid_decision_surface_status: scores.bidSurface?.status ?? null,
     bid_decision_surface_components: scores.bidSurface?.components ?? [],
     bid_decision_surface_gaps: scores.bidSurface?.missing ?? [],
+    roster_category_surface_0_10: scores.rosterSurface?.score ?? null,
+    roster_category_surface_status: scores.rosterSurface?.status ?? null,
+    roster_category_surface_components: scores.rosterSurface?.components ?? [],
+    roster_category_surface_gaps: scores.rosterSurface?.missing ?? [],
     proposal_fixture_title: fixture?.source_title ?? null,
     proposal_fixture_source_url: fixture?.source_url ?? null,
     service_output_quality_0_10: scores.serviceOutput,
@@ -1263,6 +1386,9 @@ function summarize(results: ProfileResult[]) {
       median_bid_decision_surface_0_10: rows.some((row) => row.bid_decision_surface_0_10 != null)
         ? median(rows.flatMap((row) => row.bid_decision_surface_0_10 == null ? [] : [row.bid_decision_surface_0_10]))
         : null,
+      median_roster_category_surface_0_10: rows.some((row) => row.roster_category_surface_0_10 != null)
+        ? median(rows.flatMap((row) => row.roster_category_surface_0_10 == null ? [] : [row.roster_category_surface_0_10]))
+        : null,
     },
   ]));
 
@@ -1297,6 +1423,9 @@ function summarize(results: ProfileResult[]) {
       : null,
     median_bid_decision_surface_0_10: results.some((result) => result.bid_decision_surface_0_10 != null)
       ? median(results.flatMap((result) => result.bid_decision_surface_0_10 == null ? [] : [result.bid_decision_surface_0_10]))
+      : null,
+    median_roster_category_surface_0_10: results.some((result) => result.roster_category_surface_0_10 != null)
+      ? median(results.flatMap((result) => result.roster_category_surface_0_10 == null ? [] : [result.roster_category_surface_0_10]))
       : null,
     status_counts: Object.fromEntries(statusCounts.entries()),
     failure_category_counts: Object.fromEntries(failureCounts.entries()),
