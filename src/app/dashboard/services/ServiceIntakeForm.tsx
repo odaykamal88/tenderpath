@@ -88,6 +88,7 @@ const SERVICE_FIELDS: Record<ServiceSlug, Array<{ key: string; label: string; pl
   ],
   "lta-roster": [
     { key: "target_agency", label: "Target agency or roster", placeholder: "e.g. UNOPS supplier registration, FAO agriculture roster, WHO e-tendering, WFP logistics LTA", required: true },
+    { key: "target_category", label: "Product / service category", placeholder: "e.g. food-safety advisory, WHO/PQS cold-chain monitoring device, mini-grid O&M, EPC contractor, agriculture inputs", required: true },
     { key: "additional_details", label: "Additional details we should know", placeholder: "Current registration status, product/service category, or anything specific to this application", rows: 4 },
   ],
 };
@@ -149,6 +150,7 @@ function buildEvidenceReview(args: {
   const pastedRequirements = hasText(args.fields.tender_context) || hasText(args.fields.additional_details);
   const hasRequirements = extractedRequirements || pastedRequirements;
   const hasTargetAgency = hasText(args.fields.target_agency);
+  const hasTargetCategory = hasText(args.fields.target_category) || hasText(args.fields.additional_details);
   const matchEvidence = hasMatchEvidence(args.pipelineContext);
   const hasDeadline = hasText(args.pipelineContext?.tender_deadline) || hasText(args.fields.submission_deadline);
   const checks: Array<{ label: string; ok: boolean; help: string }> = [];
@@ -199,6 +201,11 @@ function buildEvidenceReview(args: {
       label: "Target agency",
       ok: hasTargetAgency,
       help: "Confirm the roster, LTA, or agency before checkout.",
+    });
+    checks.push({
+      label: "Category lane",
+      ok: hasTargetCategory,
+      help: "Name the exact product or service category so the package does not drift into generic supplier registration.",
     });
     checks.push({
       label: "Agency guide or call document",
@@ -303,7 +310,7 @@ export default function ServiceIntakeForm({
       && (
         (service === "bid-no-bid" && evidenceReview.missing.some((item) => item.label === "Pipeline tender" || item.label === "Tender source"))
         || (service === "proposal" && evidenceReview.status === "high risk")
-        || (service === "lta-roster" && evidenceReview.missing.some((item) => item.label === "Target agency"))
+        || (service === "lta-roster" && evidenceReview.missing.some((item) => item.label === "Target agency" || item.label === "Category lane"))
       ),
   );
 

@@ -167,6 +167,28 @@ Additional work done outside the prompt sequence:
 - **Sprint 5 Status**: Bid/No-Bid now has the same product discipline as the validation rubric: it can be strong when a real selected tender is present, but it stops or slows down when the source context is too weak.
 - **Next Recommended Task**: Move to the next paid-service gap: Roster Fast-Track agency/category readiness, especially FAO, WHO/PQS, UNOPS energy, and product-vs-advisory category guardrails.
 
+### Sprint 5 Continuation — Roster Category Guardrails
+
+- **Task Completed**: Added Roster Fast-Track category discipline so supported agency packs do not produce generic vendor-registration advice.
+- **Files / Areas Changed**:
+  - `src/lib/proposal-package/roster-packages.ts` — added category guardrails to UNGM, WFP, UNICEF, UNDP, IOM, FAO, UNOPS, and WHO. The guardrails explicitly separate advisory, commodity supply, logistics, EPC/O&M, project developer, product/PQS, and support categories.
+  - `src/app/dashboard/services/ServiceIntakeForm.tsx` — roster intake now requires a product/service category lane in addition to target agency.
+  - `src/lib/service-context.ts`, `src/lib/service-fulfillment-gates.ts` — roster context now records missing target category and blocks checkout when category is absent.
+  - `src/lib/proposal-package/generate-roster.ts`, `src/lib/proposal-package/llm.ts` — roster generation now passes category guardrails into the prompt and instructs the model to respect product-vs-advisory/category boundaries.
+  - `src/lib/proposal-package/pdfDocs.tsx` — the submission instructions PDF now renders agency category guardrails.
+  - `src/app/dashboard/services/[service]/page.tsx` — roster service copy now tells users category choice is required and not interchangeable.
+- **Behavioral Change**:
+  - FAO food-safety advisory is no longer treated as food commodity supply by default.
+  - WHO/PQS product suppliers are kept separate from generic health consulting.
+  - UNOPS energy vendors are separated into developer, EPC, O&M, equipment supplier, and finance/platform lanes.
+  - Roster checkout pauses until the target category is explicit.
+- **Verification Run**:
+  - `npx tsc --noEmit`
+  - `npx eslint src/lib/proposal-package/roster-packages.ts src/lib/proposal-package/generate-roster.ts src/lib/proposal-package/llm.ts src/lib/proposal-package/pdfDocs.tsx src/lib/service-context.ts src/lib/service-fulfillment-gates.ts src/app/dashboard/services/ServiceIntakeForm.tsx src/app/dashboard/services/[service]/page.tsx`
+  - `rm -rf .next/cache && NEXT_FONT_GOOGLE_MOCKED_RESPONSES=/tmp/tenderpath-next-font-mocks.cjs npm run build`
+- **Sprint 5 Status**: Bid/No-Bid and Roster Fast-Track now both enforce the core context needed to avoid false-confidence paid outputs.
+- **Next Recommended Task**: Update the paid-services validation harness to add an explicit roster category-surface score, the same way Bid/No-Bid now has a decision-surface score.
+
 ## Latest Session Update — 2026-05-14 (Sprint 4 started)
 
 - **Agent**: Codex

@@ -260,6 +260,26 @@ function rosterGate(order: WorkOrderRow): ServiceFulfillmentGate {
   const quality = contextQuality(order);
   const score = typeof quality?.score_0_10 === "number" ? quality.score_0_10 : null;
   const missing = contextMissing(order);
+  if (missing.includes("target product/service category")) {
+    return {
+      plan: ROSTER_PLAN,
+      work_order_id: order.id,
+      mode: "blocked",
+      payment_allowed: false,
+      auto_fulfill_allowed: false,
+      score_0_10: score,
+      missing_inputs: missing,
+      warnings: [],
+      code: "ROSTER_CATEGORY_REQUIRED",
+      message: "Roster Fast-Track needs the exact product or service category before checkout so the package does not become generic.",
+      metadata: {
+        fulfillment_mode: "blocked",
+        readiness_code: "ROSTER_CATEGORY_REQUIRED",
+        readiness_score: score != null ? String(score) : "",
+        agency_slug: agency.slug,
+      },
+    };
+  }
   const status = clean(quality?.status, 40);
   const needsReview = status === "blocked" || (score != null && score < 7);
 

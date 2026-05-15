@@ -26,6 +26,8 @@ export interface AgencyPackage {
   notes: string[];
   /** Suggested category/UNSPSC families to register against. */
   categoryHints: string[];
+  /** Guardrails that keep the package in the right procurement lane. */
+  categoryGuardrails?: string[];
 }
 
 const UNGM: AgencyPackage = {
@@ -64,6 +66,10 @@ const UNGM: AgencyPackage = {
     "Look up UNSPSC at https://www.unspsc.org and pick 3-8 specific codes",
     "Avoid overly broad codes — exact matches surface tenders, broad ones get filtered out",
   ],
+  categoryGuardrails: [
+    "Choose product/service codes that match the vendor's actual delivery proof; do not register for broad UN categories just because they are high-volume.",
+    "If the vendor is advisory-only, keep goods, logistics, and construction codes out unless they have delivery evidence.",
+  ],
 };
 
 const WFP: AgencyPackage = {
@@ -94,6 +100,10 @@ const WFP: AgencyPackage = {
     "Logistics, food, NFI, fleet, warehousing, fuel — typical WFP categories",
     "Avoid generic 'consulting' — WFP buys delivery, not advice",
   ],
+  categoryGuardrails: [
+    "Separate food-safety or quality advisory from food commodity supply; HACCP advisory does not prove bulk food delivery capacity.",
+    "For logistics, separate freight forwarding, warehousing, fleet operation, fuel, and last-mile delivery instead of selecting one broad logistics lane.",
+  ],
 };
 
 const UNICEF: AgencyPackage = {
@@ -122,6 +132,10 @@ const UNICEF: AgencyPackage = {
   ],
   categoryHints: [
     "Education materials, WASH equipment, child-protection supplies, vaccine cold-chain, NFI",
+  ],
+  categoryGuardrails: [
+    "For cold-chain products, separate WHO/PQS-listed devices, service/maintenance, data monitoring, and distribution authorization evidence.",
+    "Do not route a general consulting vendor into UNICEF supply categories unless product specifications or implementation proof are present.",
   ],
 };
 
@@ -152,6 +166,10 @@ const UNDP: AgencyPackage = {
   categoryHints: [
     "Consulting, governance, environment, IT, capacity building, M&E",
   ],
+  categoryGuardrails: [
+    "Separate advisory/consulting, software implementation, works, goods, and training categories; UNDP country offices evaluate them differently.",
+    "For environment and energy vendors, distinguish policy/strategy work from engineering, EPC, O&M, and equipment supply.",
+  ],
 };
 
 const IOM: AgencyPackage = {
@@ -180,6 +198,10 @@ const IOM: AgencyPackage = {
   ],
   categoryHints: [
     "Accommodation, transport, NFI, health services, fleet, fuel, food",
+  ],
+  categoryGuardrails: [
+    "Separate accommodation, passenger transport, freight, fleet leasing, NFI, and health-service lanes; IOM mission rosters are often country/category specific.",
+    "Do not imply LTA readiness without country licensing, insurance, and operating capacity evidence.",
   ],
 };
 
@@ -218,6 +240,10 @@ const FAO: AgencyPackage = {
     "Agriculture inputs, seeds, fertilizers, livestock, irrigation, food processing, rural infrastructure, agritech, technical assistance",
     "Add exact product and service codes; avoid only broad agriculture or consulting categories",
   ],
+  categoryGuardrails: [
+    "Separate food-safety advisory, lab/testing services, agriculture inputs, equipment supply, and food commodity delivery; each needs different proof.",
+    "For advisory vendors, emphasize technical assistance, quality systems, inspection, training, and lab/testing categories instead of commodity supply unless stock and delivery capacity are proven.",
+  ],
 };
 
 const UNOPS: AgencyPackage = {
@@ -254,6 +280,10 @@ const UNOPS: AgencyPackage = {
     "Infrastructure, engineering, construction supervision, health equipment, vehicles, project operations, procurement services, logistics",
     "Map categories to specific UNSPSC families and countries, not only global capability statements",
   ],
+  categoryGuardrails: [
+    "For energy vendors, distinguish project developer, EPC contractor, O&M provider, equipment supplier, mini-grid operator, and finance/investment platform.",
+    "Do not route an investor/project developer into construction or equipment-supply categories without licenses, manufacturer authorizations, and delivery references.",
+  ],
 };
 
 const WHO: AgencyPackage = {
@@ -289,6 +319,10 @@ const WHO: AgencyPackage = {
   categoryHints: [
     "Medical equipment, diagnostics, laboratory supplies, health ICT, research support, emergency health logistics, public-health consulting",
     "Flag any WHO prequalification, GMP, ISO, CE, or national regulatory registrations explicitly",
+  ],
+  categoryGuardrails: [
+    "For WHO/PQS or health products, separate product listing evidence, SKUs, technical datasheets, warranty/support, distributor authorization, and country regulatory approvals.",
+    "Do not treat PQS/product evidence as generic consulting readiness; product suppliers need product-specific proof and support coverage.",
   ],
 };
 

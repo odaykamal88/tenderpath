@@ -127,7 +127,8 @@ export async function generateRosterFastTrack({
     `Required documents: ${agency.requiredDocuments.join("; ")}`,
     `Agency notes: ${agency.notes.join(" | ")}`,
     `Suggested categories: ${agency.categoryHints.join("; ")}`,
-  ].join("\n");
+    agency.categoryGuardrails?.length ? `Category guardrails: ${agency.categoryGuardrails.join(" | ")}` : null,
+  ].filter(Boolean).join("\n");
   const generatedAt = generatedAtLabel();
   const companyName = assessment?.company_name ?? order.email ?? "Vendor";
 

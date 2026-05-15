@@ -374,6 +374,9 @@ function missingInputs(args: BuildServiceContextArgs, pipeline: PipelineContextR
   if ((args.serviceSlug === "lta-roster" || args.serviceSlug === "roster-fast-track") && !hasIntakeText(intake, ["target_agency"])) {
     missing.push("target roster or agency");
   }
+  if ((args.serviceSlug === "lta-roster" || args.serviceSlug === "roster-fast-track") && !hasIntakeText(intake, ["target_category", "additional_details"])) {
+    missing.push("target product/service category");
+  }
 
   return [...new Set(missing)];
 }
@@ -391,7 +394,7 @@ function qualityScore(args: BuildServiceContextArgs, pipeline: PipelineContextRo
   if (hasSourceContext) score += 1;
   if (pipeline?.match_reasons || (pipeline?.fit_score ?? 0) > 0) score += 1;
   if (assessment) score += 1;
-  if (hasUploadedDocument(intake) || hasIntakeText(intake, ["tender_context", "additional_details", "target_agency"])) score += 1;
+  if (hasUploadedDocument(intake) || hasIntakeText(intake, ["tender_context", "additional_details", "target_agency", "target_category"])) score += 1;
   if (isBidNoBid && hasTenderRequirementContext(intake, pipeline)) score += 0.7;
   if (pipeline?.has_broken_link) score -= 1.5;
   if (missing.length >= 3) score -= 1;
@@ -454,6 +457,7 @@ export async function buildServiceContextPacket(args: BuildServiceContextArgs): 
         "tender_context",
         "additional_details",
         "target_agency",
+        "target_category",
         "package_notes",
         "requirement_eligibility",
         "requirement_scope",

@@ -214,6 +214,7 @@ Return a strict-shape JSON object with EXACTLY these keys:
 
 Rules:
 - Be specific to the target agency. Reference its actual portal, its actual category codes, its actual submission timing if known.
+- Respect category guardrails. Separate advisory, commodity supply, products, logistics, EPC/O&M, and technology/product-support lanes when the agency context provides them.
 - Do NOT invent facts about the company; missing details go in missing_information.
 - Document filenames in document_renaming_rules should follow the agency's known convention if any.
 - Return ONLY valid JSON.`,

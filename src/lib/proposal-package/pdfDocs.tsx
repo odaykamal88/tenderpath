@@ -214,6 +214,15 @@ export async function renderSubmissionInstructionsPdf(
           ))}
         </View>
 
+        {agency.categoryGuardrails && agency.categoryGuardrails.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.h2}>Category guardrails</Text>
+            {agency.categoryGuardrails.map((guardrail, i) => (
+              <Text key={i} style={[styles.bullet, { color: INK2 }]}>· {guardrail}</Text>
+            ))}
+          </View>
+        )}
+
         {output.submission_guidance.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.h2}>Tips and common rejections</Text>
