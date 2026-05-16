@@ -190,8 +190,16 @@ Return a strict-shape JSON object with EXACTLY these keys:
   "executive_summary": string — 2-3 paragraph summary opening with company name, sector fit, and key win-themes. Plain prose, no markdown.,
   "technical_approach": string[] — 5-8 paragraphs describing methodology, mobilization, work plan, deliverables, and quality assurance. Each item is a full paragraph.,
   "compliance_checklist": [
-    { "requirement": string, "status": "compliant" | "partial" | "needs_action", "evidence_or_action": string }
-  ] — 8-15 items mapping each tender requirement to a compliance status and either evidence or a specific action.,
+    {
+      "requirement": string,
+      "status": "compliant" | "partial" | "needs_action",
+      "evidence_or_action": string,
+      "priority": "mandatory" | "recommended",
+      "evidence_label": "evidence_from_library" | "user_claim" | "inference" | "gap"
+    }
+  ] — 8-15 items mapping each tender requirement to a compliance status,
+       either evidence or a specific action, an administrative priority,
+       and a label describing what backs the claim.,
   "required_documents": string[] — complete list of documents to compile (10-20 items),
   "cover_letter_draft": string — full cover letter addressed to the contracting agency. Include date placeholder, salutation, 3 body paragraphs (interest, capability, request for evaluation), and a signature block. Plain prose, no markdown.,
   "financial_template_notes": string[] — guidance on pricing structure, cost line items, taxes/contingency, and pricing strategy (5-10 items),
@@ -210,6 +218,12 @@ Rules:
   capability_match.status="evidenced" → compliance_checklist.status="compliant" and cite the evidence in evidence_or_action.
   capability_match.status="claimed"   → compliance_checklist.status="partial" with evidence_or_action stating what proof is still needed.
   capability_match.status="missing"   → compliance_checklist.status="needs_action" and put the specific gap in missing_information too.
+- compliance_checklist.priority is "mandatory" when failing the requirement causes administrative rejection (eligibility, registration, signed declaration, audited statements floor, mandatory documents list). It is "recommended" when it only affects scoring (methodology depth, M&E rigour, indicators detail, narrative quality). When uncertain, default to "mandatory" if the requirement appears in the tender's eligibility or required-documents lists; otherwise "recommended".
+- compliance_checklist.evidence_label maps from capability_match:
+  capability_match.status="evidenced" → evidence_label="evidence_from_library" (a vault file was cited).
+  capability_match.status="claimed"   → evidence_label="user_claim".
+  capability_match.status="missing"   → evidence_label="gap".
+  If no capability_match exists for this item, use "inference".
 - Return ONLY valid JSON, no prose around it.`,
       },
     ],
@@ -302,11 +316,21 @@ function normalizeProposal(raw: Partial<ProposalOutput>): ProposalOutput {
   out.compliance_checklist = Array.isArray(out.compliance_checklist)
     ? out.compliance_checklist
         .slice(0, 20)
-        .map((c) => ({
-          requirement: clampString(c.requirement, 400),
-          status: (["compliant", "partial", "needs_action"] as const).includes(c.status) ? c.status : "needs_action",
-          evidence_or_action: clampString(c.evidence_or_action, 600),
-        }))
+        .map((c) => {
+          const priority = (["mandatory", "recommended"] as const).includes(c.priority as never)
+            ? (c.priority as "mandatory" | "recommended")
+            : undefined;
+          const label = (["evidence_from_library", "user_claim", "inference", "gap"] as const).includes(c.evidence_label as never)
+            ? (c.evidence_label as "evidence_from_library" | "user_claim" | "inference" | "gap")
+            : undefined;
+          return {
+            requirement: clampString(c.requirement, 400),
+            status: (["compliant", "partial", "needs_action"] as const).includes(c.status) ? c.status : "needs_action",
+            evidence_or_action: clampString(c.evidence_or_action, 600),
+            priority,
+            evidence_label: label,
+          };
+        })
         .filter((c) => c.requirement.length > 0)
     : [];
   return out;

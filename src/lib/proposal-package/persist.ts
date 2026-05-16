@@ -1,5 +1,5 @@
 import { sql } from "@/lib/db";
-import type { ProposalOutput, RosterOutput, TenderRequirements } from "./types";
+import type { GateState, ProposalOutput, RosterOutput, TenderRequirements } from "./types";
 
 export interface UpsertArgs {
   workOrderId: number;
@@ -23,12 +23,19 @@ export interface UpsertArgs {
   /** Sprint 9: persist the extracted TenderRequirements with capability_match
    *  so subsequent runs and the harness can detect "TOR parsed = yes". */
   parsedRequirements?: TenderRequirements | null;
+  /** Sprint 11: gate summary mirrored from output.gate_state for direct query. */
+  gateState?: GateState | null;
+  /** Sprint 11: generation_status to persist. Defaults to 'ready' when not supplied.
+   *  Use 'needs_remediation' when the compliance gate is open. */
+  generationStatus?: "ready" | "needs_remediation";
 }
 
 export async function upsertPackage(args: UpsertArgs): Promise<number> {
   const outputJson = JSON.stringify(args.output);
   const intakeJson = JSON.stringify(args.intake);
   const requirementsJson = args.parsedRequirements ? JSON.stringify(args.parsedRequirements) : null;
+  const gateJson = args.gateState ? JSON.stringify(args.gateState) : null;
+  const generationStatus = args.generationStatus ?? "ready";
   // When blob failed, preserve the diagnostic instead of clearing error_message.
   const errorMessage = args.pdfUrl == null && args.uploadError ? args.uploadError : null;
   if (args.existingPackageId != null) {
@@ -37,14 +44,15 @@ export async function upsertPackage(args: UpsertArgs): Promise<number> {
         output = ${outputJson}::jsonb,
         pdf_url = COALESCE(${args.pdfUrl}, pdf_url),
         pdf_pathname = COALESCE(${args.pdfPathname}, pdf_pathname),
-        generation_status = 'ready',
+        generation_status = ${generationStatus},
         generation_attempts = ${args.attempts},
         error_message = ${errorMessage},
         tender_title = COALESCE(${args.tenderTitle}, tender_title),
         agency = COALESCE(${args.agency}, agency),
         tender_url = COALESCE(${args.tenderUrl}, tender_url),
         intake = ${intakeJson}::jsonb,
-        parsed_requirements = COALESCE(${requirementsJson}::jsonb, parsed_requirements)
+        parsed_requirements = COALESCE(${requirementsJson}::jsonb, parsed_requirements),
+        gate_state = ${gateJson}::jsonb
       WHERE id = ${args.existingPackageId}
       RETURNING id
     ` as unknown as Array<{ id: number }>;
@@ -58,12 +66,14 @@ export async function upsertPackage(args: UpsertArgs): Promise<number> {
       user_id, work_order_id, pipeline_item_id, plan,
       tender_title, agency, tender_url, intake,
       stripe_session_id, output, pdf_url, pdf_pathname,
-      generation_status, generation_attempts, error_message, parsed_requirements
+      generation_status, generation_attempts, error_message,
+      parsed_requirements, gate_state
     ) VALUES (
       ${args.userId}, ${args.workOrderId}, ${args.pipelineItemId}, ${args.plan},
       ${args.tenderTitle}, ${args.agency}, ${args.tenderUrl}, ${intakeJson}::jsonb,
       ${args.stripeSessionId}, ${outputJson}::jsonb, ${args.pdfUrl}, ${args.pdfPathname},
-      'ready', ${args.attempts}, ${errorMessage}, ${requirementsJson}::jsonb
+      ${generationStatus}, ${args.attempts}, ${errorMessage},
+      ${requirementsJson}::jsonb, ${gateJson}::jsonb
     )
     RETURNING id
   ` as unknown as Array<{ id: number }>;

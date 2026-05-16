@@ -15,6 +15,7 @@ interface ProposalOutput {
   missing_information?: string[];
   next_steps?: string[];
   source_quality?: SourceQuality;
+  gate_state?: GateState; // Sprint 11
   // roster-fast-track fields
   registration_checklist?: string[];
   capability_statement_draft?: string;
@@ -26,6 +27,21 @@ interface ComplianceItem {
   requirement: string;
   status: "compliant" | "partial" | "needs_action";
   evidence_or_action: string;
+  // Sprint 11
+  priority?: "mandatory" | "recommended";
+  evidence_label?: "evidence_from_library" | "user_claim" | "inference" | "gap";
+}
+
+interface GateState {
+  total: number;
+  mandatory_gaps: number;
+  recommended_gaps: number;
+  gap_items: Array<{
+    requirement: string;
+    priority: "mandatory" | "recommended";
+    evidence_or_action: string;
+    evidence_label?: ComplianceItem["evidence_label"];
+  }>;
 }
 
 interface SourceQuality {
@@ -137,11 +153,24 @@ function ComplianceList({ items }: { items: Array<string | ComplianceItem> }) {
     partial: "text-amber-700 border-amber-200 bg-amber-50",
     needs_action: "text-red-700 border-red-200 bg-red-50",
   };
+  // Sprint 11
+  const evidenceCopy: Record<NonNullable<ComplianceItem["evidence_label"]>, string> = {
+    evidence_from_library: "Evidence on file",
+    user_claim: "Applicant claim",
+    inference: "Inference",
+    gap: "Gap",
+  };
+  const evidenceCls: Record<NonNullable<ComplianceItem["evidence_label"]>, string> = {
+    evidence_from_library: "text-emerald-700 border-emerald-200 bg-emerald-50/60",
+    user_claim: "text-stone-600 border-stone-200 bg-stone-50",
+    inference: "text-stone-500 border-stone-200 bg-white",
+    gap: "text-red-700 border-red-200 bg-red-50",
+  };
   return (
     <div className="space-y-3">
       {items.map((item, i) => {
         const row = typeof item === "string"
-          ? { requirement: item, status: "needs_action" as const, evidence_or_action: "Confirm evidence before submission." }
+          ? { requirement: item, status: "needs_action" as const, evidence_or_action: "Confirm evidence before submission." } as ComplianceItem
           : item;
         return (
           <div key={i} className="rounded-sm border border-stone-200 bg-stone-50/50 p-3">
@@ -155,6 +184,26 @@ function ComplianceList({ items }: { items: Array<string | ComplianceItem> }) {
               >
                 {statusCopy[row.status]}
               </span>
+              {row.priority === "mandatory" && (
+                <span
+                  className="rounded-sm border border-red-300 bg-red-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-red-800"
+                  style={{ fontFamily: MONO }}
+                >
+                  Mandatory
+                </span>
+              )}
+              {row.evidence_label && (
+                <span
+                  className={[
+                    "rounded-sm border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
+                    evidenceCls[row.evidence_label],
+                  ].join(" ")}
+                  style={{ fontFamily: MONO }}
+                  title={`Evidence source: ${row.evidence_label.replace(/_/g, " ")}`}
+                >
+                  {evidenceCopy[row.evidence_label]}
+                </span>
+              )}
               <p className="flex-1 text-[13.5px] font-medium leading-relaxed text-stone-800">{row.requirement}</p>
             </div>
             {row.evidence_or_action && (
@@ -255,9 +304,76 @@ function NumberedList({ items }: { items: string[] }) {
   );
 }
 
-function ProposalDraftView({ output }: { output: ProposalOutput }) {
+function GateBanner({ gate, onRegenerate, regenerating }: {
+  gate: GateState | undefined;
+  onRegenerate?: () => void;
+  regenerating?: boolean;
+}) {
+  if (!gate || gate.mandatory_gaps === 0) return null;
+  return (
+    <div className="mb-6 rounded-md border-l-2 border-red-700 bg-red-50/40 p-4">
+      <div
+        className="text-[10px] font-semibold uppercase tracking-[0.18em] text-red-800"
+        style={{ fontFamily: MONO }}
+      >
+        Compliance gate · {gate.mandatory_gaps} mandatory {gate.mandatory_gaps === 1 ? "item" : "items"} needs remediation
+      </div>
+      <p className="mt-2 text-[13.5px] leading-relaxed text-red-900">
+        The proposal package is being held until these items are resolved. Mandatory items affect administrative eligibility — leaving them unresolved risks rejection on submission.
+      </p>
+      <ul className="mt-3 space-y-2.5">
+        {gate.gap_items
+          .filter((g) => g.priority === "mandatory")
+          .slice(0, 8)
+          .map((g, i) => (
+            <li key={i} className="rounded-sm border border-red-200 bg-white px-3 py-2.5">
+              <p className="text-[13px] font-medium text-stone-900">{g.requirement}</p>
+              {g.evidence_or_action && (
+                <p className="mt-1.5 text-[12.5px] leading-relaxed text-stone-600">{g.evidence_or_action}</p>
+              )}
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Link
+                  href={`/dashboard/vault?gap=${encodeURIComponent(g.requirement.slice(0, 200))}`}
+                  className="rounded-sm border border-stone-700 bg-white px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-[0.15em] text-stone-900 hover:bg-stone-900 hover:text-white transition-colors"
+                  style={{ fontFamily: MONO }}
+                >
+                  Provide evidence →
+                </Link>
+                <button
+                  type="button"
+                  onClick={onRegenerate}
+                  disabled={regenerating}
+                  className="rounded-sm bg-stone-900 px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ fontFamily: MONO }}
+                >
+                  {regenerating ? "Regenerating…" : "Regenerate"}
+                </button>
+              </div>
+            </li>
+          ))}
+      </ul>
+      {gate.recommended_gaps > 0 && (
+        <p className="mt-3 text-[12px] text-red-900/80">
+          {gate.recommended_gaps} additional recommended improvements are flagged in the checklist below — they affect scoring but won&apos;t block submission.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ProposalDraftView({
+  output,
+  onRegenerate,
+  regenerating,
+}: {
+  output: ProposalOutput;
+  onRegenerate?: () => void;
+  regenerating?: boolean;
+}) {
   return (
     <div className="space-y-5">
+      <GateBanner gate={output.gate_state} onRegenerate={onRegenerate} regenerating={regenerating} />
+
       <Section index="01" title="Executive summary">
         <TextBlock text={output.executive_summary} />
       </Section>
@@ -523,9 +639,10 @@ export default function ProposalPackagePage() {
   const [stage, setStage] = useState<Stage>("loading");
   const [pkg, setPkg] = useState<ProposalPackage | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
 
-  const generate = useCallback(async () => {
-    setStage("generating");
+  const generate = useCallback(async (opts?: { force?: boolean }) => {
+    if (!opts?.force) setStage("generating");
     try {
       const res = await fetch("/api/proposals/generate", {
         method: "POST",
@@ -533,6 +650,7 @@ export default function ProposalPackagePage() {
         body: JSON.stringify({
           work_order_id: Number(workOrderId),
           stripe_session_id: sessionId,
+          force: opts?.force === true,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -581,13 +699,31 @@ export default function ProposalPackagePage() {
     })();
   }, [workOrderId, generate]);
 
+  // Sprint 11: regenerate when the compliance gate is open. We don't kick
+  // back into the full "generating…" splash since the user already has the
+  // draft view loaded; we just refresh the package quietly.
+  const regenerate = useCallback(async () => {
+    setRegenerating(true);
+    try {
+      await generate({ force: true });
+    } finally {
+      setRegenerating(false);
+    }
+  }, [generate]);
+
   const isProposal = !pkg || pkg.plan !== "roster-fast-track";
   const title = isProposal ? "Proposal package" : "Roster / LTA package";
   const subtitle = pkg?.tender_title
     ? [pkg.tender_title, pkg.agency].filter(Boolean).join(" · ")
     : null;
   const sourceQualityStatus = pkg?.output.source_quality?.status;
-  const packageStatusLabel = sourceQualityStatus && sourceQualityStatus !== "ready" ? "ready · source review required" : "ready";
+  // Sprint 11: compliance-gate state trumps source-quality state in the header label.
+  const gateBlocked = (pkg?.output.gate_state?.mandatory_gaps ?? 0) > 0;
+  const packageStatusLabel = gateBlocked
+    ? `needs remediation · ${pkg?.output.gate_state?.mandatory_gaps} mandatory ${pkg?.output.gate_state?.mandatory_gaps === 1 ? "item" : "items"}`
+    : sourceQualityStatus && sourceQualityStatus !== "ready"
+      ? "ready · source review required"
+      : "ready";
 
   if (stage === "loading" || stage === "generating") {
     return (
@@ -641,7 +777,7 @@ export default function ProposalPackagePage() {
           <p className="text-[13.5px] text-red-900 leading-relaxed">{errorMsg}</p>
           <div className="mt-4 flex flex-wrap gap-3">
             <button
-              onClick={generate}
+              onClick={() => generate()}
               className="rounded-sm bg-stone-900 px-4 py-2.5 text-[12.5px] font-semibold text-white hover:bg-stone-800"
             >
               Retry
@@ -720,7 +856,7 @@ export default function ProposalPackagePage() {
 
       {/* Sections */}
       {isProposal ? (
-        <ProposalDraftView output={pkg.output} />
+        <ProposalDraftView output={pkg.output} onRegenerate={regenerate} regenerating={regenerating} />
       ) : (
         <>
           <RosterPackageView output={pkg.output} />

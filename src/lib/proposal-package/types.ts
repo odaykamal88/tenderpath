@@ -18,13 +18,67 @@ export interface ProposalOutput {
   missing_information: string[];
   next_steps: string[];
   source_quality?: ProposalEvidenceProfile;
+  /** Sprint 11. Optional. Compliance-gate summary produced at generation
+   *  time. When mandatory_gaps > 0 the package is held in
+   *  generation_status="needs_remediation" until the applicant resolves
+   *  the gates (provide evidence, skip with explanation, or regenerate). */
+  gate_state?: GateState;
+}
+
+export interface GateState {
+  /** Total compliance items. */
+  total: number;
+  /** Items with status="needs_action" AND priority="mandatory". The bundle
+   *  is held when this is >0. Legacy items without priority are treated as
+   *  recommended (no gate) so the gate never trips on pre-Sprint-11 output. */
+  mandatory_gaps: number;
+  /** Items with priority="recommended" and status="needs_action". Surfaced
+   *  to the applicant but not blocking. */
+  recommended_gaps: number;
+  /** Snapshot of the gap items so the dashboard can render the remediation
+   *  panel from `proposal_packages.output` without re-deriving. */
+  gap_items: Array<{
+    requirement: string;
+    priority: "mandatory" | "recommended";
+    evidence_or_action: string;
+    evidence_label?: ComplianceItem["evidence_label"];
+  }>;
 }
 
 export interface ComplianceItem {
   requirement: string;
   status: "compliant" | "partial" | "needs_action";
   evidence_or_action: string;
+  /** Sprint 11. Optional. Whether failing this item causes administrative
+   *  rejection (mandatory) or only scoring deduction (recommended). The
+   *  compliance gate blocks the ZIP bundle when ≥1 mandatory item is in
+   *  status="needs_action". Legacy rows render unchanged when absent. */
+  priority?: "mandatory" | "recommended";
+  /** Sprint 11. Optional. What backs the evidence_or_action claim:
+   *  - evidence_from_library: a file in the applicant's vault was cited.
+   *  - user_claim:            the applicant said it (profile/intake) but
+   *                           no vault item proves it.
+   *  - inference:             reasoning over the tender text without
+   *                           specific company backing.
+   *  - gap:                   known absence — nothing supports the claim.
+   *  Mirrors the Bid/No-Bid evidence_label pattern from Sprint 8. */
+  evidence_label?: "evidence_from_library" | "user_claim" | "inference" | "gap";
 }
+
+export const COMPLIANCE_PRIORITIES = ["mandatory", "recommended"] as const;
+export const COMPLIANCE_EVIDENCE_LABELS = [
+  "evidence_from_library",
+  "user_claim",
+  "inference",
+  "gap",
+] as const;
+
+export const COMPLIANCE_EVIDENCE_LABEL_TEXT: Record<NonNullable<ComplianceItem["evidence_label"]>, string> = {
+  evidence_from_library: "Evidence on file",
+  user_claim: "Applicant claim",
+  inference: "Inference",
+  gap: "Gap",
+};
 
 export interface RosterOutput {
   registration_checklist: string[];
@@ -129,4 +183,10 @@ export const DEFAULT_ROSTER_OUTPUT: RosterOutput = {
 
 export const PROPOSAL_PLAN = "proposal-draft";
 export const ROSTER_PLAN = "roster-fast-track";
-export const MAX_ATTEMPTS = 3; // 1 automatic + 2 user-triggered regenerations
+// Sprint 11. Lifted from 3 (1 auto + 2 user) to 6 because the compliance
+// gate now expects applicants to iterate: upload evidence → regenerate →
+// (possibly) discover another gap → upload → regenerate. Three was too
+// tight to absorb the new round-trip workflow without falling back to
+// concierge. The senior-review escape hatch remains for genuinely stuck
+// cases.
+export const MAX_ATTEMPTS = 6;
