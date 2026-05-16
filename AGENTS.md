@@ -12,6 +12,7 @@ Tenderpath is a procurement intelligence platform that crawls live tenders, asse
 
 - `src/lib/crawlers/`: source-specific crawlers, sync orchestration, dedup, verification, sector mapping.
 - `src/lib/assessment/`: website crawl, company classification, readiness analysis, tender matching.
+- `src/lib/proposal-package/`: opportunity-level proposal review, bid/no-bid analysis, proposal-draft and roster-fast-track generation, structured outputs persisted on `proposal_packages.output`, and the shared @react-pdf/renderer rendering primitives in `pdfDocs.tsx`.
 - `src/app/`: App Router pages and API routes.
 - `workers/crawler-browser/`: Cloudflare Browser Rendering worker used for anti-bot and JS-rendered pages.
 - `scripts/`: migrations, sync scripts, operational helpers.
@@ -73,6 +74,8 @@ Near launch, optimize for the following in order:
 - When a site is JS-rendered, Cloudflare-protected, or returns thin HTML, reuse `workers/crawler-browser/` before introducing a new scraping stack.
 - Any crawler change must preserve the `RawTender` and `CrawlResult` contracts unless a coordinated migration is included.
 - Any assessment change must preserve graceful degradation when website content is poor, blocked, or misleading.
+- Any proposal-review output must flow through the work-order surface and reuse the @react-pdf/renderer primitives in `src/lib/proposal-package/pdfDocs.tsx`; never produce shareable artefacts from standalone scripts or coordinate-based renderers.
+- Any proposal review must read the call's corrigenda and Q&A appendix before scoring against the original guidelines; assume one corrigendum exists until proven otherwise.
 - Every major data pipeline change should add instrumentation or a health endpoint.
 - Do not optimize for source count at the expense of match quality or dashboard usefulness.
 - Do not ship generic dashboard filler; every UI module should help the user qualify, prepare, or act.
@@ -127,6 +130,21 @@ Near launch, optimize for the following in order:
   - Why it matches,
   - What to do next.
 
+## Proposal Review Quality Standards
+
+Tender Assessment and Tender Dashboard agents share ownership of proposal reviews; the Proposal Review Agent leads. See `docs/agents/service-output-spec.md` and `docs/agents/proposal-review-report-template.md` for shape and tone.
+
+- Anchor every finding in evidence drawn from the call documents or the applicant's own submission, supporting deck, or evidence library. Label evidence vs. inference vs. gap vs. unverified at the field level.
+- Read the corrigendum and Q&A appendix before scoring. Mis-scoring against an outdated rubric is a trust-killer; corrigendum-driven changes (e.g. score band shifts, eligibility tightenings) must be surfaced explicitly.
+- Score against the published rubric, never an invented one. If the call publishes max scores per criterion, the review must mirror them exactly, including double-weighted criteria.
+- Distinguish administrative gates from scoring deductions. A missing budget estimate is an administrative blocker; a thin risk register is a scoring deduction. Conflating them costs trust.
+- Severity is `BLOCK` / `HIGH` / `MED` / `LOW`. `BLOCK` means administrative rejection risk if not fixed. `HIGH` is multi-point scoring exposure. Each fix carries an owner and a deadline.
+- Every "why this can win" claim must be tied to one of: applicant evidence, call-priority alignment, scoring rubric advantage, or competitor-comparison context. Do not list strengths in the abstract.
+- Output is a workflow object, not a consultant report. Fixes are tasks. Rewrites are drop-in editorial. Timeline is operational. Avoid analytical prose without action.
+- Preserve TenderPath workflow identity: the review must continue the assessment → matched workflow → service-order → submission arc, never sit outside it as a standalone document.
+- Treat applicant evidence as a persistent asset. Every review run should leave the applicant's evidence library richer than it found it.
+- Reviews are versioned. Re-running a review must not silently overwrite the prior version; treat each run as a revision on the same work-order.
+
 ## UX / Product Experience Standards
 
 - The assessment → onboarding → dashboard transition must feel seamless.
@@ -160,6 +178,9 @@ Before changing a subsystem, read its companion docs in `docs/agents/`:
 - `docs/agents/dashboard-architecture.md`
 - `docs/agents/managed-agents-setup.md`
 - `docs/agents/claude-code-prompts.md`
+- `docs/agents/service-output-spec.md` — formal shapes for ProposalOutput, ReviewOutput, severity, status, and evidence-vs-inference labels
+- `docs/agents/proposal-review-report-template.md` — canonical narrative shape, section order, tone rules, and required elements for any review deliverable
+- `docs/learning/eu-grant-proposal-review-case-learnings.md` — extracted lessons from the first real EU proposal review case
 
 Also read product strategy when working on flow, monetization, or dashboard direction:
 

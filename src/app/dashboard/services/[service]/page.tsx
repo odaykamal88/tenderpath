@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { TIERS } from "@/lib/pricing";
 import ServiceIntakeForm from "../ServiceIntakeForm";
 import SampleOutputPreview, { type SamplePreviewType } from "@/components/SampleOutputPreview";
+import { getCurrentUserAssessment } from "@/lib/assessment";
 
 type ServiceSlug = "bid-no-bid" | "digest" | "proposal" | "lta-roster";
 
@@ -182,6 +183,19 @@ export default async function ServiceDetailPage({
   };
   const tier = TIERS.find((item) => item.slug === service.tierSlug);
   const hasContext = Boolean(context.tender || context.agency || context.pipelineItemId);
+
+  // Fetch a slim view of the current assessment so the ConfidenceGate can
+  // detect low-confidence / multi-bucket sector classifications and prompt
+  // the user to confirm before the paid order. Server-side fetch keeps
+  // ServiceIntakeForm free of additional API plumbing.
+  const assessment = await getCurrentUserAssessment().catch(() => null);
+  const assessmentSnapshot = assessment
+    ? {
+        companyName: assessment.companyName,
+        sector: assessment.sector,
+        description: assessment.summary,
+      }
+    : null;
 
   return (
     <div className="px-8 py-8 max-w-[1400px]">
@@ -431,6 +445,7 @@ export default async function ServiceDetailPage({
             docId={context.docId}
             initialTenderUrl={context.tenderUrl}
             label={service.cta}
+            assessmentSnapshot={assessmentSnapshot}
           />
         </aside>
       </div>
