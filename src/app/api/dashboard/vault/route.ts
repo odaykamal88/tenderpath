@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireDashboardAccess } from "@/lib/access";
-import { linkExtractionToVaultDocument } from "@/lib/documents/extract";
+import { ensureDocumentExtractionTable, linkExtractionToVaultDocument } from "@/lib/documents/extract";
 
 const DOC_TYPES = ["certification", "financial", "cv", "past_performance", "other"] as const;
 type DocType = (typeof DOC_TYPES)[number];
@@ -11,6 +11,8 @@ const isType = (v: unknown): v is DocType =>
 export async function GET(request: Request) {
   const guard = await requireDashboardAccess(request);
   if (!guard.authorized) return guard.response!;
+
+  await ensureDocumentExtractionTable();
 
   const rows = await sql`
     SELECT

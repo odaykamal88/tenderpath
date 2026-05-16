@@ -20,6 +20,9 @@ interface WorkOrder {
   fit_score: number | null;
   pipeline_stage: string | null;
   fulfillment_notes: string | null;
+  evidence_pack_status?: "ready" | "needs_review" | "blocked" | null;
+  evidence_pack_score?: number | null;
+  evidence_pack_missing_required?: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -82,6 +85,34 @@ function expectedDelivery(slug: string | null, createdAt: string): string {
 
 function orderRef(id: number): string {
   return `WO-${id.toString(16).toUpperCase().padStart(4, "0")}`;
+}
+
+function evidenceStatusCopy(order: WorkOrder): { label: string; className: string; detail: string | null } | null {
+  if (!order.evidence_pack_status) return null;
+  const score = order.evidence_pack_score != null ? ` · ${order.evidence_pack_score}/10` : "";
+  const missing = order.evidence_pack_missing_required ?? [];
+
+  if (order.evidence_pack_status === "ready") {
+    return {
+      label: `Proof received${score}`,
+      className: "border-emerald-200 bg-emerald-50/70 text-emerald-800",
+      detail: "Required evidence is on file.",
+    };
+  }
+
+  if (order.evidence_pack_status === "blocked") {
+    return {
+      label: `Proof needed${score}`,
+      className: "border-red-200 bg-red-50/70 text-red-800",
+      detail: missing.length ? missing.slice(0, 3).join(", ") : "Critical proof is missing.",
+    };
+  }
+
+  return {
+    label: `Proof in review${score}`,
+    className: "border-amber-200 bg-amber-50/70 text-amber-800",
+    detail: missing.length ? missing.slice(0, 3).join(", ") : "Some proof still needs review.",
+  };
 }
 
 export default function WorkOrdersPage() {
@@ -229,6 +260,7 @@ export default function WorkOrdersPage() {
               const isProposalService =
                 order.service_slug === "proposal-draft" || order.service_slug === "roster-fast-track";
               const dot = STATUS_DOT[order.status] ?? "bg-stone-300";
+              const evidenceStatus = evidenceStatusCopy(order);
               return (
                 <div key={order.id} className="flex gap-4 px-5 py-4 hover:bg-stone-50/60 transition-colors">
                   <Link href={`/dashboard/work-orders/${order.id}`} className="min-w-0 flex-1">
@@ -288,6 +320,21 @@ export default function WorkOrdersPage() {
                       <p className="mt-2 line-clamp-2 text-[12.5px] leading-relaxed text-stone-600 max-w-3xl">
                         {order.fulfillment_notes}
                       </p>
+                    )}
+                    {evidenceStatus && (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-sm border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.13em] ${evidenceStatus.className}`}
+                          style={{ fontFamily: MONO }}
+                        >
+                          {evidenceStatus.label}
+                        </span>
+                        {evidenceStatus.detail && (
+                          <span className="text-[11.5px] text-stone-500">
+                            {evidenceStatus.detail}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </Link>
 

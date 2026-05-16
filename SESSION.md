@@ -206,6 +206,28 @@ Additional work done outside the prompt sequence:
 - **Sprint 6 Status**: Ready to ship.
 - **Next Recommended Task**: Start Sprint 7 after deployment: customer missing-proof loop on `/dashboard/work-orders/[id]`, allowing users to upload or attach proof after checkout and automatically move an order back from `waiting_on_client` to `in_progress` when required proof is complete.
 
+### Sprint 7 Closeout — Customer Missing-Proof Loop
+
+- **Task Completed**: Completed Sprint 7 with the customer-side missing-proof loop on work-order detail pages and proof-status visibility on the work-order ledger.
+- **Files / Areas Changed**:
+  - `src/app/dashboard/work-orders/[id]/page.tsx` — evidence-pack requirements that are still missing now expose “Attach from vault” and “Upload” controls directly on the customer work-order page.
+  - `src/app/dashboard/work-orders/[id]/page.tsx` — uploads go through the existing Vault upload endpoint, attempt to create a reusable Vault document, then save the uploaded proof into `intake.evidence_pack_documents`.
+  - `src/app/dashboard/work-orders/[id]/page.tsx` — attached Vault documents are ranked per requirement, saved into the evidence pack, and the page refreshes from the returned work order.
+  - `src/app/api/dashboard/work-orders/[id]/route.ts` — PATCH now merges nested `evidence_pack_documents` instead of replacing the whole intake blindly, recomputes the evidence pack, refreshes the stored service-context evidence pack when present, and returns the full updated work order.
+  - `src/app/api/dashboard/work-orders/[id]/route.ts` — if an order is `waiting_on_client` and the recomputed evidence pack becomes `ready`, the route automatically moves the order back to `in_progress` and appends a fulfillment note.
+  - `src/app/api/dashboard/vault/route.ts` — GET now ensures `document_extractions` exists before joining it, fixing the 500 seen in local smoke where the database had Vault docs but had not created the extraction table yet.
+  - `src/app/api/dashboard/work-orders/route.ts` — customer work-order ledger rows now include evidence-pack status, score, and missing-required count.
+  - `src/app/dashboard/work-orders/page.tsx` — work-order cards now show a compact proof cue (`Proof needed`, `Proof received`, or `Proof in review`) with missing proof labels.
+- **Verification Run**:
+  - `npm exec eslint -- src/app/api/dashboard/work-orders/route.ts src/app/api/dashboard/work-orders/[id]/route.ts src/app/dashboard/work-orders/page.tsx src/app/dashboard/work-orders/[id]/page.tsx src/app/api/dashboard/vault/route.ts`
+  - `npx tsc --noEmit`
+  - Browser smoke with a temporary local JWT opened `/dashboard/work-orders/11`: HTTP 200, evidence panel present, 4 upload controls, 4 Vault attach selectors, no `[object Object]`, no console errors.
+  - Controlled API resume smoke created a temporary `proposal-draft` work order in `waiting_on_client`, PATCHed the missing `tor_rfp` and `past_performance` proof docs, confirmed `resumed: true`, `evidence_pack_status: "ready"`, status moved to `in_progress`, the fulfillment note was appended, and deleted the temporary row afterward.
+  - Browser smoke on `/dashboard/work-orders`: proof cue rendered (`Proof needed · 2/10`) with missing labels and no console errors.
+  - `rm -rf .next/cache && NEXT_FONT_GOOGLE_MOCKED_RESPONSES=/tmp/tenderpath-next-font-mocks.cjs npm run build`
+- **Sprint 7 Status**: Ready to ship. The post-checkout proof loop now closes the customer side of the evidence-pack workflow: missing proof is actionable, attached proof is persisted, ready packs can resume fulfillment, and the ledger shows whether proof is still blocking the order.
+- **Next Recommended Task**: Post-deploy production smoke, then monitor the first real customer proof upload/attach. Next sprint candidate: notification/ops SLA when customer proof is received so fulfillment owners see the resumed order without manual polling.
+
 ## Latest Session Update — 2026-05-14 (Sprint 5 started)
 
 - **Agent**: Codex
