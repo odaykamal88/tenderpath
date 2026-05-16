@@ -311,6 +311,10 @@ ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS pdf_pathname TEXT;
 ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS generation_status TEXT DEFAULT 'pending';
 ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS generation_attempts INTEGER DEFAULT 1;
 ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS error_message TEXT;
+-- Sprint 9: persist extracted TenderRequirements (with capability_match) so
+-- subsequent runs and the dashboard read what we parsed from the uploaded
+-- TOR/RFP without re-running extraction.
+ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS parsed_requirements JSONB;
 CREATE INDEX IF NOT EXISTS proposal_packages_work_order_plan ON proposal_packages (work_order_id, plan, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS weekly_digest_logs (

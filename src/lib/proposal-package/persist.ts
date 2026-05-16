@@ -1,5 +1,5 @@
 import { sql } from "@/lib/db";
-import type { ProposalOutput, RosterOutput } from "./types";
+import type { ProposalOutput, RosterOutput, TenderRequirements } from "./types";
 
 export interface UpsertArgs {
   workOrderId: number;
@@ -20,11 +20,15 @@ export interface UpsertArgs {
   uploadError: string | null;
   attempts: number;
   existingPackageId: number | null;
+  /** Sprint 9: persist the extracted TenderRequirements with capability_match
+   *  so subsequent runs and the harness can detect "TOR parsed = yes". */
+  parsedRequirements?: TenderRequirements | null;
 }
 
 export async function upsertPackage(args: UpsertArgs): Promise<number> {
   const outputJson = JSON.stringify(args.output);
   const intakeJson = JSON.stringify(args.intake);
+  const requirementsJson = args.parsedRequirements ? JSON.stringify(args.parsedRequirements) : null;
   // When blob failed, preserve the diagnostic instead of clearing error_message.
   const errorMessage = args.pdfUrl == null && args.uploadError ? args.uploadError : null;
   if (args.existingPackageId != null) {
@@ -39,7 +43,8 @@ export async function upsertPackage(args: UpsertArgs): Promise<number> {
         tender_title = COALESCE(${args.tenderTitle}, tender_title),
         agency = COALESCE(${args.agency}, agency),
         tender_url = COALESCE(${args.tenderUrl}, tender_url),
-        intake = ${intakeJson}::jsonb
+        intake = ${intakeJson}::jsonb,
+        parsed_requirements = COALESCE(${requirementsJson}::jsonb, parsed_requirements)
       WHERE id = ${args.existingPackageId}
       RETURNING id
     ` as unknown as Array<{ id: number }>;
@@ -53,12 +58,12 @@ export async function upsertPackage(args: UpsertArgs): Promise<number> {
       user_id, work_order_id, pipeline_item_id, plan,
       tender_title, agency, tender_url, intake,
       stripe_session_id, output, pdf_url, pdf_pathname,
-      generation_status, generation_attempts, error_message
+      generation_status, generation_attempts, error_message, parsed_requirements
     ) VALUES (
       ${args.userId}, ${args.workOrderId}, ${args.pipelineItemId}, ${args.plan},
       ${args.tenderTitle}, ${args.agency}, ${args.tenderUrl}, ${intakeJson}::jsonb,
       ${args.stripeSessionId}, ${outputJson}::jsonb, ${args.pdfUrl}, ${args.pdfPathname},
-      'ready', ${args.attempts}, ${errorMessage}
+      'ready', ${args.attempts}, ${errorMessage}, ${requirementsJson}::jsonb
     )
     RETURNING id
   ` as unknown as Array<{ id: number }>;
