@@ -1,0 +1,231 @@
+{
+  "requirements": {
+    "eligibility_criteria": [],
+    "technical_requirements": [],
+    "required_documents": [],
+    "evaluation_criteria": [],
+    "key_constraints": [],
+    "submission_format": "unknown"
+  },
+  "output": {
+    "recommendation": "conditional",
+    "win_probability_band": "25-50%",
+    "headline": "EU €675k fixed-amount Lot 3 grant for media freedom & pluralism in Syria; restricted CFP, concept note due 18 May 2026.",
+    "fit_reasoning": [
+      "CSIM's core mandate — independent journalism training, editorial coaching, journalist protection, and anti-disinformation work — maps directly onto Lot 3 priorities: strengthening independent media, protecting journalists/bloggers, and raising public awareness on media freedom.",
+      "Operational nodes in Gaziantep, Erbil, and Qamishli provide credible field reach into Northwest Syria, KRI, and Northeast Syria — the primary geographic areas of concern for the EU's Syria re-engagement strategy.",
+      "Multi-platform Arabic and Kurdish content production directly addresses the pluralism dimension of Lot 3 and the EU's emphasis on inclusive, multi-community outreach.",
+      "CSIM has delivered four sub-million-EUR grants on time with no audit qualifications (KPMG Türkiye, clean 2024), demonstrating the financial management track record EU evaluators weight heavily at eligibility stage.",
+      "Existing relationships with SIDA, Free Press Unlimited, and Internews (subaward) signal credibility within the media-development donor ecosystem that the EU Delegation will recognise.",
+      "Network of vetted Syrian journalists, photographers, and fact-checkers constitutes a ready implementation asset that reduces start-up risk — a scoring advantage under 'design of the action' and 'capacity of the applicant'."
+    ],
+    "gap_analysis": [
+      {
+        "gap": "PADOR registration is listed as 'in progress'; PROSPECT submission requires a valid PADOR EuropeAid ID before the concept note can be submitted online.",
+        "severity": "high",
+        "fix": "Prioritise PADOR completion immediately; allow 2–3 weeks for EC validation. Target completion by 15 April 2026 to avoid last-minute IT issues.",
+        "evidence_label": "gap"
+      },
+      {
+        "gap": "CSIM has been a co-applicant on a USAID award and lead on one small EU project (~sub-million EUR); Lot 3 is a fixed €675k grant, but EU evaluators will scrutinise whether the lead applicant has managed EU grants of comparable scope independently.",
+        "severity": "medium",
+        "fix": "Document the 2023 EU lead-applicant grant in detail (budget managed, reporting cycle, EC contact); if grant was <€300k, position the INGO co-applicant as the entity that elevates institutional credibility.",
+        "evidence_label": "inference"
+      },
+      {
+        "gap": "Co-applicant is described as 'in soft conversation' only; no confirmed INGO partner with PADOR registration and EU grant history is locked in.",
+        "severity": "medium",
+        "fix": "Formalise a Letter of Intent with the INGO co-applicant before the information session (21 April 2026); ensure the partner has an active PADOR ID and can evidence EU grant management experience.",
+        "evidence_label": "gap"
+      },
+      {
+        "gap": "Co-financing: the call requires a minimum 10% co-financing (100% EU max only for applicants established in Syria per Corrigendum No.1; CSIM is registered in Türkiye, so 90% EU max applies, meaning at least 10% own/other funds needed).",
+        "severity": "medium",
+        "fix": "CSIM's stated ~5% own reserves plus SIDA bridge financing may cover the gap, but this must be confirmed in writing. Secure a co-financing commitment letter from SIDA or another non-EU source before full application stage.",
+        "evidence_label": "inference"
+      },
+      {
+        "gap": "No explicit evidence of CSIM having a formal journalist digital-security or physical-protection programme — Lot 3 priority 2 specifically calls for 'effective protection of journalists, bloggers and other media workers'.",
+        "severity": "low",
+        "fix": "Either document existing protection activities (e.g. digital-security training delivered, relocation support provided) or bring a specialist sub-contractor (e.g. Committee to Protect Journalists, Reporters Without Borders affiliate) to fill this gap in the concept note.",
+        "evidence_label": "inference"
+      }
+    ],
+    "required_documents": [
+      {
+        "document": "Concept Note (Annex A.1 — Grant Application Form, Concept Note)",
+        "why_needed": "Mandatory first-stage submission via PROSPECT; gates entry to full application evaluation.",
+        "estimated_effort_hours": 40,
+        "priority": "mandatory"
+      },
+      {
+        "document": "Declaration by the Lead Applicant (signed)",
+        "why_needed": "Mandatory eligibility declaration confirming exclusion criteria are not met; submitted with concept note.",
+        "estimated_effort_hours": 2,
+        "priority": "mandatory"
+      },
+      {
+        "document": "PADOR registration confirmation / EuropeAid ID",
+        "why_needed": "PROSPECT submission is blocked without a valid PADOR ID for the lead applicant.",
+        "estimated_effort_hours": 8,
+        "priority": "mandatory"
+      },
+      {
+        "document": "Co-applicant Letter of Intent / Partnership Agreement",
+        "why_needed": "Demonstrates confirmed consortium structure; required at concept note stage to evidence co-applicant commitment.",
+        "estimated_effort_hours": 4,
+        "priority": "mandatory"
+      },
+      {
+        "document": "Co-financing commitment letter (SIDA or other non-EU source)",
+        "why_needed": "Evidences the ≥10% co-financing requirement for a Türkiye-registered lead applicant; needed at full application stage but should be secured early.",
+        "estimated_effort_hours": 6,
+        "priority": "mandatory"
+      },
+      {
+        "document": "Full Application Form (Annex A.2) including logical framework, detailed budget, and work plan",
+        "why_needed": "Required only if pre-selected after concept note evaluation; accounts for the bulk of proposal effort.",
+        "estimated_effort_hours": 60,
+        "priority": "mandatory"
+      },
+      {
+        "document": "Statutes / Articles of Association of CSIM (Türkiye registration)",
+        "why_needed": "Evidences legal personality and country of establishment; required at eligibility verification stage.",
+        "estimated_effort_hours": 1,
+        "priority": "mandatory"
+      },
+      {
+        "document": "Latest audited financial statements (KPMG Türkiye, 2024)",
+        "why_needed": "Required at full application / eligibility check to demonstrate financial capacity.",
+        "estimated_effort_hours": 1,
+        "priority": "mandatory"
+      },
+      {
+        "document": "CVs of key personnel (project director, M&E lead, field coordinators)",
+        "why_needed": "Evaluators score 'capacity of the applicant and co-applicant'; strong CVs directly improve the score.",
+        "estimated_effort_hours": 6,
+        "priority": "recommended"
+      },
+      {
+        "document": "Past performance summaries / references for 4 delivered grants (SIDA, FPU, Internews)",
+        "why_needed": "Strengthens 'capacity' section of full application; EU evaluators reward demonstrated delivery track record.",
+        "estimated_effort_hours": 4,
+        "priority": "recommended"
+      },
+      {
+        "document": "Context / needs analysis for media freedom in Syria (desk research + field data)",
+        "why_needed": "Concept note evaluation criterion 1.2 scores relevance to country/sector needs; a robust analysis differentiates the proposal.",
+        "estimated_effort_hours": 12,
+        "priority": "recommended"
+      },
+      {
+        "document": "Journalist protection sub-contractor scope of work / letter of support",
+        "why_needed": "Addresses Lot 3 priority 2 gap; a named specialist partner (e.g. CPJ, RSF affiliate) raises evaluator confidence in protection activities.",
+        "estimated_effort_hours": 4,
+        "priority": "recommended"
+      }
+    ],
+    "effort_estimate_hours": 148,
+    "red_flags": [
+      "PADOR registration incomplete — submission is technically impossible without a validated EuropeAid ID; this is a hard blocker if not resolved well before 18 May 2026.",
+      "Lot 3 is the smallest lot (EUR 675k fixed, single award) — competition from larger, more established media-freedom INGOs (e.g. Internews, IMS, RSF) is likely intense; CSIM's smaller institutional profile is a scoring disadvantage on 'capacity'.",
+      "Co-financing gap: CSIM's ~5% own reserves may be insufficient to cover the ≥10% co-financing requirement without confirmed SIDA bridge financing in writing.",
+      "Corrigendum No.1 clarifies the 100% EU funding exemption applies only to the lead applicant established in Syria — CSIM is registered in Türkiye and does not qualify, increasing financial risk if co-financing cannot be confirmed."
+    ],
+    "conditions_for_bid": [
+      "Complete PADOR registration and obtain a validated EuropeAid ID before 15 April 2026.",
+      "Confirm and formalise the INGO co-applicant with a signed Letter of Intent and verified PADOR registration before the 21 April 2026 information session.",
+      "Secure a written co-financing commitment (SIDA bridge or equivalent non-EU source) covering at least 10% of the EUR 675k budget (i.e., ≥EUR 67,500) before submitting the concept note."
+    ],
+    "next_steps": [
+      "IMMEDIATE (this week): Escalate PADOR registration to highest internal priority; assign one staff member as sole owner; target EC validation by 10 April 2026.",
+      "BY 10 APRIL 2026: Contact SIDA programme officer to request a written co-financing commitment letter for up to EUR 75,000 bridge financing against the Lot 3 grant.",
+      "BY 15 APRIL 2026: Formalise the INGO co-applicant relationship with a signed Letter of Intent; confirm the partner's PADOR ID and EU grant eligibility; register for the 21 April online information session (email DELEGATION-SYRIA-FCA@eeas.europa.eu with max 2 participants).",
+      "BY 30 APRIL 2026: Complete the context/needs analysis for media freedom in Syria and draft the concept note narrative, ensuring Lot 3 priorities 1–3 are each explicitly addressed with CSIM-specific activities and measurable outputs.",
+      "BY 10 MAY 2026: Conduct an internal red-team review of the concept note against the evaluation grid (relevance 20pts + design 25pts); submit via PROSPECT no later than 16 May 2026 to allow for IT contingency before the 18 May 12:00 Brussels deadline."
+    ],
+    "evidence": {
+      "tender_excerpt": "Lot 3: Promotion of and support to media freedom and pluralism in Syria — EUR 675,000 fixed. Priorities: 1. Strengthening independent media/journalists; 2. Effective protection of journalists/bloggers; 3. Strengthened public awareness on media freedom.",
+      "company_capabilities_matched": [
+        "Independent journalism training and protection across Syrian governorates",
+        "Editorial coaching for Syrian newsrooms in exile",
+        "Network of vetted Syrian journalists, photographers, and fact-checkers",
+        "Multi-platform content production in Arabic and Kurdish",
+        "Information-integrity and anti-disinformation programming",
+        "Operational field nodes in Gaziantep, Erbil, and Qamishli covering Northwest Syria, KRI, and Northeast Syria",
+        "Clean KPMG audit (2024) and four on-time grant deliveries — financial management track record",
+        "Donor reporting experience against EU and US humanitarian frameworks"
+      ],
+      "company_capabilities_missing": [
+        "Formal journalist digital-security or physical-protection programme (Lot 3 priority 2)",
+        "Lead-applicant experience on EU grants of comparable scale (≥EUR 500k) as sole institutional lead",
+        "Confirmed EU-eligible INGO co-applicant with active PADOR registration",
+        "Validated PADOR / EuropeAid ID for CSIM itself"
+      ]
+    },
+    "tender_type": "RFP",
+    "tender_type_note": "Restricted CFP (2-stage): concept note first, then invited full application; quality-scored, not lowest-price; narrative + design heavy.",
+    "commercial_terms": {
+      "payment_terms": null,
+      "performance_bond_pct": null,
+      "bid_security_pct": null,
+      "advance_payment_pct": null,
+      "retention_pct": null,
+      "bid_validity_days": null,
+      "completion_period": null,
+      "currency": "EUR",
+      "notes": [
+        "Lot 3 grant is a fixed amount: minimum and maximum are both EUR 675,000 — no budget flexibility; budget must be designed to exactly match this figure.",
+        "EU co-financing maximum is 90% for CSIM (Türkiye-registered); minimum 10% must come from non-EU sources.",
+        "Minimum EU co-financing floor is 70% of total eligible costs.",
+        "Indirect costs (overheads) are typically capped at 7% of direct eligible costs under EU standard grant contracts — verify in PRAG and full guidelines.",
+        "Payment schedule for EU grants typically follows: pre-financing advance on contract signature, interim payment(s) on report approval, balance on final report — exact schedule will be in the grant contract template.",
+        "No bid security or performance bond referenced in the guidelines; standard EU grant contract provisions apply."
+      ]
+    },
+    "eligibility_findings": [
+      {
+        "requirement": "Lead applicant must be a non-profit organisation or international organisation; must have legal personality.",
+        "status": "met",
+        "recommended_action": "ok",
+        "rationale": "CSIM is a registered Syrian-led nonprofit in Türkiye with legal personality evidenced by statutes; this satisfies the actor eligibility requirement.",
+        "evidence_label": "evidence"
+      },
+      {
+        "requirement": "Lead applicant must be registered in PADOR before submission via PROSPECT.",
+        "status": "gap",
+        "recommended_action": "verify",
+        "rationale": "PADOR registration is in progress; must be completed and validated by EC before the concept note deadline of 18 May 2026.",
+        "evidence_label": "gap"
+      },
+      {
+        "requirement": "Maximum EU co-financing is 90% of total eligible costs for applicants NOT established in the locations listed in Section 2.1.3 (i.e., not established in Syria); balance must come from non-EU sources.",
+        "status": "unverified",
+        "recommended_action": "verify",
+        "rationale": "CSIM is registered in Türkiye, not Syria, so the 100% exemption does not apply per Corrigendum No.1; the ~5% own reserves plus SIDA bridge must demonstrably cover the ≥10% co-financing requirement.",
+        "evidence_label": "inference"
+      },
+      {
+        "requirement": "Co-applicant(s) must meet the same eligibility conditions as the lead applicant and must be registered in PADOR.",
+        "status": "gap",
+        "recommended_action": "bring_jv_partner",
+        "rationale": "The intended INGO co-applicant is only in soft conversation; a confirmed, PADOR-registered EU-eligible partner must be formalised before concept note submission.",
+        "evidence_label": "gap"
+      },
+      {
+        "requirement": "Actions must be implemented in Syria and/or directly benefit Syrian populations; geographic eligibility of the action.",
+        "status": "met",
+        "recommended_action": "ok",
+        "rationale": "CSIM operates field nodes in Gaziantep, Erbil, and Qamishli with a network of Syrian journalists across governorates, satisfying the geographic implementation requirement.",
+        "evidence_label": "evidence"
+      },
+      {
+        "requirement": "Applicants must not be in any of the exclusion situations listed in the PRAG (bankruptcy, fraud, conflict of interest, etc.); Declaration by the Lead Applicant required.",
+        "status": "met",
+        "recommended_action": "ok",
+        "rationale": "CSIM has a clean KPMG audit (2024) and no reported audit qualifications; Declaration of Honour is already drafted per intake notes.",
+        "evidence_label": "evidence"
+      }
+    ]
+  }
+}
