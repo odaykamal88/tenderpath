@@ -2,16 +2,49 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+type EvidenceLabel = "evidence" | "inference" | "gap" | "unverified";
+type DocumentPriority = "mandatory" | "recommended";
+type TenderType = "RFQ" | "ITB" | "RFP" | "EOI" | "EOI-RFP" | "LTA" | "unknown";
+type EligibilityAction =
+  | "ok"
+  | "bring_jv_partner"
+  | "subcontract"
+  | "supplier_authorization"
+  | "no_bid"
+  | "verify";
+
 interface BidGap {
   gap: string;
   severity: "high" | "medium" | "low";
   fix: string;
+  evidence_label?: EvidenceLabel;
 }
 
 interface BidRequirement {
   document: string;
   why_needed: string;
   estimated_effort_hours: number | null;
+  priority?: DocumentPriority;
+}
+
+interface CommercialTerms {
+  payment_terms: string | null;
+  performance_bond_pct: number | null;
+  bid_security_pct: number | null;
+  advance_payment_pct: number | null;
+  retention_pct: number | null;
+  bid_validity_days: number | null;
+  completion_period: string | null;
+  currency: string | null;
+  notes: string[];
+}
+
+interface BidEligibilityFinding {
+  requirement: string;
+  status: "met" | "gap" | "unverified";
+  recommended_action: EligibilityAction;
+  rationale: string;
+  evidence_label: EvidenceLabel;
 }
 
 interface BidOutput {
@@ -30,6 +63,83 @@ interface BidOutput {
     company_capabilities_matched: string[];
     company_capabilities_missing: string[];
   };
+  /* Sprint 8.2 additions — all optional for backwards-compatible reads. */
+  tender_type?: TenderType;
+  tender_type_note?: string | null;
+  commercial_terms?: CommercialTerms;
+  eligibility_findings?: BidEligibilityFinding[];
+}
+
+const TENDER_TYPE_LABEL: Record<TenderType, string> = {
+  RFQ: "RFQ",
+  ITB: "ITB",
+  RFP: "RFP",
+  EOI: "EOI",
+  "EOI-RFP": "EOI → RFP",
+  LTA: "LTA",
+  unknown: "Unknown",
+};
+
+const ELIGIBILITY_ACTION_LABEL: Record<EligibilityAction, string> = {
+  ok: "OK",
+  bring_jv_partner: "Bring a JV partner",
+  subcontract: "Subcontract",
+  supplier_authorization: "Get supplier authorization",
+  no_bid: "Do not bid",
+  verify: "Verify",
+};
+
+const EVIDENCE_LABEL_TEXT: Record<EvidenceLabel, string> = {
+  evidence: "Evidence",
+  inference: "Inference",
+  gap: "Gap",
+  unverified: "Unverified",
+};
+
+function evidenceClasses(label: EvidenceLabel | undefined): string {
+  switch (label) {
+    case "evidence":
+      return "border-emerald-600 text-emerald-700";
+    case "gap":
+      return "border-red-600 text-red-700";
+    case "unverified":
+      return "border-amber-600 text-amber-700";
+    case "inference":
+    default:
+      return "border-stone-400 text-stone-500";
+  }
+}
+
+function eligibilityStatusClasses(status: BidEligibilityFinding["status"]): string {
+  if (status === "met") return "bg-emerald-700 text-white";
+  if (status === "gap") return "bg-red-700 text-white";
+  return "bg-amber-600 text-white";
+}
+
+function Term({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[9px] font-semibold uppercase tracking-[0.16em] text-stone-500 mb-0.5" style={{ fontFamily: MONO }}>
+        {label}
+      </div>
+      <div className="text-[13px] font-semibold text-stone-900">{value}</div>
+    </div>
+  );
+}
+
+function hasCommercialTerms(t: CommercialTerms | undefined): boolean {
+  if (!t) return false;
+  return (
+    t.payment_terms != null ||
+    t.performance_bond_pct != null ||
+    t.bid_security_pct != null ||
+    t.advance_payment_pct != null ||
+    t.retention_pct != null ||
+    t.bid_validity_days != null ||
+    t.completion_period != null ||
+    t.currency != null ||
+    (t.notes?.length ?? 0) > 0
+  );
 }
 
 interface PackageRow {
@@ -216,14 +326,27 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
 
   const out = pkg.output;
   const remaining = data?.remaining_regenerations ?? 0;
+  const tenderTypeLabel = out.tender_type ? TENDER_TYPE_LABEL[out.tender_type] : null;
+  const eligibilityFindings = out.eligibility_findings ?? [];
+  const showCommercialTerms = hasCommercialTerms(out.commercial_terms);
 
   return (
     <section className={`rounded-md border-l-2 ${recBorder(out.recommendation)} bg-white shadow-sm`}>
       <div className="p-5 border-b border-stone-100">
         <div className="flex items-baseline justify-between mb-4">
-          <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
-              Bid analysis
-          </h2>
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+                Bid analysis
+            </h2>
+            {tenderTypeLabel && tenderTypeLabel !== "Unknown" && (
+              <span
+                className="inline-block rounded-sm border border-blue-700/40 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-800"
+                style={{ fontFamily: MONO }}
+              >
+                {tenderTypeLabel}
+              </span>
+            )}
+          </div>
           {pkg.pdf_url && (
             <a
               href={pkg.pdf_url}
@@ -236,6 +359,9 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
             </a>
           )}
         </div>
+        {out.tender_type_note && (
+          <p className="mb-3 text-[12px] text-stone-600 leading-snug">{out.tender_type_note}</p>
+        )}
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-6">
           <span
             className={`${recBg(out.recommendation)} text-white inline-block self-start px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] rounded-sm`}
@@ -280,10 +406,18 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
             <ul className="space-y-2 text-[13px] text-stone-800">
               {out.gap_analysis.map((g, i) => (
                 <li key={i}>
-                  <div className="flex items-baseline gap-2">
+                  <div className="flex items-baseline gap-2 flex-wrap">
                     <span className={`text-[9px] uppercase tracking-[0.16em] font-semibold ${sevTint(g.severity)}`} style={{ fontFamily: MONO }}>
                       {g.severity}
                     </span>
+                    {g.evidence_label && (
+                      <span
+                        className={`inline-block rounded-sm border px-1.5 py-[1px] text-[8.5px] font-semibold uppercase tracking-[0.14em] ${evidenceClasses(g.evidence_label)}`}
+                        style={{ fontFamily: MONO }}
+                      >
+                        {EVIDENCE_LABEL_TEXT[g.evidence_label]}
+                      </span>
+                    )}
                     <span className="font-semibold leading-snug">{g.gap}</span>
                   </div>
                   <p className="ml-12 text-[12px] text-stone-600 leading-relaxed">{g.fix}</p>
@@ -293,6 +427,81 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
           </div>
         )}
       </div>
+
+      {eligibilityFindings.length > 0 && (
+        <div className="border-t border-stone-100 p-5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-3" style={{ fontFamily: MONO }}>
+            Eligibility findings
+          </div>
+          <ul className="space-y-3 text-[13px] text-stone-800">
+            {eligibilityFindings.map((f, i) => (
+              <li key={i} className="leading-snug">
+                <div className="flex items-baseline gap-2 flex-wrap mb-1">
+                  <span
+                    className={`inline-block rounded-sm px-1.5 py-[1px] text-[8.5px] font-semibold uppercase tracking-[0.14em] ${eligibilityStatusClasses(f.status)}`}
+                    style={{ fontFamily: MONO }}
+                  >
+                    {f.status}
+                  </span>
+                  <span className="font-semibold">{f.requirement}</span>
+                </div>
+                <div className="ml-0 flex items-center gap-2 flex-wrap text-[11px] mb-1">
+                  <span className="inline-block rounded-sm border border-amber-600/60 px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-800" style={{ fontFamily: MONO }}>
+                    {ELIGIBILITY_ACTION_LABEL[f.recommended_action]}
+                  </span>
+                  <span className={`inline-block rounded-sm border px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-[0.14em] ${evidenceClasses(f.evidence_label)}`} style={{ fontFamily: MONO }}>
+                    {EVIDENCE_LABEL_TEXT[f.evidence_label]}
+                  </span>
+                </div>
+                {f.rationale && (
+                  <p className="text-[12px] text-stone-600 leading-relaxed">{f.rationale}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {showCommercialTerms && out.commercial_terms && (
+        <div className="border-t border-stone-100 bg-blue-50/30 p-5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-800 mb-2" style={{ fontFamily: MONO }}>
+            Commercial terms
+          </div>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-[13px] text-stone-800 sm:grid-cols-4">
+            {out.commercial_terms.payment_terms && (
+              <Term label="Payment terms" value={out.commercial_terms.payment_terms} />
+            )}
+            {out.commercial_terms.performance_bond_pct != null && (
+              <Term label="Perf. bond" value={`${out.commercial_terms.performance_bond_pct}%`} />
+            )}
+            {out.commercial_terms.bid_security_pct != null && (
+              <Term label="Bid security" value={`${out.commercial_terms.bid_security_pct}%`} />
+            )}
+            {out.commercial_terms.advance_payment_pct != null && (
+              <Term label="Advance" value={`${out.commercial_terms.advance_payment_pct}%`} />
+            )}
+            {out.commercial_terms.retention_pct != null && (
+              <Term label="Retention" value={`${out.commercial_terms.retention_pct}%`} />
+            )}
+            {out.commercial_terms.bid_validity_days != null && (
+              <Term label="Bid validity" value={`${out.commercial_terms.bid_validity_days}d`} />
+            )}
+            {out.commercial_terms.completion_period && (
+              <Term label="Completion" value={out.commercial_terms.completion_period} />
+            )}
+            {out.commercial_terms.currency && (
+              <Term label="Currency" value={out.commercial_terms.currency} />
+            )}
+          </div>
+          {out.commercial_terms.notes.length > 0 && (
+            <ul className="mt-3 space-y-1 text-[12px] text-stone-600 leading-relaxed">
+              {out.commercial_terms.notes.map((n, i) => (
+                <li key={i}>· {n}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {out.red_flags.length > 0 && (
         <div className="border-t border-stone-100 bg-red-50/40 p-5">

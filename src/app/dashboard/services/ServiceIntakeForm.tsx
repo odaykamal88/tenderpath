@@ -2,8 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import ConfidenceGate from "./ConfidenceGate";
 
 type ServiceSlug = "bid-no-bid" | "digest" | "proposal" | "lta-roster";
+
+interface AssessmentSnapshot {
+  companyName: string;
+  sector: string;
+  description: string;
+}
 
 interface ServiceIntakeFormProps {
   service: ServiceSlug;
@@ -14,6 +21,12 @@ interface ServiceIntakeFormProps {
   docId?: string | null;
   initialTenderUrl?: string | null;
   label: string;
+  /**
+   * Slim view of the current user's assessment, used by ConfidenceGate to
+   * detect low-confidence / multi-sector classifications and prompt for
+   * disambiguation before the paid order.
+   */
+  assessmentSnapshot?: AssessmentSnapshot | null;
 }
 
 interface PipelineEvidenceContext {
@@ -194,6 +207,7 @@ export default function ServiceIntakeForm({
   docId,
   initialTenderUrl,
   label,
+  assessmentSnapshot,
 }: ServiceIntakeFormProps) {
   const router = useRouter();
   const [tenderUrl, setTenderUrl] = useState(initialTenderUrl ?? "");
@@ -206,6 +220,16 @@ export default function ServiceIntakeForm({
   const [uploadingFinancial, setUploadingFinancial] = useState(false);
   const [pipelineContext, setPipelineContext] = useState<PipelineEvidenceContext | null>(null);
   const [contextLoadError, setContextLoadError] = useState<string | null>(null);
+  /** Confirmed primary line of business for this order (from ConfidenceGate). */
+  const [confirmedPrimarySector, setConfirmedPrimarySector] = useState<string | null>(null);
+
+  // ConfidenceGate scope key: prefer pipeline-item-id; fall back to plan+title
+  // so disambiguation persists per opportunity even without a pipeline anchor.
+  const confidenceScopeKey = useMemo(() => {
+    if (pipelineItemId) return `pi-${pipelineItemId}`;
+    if (tenderTitle) return `t-${tenderTitle.slice(0, 64)}`;
+    return `s-${plan}`;
+  }, [pipelineItemId, tenderTitle, plan]);
 
   useEffect(() => {
     if (!pipelineItemId) {
@@ -305,6 +329,7 @@ export default function ServiceIntakeForm({
         ...(uploadedFile ? { vault_url: uploadedFile.url, vault_filename: uploadedFile.name } : {}),
         ...(financialFile ? { financial_documents_url: financialFile.url, financial_documents_filename: financialFile.name } : {}),
         ...(docId ? { vault_doc_id: docId } : {}),
+        ...(confirmedPrimarySector ? { confirmed_primary_sector: confirmedPrimarySector } : {}),
       };
 
       const res = await fetch("/api/service-orders", {
@@ -385,6 +410,16 @@ export default function ServiceIntakeForm({
 
   return (
     <form onSubmit={submit} className="mt-5 space-y-4">
+      {assessmentSnapshot && (
+        <ConfidenceGate
+          sector={assessmentSnapshot.sector ?? null}
+          description={assessmentSnapshot.description ?? null}
+          companyName={assessmentSnapshot.companyName ?? null}
+          scopeKey={confidenceScopeKey}
+          onChosen={setConfirmedPrimarySector}
+        />
+      )}
+
       {requiresPipeline && (
         <div className="rounded-sm border-l-2 border-amber-600 bg-amber-50/40 px-3.5 py-2.5 text-[12px] leading-relaxed text-amber-900">
           Bid/no-bid analysis needs a selected pipeline tender so the recommendation can use your saved match evidence.
