@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireDashboardAccess } from "@/lib/access";
 import { linkExtractionToVaultDocument } from "@/lib/documents/extract";
+import { applyAutoTagsForVaultDocument } from "@/lib/applicant-evidence/ingest";
 
+// Kept the original (narrow) form values. Sprint 10's canonical taxonomy
+// in EVIDENCE_TYPES is broader; the auto-tagger upgrades "other" uploads
+// to more specific types when it has strong filename/text signal.
 const DOC_TYPES = ["certification", "financial", "cv", "past_performance", "other"] as const;
 type DocType = (typeof DOC_TYPES)[number];
 const isType = (v: unknown): v is DocType =>
@@ -13,7 +17,7 @@ export async function GET(request: Request) {
   if (!guard.authorized) return guard.response!;
 
   const rows = await sql`
-    SELECT id, name, type, expiry_date, file_url, created_at
+    SELECT id, name, type, expiry_date, file_url, created_at, tags
     FROM vault_documents
     WHERE user_id = ${guard.user!.id}
     ORDER BY created_at DESC
@@ -51,6 +55,19 @@ export async function POST(request: Request) {
     fileUrl: file_url,
   }).catch((err) => {
     console.error("[tp:vault:extraction_link_failed]", {
+      userId: guard.user!.id,
+      documentId: rows[0].id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
+
+  // Sprint 10: auto-tag from filename + declared type at insert time. The
+  // tagger re-runs after extraction completes with full text available.
+  await applyAutoTagsForVaultDocument({
+    userId: guard.user!.id,
+    vaultDocumentId: rows[0].id as number,
+  }).catch((err) => {
+    console.error("[tp:vault:autotag_failed]", {
       userId: guard.user!.id,
       documentId: rows[0].id,
       error: err instanceof Error ? err.message : String(err),

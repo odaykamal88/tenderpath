@@ -218,6 +218,22 @@ export async function persistDocumentExtraction(args: {
     RETURNING id, status, char_count, error
   `;
   const row = rows[0];
+  // Sprint 10: re-run auto-tagging now that we have the full extracted
+  // text. Filename-only tags were applied at upload time; this pass adds
+  // tags that only the body content reveals (e.g. ISO 27001 in a clause).
+  if (args.vaultDocumentId != null && row.status === "extracted") {
+    const { applyAutoTagsForVaultDocument } = await import("@/lib/applicant-evidence/ingest");
+    await applyAutoTagsForVaultDocument({
+      userId: args.userId,
+      vaultDocumentId: args.vaultDocumentId,
+    }).catch((err) => {
+      console.warn("[tp:extract:autotag_after_extraction_failed]", {
+        userId: args.userId,
+        vaultDocumentId: args.vaultDocumentId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
   return {
     id: row.id as number,
     status: row.status as ExtractionStatus,
@@ -239,4 +255,17 @@ export async function linkExtractionToVaultDocument(args: {
     WHERE user_id = ${args.userId}
       AND file_url = ${args.fileUrl}
   `;
+  // Sprint 10: the link gave us extracted text we did not have at upload
+  // time, so re-run the auto-tagger with the fuller payload.
+  const { applyAutoTagsForVaultDocument } = await import("@/lib/applicant-evidence/ingest");
+  await applyAutoTagsForVaultDocument({
+    userId: args.userId,
+    vaultDocumentId: args.vaultDocumentId,
+  }).catch((err) => {
+    console.warn("[tp:extract:autotag_after_link_failed]", {
+      userId: args.userId,
+      vaultDocumentId: args.vaultDocumentId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
 }

@@ -12,6 +12,10 @@ interface VaultDoc {
   expiry_date: string | null;
   file_url: string;
   created_at: string;
+  /** Sprint 10: auto-applied capability tags (e.g. iso-9001, pador,
+   *  external-audit). Used by the proposal generator to match evidence
+   *  to tender requirements. */
+  tags?: string[] | null;
 }
 
 const TYPES: { value: DocType; label: string }[] = [
@@ -389,6 +393,24 @@ export default function VaultPage() {
                           {docRef(d.id)}
                         </div>
                         <div className="mt-0.5 text-stone-900 font-medium leading-tight">{d.name}</div>
+                        {Array.isArray(d.tags) && d.tags.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {d.tags.slice(0, 6).map((tag) => (
+                              <span
+                                key={tag}
+                                className="inline-block rounded-sm bg-stone-100 px-1.5 py-0.5 text-[10px] tracking-wide text-stone-600"
+                                style={{ fontFamily: MONO }}
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                            {d.tags.length > 6 && (
+                              <span className="text-[10px] text-stone-400" style={{ fontFamily: MONO }}>
+                                +{d.tags.length - 6}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-5 py-3.5 align-top">
                         <span

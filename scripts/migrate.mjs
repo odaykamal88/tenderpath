@@ -155,6 +155,9 @@ CREATE TABLE IF NOT EXISTS vault_documents (
   file_url TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}';
+CREATE INDEX IF NOT EXISTS vault_documents_tags_gin ON vault_documents USING GIN (tags);
+CREATE INDEX IF NOT EXISTS vault_documents_user_type ON vault_documents (user_id, type);
 
 CREATE TABLE IF NOT EXISTS document_extractions (
   id SERIAL PRIMARY KEY,

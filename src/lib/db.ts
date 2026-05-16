@@ -230,6 +230,9 @@ export async function initializeDatabase() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+  await sql`ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}'`;
+  await sql`CREATE INDEX IF NOT EXISTS vault_documents_tags_gin ON vault_documents USING GIN (tags)`;
+  await sql`CREATE INDEX IF NOT EXISTS vault_documents_user_type ON vault_documents (user_id, type)`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS document_extractions (

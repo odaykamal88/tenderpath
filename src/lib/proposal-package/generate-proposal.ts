@@ -7,6 +7,7 @@ import {
 } from "./types";
 import { extractTenderRequirements, generateProposalDraft } from "./llm";
 import { buildProposalEvidenceProfile } from "./evidence";
+import { loadEvidenceLibrary, formatEvidenceLibraryForPrompt } from "@/lib/applicant-evidence/query";
 import { renderProposalDocx, renderCoverLetterDocx } from "./docx";
 import { renderFinancialTemplateXlsx } from "./xlsx";
 import { renderComplianceMatrixPdf } from "./pdfDocs";
@@ -83,9 +84,26 @@ export async function generateProposalPackage({
 
   try {
     const evidenceProfile = buildProposalEvidenceProfile({ tenderText, intakeSummary });
+    // Sprint 10: load the applicant's persistent evidence library so the
+    // extractor can mark requirements "evidenced" only when a real file
+    // backs them. Empty for anonymous/email-only flows (no user_id).
+    const evidenceLibrary = order.user_id != null
+      ? await loadEvidenceLibrary(order.user_id).catch((err) => {
+          console.warn("[proposal-draft:evidence_library_load_failed]", {
+            workOrderId: order.id,
+            userId: order.user_id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          return [];
+        })
+      : [];
+    const evidenceLibrarySummary = formatEvidenceLibraryForPrompt(evidenceLibrary);
     // Sprint 9: pass companyContext so the extractor cross-checks each
     // high-leverage requirement against the profile (capability_match field).
-    const requirements = await extractTenderRequirements({ tenderText, companyContext }, evidenceProfile);
+    const requirements = await extractTenderRequirements(
+      { tenderText, companyContext, evidenceLibrarySummary },
+      evidenceProfile,
+    );
     const output = await generateProposalDraft(
       { tenderText, companyContext, intakeSummary },
       requirements,
