@@ -82,6 +82,12 @@ export interface ExtractRequirementsInputs {
    *  requirement against the company profile and populates capability_match
    *  so the generator has a hard signal instead of inferring from prose. */
   companyContext?: string;
+  /** Sprint 10. Optional summary of the applicant's evidence library (CVs,
+   *  audits, certifications, past performance, etc.) generated via
+   *  formatEvidenceLibraryForPrompt(). When supplied, "evidenced" status on
+   *  capability_match REQUIRES a matching library item and the citation in
+   *  company_evidence MUST reference the library entry verbatim. */
+  evidenceLibrarySummary?: string;
 }
 
 export async function extractTenderRequirements(
@@ -93,7 +99,7 @@ export async function extractTenderRequirements(
   // cross-checking activates.
   const inputs: ExtractRequirementsInputs =
     typeof input === "string" ? { tenderText: input } : input;
-  const { tenderText, companyContext } = inputs;
+  const { tenderText, companyContext, evidenceLibrarySummary } = inputs;
   const client = getClient();
   const sourceQuality = evidenceProfile ? formatProposalEvidenceProfile(evidenceProfile) : "";
   const response = await client.messages.create({
@@ -109,6 +115,7 @@ TENDER/OPPORTUNITY:
 ${tenderText}
 
 ${companyContext ? `COMPANY PROFILE (for capability cross-check only — do not paraphrase into requirements):\n${companyContext}\n` : ""}
+${evidenceLibrarySummary ? `${evidenceLibrarySummary}\n` : ""}
 ${sourceQuality ? `SOURCE QUALITY CHECK:\n${sourceQuality}\n` : ""}
 
 Return a JSON object with:
@@ -120,15 +127,16 @@ Return a JSON object with:
 - "submission_format": string — portal, email, physical, or unknown
 ${companyContext ? `- "capability_match": [{ "requirement": string, "status": "evidenced" | "claimed" | "missing", "company_evidence": string }]
    — 6-10 items covering the highest-leverage requirements. For each:
-     * "evidenced" = the company profile or uploaded evidence directly proves it (cite the evidence in one sentence).
-     * "claimed"   = the applicant says it but the profile has no independent proof.
-     * "missing"   = nothing in the profile/uploads addresses this requirement.` : ""}
+     * "evidenced" = a matching item exists in the APPLICANT EVIDENCE LIBRARY${evidenceLibrarySummary ? "" : " (or the company profile contains direct proof if no library is supplied)"}. Cite the library entry by file name in company_evidence.
+     * "claimed"   = the applicant claims it (profile or intake) but no library item proves it.
+     * "missing"   = nothing in profile, intake, or library addresses this.` : ""}
 
 Rules:
 - Extract only what is present in the tender/source text.
 - If a section is not present, return an empty array or "unknown"; do not infer it from generic procurement practice.
-${companyContext ? `- For capability_match, anchor every "company_evidence" sentence in the profile. If nothing supports the requirement, status MUST be "missing".
-- Do NOT mark a requirement "evidenced" based on the user's intake notes alone — that is "claimed".` : ""}
+${companyContext ? `- For capability_match, anchor every "company_evidence" sentence in the profile${evidenceLibrarySummary ? " or library" : ""}. If nothing supports the requirement, status MUST be "missing".
+- Do NOT mark a requirement "evidenced" based on the user's intake notes alone — that is "claimed".
+${evidenceLibrarySummary ? `- "evidenced" is reserved for requirements where the APPLICANT EVIDENCE LIBRARY contains a matching item. If only the company profile mentions a capability without a library document backing it, use "claimed".` : ""}` : ""}
 
 Return ONLY valid JSON.`,
       },
@@ -149,12 +157,13 @@ export async function generateProposalDraft(
   const sourceQuality = evidenceProfile ? formatProposalEvidenceProfile(evidenceProfile) : "";
   const response = await client.messages.create({
     model: SONNET_MODEL,
-    // Sprint 9: capability_match echoing plus longer compliance items push
-    // the JSON output above ~5,500 tokens. 4500 was truncating mid-string;
-    // safeParseJSON then fell back to default and evidence-guardrails
-    // synthesised 12 placeholder needs_action rows. 7500 leaves headroom
-    // while staying well below the model's 64K budget.
-    max_tokens: 7500,
+    // Sprint 10: with the evidence library wired in, every compliance item
+    // can carry a long evidence_or_action citation, and the model echoes
+    // file names. Observed output on the EU CIM call: ~34k chars (>8500
+    // tokens). 7500 was still truncating. 12000 leaves comfortable headroom
+    // for richer compliance evidence while staying well below Sonnet's 64K
+    // output budget. Sprint 8/9 saw the same class of bug — keep monitoring.
+    max_tokens: 12000,
     temperature: 0.3,
     messages: [
       {
