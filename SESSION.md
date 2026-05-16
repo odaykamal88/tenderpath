@@ -86,6 +86,60 @@ Additional work done outside the prompt sequence:
 
 ## Current Status
 
+## Latest Session Update — 2026-05-16
+
+- **Agent**: Claude Code
+- **Date**: 2026-05-16
+- **Task Completed**: Sprint 8 (paid-services validation gates) + Sprint 9 (company-aware Proposal Draft extraction). Two production bugs in the Bid/No-Bid and Proposal Draft LLM pipelines were caught by live-prompt validation and fixed before deploy — both would have shipped blank/boilerplate outputs to paying users.
+- **Sprint 8 deliverables** (commits `37f0826` → `a66510e`):
+  - Bid/No-Bid output schema extended with `tender_type` + `tender_type_note`, `eligibility_findings[]` (status/recommended_action/rationale with structural actions: ok / bring_jv_partner / subcontract / supplier_authorization / no_bid / verify), `commercial_terms` (payment terms, bond/security/advance/retention percentages, currency, notes), `required_documents[]` priority-split (mandatory vs recommended). All fields optional → legacy JSONB rows render unchanged.
+  - `evidence_label` (evidence / inference / gap / unverified) on every Bid/No-Bid gap and eligibility finding. Renderer (panel + PDF) surfaces the labels.
+  - `ConfidenceGate` component in dashboard intake — prompts users to confirm a single primary line of business before any paid service order when the assessment is multi-bucket or low-confidence. Splitter scoped to `,` and `/` to avoid over-splitting "Oil & Gas" / "Water and Waste Water Management". Choice persists per work-order in localStorage and flows into the intake payload.
+  - **Production bug found by live-prompt validation:** Sonnet was truncating mid-string at `max_tokens=3500` because the Sprint 8 schema emits ~3.5k tokens of JSON. The truncated reply failed `safeParseJSON` and the renderer fell back to `DEFAULT_BID_OUTPUT` — blank panel and PDF in production. Raised to 6000.
+  - **Second production bug:** `safeParseJSON` only stripped a leading ```json fence and trailing ``` fence. When Haiku appended a "Note:" paragraph after the JSON block (which it does on real calls), parsing failed and the extractor returned defaults. Replaced regex-strip with two-strategy parser: (1) match fenced code block, (2) walk the text and parse first balanced top-level JSON object, tolerating trailing prose.
+- **Sprint 9 deliverables** (commit `c5b77b9`):
+  - `TenderRequirements.capability_match` — additive optional field; each high-leverage requirement labelled `evidenced` / `claimed` / `missing` with one-sentence company evidence citation.
+  - `extractTenderRequirements({tenderText, companyContext})` — Haiku extractor now cross-checks each requirement against the company profile. Legacy single-string callers still supported.
+  - `generateProposalDraft` prompt rule: `capability_match.status` drives `compliance_checklist.status` one-to-one (evidenced→compliant, claimed→partial, missing→needs_action) and missing items mirror into `missing_information`.
+  - Same parser hardening in `proposal-package/llm.ts` as Bid/No-Bid (Sprint 8 fix).
+  - Sonnet `max_tokens` lifted 4500 → 7500 — the old budget was truncating on real calls, which then fired the evidence-guardrails fallback that synthesised 12 boilerplate `needs_action` rows. Every real paid proposal draft was hitting this fallback.
+  - `parsed_requirements JSONB` column on `proposal_packages` — persists the extracted TenderRequirements (including capability_match) on every generation. Lets the dashboard surface what we parsed from the uploaded TOR/RFP and gives the Sprint 12 harness recalibration a verifiable "TOR parsed" signal.
+- **Primary Product Result** (estimated, pending Sprint 12 full re-validation):
+  - Bid/No-Bid: 8.6 → **~9.2** (live-prompt verified: tender_type=RFP, 6 eligibility findings with 3 distinct structural actions all evidence-labelled, 8 mandatory + 4 recommended docs, grant-aware commercial_terms, 5 gaps labelled).
+  - Proposal Draft: 7.3 → **~8.8** measured via output quality; full 9.0+ requires Sprint 10 (applicant evidence library) + Sprint 11 (compliance gate) + Sprint 12 (harness recalibration). Compliance_checklist on EU CIM live run: 7 compliant / 4 partial / 2 needs_action (replacing the previous 12/12 boilerplate needs_action fallback).
+  - Roster Fast-Track: unchanged at 8.1 — Sprint 13 territory.
+- **Files / Areas Changed**:
+  - `src/lib/bid-no-bid/types.ts`, `llm.ts`, `pdfDoc.tsx` — Sprint 8 schema + parser + max_tokens + new render blocks.
+  - `src/app/dashboard/work-orders/[id]/BidNoBidPanel.tsx` — dashboard rendering of new Sprint 8 fields.
+  - `src/app/dashboard/services/ConfidenceGate.tsx` (new), `ServiceIntakeForm.tsx`, `[service]/page.tsx` — Sprint 8 Fix 5 confidence gate.
+  - `src/lib/proposal-package/types.ts`, `llm.ts`, `persist.ts`, `generate-proposal.ts` — Sprint 9 capability_match + persistence.
+  - `src/lib/db.ts`, `scripts/migrate.mjs` — `parsed_requirements JSONB` column.
+  - `docs/agents/service-output-spec.md`, `proposal-review-report-template.md`, `docs/learning/eu-grant-proposal-review-case-learnings.md` — proposal-review docs.
+  - `docs/agents/dashboard-architecture.md` — active submission workspace + tracked-calls feed notes.
+  - `docs/agents/managed-agents-setup.md` — Tender Proposal Review Agent (#12) role.
+  - `scripts/_sprint8-bid-no-bid-live.ts`, `_sprint9-proposal-live.ts` — live-prompt regression drivers.
+- **Validation Outputs**:
+  - `outputs/paid-services-validation/sprint8-static-smoke.{json,csv}` — confirms no regression in static harness.
+  - `outputs/paid-services-validation/sprint8-bid-no-bid-live-cim.json` — 8/8 Fix 2/4 fields populate on EuropeAid 185831.
+  - `outputs/paid-services-validation/sprint9-proposal-live-cim.json` — 10 capability_match items (6/2/2), compliance_checklist 7/4/2.
+- **Tests / Verification Run**:
+  - `npx tsc --noEmit` — clean.
+  - `npx eslint --max-warnings 0` on all touched files — clean.
+  - `npm run build` — `✓ Compiled successfully`, 75/75 static pages generated.
+  - Live-prompt validation on EU CIM Syrian Media (EuropeAid 185831) end-to-end for both Bid/No-Bid and Proposal Draft pipelines.
+- **Important Decisions**:
+  - Sprint 9 deliberately did NOT touch the validation panel CSV or harness scoring. Recalibration of the `5.8` cap belongs in Sprint 12 once the evidence library exists; moving caps now would be sneaking goalposts before measurement. The harness measures the same thing it did pre-sprint until Sprint 12.
+  - Proposal Draft remains gated for self-serve until Sprint 11 (compliance gate) lands. Sprint 9 ships the production pipeline; users still need an explicit "ready" gate before this becomes a clean concierge-free flow.
+  - All Sprint 8/9 schema additions are optional. Legacy `proposal_packages.output` and bid-no-bid JSONB rows render unchanged. No data migration required.
+- **Deploy Steps**:
+  1. Merge PR `claude/dazzling-johnson-838d71` to `main`. Vercel auto-deploys.
+  2. Run `node scripts/migrate.mjs` against production DB to add `parsed_requirements JSONB` column. The `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` is safe to run repeatedly.
+  3. (Optional) Smoke test: open `/dashboard/work-orders/<existing-bid-no-bid-order>` and verify legacy Bid/No-Bid output renders unchanged; trigger a regeneration to see the new fields populate.
+- **Next Recommended Task**: Sprint 10 — applicant evidence library (`applicant_evidence` table, ingestion at upload, simple library UI under each work-order, query function wired into `buildProposalEvidenceProfile`). Then Sprint 11 (compliance gate) and Sprint 12 (harness recalibration + full 9.0+ validation).
+- **Recommended Agent**: Claude Code.
+
+---
+
 ## Latest Session Update — 2026-05-14
 
 - **Agent**: Codex
