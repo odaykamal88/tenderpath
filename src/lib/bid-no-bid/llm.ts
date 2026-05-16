@@ -23,16 +23,42 @@ function getClient(): Anthropic {
 }
 
 function safeParseJSON<T>(text: string, fallback: T): T {
+  // Strategy 1: strip fenced code block, parse what's inside.
+  // Strategy 2: locate the first balanced top-level JSON object and parse it.
+  // Falls back to the supplied default on failure.
+  const fenced = text.match(/```(?:json)?\s*\n([\s\S]*?)\n```/i);
+  const candidate = (fenced ? fenced[1] : text).trim();
   try {
-    const cleaned = text
-      .replace(/^```json?\s*\n?/i, "")
-      .replace(/\n?```\s*$/i, "")
-      .trim();
-    return JSON.parse(cleaned) as T;
-  } catch (err) {
+    return JSON.parse(candidate) as T;
+  } catch {
+    // Locate first balanced top-level JSON object. Tolerates trailing prose.
+    const start = candidate.indexOf("{");
+    if (start >= 0) {
+      let depth = 0;
+      let inStr = false;
+      let esc = false;
+      for (let i = start; i < candidate.length; i += 1) {
+        const ch = candidate[i];
+        if (inStr) {
+          if (esc) { esc = false; continue; }
+          if (ch === "\\") { esc = true; continue; }
+          if (ch === '"') inStr = false;
+          continue;
+        }
+        if (ch === '"') { inStr = true; continue; }
+        if (ch === "{") depth += 1;
+        else if (ch === "}") {
+          depth -= 1;
+          if (depth === 0) {
+            try { return JSON.parse(candidate.slice(start, i + 1)) as T; } catch { break; }
+          }
+        }
+      }
+    }
     console.error("[bid-no-bid:json_parse_failed]", {
       preview: text.slice(0, 240),
-      error: err instanceof Error ? err.message : String(err),
+      tail: text.slice(-160),
+      length: text.length,
     });
     return fallback;
   }
@@ -87,7 +113,12 @@ export async function generateBidNoBidAnalysis(
   const client = getClient();
   const response = await client.messages.create({
     model: SONNET_MODEL,
-    max_tokens: 3500,
+    // Sprint 8 schema (tender_type, eligibility_findings, commercial_terms,
+    // required_documents priority split, evidence_label on findings) typically
+    // emits ~3.5k tokens of JSON; the previous 3500 budget was truncating
+    // Sonnet mid-string, which made safeParseJSON discard the whole reply
+    // and the renderer fall back to the empty default. 6000 leaves headroom.
+    max_tokens: 6000,
     temperature: 0.2,
     messages: [
       {
