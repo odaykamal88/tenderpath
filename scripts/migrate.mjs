@@ -311,9 +311,6 @@ ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS pdf_pathname TEXT;
 ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS generation_status TEXT DEFAULT 'pending';
 ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS generation_attempts INTEGER DEFAULT 1;
 ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS error_message TEXT;
--- Sprint 9: persist extracted TenderRequirements (with capability_match) so
--- subsequent runs and the dashboard read what we parsed from the uploaded
--- TOR/RFP without re-running extraction.
 ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS parsed_requirements JSONB;
 CREATE INDEX IF NOT EXISTS proposal_packages_work_order_plan ON proposal_packages (work_order_id, plan, created_at DESC);
 
@@ -350,10 +347,18 @@ CREATE INDEX IF NOT EXISTS demo_sessions_logged_at_idx ON demo_sessions (logged_
 
 async function migrate() {
   console.log("Running migration...");
-  // neon() doesn't support multi-statement, split by CREATE TABLE
+  // neon() doesn't support multi-statement, split by `;`. Strip leading
+  // `-- comment` lines and leading blank lines before the CREATE/ALTER check,
+  // otherwise a single SQL comment placed before a statement causes the
+  // statement to be silently filtered out (lost a Sprint 9 migration this way).
+  const stripLeadingComments = (s) => {
+    let out = s.trim();
+    while (/^(--[^\n]*\n|\s*\n)/.test(out)) out = out.replace(/^(--[^\n]*\n|\s*\n)/, "").trim();
+    return out;
+  };
   const statements = tables
     .split(/;/)
-    .map((s) => s.trim())
+    .map(stripLeadingComments)
     .filter((s) => /^(CREATE|ALTER)\b/.test(s));
 
   for (const stmt of statements) {
