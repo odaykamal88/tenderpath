@@ -25,16 +25,42 @@ function getClient(): Anthropic {
 }
 
 function safeParseJSON<T>(text: string, fallback: T, tag: string): T {
+  // Two strategies. (1) Strip fenced code block and parse what's inside.
+  // (2) Walk the text and parse the first balanced top-level JSON object,
+  // tolerating trailing prose (Haiku sometimes appends a "Note:" paragraph
+  // after the JSON, which the naive replace-based strip cannot handle).
+  const fenced = text.match(/```(?:json)?\s*\n([\s\S]*?)\n```/i);
+  const candidate = (fenced ? fenced[1] : text).trim();
   try {
-    const cleaned = text
-      .replace(/^```json?\s*\n?/i, "")
-      .replace(/\n?```\s*$/i, "")
-      .trim();
-    return JSON.parse(cleaned) as T;
-  } catch (err) {
+    return JSON.parse(candidate) as T;
+  } catch {
+    const start = candidate.indexOf("{");
+    if (start >= 0) {
+      let depth = 0;
+      let inStr = false;
+      let esc = false;
+      for (let i = start; i < candidate.length; i += 1) {
+        const ch = candidate[i];
+        if (inStr) {
+          if (esc) { esc = false; continue; }
+          if (ch === "\\") { esc = true; continue; }
+          if (ch === '"') inStr = false;
+          continue;
+        }
+        if (ch === '"') { inStr = true; continue; }
+        if (ch === "{") depth += 1;
+        else if (ch === "}") {
+          depth -= 1;
+          if (depth === 0) {
+            try { return JSON.parse(candidate.slice(start, i + 1)) as T; } catch { break; }
+          }
+        }
+      }
+    }
     console.error(`[proposal-package:${tag}:json_parse_failed]`, {
       preview: text.slice(0, 240),
-      error: err instanceof Error ? err.message : String(err),
+      tail: text.slice(-160),
+      length: text.length,
     });
     return fallback;
   }
@@ -50,15 +76,29 @@ export interface GenerationInputs {
   rosterAgencyContext?: string;
 }
 
+export interface ExtractRequirementsInputs {
+  tenderText: string;
+  /** Optional. When provided, the extractor cross-checks each high-leverage
+   *  requirement against the company profile and populates capability_match
+   *  so the generator has a hard signal instead of inferring from prose. */
+  companyContext?: string;
+}
+
 export async function extractTenderRequirements(
-  tenderText: string,
+  input: string | ExtractRequirementsInputs,
   evidenceProfile?: ProposalEvidenceProfile,
 ): Promise<TenderRequirements> {
+  // Accept legacy single-string callers for backwards compatibility; new
+  // callers should pass {tenderText, companyContext} so Sprint 9 capability
+  // cross-checking activates.
+  const inputs: ExtractRequirementsInputs =
+    typeof input === "string" ? { tenderText: input } : input;
+  const { tenderText, companyContext } = inputs;
   const client = getClient();
   const sourceQuality = evidenceProfile ? formatProposalEvidenceProfile(evidenceProfile) : "";
   const response = await client.messages.create({
     model: HAIKU_MODEL,
-    max_tokens: 1500,
+    max_tokens: companyContext ? 2500 : 1500,
     temperature: 0.1,
     messages: [
       {
@@ -68,6 +108,7 @@ export async function extractTenderRequirements(
 TENDER/OPPORTUNITY:
 ${tenderText}
 
+${companyContext ? `COMPANY PROFILE (for capability cross-check only — do not paraphrase into requirements):\n${companyContext}\n` : ""}
 ${sourceQuality ? `SOURCE QUALITY CHECK:\n${sourceQuality}\n` : ""}
 
 Return a JSON object with:
@@ -77,10 +118,17 @@ Return a JSON object with:
 - "evaluation_criteria": string[] — how submissions will be scored
 - "key_constraints": string[] — budget limits, geography, language, timeline
 - "submission_format": string — portal, email, physical, or unknown
+${companyContext ? `- "capability_match": [{ "requirement": string, "status": "evidenced" | "claimed" | "missing", "company_evidence": string }]
+   — 6-10 items covering the highest-leverage requirements. For each:
+     * "evidenced" = the company profile or uploaded evidence directly proves it (cite the evidence in one sentence).
+     * "claimed"   = the applicant says it but the profile has no independent proof.
+     * "missing"   = nothing in the profile/uploads addresses this requirement.` : ""}
 
 Rules:
 - Extract only what is present in the tender/source text.
 - If a section is not present, return an empty array or "unknown"; do not infer it from generic procurement practice.
+${companyContext ? `- For capability_match, anchor every "company_evidence" sentence in the profile. If nothing supports the requirement, status MUST be "missing".
+- Do NOT mark a requirement "evidenced" based on the user's intake notes alone — that is "claimed".` : ""}
 
 Return ONLY valid JSON.`,
       },
@@ -101,7 +149,12 @@ export async function generateProposalDraft(
   const sourceQuality = evidenceProfile ? formatProposalEvidenceProfile(evidenceProfile) : "";
   const response = await client.messages.create({
     model: SONNET_MODEL,
-    max_tokens: 4500,
+    // Sprint 9: capability_match echoing plus longer compliance items push
+    // the JSON output above ~5,500 tokens. 4500 was truncating mid-string;
+    // safeParseJSON then fell back to default and evidence-guardrails
+    // synthesised 12 placeholder needs_action rows. 7500 leaves headroom
+    // while staying well below the model's 64K budget.
+    max_tokens: 7500,
     temperature: 0.3,
     messages: [
       {
@@ -144,6 +197,10 @@ Rules:
 - Treat missing evaluation criteria, required documents, submission format, or TOR scope as explicit missing_information.
 - Cover letter must be a complete draft — no [bracketed placeholders] except the date and salutation.
 - compliance_checklist.status MUST be one of the three exact strings: "compliant", "partial", "needs_action".
+- If the extracted requirements include "capability_match", use it as the source of truth for compliance_checklist statuses:
+  capability_match.status="evidenced" → compliance_checklist.status="compliant" and cite the evidence in evidence_or_action.
+  capability_match.status="claimed"   → compliance_checklist.status="partial" with evidence_or_action stating what proof is still needed.
+  capability_match.status="missing"   → compliance_checklist.status="needs_action" and put the specific gap in missing_information too.
 - Return ONLY valid JSON, no prose around it.`,
       },
     ],

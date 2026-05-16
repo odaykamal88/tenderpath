@@ -83,7 +83,9 @@ export async function generateProposalPackage({
 
   try {
     const evidenceProfile = buildProposalEvidenceProfile({ tenderText, intakeSummary });
-    const requirements = await extractTenderRequirements(tenderText, evidenceProfile);
+    // Sprint 9: pass companyContext so the extractor cross-checks each
+    // high-leverage requirement against the profile (capability_match field).
+    const requirements = await extractTenderRequirements({ tenderText, companyContext }, evidenceProfile);
     const output = await generateProposalDraft(
       { tenderText, companyContext, intakeSummary },
       requirements,
@@ -142,6 +144,7 @@ export async function generateProposalPackage({
       uploadError: zipUploadError,
       attempts,
       existingPackageId: existing?.id ?? null,
+      parsedRequirements: requirements,
     });
 
     if (!silent && order.email && zipUrl) {

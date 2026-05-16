@@ -52,6 +52,27 @@ export interface TenderRequirements {
   key_constraints: string[];
   submission_format: string;
   source_quality?: ProposalEvidenceProfile;
+  /**
+   * Sprint 9: company-aware cross-check. Populated when extractTenderRequirements
+   * receives companyContext. The LLM matches each high-leverage requirement
+   * to one of three states based on the company profile, so the generator
+   * has a hard signal instead of inferring from the prose draft. Optional
+   * for backwards compatibility — legacy JSONB rows render unchanged.
+   */
+  capability_match?: CapabilityMatch[];
+}
+
+export interface CapabilityMatch {
+  /** The requirement being matched, in the tender's own wording where possible. */
+  requirement: string;
+  /**
+   * - `evidenced` = company profile or uploaded evidence proves this.
+   * - `claimed`   = the applicant says they can do it but no independent proof.
+   * - `missing`   = nothing in the profile/uploads addresses this.
+   */
+  status: "evidenced" | "claimed" | "missing";
+  /** One short sentence citing the specific company evidence, or stating the gap. */
+  company_evidence: string;
 }
 
 export interface ProposalEvidenceProfile {
