@@ -3,11 +3,13 @@ import { track } from "@/lib/telemetry/funnel";
 import {
   PROPOSAL_PLAN,
   MAX_ATTEMPTS,
+  type GateState,
   type ProposalOutput,
 } from "./types";
 import { extractTenderRequirements, generateProposalDraft } from "./llm";
 import { buildProposalEvidenceProfile } from "./evidence";
 import { loadEvidenceLibrary, formatEvidenceLibraryForPrompt } from "@/lib/applicant-evidence/query";
+import { summariseComplianceGate, isBlocked, withGateState } from "./gate";
 import { renderProposalDocx, renderCoverLetterDocx } from "./docx";
 import { renderFinancialTemplateXlsx } from "./xlsx";
 import { renderComplianceMatrixPdf } from "./pdfDocs";
@@ -32,6 +34,10 @@ export interface GenerateProposalResult {
   attempts: number;
   skippedReason?: "already_generated" | "not_paid" | "wrong_plan" | "max_attempts" | "work_order_missing";
   error?: string;
+  /** Sprint 11. True when the compliance gate held the bundle. */
+  blocked?: boolean;
+  /** Sprint 11. Snapshot of gate state for the caller (API/dashboard). */
+  gateState?: GateState;
 }
 
 export interface GenerateProposalOptions {
@@ -104,46 +110,62 @@ export async function generateProposalPackage({
       { tenderText, companyContext, evidenceLibrarySummary },
       evidenceProfile,
     );
-    const output = await generateProposalDraft(
+    const rawOutput = await generateProposalDraft(
       { tenderText, companyContext, intakeSummary },
       requirements,
       evidenceProfile,
     );
 
+    // Sprint 11: compute the compliance gate. If any compliance_checklist
+    // item is mandatory + needs_action, we hold the bundle. The output is
+    // still persisted so the dashboard can render the remediation panel
+    // and the applicant can resolve the gates and regenerate.
+    const gate = summariseComplianceGate(rawOutput);
+    const output = withGateState(rawOutput, gate);
+    const blocked = isBlocked(gate);
+
     let zipUrl: string | null = null;
     let zipPathname: string | null = null;
     let zipUploadError: string | null = null;
-    try {
-      const docCtx = { companyName, tenderTitle, agency, generatedAt };
-      const [proposalDoc, coverLetterDoc, financialXlsx, complianceMatrixPdf] = await Promise.all([
-        renderProposalDocx(output, docCtx),
-        renderCoverLetterDocx(output.cover_letter_draft, docCtx),
-        renderFinancialTemplateXlsx(output, docCtx),
-        renderComplianceMatrixPdf(output, docCtx, order.id),
-      ]);
-      const stem = safeFilenameStem(tenderTitle, `proposal-${order.id}`);
-      const uploaded = await bundleAndUpload(
-        [
-          { filename: `${stem}-technical-proposal.docx`, content: proposalDoc },
-          { filename: `${stem}-cover-letter.docx`, content: coverLetterDoc },
-          { filename: `${stem}-financial-template.xlsx`, content: financialXlsx },
-          { filename: `${stem}-compliance-matrix.pdf`, content: complianceMatrixPdf },
-        ],
-        `proposal-draft/${order.id}-${Date.now()}.zip`,
-      );
-      zipUrl = uploaded.url;
-      zipPathname = uploaded.pathname;
-      zipUploadError = uploaded.error;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("[proposal-draft:bundle_failed]", {
+    if (!blocked) {
+      try {
+        const docCtx = { companyName, tenderTitle, agency, generatedAt };
+        const [proposalDoc, coverLetterDoc, financialXlsx, complianceMatrixPdf] = await Promise.all([
+          renderProposalDocx(output, docCtx),
+          renderCoverLetterDocx(output.cover_letter_draft, docCtx),
+          renderFinancialTemplateXlsx(output, docCtx),
+          renderComplianceMatrixPdf(output, docCtx, order.id),
+        ]);
+        const stem = safeFilenameStem(tenderTitle, `proposal-${order.id}`);
+        const uploaded = await bundleAndUpload(
+          [
+            { filename: `${stem}-technical-proposal.docx`, content: proposalDoc },
+            { filename: `${stem}-cover-letter.docx`, content: coverLetterDoc },
+            { filename: `${stem}-financial-template.xlsx`, content: financialXlsx },
+            { filename: `${stem}-compliance-matrix.pdf`, content: complianceMatrixPdf },
+          ],
+          `proposal-draft/${order.id}-${Date.now()}.zip`,
+        );
+        zipUrl = uploaded.url;
+        zipPathname = uploaded.pathname;
+        zipUploadError = uploaded.error;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[proposal-draft:bundle_failed]", {
+          workOrderId: order.id,
+          error: msg,
+        });
+        // Bundle failure does not block analysis storage — dashboard still
+        // renders the JSON view. Persist the diagnostic so the failure is
+        // queryable from the DB without depending on Vercel runtime logs.
+        zipUploadError = `bundle_failed: ${msg}`;
+      }
+    } else {
+      console.info("[proposal-draft:gate_blocked]", {
         workOrderId: order.id,
-        error: msg,
+        mandatoryGaps: gate.mandatory_gaps,
+        recommendedGaps: gate.recommended_gaps,
       });
-      // Bundle failure does not block analysis storage — dashboard still
-      // renders the JSON view. Persist the diagnostic so the failure is
-      // queryable from the DB without depending on Vercel runtime logs.
-      zipUploadError = `bundle_failed: ${msg}`;
     }
 
     const persisted = await upsertPackage({
@@ -163,9 +185,11 @@ export async function generateProposalPackage({
       attempts,
       existingPackageId: existing?.id ?? null,
       parsedRequirements: requirements,
+      gateState: gate,
+      generationStatus: blocked ? "needs_remediation" : "ready",
     });
 
-    if (!silent && order.email && zipUrl) {
+    if (!silent && order.email && zipUrl && !blocked) {
       // MUST await inside Vercel after() — see bid-no-bid generate.ts for
       // detailed explanation. Fire-and-forget inside after() = lambda kills
       // the in-flight Resend HTTP call and the email never sends.
@@ -184,20 +208,25 @@ export async function generateProposalPackage({
         });
       }
     }
+    // When blocked, we deliberately do not send the "ready" email. The
+    // dashboard surfaces the remediation panel; once the applicant
+    // resolves the gates and regenerates, the standard email path fires.
 
     await track(
-      "deliverable_ready",
+      blocked ? "deliverable_blocked" : "deliverable_ready",
       {
         plan: PROPOSAL_PLAN,
         work_order_id: order.id,
         package_id: persisted,
         attempts,
         has_zip_url: Boolean(zipUrl),
+        mandatory_gaps: gate.mandatory_gaps,
+        recommended_gaps: gate.recommended_gaps,
       },
       { userId: order.user_id ?? null },
     );
 
-    return { ok: true, packageId: persisted, output, zipUrl, attempts };
+    return { ok: true, packageId: persisted, output, zipUrl, attempts, blocked, gateState: gate };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown proposal generation error";
     console.error("[proposal-draft:generation_failed]", { workOrderId: order.id, error: message, attempts });

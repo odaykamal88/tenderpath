@@ -382,6 +382,9 @@ export async function initializeDatabase() {
   // so subsequent runs and the dashboard can read what we parsed from the
   // uploaded TOR/RFP without re-running extraction.
   await sql`ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS parsed_requirements JSONB`;
+  // Sprint 11: gate summary mirrored from output.gate_state for direct query
+  // (so the dashboard list can filter "needs_remediation" without JSONB scan).
+  await sql`ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS gate_state JSONB`;
   await sql`CREATE INDEX IF NOT EXISTS proposal_packages_work_order_plan ON proposal_packages (work_order_id, plan, created_at DESC)`;
 
   await sql`

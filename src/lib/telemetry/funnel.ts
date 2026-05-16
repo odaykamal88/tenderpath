@@ -17,6 +17,11 @@ export const FUNNEL_EVENTS = [
   "paid_intent_clicked",
   "payment_succeeded",
   "deliverable_ready",
+  // Sprint 11: emitted when the Proposal Draft compliance gate holds the
+  // bundle because >=1 mandatory item is needs_action. The output is
+  // persisted (dashboard renders the remediation panel) but no ZIP is
+  // produced and no "ready" email is sent.
+  "deliverable_blocked",
 ] as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[number];
