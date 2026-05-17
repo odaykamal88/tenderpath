@@ -218,6 +218,18 @@ export async function generateRosterFastTrack({
       // MUST await inside Vercel after() — see bid-no-bid generate.ts for
       // detailed explanation. Fire-and-forget inside after() = lambda kills
       // the in-flight Resend HTTP call and the email never sends.
+      // Sprint 14: pass a compact summary of the agency_readiness_breakdown
+      // so the email subject + body tease the leaderboard.
+      const breakdown = output.agency_readiness_breakdown ?? [];
+      const startHere = breakdown.find((b) => b.recommendation === "start_here");
+      const viable = breakdown.filter((b) => b.recommendation === "viable").map((b) => b.agency_label);
+      const summary = breakdown.length > 0
+        ? {
+            startHereLabel: startHere?.agency_label ?? agency.label,
+            viableLabels: viable,
+            totalScored: breakdown.length,
+          }
+        : undefined;
       try {
         await sendRosterReadyEmail({
           email: order.email,
@@ -225,6 +237,7 @@ export async function generateRosterFastTrack({
           agencyLabel: agency.label,
           portalUrl: agency.portalUrl,
           zipUrl,
+          agencyReadinessSummary: summary,
         });
       } catch (err) {
         console.error("[roster-fast-track:email_failed]", {
