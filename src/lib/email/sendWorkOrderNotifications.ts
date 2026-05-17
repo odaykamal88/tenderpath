@@ -10,6 +10,18 @@ interface WorkOrderNotification {
   paymentStatus: string | null;
   amountCents: number | null;
   currency: string | null;
+  /** Sprint 17. Optional. When the service-fulfillment gate holds the
+   *  order (human_review or blocked), this carries the reason so the
+   *  ops email subject can flag it and the body can name the specific
+   *  blockers — avoiding the "invisible refund queue" failure mode
+   *  where ops gets a generic "new paid order" email and doesn't
+   *  realise auto-fulfilment never ran. */
+  fulfillmentHold?: {
+    mode: "human_review" | "blocked";
+    code: string | null;
+    message: string | null;
+    missingInputs: string[];
+  };
 }
 
 interface WorkOrderStatusNotification extends WorkOrderNotification {
@@ -76,19 +88,37 @@ export async function sendWorkOrderPaidNotifications(order: WorkOrderNotificatio
     });
   }
 
+  // Sprint 17. When the service-fulfillment gate holds the order
+  // (human_review or blocked), prefix the subject so ops can triage
+  // at a glance. Without this, gated paid orders look identical to
+  // auto-fulfilled ones in the inbox — the "invisible refund queue".
+  const hold = order.fulfillmentHold;
+  const subjectPrefix = hold ? `[HOLD · ${hold.mode}] ` : "";
+  const holdBlock = hold
+    ? [
+        ``,
+        `*** AUTO-FULFILMENT BLOCKED — manual action required ***`,
+        `Mode: ${hold.mode}`,
+        hold.code ? `Code: ${hold.code}` : null,
+        hold.message ? `Reason: ${hold.message}` : null,
+        hold.missingInputs.length ? `Missing inputs: ${hold.missingInputs.join("; ")}` : null,
+        ``,
+      ].filter(Boolean).join("\n")
+    : "";
+
   await resend.emails.send({
     from,
     to: opsEmail,
-    subject: `New paid work order #${order.id}: ${plan}`,
+    subject: `${subjectPrefix}New paid work order #${order.id}: ${plan}`,
     text: [
       `Work order #${order.id}`,
       `Plan: ${order.plan}`,
       `Service: ${order.serviceSlug ?? "unknown"}`,
       `Customer: ${userEmail ?? "unknown"}`,
       context,
-      "",
+      holdBlock,
       `${appUrl}/admin/work-orders`,
-    ].join("\n"),
+    ].filter(Boolean).join("\n"),
   });
 }
 

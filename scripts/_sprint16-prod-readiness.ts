@@ -170,8 +170,8 @@ interface PackageSummary {
       console.log(`  ABORT: work_order ${regenId} is payment_status=${target[0].payment_status}, not "paid"`);
       process.exit(1);
     }
-    const { generateRosterPackage } = await import("../src/lib/proposal-package/generate-roster");
-    const result = await generateRosterPackage({
+    const { generateRosterFastTrack } = await import("../src/lib/proposal-package/generate-roster");
+    const result = await generateRosterFastTrack({
       workOrderId: regenId,
       force: true,    // bypass already-generated check
       silent: true,   // don't send email — we're testing
@@ -181,7 +181,7 @@ interface PackageSummary {
     if (result.output) {
       const b = result.output.agency_readiness_breakdown ?? [];
       console.log(`  agency_readiness_breakdown: ${b.length} entries`);
-      const startHere = b.find((x) => x.recommendation === "start_here");
+      const startHere = b.find((x: { recommendation: string }) => x.recommendation === "start_here");
       if (startHere) console.log(`  start_here: ${startHere.agency_label} ${startHere.readiness_0_10}/10`);
     }
   }

@@ -385,6 +385,10 @@ export async function initializeDatabase() {
   // Sprint 11: gate summary mirrored from output.gate_state for direct query
   // (so the dashboard list can filter "needs_remediation" without JSONB scan).
   await sql`ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS gate_state JSONB`;
+  // Sprint 17. Relax user_id NOT NULL so anonymous (email-only) paid
+  // orders can persist. Without this, persist.ts threw at the INSERT
+  // and the customer's $39–$749 charge produced no deliverable.
+  await sql`ALTER TABLE proposal_packages ALTER COLUMN user_id DROP NOT NULL`;
   await sql`CREATE INDEX IF NOT EXISTS proposal_packages_work_order_plan ON proposal_packages (work_order_id, plan, created_at DESC)`;
 
   await sql`
