@@ -1,0 +1,339 @@
+{
+  "requirements": {
+    "eligibility_criteria": [
+      "Renewable energy access supplier",
+      "Mini-grid supplier",
+      "Solar EPC (Engineering, Procurement, Construction) supplier",
+      "USAID Power Africa partner status preferred",
+      "AfDB renewable-energy platform credentials preferred"
+    ],
+    "technical_requirements": [
+      "Renewable energy mini-grid project delivery capability",
+      "Solar EPC project delivery capability",
+      "Operations in East Africa (Kenya, Tanzania, Uganda, Rwanda, Ethiopia)"
+    ],
+    "required_documents": [],
+    "evaluation_criteria": [],
+    "key_constraints": [
+      "Geographic focus: East Africa (Kenya HQ, Tanzania, Uganda, Rwanda field operations, Ethiopia early-stage)",
+      "Primary registration target: UNDP supplier roster",
+      "Secondary registration target: UNOPS renewable-energy roster"
+    ],
+    "submission_format": "unknown"
+  },
+  "output": {
+    "registration_checklist": [
+      "1. Confirm UNGM Level 1 status is active and up-to-date (UNGM ID 263073) — log in to https://www.ungm.org, verify all Level 1 fields are complete, and note the UNGM confirmation reference number for use in the UNDP eTendering profile.",
+      "2. Rename and package all supporting documents using the UN-friendly filename convention defined in document_renaming_rules before uploading anywhere.",
+      "3. Navigate to https://procurement-notices.undp.org and click 'Register' to create a new vendor account on the UNDP eTendering portal — use the exact legal company name 'POWERGEN RENEWABLE ENERGY EAST AFRICA LIMITED' as it appears on the Certificate of Incorporation.",
+      "4. Complete the UNDP eTendering company profile: enter UNGM ID 263073, legal address (Nairobi HQ), company type (private limited / EPC contractor), year of establishment (2011), headcount (~85), and primary contact details.",
+      "5. Select and enter UNSPSC commodity codes in the UNDP eTendering profile — use the codes recommended in organization_profile_notes; choose 5-7 codes that precisely match mini-grid EPC, solar PV installation, O&M services, and renewable energy consulting.",
+      "6. Upload the capability statement (tailored UNDP version as drafted in capability_statement_draft) as the primary company profile document.",
+      "7. Upload audited financial statements (2022, 2023, 2024 — Deloitte consolidated) and the Equity Bank letter as evidence of financial capacity.",
+      "8. Upload ISO 9001 + ISO 45001 certificates, USAID Power Africa reference letter, and AfDB SEFA Project Completion Report as technical and past-performance evidence.",
+      "9. Upload the Code of Conduct + Anti-Corruption policy and the Professional Indemnity Insurance Certificate to satisfy UNDP's ethical and risk compliance requirements.",
+      "10. Register the UNDP eTendering account for EACH country office where PowerGen operates: Kenya (CO Nairobi), Tanzania (CO Dar es Salaam), Uganda (CO Kampala), Rwanda (CO Kigali), and Ethiopia (CO Addis Ababa) — UNDP procurement is decentralised and country offices issue their own tenders.",
+      "11. Use the UNDP eTendering portal's search and filter function to identify active or upcoming tenders in the energy, environment, and infrastructure categories across the five country offices; bookmark relevant tenders.",
+      "12. Subscribe to email notifications for tender categories: Energy / Renewable Energy, Environment & Climate, Infrastructure & Construction, and Capacity Building — for Kenya, Tanzania, Uganda, Rwanda, and Ethiopia.",
+      "13. Prepare a short bid library folder (capability statement, financials, ISO certs, references, insurance) so that when a 2-3 week RFP/RFQ window opens, documents can be attached immediately without re-formatting.",
+      "14. Verify that UNGM Level 1 data (legal name, address, UNSPSC codes) exactly matches the UNDP eTendering profile — discrepancies between the two systems can cause automatic de-listing.",
+      "15. Set a 6-month calendar reminder to refresh the UNDP eTendering profile, update audited financials when the 2025 Deloitte audit is complete, and renew ISO certificates before expiry."
+    ],
+    "capability_statement_draft": "POWERGEN RENEWABLE ENERGY EAST AFRICA LIMITED is a pan-African distributed renewable energy developer and EPC contractor headquartered in Nairobi, Kenya, with operational offices in Arusha (Tanzania), Kampala (Uganda), and country-level presence in Rwanda and Ethiopia. Founded in 2011 and employing approximately 85 professionals across engineering, project finance, operations, and business development, PowerGen designs, builds, and operates solar PV and battery storage mini-grids, AC/DC microgrids, and solar home system supply chains for rural and peri-urban communities across East Africa. The company has delivered over 60 operational mini-grids serving more than 45,000 households, making it one of the most experienced distributed renewable energy EPC contractors on the continent.\n\nPowerGen's core capabilities are directly aligned with UNDP's energy access, climate action, and sustainable development mandates. The company provides end-to-end project delivery: site identification and feasibility, regulatory licensing and community engagement, solar PV and BESS system design, full EPC execution, low-voltage distribution network construction, and long-term operations and maintenance. PowerGen has successfully executed multi-year grant-funded programmes for USAID Power Africa (2019–2024), the African Development Bank's Sustainable Energy Fund for Africa (2020–2023), and the Shell Foundation, demonstrating the financial management discipline, donor-compliance rigour, and field execution capacity that UNDP country offices require in implementation partners.\n\nThree differentiators set PowerGen apart in the UNDP supplier landscape. First, verified track record at scale: 12 EPC contracts delivered on time with no audit qualifications, independently confirmed by a clean 2024 Deloitte East Africa consolidated audit and a USAID Power Africa reference letter. Second, dual ISO certification: ISO 9001 (quality management) and ISO 45001 (occupational health and safety), ensuring that every project meets international quality and worker-safety standards — a critical requirement for donor-funded rural infrastructure. Third, deep East African regulatory and community knowledge: PowerGen holds operating licences and established community relationships across Kenya, Tanzania, Uganda, Rwanda, and Ethiopia, enabling rapid mobilisation without the country-entry delays that affect international contractors.\n\nPowerGen is registered on the UN Global Marketplace (UNGM ID 263073) and is actively seeking to deepen its partnership with UNDP country offices across East Africa to support Sustainable Development Goal 7 (affordable and clean energy) and SDG 13 (climate action) programming. The company is available for RFPs, RFQs, and Long-Term Agreement frameworks covering mini-grid EPC, renewable energy consulting, project development services, and O&M contracts.",
+    "required_documents": [
+      "1. UNGM Level 1 confirmation / registration certificate (UNGM ID 263073)",
+      "2. Certificate of Incorporation — Kenya (PowerGen Certificate of Incorporation Kenya 2011.pdf)",
+      "3. Company profile / capability statement — UNDP-tailored version (PowerGen Capability Statement 2025.pdf, updated with UNDP narrative)",
+      "4. Audited financial statements — 3 most recent years (2022, 2023, 2024) — Deloitte East Africa consolidated (PowerGen Audited Financials 2022-2024 Deloitte.pdf)",
+      "5. Bank account confirmation letter on bank letterhead (Bank Letter Equity Bank PowerGen 2025.pdf)",
+      "6. Reference letter from prior development-sector contract — USAID Power Africa (USAID Power Africa Reference Letter 2024.pdf)",
+      "7. Reference / completion evidence from prior development-sector contract — AfDB SEFA (AfDB SEFA Project Completion Report 2023.pdf)",
+      "8. ISO 9001 Quality Management System certificate — 2024 (PowerGen ISO 9001 + ISO 45001 Certificate 2024.pdf)",
+      "9. ISO 45001 Occupational Health and Safety certificate — 2024 (PowerGen ISO 9001 + ISO 45001 Certificate 2024.pdf)",
+      "10. Code of conduct and anti-corruption policy (PowerGen Code of Conduct + Anti-Corruption 2024.docx — convert to PDF before upload)",
+      "11. Professional indemnity insurance certificate (PowerGen Insurance Certificate Professional Indemnity 2025.pdf)",
+      "12. Tax registration certificate / PIN certificate — Kenya (NOT yet in evidence library — must be obtained)",
+      "13. List of relevant completed projects with contract values, client names, and delivery dates (to be compiled from capability statement and AfDB/USAID records)",
+      "14. UNSPSC commodity code list — self-declared in UNDP eTendering profile (no separate document required, but codes must be researched and entered)",
+      "15. UN Supplier Code of Conduct acknowledgement — signed (available at https://www.ungm.org; confirm it is on file at UNGM Level 1)"
+    ],
+    "organization_profile_notes": [
+      "LEGAL NAME: Enter 'POWERGEN RENEWABLE ENERGY EAST AFRICA LIMITED' exactly as it appears on the Kenya Certificate of Incorporation — no abbreviations, no trading names. UNGM and UNDP eTendering must match character-for-character.",
+      "UNGM ID: Enter 263073 in the UNDP eTendering profile's UNGM reference field. This links the two records and allows UNDP to auto-import your UNGM data.",
+      "UNSPSC CODES — RECOMMENDED SET (verify at https://www.unspsc.org before submission): 26111700 (Photovoltaic cells and modules), 26111701 (Solar photovoltaic panels), 26111800 (Power storage systems — batteries), 81101500 (Engineering and design services), 72101500 (Building construction and support), 76111500 (Power generation services), 81141600 (Project management), 77101500 (Environmental servi",
+      "COMPANY TYPE: Select 'Private Company / Limited Liability' or equivalent. Do NOT select 'NGO' or 'Government' — PowerGen is a commercial EPC contractor.",
+      "COUNTRY OF REGISTRATION: Kenya. Enter Nairobi as the primary address. List Tanzania (Arusha), Uganda (Kampala) as secondary operational addresses in the 'additional locations' or 'countries of operation' fields.",
+      "FINANCIAL CAPACITY: UNDP eTendering may ask for annual turnover ranges. Use the Deloitte 2024 consolidated audit figures. If the portal asks for a single-year figure, use the most recent (2024) audited revenue. Do not use projected or unaudited figures.",
+      "AUDITED FINANCIALS FORMAT: Upload as a single combined PDF (all three years — 2022, 2023, 2024) if the portal allows multi-year uploads in one file. If separate uploads are required, label each file by year. Deloitte letterhead and signature page must be visible.",
+      "REFERENCES: UNDP eTendering typically has a structured 'past performance' or 'references' section. Enter the USAID Power Africa contract as Reference 1 (client: USAID/Power Africa; contract value: enter if available; period: 2019-2024; description: multi-year mini-grid grant execution, 40+ mini-grids, Kenya). Enter AfDB SEFA as Reference 2. Add Shell Foundation as Reference 3 if a field is availab",
+      "ISO CERTIFICATIONS: Upload the combined ISO 9001 + ISO 45001 certificate PDF. In the certification fields, enter the certifying body name, certificate number, and expiry date exactly as printed on the certificate.",
+      "INSURANCE: Enter the Professional Indemnity insurance details (insurer name, policy number, coverage amount, expiry date) in the insurance fields. Note: UNDP may also require public liability / third-party liability insurance for works contracts — check whether PowerGen holds this and add if available.",
+      "LANGUAGES: Select English as the primary business language. Swahili may be listed as an operational language if the portal allows multiple entries.",
+      "NCAGE / NATO CODE: Not required for UNDP. Leave blank if prompted — this field is relevant only for NATO/defence procurement.",
+      "DUNS / LEI: UNDP eTendering does not mandate a DUNS number, but if PowerGen has one, enter it — it speeds up due-diligence checks. If not, leave blank.",
+      "DOCUMENT FILE SIZE: UNDP eTendering and UNGM both enforce a 5 MB per-file limit. The Deloitte 2022-2024 combined financials PDF may exceed this — compress or split by year if needed."
+    ],
+    "cover_letter_draft": "Dear UNDP Procurement Team,\n\nPOWERGEN RENEWABLE ENERGY EAST AFRICA LIMITED (UNGM ID: 263073) respectfully submits this vendor registration package for inclusion on the UNDP supplier roster, with particular relevance to energy access, climate action, and rural infrastructure programming across East Africa. Founded in 2011 and headquartered in Nairobi, Kenya, PowerGen is a specialist solar PV and battery storage mini-grid developer and EPC contractor with a proven track record of delivering over 60 operational mini-grids serving more than 45,000 households across Kenya, Tanzania, Uganda, Rwanda, and Ethiopia. Our work has been funded and validated by USAID Power Africa, the African Development Bank's Sustainable Energy Fund for Africa, and the Shell Foundation, and our financial statements have received a clean audit opinion from Deloitte East Africa for three consecutive years (2022–2024).\n\nPowerGen is ISO 9001 and ISO 45001 certified, operates in-country teams across five East African markets, and has the regulatory licences, community relationships, and field execution capacity to mobilise rapidly in support of UNDP country office programming under SDG 7 (affordable and clean energy) and SDG 13 (climate action). We are committed to the principles of the UN Supplier Code of Conduct and attach our Code of Conduct and Anti-Corruption Policy as evidence of our governance standards. We welcome the opportunity to support UNDP's development mandate and are available to respond to RFPs, RFQs, and Long-Term Agreement frameworks at short notice. All supporting documents are enclosed in accordance with UNDP eTendering requirements.",
+    "submission_guidance": [
+      "PORTAL NAVIGATION: Go to https://procurement-notices.undp.org. Click 'Supplier Registration' or 'Create Account' — do not confuse this with the UNGM registration portal. These are two separate systems; both must be completed.",
+      "UNGM LINK: During UNDP eTendering registration, you will be asked for your UNGM ID. Enter 263073. This triggers an automatic data pull from UNGM — verify that the imported data (legal name, address, UNSPSC codes) is correct before finalising.",
+      "COUNTRY OFFICE REGISTRATION: UNDP procurement is decentralised. After creating your global account, navigate to each country office section (Kenya, Tanzania, Uganda, Rwanda, Ethiopia) and register your interest / subscribe to tenders for each. Failure to do this means you will not receive notifications from country offices even if your global profile is complete.",
+      "TENDER SEARCH: Use the 'Search Tenders' function and filter by: Country = Kenya / Tanzania / Uganda / Rwanda / Ethiopia; Category = Energy, Environment, Infrastructure. Save these searches as alerts.",
+      "RESPONSE WINDOW: Most UNDP RFPs and RFQs have a 2-3 week response window. Do not wait for a tender to appear before preparing your bid library. Have the capability statement, financials, ISO certs, references, and insurance certificate in a single ready-to-attach folder.",
+      "COMMON REJECTION REASONS: (1) Legal name mismatch between UNGM and UNDP eTendering — use the exact name from the Certificate of Incorporation on every document. (2) Expired documents — check ISO certificate and insurance expiry dates before submission. (3) Overly broad UNSPSC codes — UNDP buyers filter by specific codes; if your codes are too high-level, your profile will not surface. (4) Missing tax registration certificate — this is a common gap for East African vendors; obtain the Kenya PIN certificate before submitting. (5) Uncompressed PDFs exceeding 5 MB — compress large files before upload.",
+      "CODE OF CONDUCT: The PowerGen Code of Conduct + Anti-Corruption 2024 is currently a .docx file. Convert it to PDF before uploading — UNDP portals typically do not accept .docx for compliance documents.",
+      "FINANCIAL STATEMENTS: If the Deloitte 2022-2024 combined PDF exceeds 5 MB, split into three separate annual files: 03a_Audited_Financials_2022.pdf, 03b_Audited_Financials_2023.pdf, 03c_Audited_Financials_2024.pdf.",
+      "FOLLOW-UP: After submitting, email the procurement focal point at each UNDP country office (Kenya: procurement.ke@undp.org; Tanzania: procurement.tz@undp.org — verify current addresses on the UNDP country office websites) to introduce PowerGen and flag your registration. Relationship-building at the country office level significantly increases the likelihood of receiving direct RFQ invitations.",
+      "PROFILE REFRESH: UNDP eTendering profiles can become stale. Set a 6-month calendar reminder to log in, update any changed documents, and confirm that your UNSPSC codes still reflect your active service lines."
+    ],
+    "document_renaming_rules": [
+      {
+        "document_type": "Company profile / capability statement",
+        "required_filename": "01_Company_Profile_POWERGEN_RENEWABLE_ENERGY_EAST_AFRICA_LIMITED.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Place capability statement first so reviewers see it immediately."
+      },
+      {
+        "document_type": "Certificate of Incorporation",
+        "required_filename": "02_Certificate_of_Incorporation_Kenya_POWERGEN.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Source file: PowerGen Certificate of Incorporation Kenya 2011.pdf."
+      },
+      {
+        "document_type": "Audited financial statements (combined 2022-2024)",
+        "required_filename": "03_Audited_Financials_2022_2023_2024_Deloitte_POWERGEN.pdf",
+        "note": "If file exceeds 5 MB portal limit, split into 03a_Audited_Financials_2022.pdf, 03b_Audited_Financials_2023.pdf, 03c_Audited_Financials_2024.pdf. Source file: PowerGen Audited Financials 2022-2024 Deloitte.pdf."
+      },
+      {
+        "document_type": "Bank account confirmation letter",
+        "required_filename": "04_Bank_Letter_Equity_Bank_POWERGEN_2025.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Source file: Bank Letter Equity Bank PowerGen 2025.pdf."
+      },
+      {
+        "document_type": "ISO 9001 + ISO 45001 certificates",
+        "required_filename": "05_ISO_9001_ISO_45001_Certificate_2024_POWERGEN.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Source file: PowerGen ISO 9001 + ISO 45001 Certificate 2024.pdf. Both certificates may remain in one combined PDF."
+      },
+      {
+        "document_type": "USAID Power Africa reference letter",
+        "required_filename": "06_Reference_Letter_USAID_PowerAfrica_2024_POWERGEN.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Source file: USAID Power Africa Reference Letter 2024.pdf."
+      },
+      {
+        "document_type": "AfDB SEFA project completion report",
+        "required_filename": "07_Reference_AfDB_SEFA_Project_Completion_2023_POWERGEN.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Source file: AfDB SEFA Project Completion Report 2023.pdf."
+      },
+      {
+        "document_type": "Code of conduct and anti-corruption policy",
+        "required_filename": "08_Code_of_Conduct_Anti_Corruption_2024_POWERGEN.pdf",
+        "note": "CRITICAL: Source file is .docx — must be converted to PDF before upload. UNDP portals do not accept .docx for compliance documents. Source file: PowerGen Code of Conduct + Anti-Corruption 2024.docx."
+      },
+      {
+        "document_type": "Professional indemnity insurance certificate",
+        "required_filename": "09_Insurance_Certificate_Professional_Indemnity_2025_POWERGEN.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Source file: PowerGen Insurance Certificate Professional Indemnity 2025.pdf."
+      },
+      {
+        "document_type": "Tax registration certificate / PIN certificate",
+        "required_filename": "10_Tax_Registration_Certificate_Kenya_POWERGEN.pdf",
+        "note": "Document not yet in evidence library — must be obtained from Kenya Revenue Authority (KRA iTax portal). Required for UNDP, UNGM Level 2, UNOPS, and FAO registrations."
+      },
+      {
+        "document_type": "UNGM Level 1 confirmation",
+        "required_filename": "11_UNGM_Level1_Confirmation_ID263073_POWERGEN.pdf",
+        "note": "Download the UNGM registration confirmation page as a PDF from https://www.ungm.org after logging in. Agency does not enforce filenames — convention follows UN procurement best practice."
+      },
+      {
+        "document_type": "List of completed projects / past performance summary",
+        "required_filename": "12_Past_Performance_Project_List_POWERGEN.pdf",
+        "note": "Compile a one-to-two page table listing project name, client, country, contract value, delivery date, and scope. Not a standalone document in the evidence library — must be created from capability statement and USAID/AfDB records."
+      }
+    ],
+    "missing_information": [
+      "TAX REGISTRATION CERTIFICATE (Kenya PIN / KRA certificate): Not present in the evidence library. Required by UNDP eTendering, UNGM (for Level 2 upgrade), UNOPS, and FAO. Obtain from the Kenya Revenue Authority iTax portal (https://itax.kra.go.ke) — typically available as an instant download if the company is already registered. Also obtain equivalent certificates for Tanzania (TRA), Uganda (URA), ",
+      "PUBLIC LIABILITY / THIRD-PARTY LIABILITY INSURANCE: The evidence library contains Professional Indemnity insurance only. UNDP and UNOPS works contracts typically also require public liability / contractor's all-risk (CAR) insurance. Confirm whether PowerGen holds this policy; if not, obtain from a licensed insurer (estimated 2-4 weeks, cost varies by coverage level).",
+      "UNGM LEVEL 2 UPGRADE: PowerGen is currently at UNGM Level 1. Level 2 requires additional documents (tax certificate, financial statements, references) and unlocks visibility to more agencies including UNOPS and WFP. Upgrading to Level 2 should be a 60-day priority action.",
+      "UNOPS SUPPLIER PORTAL REGISTRATION: PowerGen is not yet registered on the UNOPS supplier portal (separate from UNGM). UNOPS uses UNGM but also maintains its own supplier database for infrastructure and project-services tenders. Registration steps and portal URL should be confirmed at https://www.unops.org/business/supplier-resource-centre.",
+      "UNDP ETENDERING ACCOUNT: PowerGen does not yet have an account on https://procurement-notices.undp.org. This is a separate system from UNGM and must be created independently.",
+      "CONTRACT VALUE DATA FOR PAST PERFORMANCE: The evidence library contains reference letters and a project completion report but does not explicitly state contract values. UNDP and UNOPS evaluation panels typically require contract values in the past performance section. Obtain written confirmation of contract values from USAID Power Africa and AfDB SEFA, or extract from audited financials if disclos",
+      "SHELL FOUNDATION REFERENCE LETTER: The Shell Foundation is listed as a past donor (2018-2022) but no reference letter is in the evidence library. A reference letter from Shell Foundation would strengthen the past-performance section for UNDP and UNOPS submissions.",
+      "COUNTRY-SPECIFIC BUSINESS REGISTRATION CERTIFICATES: The evidence library contains only the Kenya Certificate of Incorporation. For UNDP Tanzania, Uganda, Rwanda, and Ethiopia country office registrations, local business registration certificates (TZ Business Registration, UG Certificate of Incorporation, RW RDB certificate, ET investment licence) may be required. Confirm availability and add to t",
+      "QUALITY ASSURANCE POLICY (standalone document): UNGM Level 2 and UNOPS require a standalone quality assurance policy document. The ISO 9001 certificate evidences the system but a one-to-two page QA policy summary document should be prepared and added to the library.",
+      "BUSINESS CONTINUITY / RISK MANAGEMENT POLICY: Required for UNGM Level 2. Not present in the evidence library. Prepare a one-to-two page business continuity policy covering field operations, supply chain disruption, and financial risk management.",
+      "DUNS NUMBER OR LEI (Legal Entity Identifier): Not confirmed in the company profile. While not mandatory for UNDP eTendering, a DUNS number or LEI accelerates due-diligence checks at UNOPS and some UNDP country offices. Obtain from Dun & Bradstreet (free for UN-registered vendors) or the Global LEI Foundation.",
+      "POWERGEN ETENDERING PORTAL ACCOUNT CREDENTIALS: The registration package cannot be submitted until the UNDP eTendering account is created. This is a prerequisite action that must happen before any document upload."
+    ],
+    "next_steps": [
+      "IMMEDIATE (Week 1): Convert PowerGen Code of Conduct + Anti-Corruption 2024.docx to PDF and rename all documents using the convention in document_renaming_rules. Create a single 'UNDP Registration Package' folder with all 12 renamed files.",
+      "IMMEDIATE (Week 1): Download the Kenya KRA PIN certificate from https://itax.kra.go.ke and add it to the registration package as 10_Tax_Registration_Certificate_Kenya_POWERGEN.pdf.",
+      "IMMEDIATE (Week 1): Create the UNDP eTendering account at https://procurement-notices.undp.org using the exact legal name 'POWERGEN RENEWABLE ENERGY EAST AFRICA LIMITED' and link UNGM ID 263073.",
+      "WEEK 1-2: Complete the UNDP eTendering company profile — enter UNSPSC codes (see organization_profile_notes), upload all 12 documents, and register for country office notifications in Kenya, Tanzania, Uganda, Rwanda, and Ethiopia.",
+      "WEEK 2-3: Compile the past performance project list (12_Past_Performance_Project_List_POWERGEN.pdf) using contract data from USAID Power Africa and AfDB SEFA records. Include contract values, delivery dates, and client contact details.",
+      "WEEK 2-4: Initiate UNGM Level 2 upgrade — log in to https://www.ungm.org, navigate to 'Upgrade Registration', and upload the tax certificate, financial statements, references, QA policy, and business continuity policy. Level 2 unlocks visibility to UNOPS, WFP, and additional UNDP procurement categories.",
+      "WEEK 3-4: Prepare and submit UNOPS supplier portal registration (https://www.unops.org/business/supplier-resource-centre) — UNOPS is the second-highest readiness agency and has direct relevance to PowerGen's EPC and infrastructure capabilities.",
+      "WEEK 4-6: Request a reference letter from Shell Foundation (2018-2022 engagement) to add a third development-sector reference to the bid library.",
+      "WEEK 4-8: Confirm or obtain public liability / contractor's all-risk insurance policy and add to the document library as a supplementary insurance certificate.",
+      "WEEK 6-8: Obtain local business registration certificates for Tanzania, Uganda, and Rwanda country offices and add to the library for country-specific UNDP and UNOPS tender responses.",
+      "MONTH 3: Conduct a first active tender search on UNDP eTendering across all five country offices. Identify 2-3 upcoming RFPs or RFQs in the energy/environment/infrastructure categories and prepare expressions of interest or pre-qualification responses using the bid library.",
+      "MONTH 4 (ONGOING): Set quarterly calendar reminders to refresh UNDP eTendering and UNGM profiles, check document expiry dates (ISO certs, insurance, financials), and update the past performance list with any new contracts awarded."
+    ],
+    "agency_readiness_breakdown": [
+      {
+        "agency_slug": "ungm",
+        "agency_label": "UNGM",
+        "readiness_0_10": 8,
+        "document_coverage_0_10": 8,
+        "category_fit_0_10": 8,
+        "geographic_fit_0_10": 9,
+        "recommendation": "start_here",
+        "rationale": "PowerGen already holds UNGM Level 1 (ID 263073) and can produce 8 of 10 required documents from the evidence library today (Certificate of Incorporation, Deloitte 2022-2024 audited financials, ISO 9001+45001, capability statement, USAID reference, AfDB completion report, Code of Conduct, Equity Bank letter); only the Kenya tax/PIN certificate and a standalone business continuity policy are missing, making Level 2 upgrade achievable within 2-3 weeks.",
+        "missing_documents": [
+          "Tax registration certificate (Kenya KRA PIN certificate — not in evidence library)",
+          "Business continuity / risk management policy (not in evidence library)",
+          "Quality assurance policy (standalone document — ISO cert evidences the system but a policy document is separately required for Level 2)"
+        ],
+        "next_actions": [
+          "Download Kenya KRA PIN certificate from https://itax.kra.go.ke (same-day action, no cost).",
+          "Draft a 1-2 page standalone Quality Assurance Policy and Business Continuity Policy (internal effort, 3-5 days).",
+          "Log in to UNGM, navigate to Level 2 upgrade, and upload the three missing documents to complete the upgrade (target: within 2 weeks).",
+          "Review and update UNSPSC codes in the UNGM profile to include the 7 recommended codes in organization_profile_notes (1-2 hours)."
+        ]
+      },
+      {
+        "agency_slug": "undp",
+        "agency_label": "UNDP",
+        "readiness_0_10": 8,
+        "document_coverage_0_10": 8,
+        "category_fit_0_10": 8,
+        "geographic_fit_0_10": 9,
+        "recommendation": "viable",
+        "rationale": "PowerGen covers 8 of 10 UNDP required documents from the evidence library (UNGM Level 1 confirmed, capability statement, Deloitte 3-year audited financials, USAID Power Africa and AfDB SEFA references, ISO 9001+45001, Code of Conduct, Equity Bank letter, Professional Indemnity insurance); the Kenya tax registration certificate is missing and the UNDP eTendering account has not yet been created, but both gaps are resolvable within 1-2 weeks.",
+        "missing_documents": [
+          "Tax registration certificate (Kenya KRA PIN certificate — not in evidence library)",
+          "UNDP eTendering portal account (not yet created — prerequisite for submission)"
+        ],
+        "next_actions": [
+          "Create UNDP eTendering account at https://procurement-notices.undp.org this week using exact legal name and UNGM ID 263073.",
+          "Obtain Kenya KRA PIN certificate from https://itax.kra.go.ke (same-day, no cost) and upload as document 10.",
+          "Convert Code of Conduct .docx to PDF before uploading (30 minutes).",
+          "Register for country office tender notifications in Kenya, Tanzania, Uganda, Rwanda, and Ethiopia within the UNDP eTendering portal (1-2 hours)."
+        ]
+      },
+      {
+        "agency_slug": "unops",
+        "agency_label": "UNOPS",
+        "readiness_0_10": 7,
+        "document_coverage_0_10": 7,
+        "category_fit_0_10": 9,
+        "geographic_fit_0_10": 7,
+        "recommendation": "viable",
+        "rationale": "PowerGen's EPC, infrastructure, and project-services capabilities are an excellent fit for UNOPS procurement categories, and the evidence library covers 7 of 10 UNOPS required documents (UNGM confirmation, Certificate of Incorporation, Deloitte financials, capability statement, USAID and AfDB past performance references, ISO 9001+45001, Professional Indemnity insurance, Code of Conduct); the Kenya tax certificate, a standalone QA/HSSE policy, and the UNOPS supplier portal registration itself are the primary gaps.",
+        "missing_documents": [
+          "Tax registration certificate (Kenya KRA PIN certificate — not in evidence library)",
+          "Quality, health, safety, and environmental (QHSE) policy — standalone document (ISO certs evidence the system but UNOPS typically requires a policy document for works/infrastructure categories)",
+          "UNOPS supplier portal registration (not yet initiated — separate from UNGM)"
+        ],
+        "next_actions": [
+          "Obtain Kenya KRA PIN certificate from KRA iTax portal (same-day action).",
+          "Draft a combined QHSE Policy document referencing ISO 9001 and ISO 45001 certifications (internal effort, 3-5 days).",
+          "Initiate UNOPS supplier portal registration at https://www.unops.org/business/supplier-resource-centre (target: within 3 weeks).",
+          "Identify UNOPS East Africa country offices (Kenya, Uganda, Ethiopia are active UNOPS hubs) and subscribe to infrastructure/energy tenders."
+        ]
+      },
+      {
+        "agency_slug": "iom",
+        "agency_label": "IOM",
+        "readiness_0_10": 5,
+        "document_coverage_0_10": 6,
+        "category_fit_0_10": 5,
+        "geographic_fit_0_10": 6,
+        "recommendation": "blocked",
+        "rationale": "PowerGen's capability in refugee/displacement-camp electrification is plausible (solar mini-grids for off-grid settlements) and the evidence library covers 6 of 7 IOM required documents, but IOM's primary procurement categories (accommodation, transport, NFI, health services, fleet, fuel) are not PowerGen's core business, and no prior IOM or humanitarian-response reference exists in the evidence library — the category fit is moderate at best and the missing humanitarian reference is a critical gap for IOM evaluation panels.",
+        "missing_documents": [
+          "References from prior migration-response or humanitarian work (no IOM, UNHCR, or humanitarian-camp reference in evidence library)",
+          "Country-specific licensing for accommodation or transport (not applicable to PowerGen's scope, but IOM may require evidence of relevant local permits for camp-infrastructure work)"
+        ],
+        "next_actions": [
+          "Identify whether any of PowerGen's 60+ mini-grids serve refugee settlements or humanitarian sites (e.g. UNHCR camps in Kenya or Uganda) — if so, obtain a reference letter from the relevant UNHCR or camp-management authority (4-6 weeks).",
+          "Research IOM East Africa country office procurement focal points (Kenya, Uganda, Ethiopia) and request an introductory meeting to understand whether electrification subcontracts are issued under IOM programmes.",
+          "Do not invest in full IOM registration until a humanitarian-sector reference is secured — prioritise UNDP and UNOPS first."
+        ]
+      },
+      {
+        "agency_slug": "fao",
+        "agency_label": "FAO",
+        "readiness_0_10": 4,
+        "document_coverage_0_10": 6,
+        "category_fit_0_10": 3,
+        "geographic_fit_0_10": 6,
+        "recommendation": "blocked",
+        "rationale": "FAO's procurement categories (agriculture inputs, seeds, fertilizers, livestock, irrigation, food processing, rural infrastructure, agritech) have minimal overlap with PowerGen's solar EPC and mini-grid capabilities — while rural electrification can support agri-processing, PowerGen has no agritech, irrigation, or food-systems track record, and the category fit is too low to justify prioritising FAO registration within the 90-120 day window.",
+        "missing_documents": [
+          "Relevant product specifications or technical data sheets for agriculture, food systems, or irrigation equipment (not applicable to PowerGen)",
+          "Past performance references for agriculture, food systems, logistics, or field delivery in FAO-relevant categories (no FAO-adjacent references in evidence library)",
+          "Tax registration certificate (Kenya KRA PIN — missing from evidence library)"
+        ],
+        "next_actions": [
+          "Defer FAO registration until PowerGen can demonstrate a rural electrification-to-agriprocessing use case (e.g. solar-powered irrigation or cold-chain mini-grid) with a relevant client reference.",
+          "If FAO East Africa issues a rural electrification or clean-energy-for-agriculture tender, respond opportunistically using the UNGM profile — do not invest in a dedicated FAO registration package at this stage."
+        ]
+      },
+      {
+        "agency_slug": "wfp",
+        "agency_label": "WFP",
+        "readiness_0_10": 3,
+        "document_coverage_0_10": 5,
+        "category_fit_0_10": 2,
+        "geographic_fit_0_10": 6,
+        "recommendation": "blocked",
+        "rationale": "WFP procurement is dominated by logistics, food, NFI, fleet, warehousing, and fuel — categories entirely outside PowerGen's capabilities — and the evidence library lacks HACCP/ISO 22000 food-safety certification, fleet capacity statements, and humanitarian-response references, making WFP registration a poor use of resources within the 90-120 day window.",
+        "missing_documents": [
+          "HACCP / ISO 22000 certificate (food vendors) — not applicable to PowerGen",
+          "Fleet capacity statement (logistics vendors) — not applicable to PowerGen",
+          "References from prior humanitarian-response operations — not in evidence library"
+        ],
+        "next_actions": [
+          "Do not pursue WFP registration — PowerGen's capabilities do not align with WFP's primary procurement categories.",
+          "If WFP East Africa issues a solar electrification tender for a warehouse or field office, respond via UNGM profile opportunistically."
+        ]
+      },
+      {
+        "agency_slug": "unicef",
+        "agency_label": "UNICEF",
+        "readiness_0_10": 3,
+        "document_coverage_0_10": 5,
+        "category_fit_0_10": 2,
+        "geographic_fit_0_10": 6,
+        "recommendation": "blocked",
+        "rationale": "UNICEF Supply Division procurement focuses on education materials, WASH equipment, child-protection supplies, vaccine cold-chain, and NFI — none of which are PowerGen's product or service lines — and the evidence library lacks product technical data sheets, child-protection policy, and UNICEF-relevant quality/safety certifications, making UNICEF registration outside scope.",
+        "missing_documents": [
+          "Product specifications / technical data sheets for UNICEF-relevant categories (WASH, education, NFI) — not applicable to PowerGen",
+          "Child-protection policy — not in evidence library",
+          "References from prior UNICEF or similar humanitarian contracts — not in evidence library"
+        ],
+        "next_actions": [
+          "Do not pursue UNICEF Supply Division registration — PowerGen's capabilities do not align with UNICEF's primary procurement categories.",
+          "Monitor UNICEF country office tenders in Kenya and Uganda for solar electrification of schools or health facilities — these are occasionally issued as local RFQs and can be responded to via UNGM without a dedicated UNICEF roster registration."
+        ]
+      },
+      {
+        "agency_slug": "who",
+        "agency_label": "WHO",
+        "readiness_0_10": 2,
+        "document_coverage_0_10": 4,
+        "category_fit_0_10": 1,
+        "geographic_fit_0_10": 6,
+        "recommendation": "blocked",
+        "rationale": "WHO procurement is focused on medical equipment, diagnostics, laboratory supplies, health ICT, and public-health consulting — entirely outside PowerGen's capabilities — and the evidence library lacks WHO prequalification, GMP, CE marking, or any health-sector regulatory certification, making WHO registration not viable and explicitly out of scope per the user's intake notes.",
+        "missing_documents": [
+          "Product technical specifications / data sheets for health commodities — not applicable to PowerGen",
+          "Quality and regulatory certifications (GMP, CE, WHO prequalification) — not applicable to PowerGen",
+          "Past performance references in health, public sector, or emergency-response health work — not in evidence library"
+        ],
+        "next_actions": [
+          "Do not pursue WHO registration — PowerGen's capabilities have no meaningful overlap with WHO procurement categories.",
+          "No further action required for WHO within the 90-120 day registration programme."
+        ]
+      }
+    ]
+  }
+}
