@@ -352,7 +352,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <div className="mt-0.5 ml-8 flex flex-col border-l border-stone-200/70 pl-2.5">
                 <Link
                   href="/dashboard/bid-analysis"
-                  className={`block rounded-sm px-2 py-1.5 text-[12.5px] transition-colors ${
+                  className={`block rounded-sm px-2 py-2.5 lg:py-2 text-[13px] lg:text-[12.5px] transition-colors ${
                     pathname?.startsWith("/dashboard/bid-analysis")
                       ? "text-stone-900 font-medium"
                       : "text-stone-500 hover:text-stone-900"
@@ -362,7 +362,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </Link>
                 <Link
                   href="/dashboard/applications"
-                  className={`block rounded-sm px-2 py-1.5 text-[12.5px] transition-colors ${
+                  className={`block rounded-sm px-2 py-2.5 lg:py-2 text-[13px] lg:text-[12.5px] transition-colors ${
                     pathname?.startsWith("/dashboard/applications")
                       ? "text-stone-900 font-medium"
                       : "text-stone-500 hover:text-stone-900"

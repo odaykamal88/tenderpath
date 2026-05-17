@@ -73,7 +73,7 @@ export function ScoreTab({
             </li>
           ))}
         </ul>
-        <p className={styles.summary}>{summary}</p>
+        <p className={styles.summary}>{"“"}{summary}{"”"}</p>
       </section>
 
       <aside>
