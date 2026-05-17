@@ -14,6 +14,7 @@ import { GrantsTab } from "@/components/assessment/GrantsTab";
 import { NextStepsTab } from "@/components/assessment/NextStepsTab";
 import { FunnelBeacon } from "@/components/telemetry/FunnelBeacon";
 import { getCurrentUserAssessment, getThisWeek } from "@/lib/assessment";
+import { safeUrl } from "@/lib/url";
 import dashStyles from "@/components/assessment/dashboard.module.css";
 
 export const revalidate = 60;
@@ -67,13 +68,24 @@ export default async function DashboardPage({
         <section className={dashStyles.thisWeek} aria-label="This week">
           <span className={dashStyles.eyebrow}>This week</span>
           <ul className={dashStyles.weekList}>
-            {week.map((row, i) => (
-              <li key={i} className={dashStyles.weekRow}>
-                <span className={dashStyles.weekKind}>{row.kind}</span>
-                <span className={dashStyles.weekTitle}>{row.title}</span>
-                <span className={dashStyles.weekDue}>{row.due}</span>
-              </li>
-            ))}
+            {week.map((row, i) => {
+              const externalUrl = safeUrl(row.url);
+              const href = externalUrl || `/pay?plan=grants-tenders-matching`;
+              return (
+                <li key={i} className={dashStyles.weekRow}>
+                  <a
+                    href={href}
+                    target={externalUrl ? "_blank" : undefined}
+                    rel={externalUrl ? "noopener noreferrer" : undefined}
+                    className={dashStyles.weekRowLink}
+                  >
+                    <span className={dashStyles.weekKind}>{row.kind}</span>
+                    <span className={dashStyles.weekTitle}>{row.title}</span>
+                    <span className={dashStyles.weekDue}>{row.due} ↗</span>
+                  </a>
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

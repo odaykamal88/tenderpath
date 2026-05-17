@@ -48,7 +48,19 @@
   color: var(--tp2-pos);
   margin-top: 8px;
 }
-.summary { font-size: 14px; color: var(--tp2-ink-2); line-height: 1.5; margin: 8px 0 0; max-width: 480px; }
+.summary {
+  font-family: var(--tp2-serif, ui-serif), serif;
+  font-style: italic;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--tp2-ink-2);
+  margin: 18px 0 0;
+  max-width: 480px;
+  padding-top: 16px;
+  border-top: 1px solid var(--tp2-rule);
+}
+.summary::before { content: "\201C"; }
+.summary::after  { content: "\201D"; }
 .dimList { list-style: none; padding: 0; margin: 28px 0 0; border-top: 1px solid var(--tp2-rule); padding-top: 16px; }
 .dimRow {
   display: grid;

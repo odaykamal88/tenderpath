@@ -59,6 +59,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [state, setState] = useState<AccessState | null>(null);
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [servicesOpen, setServicesOpen] = useState(false);
 
   // Close drawer on route change
   useEffect(() => {
@@ -121,12 +122,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!state) return null;
 
+  const servicesActive =
+    (pathname ?? "").startsWith("/dashboard/services") ||
+    (pathname ?? "").startsWith("/dashboard/bid-analysis") ||
+    (pathname ?? "").startsWith("/dashboard/applications");
+  const servicesExpanded = servicesOpen || servicesActive;
+
   const workbench = [
     { href: "/dashboard", label: "Overview" },
-    { href: "/dashboard/pipeline", label: "Pipeline", matchPaths: ["/dashboard/pipeline", "/dashboard/applications", "/dashboard/bid-analysis"] },
+    { href: "/dashboard/pipeline", label: "Pipeline" },
   ];
   const tools = [
-    { href: "/dashboard/services", label: "Services" },
     { href: "/dashboard/vault", label: "Document vault", requiresPaid: true },
     { href: "/dashboard/settings", label: "Settings" },
   ];
@@ -135,6 +141,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Active page label for the mobile top bar
   const allItems = [
     ...workbench,
+    { href: "/dashboard/services", label: "Services", matchPaths: ["/dashboard/services", "/dashboard/bid-analysis", "/dashboard/applications"] },
     ...tools,
     { href: "/dashboard/work-orders", label: "Billing & orders" },
   ];
@@ -303,6 +310,62 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </span>
         </div>
         <nav className="flex flex-col gap-0.5">
+          {/* Services — collapsible with sub-items */}
+          <div>
+            <button
+              onClick={() => setServicesOpen((v) => !v)}
+              className={`group relative flex w-full items-center justify-between gap-2.5 rounded-sm pl-3 pr-2.5 py-2 lg:py-1.5 text-[14px] lg:text-[13px] transition-colors ${
+                servicesActive
+                  ? "bg-stone-900 text-white"
+                  : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+              }`}
+            >
+              <span className="flex items-center gap-2.5 min-w-0">
+                <NavIcon path={NAV_ICONS["/dashboard/services"]} />
+                <span className="truncate">Services</span>
+              </span>
+              <svg
+                className={`h-3 w-3 shrink-0 transition-transform ${servicesExpanded ? "rotate-90" : ""}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+            {servicesExpanded && (
+              <div className="mt-0.5 ml-8 flex flex-col border-l border-stone-200/70 pl-2.5">
+                <Link
+                  href="/dashboard/services"
+                  className={`block rounded-sm px-2 py-1.5 text-[12.5px] transition-colors ${
+                    pathname === "/dashboard/services"
+                      ? "text-stone-900 font-medium"
+                      : "text-stone-500 hover:text-stone-900"
+                  }`}
+                >
+                  All services
+                </Link>
+                <Link
+                  href="/dashboard/bid-analysis"
+                  className={`block rounded-sm px-2 py-1.5 text-[12.5px] transition-colors ${
+                    pathname?.startsWith("/dashboard/bid-analysis")
+                      ? "text-stone-900 font-medium"
+                      : "text-stone-500 hover:text-stone-900"
+                  }`}
+                >
+                  Bid analysis
+                </Link>
+                <Link
+                  href="/dashboard/applications"
+                  className={`block rounded-sm px-2 py-1.5 text-[12.5px] transition-colors ${
+                    pathname?.startsWith("/dashboard/applications")
+                      ? "text-stone-900 font-medium"
+                      : "text-stone-500 hover:text-stone-900"
+                  }`}
+                >
+                  Applications
+                </Link>
+              </div>
+            )}
+          </div>
           {tools.map(renderNavItem)}
         </nav>
       </div>
@@ -439,7 +502,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 min-w-0 pt-14 lg:pt-0">
+      <main className="flex-1 min-w-0 pt-14 lg:pt-0 [--tabbar-sticky-top:56px] lg:[--tabbar-sticky-top:0px]">
         {children}
       </main>
     </div>

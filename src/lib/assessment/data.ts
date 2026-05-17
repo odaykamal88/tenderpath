@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { sql } from "@/lib/db";
 import { verifyToken } from "@/lib/auth";
 import { decodeHtmlEntities } from "@/lib/text/entities";
+import { safeUrl } from "@/lib/url";
 import type { Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
 import type { Gap as D2Gap } from "@/components/assessment/GapsTab";
 import type { Tender } from "@/components/assessment/TendersTab";
@@ -312,7 +313,7 @@ export async function getCurrentUserAssessment(): Promise<AssessmentReport | nul
   return rowToReport(rows[0] as DBRow);
 }
 
-export async function getThisWeek(reportId: string): Promise<{ kind: string; title: string; due: string }[]> {
+export async function getThisWeek(reportId: string): Promise<{ kind: string; title: string; due: string; url?: string | null }[]> {
   const rows = await sql`
     SELECT matched_tenders, matched_grants
     FROM assessments
@@ -325,25 +326,29 @@ export async function getThisWeek(reportId: string): Promise<{ kind: string; tit
   const grants: MatchedGrant[] = rows[0].matched_grants ?? [];
   const cutoff = Date.now() + 14 * 86_400_000;
 
-  const items: { kind: string; title: string; due: string; ts: number }[] = [];
+  const items: { kind: string; title: string; due: string; ts: number; url: string | null }[] = [];
 
-  for (const t of tenders) {
-    if (!t.deadline) continue;
-    const ts = new Date(t.deadline).getTime();
-    if (ts <= cutoff) {
-      items.push({ kind: "Tender", title: t.title, due: t.deadline, ts });
+  // Unparseable / missing deadlines still surface IF they have a clickable URL —
+  // sorted last so they don't push out near-term items.
+  const consider = (kind: "Tender" | "Grant", title: string, deadline: string | null, source: string | null | undefined) => {
+    const url = safeUrl(source);
+    if (!deadline) {
+      if (url) items.push({ kind, title, due: "TBA", ts: Number.POSITIVE_INFINITY, url });
+      return;
     }
-  }
-  for (const g of grants) {
-    if (!g.deadline) continue;
-    const ts = new Date(g.deadline).getTime();
-    if (ts <= cutoff) {
-      items.push({ kind: "Grant", title: g.title, due: g.deadline, ts });
+    const ts = new Date(deadline).getTime();
+    if (Number.isNaN(ts)) {
+      if (url) items.push({ kind, title, due: "TBA", ts: Number.POSITIVE_INFINITY, url });
+      return;
     }
-  }
+    if (ts <= cutoff) items.push({ kind, title, due: deadline, ts, url });
+  };
+
+  for (const t of tenders) consider("Tender", t.title, t.deadline, t.source_url);
+  for (const g of grants) consider("Grant", g.title, g.deadline, g.source_url);
 
   return items
     .sort((a, b) => a.ts - b.ts)
     .slice(0, 6)
-    .map(({ kind, title, due }) => ({ kind, title, due }));
+    .map(({ kind, title, due, url }) => ({ kind, title, due, url }));
 }
