@@ -17,3 +17,25 @@ export function safeUrl(input?: string | null): string | null {
     return null;
   }
 }
+
+/**
+ * Append (or override) UTM tracking params on an already-sanitized URL.
+ * Returns the input unchanged if it doesn't parse — callers should pass a
+ * URL produced by `safeUrl()` to guarantee parsability.
+ */
+export function withUtm(
+  url: string,
+  campaign: string,
+  source: string = "tenderpath",
+  medium: string = "dashboard",
+): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.set("utm_source", source);
+    u.searchParams.set("utm_medium", medium);
+    u.searchParams.set("utm_campaign", campaign);
+    return u.toString();
+  } catch {
+    return url;
+  }
+}

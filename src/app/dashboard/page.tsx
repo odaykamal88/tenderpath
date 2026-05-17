@@ -14,7 +14,7 @@ import { GrantsTab } from "@/components/assessment/GrantsTab";
 import { NextStepsTab } from "@/components/assessment/NextStepsTab";
 import { FunnelBeacon } from "@/components/telemetry/FunnelBeacon";
 import { getCurrentUserAssessment, getThisWeek } from "@/lib/assessment";
-import { safeUrl } from "@/lib/url";
+import { safeUrl, withUtm } from "@/lib/url";
 import dashStyles from "@/components/assessment/dashboard.module.css";
 
 export const revalidate = 60;
@@ -69,7 +69,8 @@ export default async function DashboardPage({
           <span className={dashStyles.eyebrow}>This week</span>
           <ul className={dashStyles.weekList}>
             {week.map((row, i) => {
-              const externalUrl = safeUrl(row.url);
+              const cleanUrl = safeUrl(row.url);
+              const externalUrl = cleanUrl ? withUtm(cleanUrl, "this_week") : null;
               const href = externalUrl || `/pay?plan=grants-tenders-matching`;
               return (
                 <li key={i} className={dashStyles.weekRow}>
