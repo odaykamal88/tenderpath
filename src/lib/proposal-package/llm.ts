@@ -202,7 +202,7 @@ Return a strict-shape JSON object with EXACTLY these keys:
        and a label describing what backs the claim.,
   "required_documents": string[] — complete list of documents to compile (10-20 items),
   "cover_letter_draft": string — full cover letter addressed to the contracting agency. Include date placeholder, salutation, 3 body paragraphs (interest, capability, request for evaluation), and a signature block. Plain prose, no markdown.,
-  "financial_template_notes": string[] — guidance on pricing structure, cost line items, taxes/contingency, and pricing strategy (5-10 items),
+  "financial_template_notes": string[] — guidance on pricing structure, cost line items, taxes/contingency, and pricing strategy (5-10 items, each 1-3 sentences),
   "missing_information": string[] — specific gaps the user must fill before submission (e.g. "Confirm DUNS number", "Add 2 reference letters from prior UN clients"),
   "next_steps": string[] — ordered immediate actions to complete submission (4-8 items)
 }
@@ -212,7 +212,10 @@ Rules:
 - Do NOT invent facts. If evidence is thin, flag it in missing_information.
 - If source quality is "needs_review" or "blocked", produce a conservative draft scaffold and mark uncertain compliance items as "partial" or "needs_action"; do not claim a requirement is compliant without company/source evidence.
 - Treat missing evaluation criteria, required documents, submission format, or TOR scope as explicit missing_information.
-- Cover letter must be a complete draft — no [bracketed placeholders] except the date and salutation.
+- Cover letter must be a complete draft — NO bracketed placeholders of any kind (no [Name], [Email], [PADOR ID], [Date]). The only literal text that should appear in the cover letter is the actual company name, the actual signatory role drawn from the company profile (use "Executive Director" as the default role when the profile does not specify a person), and the literal date string "[DATE]" exactly once at the top. Do not insert placeholders for contact email, phone, registration numbers, or signatory name — if those are absent from the profile, they belong in missing_information, not in the letter.
+- The cover letter MUST NOT claim that any capability is "established", "in place", "delivered", or otherwise settled if the corresponding compliance_checklist item is status="needs_action". Phrase such capabilities as "in preparation", "planned", "being established", or describe the bridging mechanism (e.g. "a co-applicant with this expertise is being onboarded"). Read your own compliance_checklist before writing the cover letter and treat its statuses as the source of truth.
+- The technical_approach MUST NOT describe capabilities marked needs_action as if they are operational; use the same "in preparation / via partnership" framing as the cover letter.
+- Each financial_template_notes item should be 1-3 sentences (under ~800 chars) and stand alone as advice — do not write a single long note that gets truncated.
 - compliance_checklist.status MUST be one of the three exact strings: "compliant", "partial", "needs_action".
 - If the extracted requirements include "capability_match", use it as the source of truth for compliance_checklist statuses:
   capability_match.status="evidenced" → compliance_checklist.status="compliant" and cite the evidence in evidence_or_action.
@@ -310,7 +313,14 @@ function normalizeProposal(raw: Partial<ProposalOutput>): ProposalOutput {
   out.cover_letter_draft = clampString(out.cover_letter_draft, 4000);
   out.technical_approach = clampStringArray(out.technical_approach, 12, 2500);
   out.required_documents = clampStringArray(out.required_documents, 25, 280);
-  out.financial_template_notes = clampStringArray(out.financial_template_notes, 15, 400);
+  // Sprint 13b. Widened from 400 -> 1200 chars/item. The grader caught
+  // financial_template_notes being truncated mid-word on real EU CIM runs
+  // because the model often writes 2-3 sentence guidance per note (e.g.
+  // "EU grants typically follow pre-financing on contract signature,
+  // interim payments on report approval, balance on final report — budget
+  // your cashflow accordingly"). The prompt now asks for 1-3 sentences;
+  // the clamp follows so a well-formed note doesn't get cut.
+  out.financial_template_notes = clampStringArray(out.financial_template_notes, 15, 1200);
   out.missing_information = clampStringArray(out.missing_information, 12, 400);
   out.next_steps = clampStringArray(out.next_steps, 12, 400);
   out.compliance_checklist = Array.isArray(out.compliance_checklist)

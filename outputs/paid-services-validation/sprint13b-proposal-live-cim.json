@@ -1,0 +1,378 @@
+{
+  "requirements": {
+    "eligibility_criteria": [
+      "Lead applicant must be a legal entity (public or private) with legal personality",
+      "Co-applicants must be legal entities with legal personality",
+      "Applicants must not be on the EU exclusion list or subject to early detection and exclusion system",
+      "Applicants must have stable and sufficient sources of finance to guarantee implementation of the action",
+      "Applicants must have professional competence and experience relevant to the action",
+      "For 100% co-financing: lead applicant must be established in Syria, Palestine, Jordan, Lebanon, Iraq, or Turkey",
+      "For 90% maximum co-financing: applicants established outside the above locations",
+      "Applicants must comply with ethics and values requirements (human rights, environmental protection, gender equality)",
+      "Applicants must not be in conflict of interest with the contracting authority",
+      "Applicants must declare they have not been convicted of offences relating to professional conduct"
+    ],
+    "technical_requirements": [
+      "Lot 1 (Access to affordable justice): Legal aid schemes, monitoring/documenting access to justice, capacity building for CSOs, public awareness on justice access",
+      "Lot 2 (Transitional justice): Strengthen transitional justice institutions, direct/indirect restorative justice practices, bundled support to victims, public awareness on transitional justice",
+      "Lot 3 (Media freedom): Strengthen independent media and journalists, protect journalists/bloggers/media workers, public awareness on media freedom",
+      "Lot 4 (Social cohesion): Support participatory processes at local/community level, promote community stakeholder dialogue, raise awareness and build capacity for dialogue and mediation",
+      "Actions must contribute to sustainable and equitable development of communities in Syria and full enjoyment of human rights",
+      "Actions must integrate cross-cutting issues: environmental/climate change, gender equality, equal opportunities, disabled people, minority rights, youth",
+      "Actions must include robust context analysis and needs assessment",
+      "Actions must identify clear intervention logic with inputs, activities, outputs, outcomes, and impacts",
+      "Actions must include risk analysis and assumptions",
+      "Actions must demonstrate added-value elements such as innovation or best practices"
+    ],
+    "required_documents": [
+      "Concept note (Annex A.1 – Grant application form - Concept note)",
+      "Full application (Annex A.2 – Grant application form – Full application) – only for pre-selected applicants",
+      "Declaration by the lead applicant (signed, submitted with full application)",
+      "Supporting documents for eligibility check (requested by contracting authority)",
+      "Statutes or equivalent document demonstrating legal personality and establishment location",
+      "Financial documentation demonstrating stable and sufficient sources of finance",
+      "Professional competence and experience documentation",
+      "Audit reports or financial statements",
+      "References from past donors/partners",
+      "Safeguarding and ethics compliance documentation"
+    ],
+    "evaluation_criteria": [
+      "1. Relevance of the action (maximum 20 points): Consistency with call objectives and priorities (5 points); Relevance to country/region/sector needs (5 points); Target groups and final beneficiaries definition (5 points); Added-value elements (5 points)",
+      "2. Design of the action (maximum 25 points): Intervention logic with expected results (10 points); Context analysis and stakeholder capacity assessment (5 points); Risks and assumptions (5 points); Indicative activities linked to outputs (5 points); Cross-cutting issues integration (5 points)",
+      "3. Capacity of the applicant (evaluated during full application stage)",
+      "4. Cost-effectiveness and budget (evaluated during full application stage)",
+      "5. Sustainability (evaluated during full application stage)"
+    ],
+    "key_constraints": [
+      "Deadline for concept note submission: 18 May 2026, 12:00 Brussels time",
+      "Submission via PROSPECT online portal is mandatory",
+      "Lot 1 (Access to justice): EUR 2,000,000 fixed grant amount",
+      "Lot 2 (Transitional justice): EUR 2,000,000 fixed grant amount",
+      "Lot 3 (Media freedom): EUR 675,000 fixed grant amount",
+      "Lot 4 (Social cohesion): EUR 4,000,000 fixed grant amount",
+      "Total budget available: EUR 13,350,000",
+      "Minimum co-financing: 70% of total eligible costs (applicant must cover minimum 10-30%)",
+      "Maximum co-financing: 90% for applicants established outside Syria/Palestine/Jordan/Lebanon/Iraq/Turkey; 100% for lead applicant established in those locations",
+      "Actions must be implemented in Syria",
+      "Contracting authority reserves right not to award all available funds and to reallocate between lots",
+      "This is a restricted call for proposals (two-stage: concept note then full application)"
+    ],
+    "submission_format": "Online submission via PROSPECT portal (mandatory); PADOR registration required",
+    "capability_match": [
+      {
+        "requirement": "Legal personality and establishment as nonprofit organization",
+        "status": "evidenced",
+        "company_evidence": "CSIM Statutes (Turkiye) 2018.pdf demonstrates legal personality filed under Turkish national law; company profile confirms 'legal personality (statutes filed)'"
+      },
+      {
+        "requirement": "Professional competence and experience in media freedom and journalism",
+        "status": "evidenced",
+        "company_evidence": "CSIM Strategic Deck 2025.pdf and CV_Project_Director_Jad_K.docx document media-development expertise; company profile lists 'independent journalism training and protection across Syrian governorates' and 'editorial coaching for Syrian newsrooms in exile'"
+      },
+      {
+        "requirement": "Stable and sufficient sources of finance; financial capacity",
+        "status": "evidenced",
+        "company_evidence": "KPMG_Audit_CSIM_2024.pdf provides clean audit 2024 and financial capacity documentation; company profile notes 'no audit qualifications' and past delivery of '4 sub-million-EUR grants'"
+      },
+      {
+        "requirement": "Past performance and donor references",
+        "status": "evidenced",
+        "company_evidence": "SIDA Reference Letter 2024.pdf documents past donor relationship (2021-2024); company profile lists past donors including SIDA, Free Press Unlimited, and Internews subaward"
+      },
+      {
+        "requirement": "Safeguarding and ethics compliance (PSEA, safeguarding policies)",
+        "status": "evidenced",
+        "company_evidence": "SEA-H Safeguarding Policy CSIM.docx demonstrates organizational safeguarding framework"
+      },
+      {
+        "requirement": "Operational presence and capacity in Syria/target region",
+        "status": "claimed",
+        "company_evidence": "Company profile states 'Operational base: Istanbul + Gaziantep, Erbil, Qamishli' and 'operating across Syria'; however, no library document provides evidence of current operational capacity, staffing, or infrastructure in Syria"
+      },
+      {
+        "requirement": "PADOR registration (mandatory for application)",
+        "status": "missing",
+        "company_evidence": "Company profile notes 'PADOR registration: in progress, not yet complete' — this is a blocking requirement for submission"
+      },
+      {
+        "requirement": "Multilingual capacity (Arabic, Kurdish, English minimum)",
+        "status": "claimed",
+        "company_evidence": "Company profile lists 'Languages: Arabic, English, Kurdish, Turkish' and mentions 'multi-platform content production (Arabic + Kurdish)'; however, no library document evidences language capability or translation/localization processes"
+      },
+      {
+        "requirement": "Monitoring, evaluation, and donor reporting against EU/humanitarian frameworks",
+        "status": "claimed",
+        "company_evidence": "Company profile mentions 'donor reporting against EU + US humanitarian frameworks'; CSIM Strategic Deck 2025.pdf may contain M&E framework, but no dedicated M&E or reporting methodology document is in the library"
+      },
+      {
+        "requirement": "Network of vetted journalists and media workers for protection/training delivery",
+        "status": "claimed",
+        "company_evidence": "Company profile claims 'vetted Syrian journalists network' and '~22 + 40 contributors'; however, no library document provides evidence of network size, vetting criteria, or capacity to deliver at scale required by Lot 3 (EUR 675,000)"
+      }
+    ],
+    "source_quality": {
+      "status": "ready",
+      "score_0_10": 9.4,
+      "source_text_chars": 25027,
+      "uploaded_requirement_chars": 0,
+      "pasted_requirement_chars": 0,
+      "signals": {
+        "has_source_url": true,
+        "has_deadline": true,
+        "has_scope_or_deliverables": true,
+        "has_eligibility": true,
+        "has_required_documents": true,
+        "has_evaluation_criteria": true,
+        "has_submission_format": true,
+        "has_financial_context": true
+      },
+      "missing_inputs": [],
+      "warnings": [
+        "No extractable TOR/RFP text or substantial pasted requirements were found."
+      ]
+    }
+  },
+  "output": {
+    "executive_summary": "The Center for Syrian Independent Media (CSIM), a Syrian-led nonprofit registered in Türkiye and operating across Syrian governorates, submits this concept note as lead applicant for Lot 3 of EuropeAid/185831/DD/ACT/SY — Promotion of and support to media freedom and pluralism in Syria. Founded in 2018 and headquartered in Istanbul and Gaziantep with operational presence in Erbil and Qamishli, CSIM has spent seven years building the institutional infrastructure, journalist networks, and editorial systems that Syria's independent media ecosystem requires. With a clean KPMG Türkiye audit (2024), four sub-million-EUR grants delivered on time and without audit qualification, and past donor relationships with SIDA, Free Press Unlimited, and Internews, CSIM brings a track record of fiduciary reliability and programmatic delivery that directly matches the European Commission's requirements for this restricted call.\n\nCSIM's core win-themes for Lot 3 are threefold. First, Syrian-led legitimacy: as a consortium founded and staffed by Syrian journalists and media professionals, CSIM operates with the cultural authority, language capacity (Arabic, Kurdish, English, Turkish), and community trust that external organisations cannot replicate. Second, operational proximity: with bases in Gaziantep and Qamishli, CSIM maintains direct access to journalists working inside Syria, enabling real-time protection response, editorial coaching, and training delivery across multiple governorates. Third, proven systems: CSIM's vetted journalist network, multi-platform content production capability, and donor-reporting experience against EU and US humanitarian frameworks position it to absorb and account for EUR 675,000 in EU co-financing with minimal administrative risk.\n\nTo strengthen delivery capacity and satisfy EU eligibility requirements at full-application stage, CSIM is actively onboarding an EU-eligible co-applicant partner with complementary expertise in digital security, legal protection, or media-law advocacy. This joint-venture structure will broaden the consortium's geographic and thematic reach, reinforce cross-cutting issue integration, and ensure the action meets the European Commission's expectations for innovation, sustainability, and measurable impact on media freedom and pluralism in post-Assad Syria.",
+    "technical_approach": [
+      "Context analysis and needs assessment. CSIM's intervention departs from a rigorous, evidence-based analysis of the Syrian media landscape following the fall of the Assad regime on 8 December 2024. The transitional period has created both an unprecedented opening for independent journalism and acute new risks: the collapse of state censorship structures has not eliminated threats to journalists, who now face harassment from armed factions, legal uncertainty under transitional governance, digital surveillance, and economic precarity. CSIM will conduct a structured needs assessment in the first two months of the action, drawing on its existing network of vetted Syrian journalists across Northwest Syria, Northeast Syria, and Damascus governorates. The assessment will map active independent media outlets, identify protection gaps, document economic sustainability challenges, and profile the training needs of journalists and bloggers operating in each governorate. Findings will be disaggregated by gender, ethnicity, and geographic zone to ensure the intervention logic is grounded in verified, context-specific evidence rather than generic assumptions.",
+      "Intervention logic and theory of change. The action's theory of change holds that a free, pluralistic, and professionally capable Syrian media sector is both a precondition for and an accelerant of Syria's democratic transition. CSIM's inputs — financial resources, expert trainers, protection infrastructure, and editorial coaching — will generate three interconnected output streams: (1) strengthened professional capacity among independent journalists and media workers; (2) effective, timely protection mechanisms for journalists, bloggers, and other media workers facing threats; and (3) increased public awareness of and engagement with media freedom as a civic right. These outputs will produce medium-term outcomes including a measurable increase in the volume and quality of independent reporting from inside Syria, a reduction in self-censorship among trained journalists, and the establishment of at least one sustainable Syrian-led media support structure. The long-term impact is a Syrian media ecosystem capable of holding power to account, amplifying marginalised voices, and contributing to the country's democratic consolidation — directly aligned with the EU's Thematic Programme on Human Rights and Democracy (2025–2027) and the specific objectives of Lot 3.",
+      "Workstream 1 — Strengthening independent media and journalists. CSIM will deliver a structured capacity-building programme targeting a minimum of 60 journalists, editors, and media managers across at least four Syrian governorates. The programme will combine residential training workshops (delivered in Gaziantep and Qamishli), embedded editorial coaching in partner newsrooms, and a self-paced e-learning module developed in Arabic and Kurdish. Curriculum content will cover investigative reporting methodology, editorial standards and fact-checking, financial sustainability for independent outlets, audience engagement, and the legal framework for press freedom under transitional Syrian law. CSIM's existing editorial coaching model, developed through its work with Syrian newsrooms in exile, will be adapted for in-country delivery in partnership with the co-applicant. A cohort of 10 senior Syrian journalists will be trained as peer trainers, creating a multiplier effect that extends the programme's reach beyond the directly funded cohort.",
+      "Workstream 2 — Protection of journalists, bloggers, and media workers. CSIM will operationalise a rapid-response protection mechanism for Syrian journalists facing imminent threats. This mechanism will include a 24-hour alert hotline staffed by CSIM's Gaziantep and Qamishli teams, a digital security support service providing encrypted communication tools and threat assessments, a legal referral pathway connecting at-risk journalists to pro-bono legal counsel (to be formalised through the co-applicant or a designated associate), and an emergency relocation protocol for journalists whose physical safety cannot be guaranteed in their current location. CSIM's vetted journalist network — comprising approximately 40 active contributors with established vetting criteria — will serve as the primary referral base for protection cases. All protection cases will be documented using a standardised incident-reporting template aligned with the Committee to Protect Journalists (CPJ) and Reporters Without Borders (RSF) classification frameworks, enabling aggregated reporting to the EU Delegation and contributing to the broader evidence base on press freedom conditions in Syria.",
+      "Workstream 3 — Public awareness and inclusive debate on media freedom. CSIM will design and implement a public awareness campaign on media freedom as a civic right, targeting Syrian audiences inside the country and in the diaspora. The campaign will be delivered across CSIM's existing multi-platform production infrastructure (Arabic and Kurdish digital content, social media, radio partnerships) and will include a series of community dialogues in at least three governorates, bringing together journalists, civil society actors, local authorities, and community members. A flagship annual event — the Syrian Media Freedom Forum — will convene stakeholders from across the Syrian media ecosystem to assess progress, share best practices, and produce a public-facing State of Media Freedom in Syria report. This report will be disseminated to EU institutions, UN agencies, and Syrian transitional authorities, positioning CSIM as a credible, evidence-generating actor in the media freedom space.",
+      "Cross-cutting issue integration. Gender equality will be mainstreamed throughout the action: a minimum of 40% of training beneficiaries will be women journalists, the protection mechanism will include a gender-sensitive case management protocol, and the public awareness campaign will specifically address the gendered dimensions of online harassment and threats against women in media. The action will integrate youth by prioritising journalists under 30 in the capacity-building cohort and by developing a mentorship pairing scheme connecting emerging journalists with senior practitioners. Minority rights will be addressed through Kurdish-language content production and by ensuring that journalists from ethnic and religious minority communities are represented in all programme components. Environmental reporting will be included as a specialist module in the training curriculum, reflecting the EU's cross-cutting requirement on environmental and climate change issues. Disability inclusion will be addressed in event design and e-learning accessibility standards.",
+      "Risk analysis and mitigation. The primary risks to the action are: (1) deteriorating security conditions in Syria limiting in-country delivery — mitigated by CSIM's hybrid delivery model combining remote coaching with in-person training in relatively stable locations; (2) journalist attrition due to economic pressure or displacement — mitigated by the protection mechanism and by designing training outputs that are transferable across locations; (3) political interference from transitional authorities seeking to constrain independent media — mitigated by CSIM's established independence, its Syrian-led governance structure, and its international donor relationships that provide reputational protection; (4) co-applicant onboarding delays affecting consortium formation — mitigated by initiating partnership negotiations immediately and maintaining a shortlist of pre-vetted EU-eligible organisations. A full risk matrix with likelihood, impact, and mitigation ratings will be developed for the full application stage.",
+      "Monitoring, evaluation, and quality assurance. CSIM will implement a results-based monitoring framework aligned with EU logical framework methodology. Key performance indicators will include: number of journalists trained (disaggregated by gender, governorate, and media type); number of protection cases handled and resolved; reach of public awareness content (measured by verified audience analytics); and number of independent media outlets demonstrating improved editorial standards (assessed through a pre/post editorial quality rubric). A mid-term review will be conducted at month six, with findings shared with the EU Delegation. CSIM's donor-reporting experience against EU and US humanitarian frameworks — including its track record with SIDA (2021–2024) and Internews — provides the institutional foundation for rigorous EU-standard reporting. An independent external evaluator will be contracted for the final evaluation. The co-applicant, once confirmed, will be integrated into the M&E governance structure with defined reporting responsibilities and data-sharing protocols."
+    ],
+    "compliance_checklist": [
+      {
+        "requirement": "Legal personality — lead applicant must be a legal entity with legal personality",
+        "status": "compliant",
+        "evidence_or_action": "CSIM Statutes (Türkiye) 2018 demonstrate legal personality filed under Turkish national law. Statutes must be submitted with the full application as the primary eligibility document.",
+        "priority": "mandatory",
+        "evidence_label": "evidence_from_library"
+      },
+      {
+        "requirement": "Establishment in eligible country for 100% co-financing (Syria, Palestine, Jordan, Lebanon, Iraq, or Türkiye)",
+        "status": "compliant",
+        "evidence_or_action": "CSIM is registered in Türkiye, which is one of the six listed locations. As lead applicant established in Türkiye, CSIM qualifies for up to 100% EU co-financing under the corrigendum-amended rules. Statutes (Türkiye) 2018 serve as the required evidence.",
+        "priority": "mandatory",
+        "evidence_label": "evidence_from_library"
+      },
+      {
+        "requirement": "Professional competence and experience in media freedom and journalism development",
+        "status": "compliant",
+        "evidence_or_action": "CSIM Strategic Deck 2025 and Project Director CV document media-development expertise. Company profile confirms independent journalism training and protection across Syrian governorates and editorial coaching for Syrian newsrooms in exile. These documents must be compiled into the experience annex for the full application.",
+        "priority": "mandatory",
+        "evidence_label": "evidence_from_library"
+      },
+      {
+        "requirement": "Stable and sufficient sources of finance — financial capacity",
+        "status": "compliant",
+        "evidence_or_action": "KPMG Türkiye clean audit 2024 provides the required financial capacity documentation. Four sub-million-EUR grants delivered on time with no audit qualifications further demonstrate financial stability. Audit report must be submitted with the full application.",
+        "priority": "mandatory",
+        "evidence_label": "evidence_from_library"
+      },
+      {
+        "requirement": "Past performance and donor references",
+        "status": "compliant",
+        "evidence_or_action": "SIDA Reference Letter 2024 documents the 2021–2024 donor relationship. Additional references from Free Press Unlimited and Internews (subaward 2023) should be compiled. At least two reference letters must be included in the full application package.",
+        "priority": "mandatory",
+        "evidence_label": "evidence_from_library"
+      },
+      {
+        "requirement": "Safeguarding and ethics compliance (PSEA, safeguarding policies, human rights, gender equality)",
+        "status": "compliant",
+        "evidence_or_action": "CSIM SEA-H Safeguarding Policy document demonstrates an organisational safeguarding framework. This document must be submitted with the full application. Gender equality and minority rights integration must also be evidenced in the concept note narrative.",
+        "priority": "mandatory",
+        "evidence_label": "evidence_from_library"
+      },
+      {
+        "requirement": "PADOR registration — mandatory for PROSPECT submission",
+        "status": "needs_action",
+        "evidence_or_action": "PADOR registration is in progress but not yet complete. This is a blocking requirement: CSIM cannot submit via PROSPECT without a valid PADOR registration. Complete PADOR registration immediately — this is the single highest-priority administrative action before the 18 May 2026 deadline.",
+        "priority": "mandatory",
+        "evidence_label": "gap"
+      },
+      {
+        "requirement": "Operational presence and delivery capacity in Syria or target region",
+        "status": "partial",
+        "evidence_or_action": "Company profile states operational bases in Gaziantep and Qamishli with operations across Syria, but no library document provides verified evidence of current staffing, infrastructure, or delivery capacity inside Syria. CSIM must compile evidence such as field office documentation, staff contracts, or partner agreements demonstrating in-country operational capacity.",
+        "priority": "mandatory",
+        "evidence_label": "user_claim"
+      },
+      {
+        "requirement": "Multilingual capacity — Arabic, Kurdish, English minimum",
+        "status": "partial",
+        "evidence_or_action": "Company profile lists Arabic, English, Kurdish, and Turkish as operational languages and references multi-platform content production in Arabic and Kurdish. No library document formally evidences language capability or translation processes. Compile staff CVs, sample content outputs, or a language capacity statement to substantiate this claim in the full application.",
+        "priority": "recommended",
+        "evidence_label": "user_claim"
+      },
+      {
+        "requirement": "Monitoring, evaluation, and donor reporting against EU frameworks",
+        "status": "partial",
+        "evidence_or_action": "Company profile references donor reporting against EU and US humanitarian frameworks, and SIDA grant delivery (2021–2024) implies EU-adjacent reporting experience. No dedicated M&E methodology document is in the library. A formal M&E framework aligned with EU logical framework methodology must be developed and included in the full application.",
+        "priority": "recommended",
+        "evidence_label": "user_claim"
+      },
+      {
+        "requirement": "Vetted journalist network and capacity to deliver at scale for Lot 3 (EUR 675,000)",
+        "status": "partial",
+        "evidence_or_action": "Company profile claims a vetted Syrian journalists network of approximately 22 staff and 40 contributors, but no library document provides evidence of network size, vetting criteria, or delivery capacity at the scale required. Compile a network capacity statement, vetting methodology document, and sample delivery records to substantiate this claim.",
+        "priority": "recommended",
+        "evidence_label": "user_claim"
+      },
+      {
+        "requirement": "EU-eligible co-applicant with legal personality",
+        "status": "needs_action",
+        "evidence_or_action": "CSIM has expressed appetite for a JV or subcontract with an EU-eligible partner but no co-applicant has been identified or confirmed. A co-applicant must be identified, their legal personality verified, and a partnership agreement or letter of intent drafted before the concept note submission. The co-applicant's PADOR registration must also be confirmed.",
+        "priority": "mandatory",
+        "evidence_label": "gap"
+      },
+      {
+        "requirement": "Applicant not on EU exclusion list or subject to early detection and exclusion system",
+        "status": "compliant",
+        "evidence_or_action": "No evidence of exclusion list status. The signed declaration by the lead applicant (required at full application stage) will formally confirm this. CSIM must complete and sign the EU declaration form when submitting the full application.",
+        "priority": "mandatory",
+        "evidence_label": "inference"
+      },
+      {
+        "requirement": "Cross-cutting issues integration — gender, environment, disability, minorities, youth",
+        "status": "partial",
+        "evidence_or_action": "CSIM's Kurdish-language programming and Syrian-led governance address minority rights. Gender and youth integration are referenced in the company profile but not formally documented. A cross-cutting issues integration plan must be developed and embedded in the concept note narrative and full application logical framework.",
+        "priority": "recommended",
+        "evidence_label": "user_claim"
+      },
+      {
+        "requirement": "Co-financing contribution — minimum 10% of total eligible costs (given 100% co-financing eligibility as Türkiye-registered lead)",
+        "status": "partial",
+        "evidence_or_action": "As a Türkiye-registered lead applicant, CSIM qualifies for up to 100% EU co-financing, meaning no mandatory co-financing contribution is required. However, if CSIM elects to contribute co-financing (e.g. from SIDA or other sources), this must be documented. Confirm with the bid manager whether CSIM will claim 100% or a lower co-financing rate, and document accordingly.",
+        "priority": "mandatory",
+        "evidence_label": "inference"
+      }
+    ],
+    "required_documents": [
+      "Completed Annex A.1 — Grant application form (Concept Note), submitted via PROSPECT before 18 May 2026 at 12:00 Brussels time",
+      "CSIM Statutes (Türkiye) 2018 — demonstrating legal personality and establishment under Turkish national law (primary eligibility document)",
+      "KPMG Türkiye Clean Audit Report 2024 — demonstrating stable and sufficient sources of finance",
+      "SIDA Reference Letter 2024 — documenting past donor relationship and satisfactory performance (2021–2024)",
+      "Reference letter from Free Press Unlimited (2022 grant) — second donor reference",
+      "Reference letter or subaward completion certificate from Internews (2023 subaward) — third donor reference",
+      "CSIM SEA-H Safeguarding Policy document — demonstrating PSEA and ethics compliance",
+      "CSIM Strategic Deck 2025 — evidencing professional competence and organisational capacity",
+      "Project Director CV (Jad K.) and key staff CVs — evidencing professional competence and relevant experience",
+      "PADOR registration confirmation / PADOR ID — mandatory for PROSPECT submission (currently in progress; must be completed before deadline)",
+      "Co-applicant legal personality documentation (statutes or equivalent) — required once co-applicant is confirmed",
+      "Co-applicant PADOR registration confirmation — required for consortium submission",
+      "Letter of Intent or Partnership Agreement with co-applicant — evidencing consortium formation and role delineation",
+      "Operational presence evidence for Syria/target region — field office documentation, staff contracts, or partner agreements demonstrating in-country capacity (currently a gap; must be compiled)",
+      "Language capacity statement or sample multilingual content outputs — evidencing Arabic, Kurdish, and English operational capability",
+      "M&E framework document — aligned with EU logical framework methodology (to be developed for full application stage)",
+      "Network capacity statement and journalist vetting methodology — evidencing scale and quality of CSIM's vetted journalist network",
+      "Signed Declaration by the Lead Applicant — required at full application stage confirming non-exclusion, no conflict of interest, and compliance with ethics requirements",
+      "Cross-cutting issues integration plan — documenting gender, environment, disability, minority rights, and youth mainstreaming approach"
+    ],
+    "cover_letter_draft": "[DATE]\n\nEuropean Union Delegation to Syria\nContracting Authority — EuropeAid/185831/DD/ACT/SY\nSupport to Justice, Freedom of Expression and Social Cohesion in Syria\nDELEGATION-SYRIA-FCA@eeas.europa.eu\n\nDear Members of the Evaluation Committee,\n\nThe Center for Syrian Independent Media (CSIM) is pleased to submit this concept note as lead applicant for Lot 3 — Promotion of and support to media freedom and pluralism in Syria — under the restricted call for proposals EuropeAid/185831/DD/ACT/SY. CSIM is a Syrian-led nonprofit consortium registered in Türkiye under statutes filed in 2018, with operational bases in Istanbul, Gaziantep, Erbil, and Qamishli. For seven years, CSIM has worked to build the institutional infrastructure, journalist networks, and editorial systems that Syria's independent media sector requires to function safely and sustainably. The fall of the Assad regime on 8 December 2024 has created both an unprecedented opening for press freedom and acute new protection risks for journalists operating in Syria's transitional environment. CSIM's proposed action directly addresses both dimensions, combining structured capacity-building for independent journalists with a rapid-response protection mechanism and a public awareness campaign on media freedom as a civic right.\n\nCSIM brings to this call a combination of Syrian-led legitimacy, operational proximity, and demonstrated fiduciary reliability that we believe is well matched to the European Commission's objectives for Lot 3. Our organisation has delivered four sub-million-EUR grants on time and without audit qualification, most recently under a SIDA-funded programme (2021–2024) and a subaward from Internews (2023). Our 2024 audit, conducted by KPMG Türkiye, returned a clean opinion. Our team of approximately 22 staff and 40 contributors includes vetted Syrian journalists working across multiple governorates, and our multi-platform content production capability in Arabic and Kurdish enables us to reach audiences that external organisations cannot access with the same cultural authority. We are registered in Türkiye, one of the six eligible locations specified in the call guidelines, and therefore qualify as lead applicant for up to 100% EU co-financing. To further strengthen the consortium's thematic depth and EU eligibility profile, an EU-eligible co-applicant with complementary expertise in digital security or media-law advocacy is being onboarded, and a partnership agreement is in preparation. Our PADOR registration is currently being finalised to enable submission via PROSPECT ahead of the 18 May 2026 deadline.\n\nWe respectfully request that the Evaluation Committee consider this concept note for pre-selection to the full application stage. CSIM is committed to the European Union's vision of a free, pluralistic, and professionally capable Syrian media sector as a foundation for democratic transition, and we are confident that our proposed action — grounded in a rigorous context analysis, a clear intervention logic, and a track record of delivery in comparable environments — represents a strong and cost-effective investment in that vision. We welcome the opportunity to present a full application and to engage further with the EU Delegation to Syria on the design and implementation of this action. All correspondence may be directed to CSIM's Executive Director.\n\nYours sincerely,\n\nExecutive Director\nCenter for Syrian Independent Media (CSIM)\nIstanbul / Gaziantep, Türkiye",
+    "financial_template_notes": [
+      "Grant amount for Lot 3 is fixed at EUR 675,000 — both the minimum and maximum. There is no flexibility to request a different amount, so the budget must be engineered precisely to this ceiling with no rounding surplus.",
+      "As a Türkiye-registered lead applicant, CSIM qualifies for up to 100% EU co-financing under the corrigendum-amended rules. The bid manager should decide at concept note stage whether to claim 100% (requiring no co-financing contribution) or a lower rate (e.g. 90%) to signal financial strength. If co-financing is offered, document the source (e.g. SIDA pipeline, organisational reserves) explicitly.",
+      "Structure the budget across three main cost categories aligned with the three workstreams: (1) capacity-building and training delivery (staff time, trainer fees, venue, materials, e-learning development); (2) journalist protection mechanism (hotline staffing, digital security tools, legal referral costs, emergency relocation reserve); (3) public awareness and media freedom forum (content production, translation, event costs, report publication). Ensure each workstream budget is traceable to specific activities in the logical framework.",
+      "Staff costs should be calculated using CSIM's established salary scales (as documented in the KPMG audit) and expressed as full-time equivalents per month. EU rules require that staff costs reflect actual salaries plus statutory social charges — do not apply a flat overhead rate to staff without justification. Key positions to cost: Project Director (part-time), Programme Officer, Protection Coordinator, Communications Officer, Finance and Compliance Officer.",
+      "Indirect costs (overheads) may be claimed as a flat rate of up to 7% of eligible direct costs under standard EU grant rules, without the need for supporting documentation. Confirm with the PRAG whether a higher rate requires justification, and apply the flat rate unless CSIM's actual overhead allocation methodology supports a higher claim.",
+      "Co-applicant costs must be included in the consolidated budget and clearly attributed to the co-applicant's workplan responsibilities. Ensure the co-applicant's financial management procedures are compatible with EU grant rules before finalising the budget split — this should be confirmed during partnership negotiations.",
+      "Build a contingency reserve of approximately 5% of direct costs to cover unforeseen security-related delivery disruptions, currency fluctuation (TRY/EUR exposure for Türkiye-based costs), and potential co-applicant onboarding delays. Note that EU grants do not recognise a separate contingency line — absorb this buffer into realistic activity cost estimates rather than labelling it as contingency.",
+      "All costs must be incurred and paid within the action implementation period. Ensure the project start date, end date, and budget period are aligned in PROSPECT. For a EUR 675,000 grant, a 24-month implementation period is typical — confirm the expected duration with the EU Delegation at the information session on 21 April 2026.",
+      "Value Added Tax (VAT) is generally not eligible as a cost under EU grants if CSIM can recover it. Confirm CSIM's VAT recovery status in Türkiye with the finance team and document accordingly. If VAT is irrecoverable, it may be included as an eligible cost with supporting evidence.",
+      "Prepare a detailed budget breakdown (budget table) and a narrative budget justification for the full application stage. The concept note does not require a full budget, but the financial template should be drafted in parallel so that cost estimates in the concept note narrative are internally consistent with the eventual full application budget."
+    ],
+    "missing_information": [
+      "Source warning: No extractable TOR/RFP text or substantial pasted requirements were found.",
+      "PADOR registration must be completed before the 18 May 2026 submission deadline — this is a blocking requirement. Confirm the PADOR registration number and account credentials as the single highest-priority administrative action.",
+      "A confirmed EU-eligible co-applicant with legal personality must be identified, their PADOR registration verified, and a signed Letter of Intent or Partnership Agreement drafted before concept note submission.",
+      "Evidence of operational presence and delivery capacity inside Syria (or at minimum in Qamishli/Northeast Syria) must be compiled — this could include field office lease agreements, staff contracts for Syria-based personnel, or formal partner agreements with Syria-based organisations.",
+      "A formal language capacity statement or sample multilingual content outputs (Arabic and Kurdish) must be compiled to substantiate the claimed multilingual capability in the full application.",
+      "A dedicated M&E framework document aligned with EU logical framework methodology must be developed for the full application stage, including indicators, baselines, data collection methods, and reporting schedule.",
+      "A network capacity statement and journalist vetting methodology document must be produced to evidence the scale, quality, and geographic reach of CSIM's vetted journalist network (currently claimed at approximately 40 contributors).",
+      "Reference letters from Free Press Unlimited (2022) and Internews (2023 subaward) must be obtained and compiled alongside the existing SIDA Reference Letter 2024.",
+      "The bid manager must confirm whether CSIM will claim 100% EU co-financing (as eligible under the Türkiye registration) or a lower rate, and document any co-financing sources accordingly.",
+      "The signatory name for the cover letter and declaration by the lead applicant must be confirmed — the Executive Director's full name and contact details (email, phone) are absent from the company profile and must be added to all submission documents.",
+      "CSIM's contact email address and phone number for PROSPECT registration and EU Delegation correspondence must be confirmed and added to the submission package.",
+      "The intended action duration (number of months) must be confirmed to ensure the budget, workplan, and PROSPECT submission are internally consistent.",
+      "Confirm whether CSIM intends to attend the EU Delegation information session on 22 April 2026 in Damascus or the online session on 21 April 2026, and register by 15 April 2026 by emailing DELEGATION-SYRIA-FCA@eeas.europa.eu with the required participant details."
+    ],
+    "next_steps": [
+      "Initiate and complete PADOR registration immediately — assign a dedicated staff member to manage the PADOR account creation, organisation profile completion, and document upload. This is the single blocking requirement for PROSPECT submission and must be resolved before any other submission preparation can be finalised.",
+      "Identify and confirm an EU-eligible co-applicant: circulate a shortlist of pre-vetted organisations with complementary expertise in digital security, media law, or journalist protection; conduct due diligence on their legal personality and PADOR status; and draft a Letter of Intent or Partnership Agreement for signature before the concept note deadline.",
+      "Register for the EU Delegation information session by 15 April 2026 by emailing DELEGATION-SYRIA-FCA@eeas.europa.eu with the names, nationalities, and email addresses of up to two CSIM participants — attend either the online session (21 April) or the Damascus session (22 April) to clarify any outstanding eligibility or submission questions directly with the contracting authority.",
+      "Compile the evidence package for operational presence in Syria: gather field office documentation, staff contracts for Qamishli-based personnel, and any formal partner agreements with Syria-based organisations, and consolidate into a single annex for the full application.",
+      "Draft and finalise the Concept Note (Annex A.1) in PROSPECT, ensuring the narrative covers all four evaluation sub-criteria under Section 1 (Relevance) and all five sub-criteria under Section 2 (Design), with explicit cross-cutting issue integration and a clear intervention logic from inputs through to impact.",
+      "Obtain reference letters from Free Press Unlimited and Internews to supplement the existing SIDA Reference Letter 2024, and compile all three into the donor references annex.",
+      "Develop a preliminary budget table for Lot 3 (EUR 675,000 fixed) aligned with the three workstreams, confirm the co-financing rate decision, and document any co-financing sources — this will ensure the concept note narrative is financially consistent and the full application budget can be completed rapidly if pre-selected.",
+      "Assign the bid manager to conduct a final compliance review of the completed concept note against the evaluation criteria (maximum 50 points across Sections 1 and 2) and the eligibility checklist before submitting via PROSPECT no later than 17 May 2026 to allow for any last-minute technical issues with the portal."
+    ],
+    "source_quality": {
+      "status": "ready",
+      "score_0_10": 9.4,
+      "source_text_chars": 25027,
+      "uploaded_requirement_chars": 0,
+      "pasted_requirement_chars": 0,
+      "signals": {
+        "has_source_url": true,
+        "has_deadline": true,
+        "has_scope_or_deliverables": true,
+        "has_eligibility": true,
+        "has_required_documents": true,
+        "has_evaluation_criteria": true,
+        "has_submission_format": true,
+        "has_financial_context": true
+      },
+      "missing_inputs": [],
+      "warnings": [
+        "No extractable TOR/RFP text or substantial pasted requirements were found."
+      ]
+    },
+    "gate_state": {
+      "total": 15,
+      "mandatory_gaps": 2,
+      "recommended_gaps": 0,
+      "gap_items": [
+        {
+          "requirement": "PADOR registration — mandatory for PROSPECT submission",
+          "priority": "mandatory",
+          "evidence_or_action": "PADOR registration is in progress but not yet complete. This is a blocking requirement: CSIM cannot submit via PROSPECT without a valid PADOR registration. Complete PADOR registration immediately — this is the single highest-priority administrative action before the 18 May 2026 deadline.",
+          "evidence_label": "gap"
+        },
+        {
+          "requirement": "EU-eligible co-applicant with legal personality",
+          "priority": "mandatory",
+          "evidence_or_action": "CSIM has expressed appetite for a JV or subcontract with an EU-eligible partner but no co-applicant has been identified or confirmed. A co-applicant must be identified, their legal personality verified, and a partnership agreement or letter of intent drafted before the concept note submission. The co-applicant's PADOR registration must also be confirmed.",
+          "evidence_label": "gap"
+        }
+      ]
+    }
+  },
+  "sweep": {
+    "count": 0,
+    "placeholders": [],
+    "modified": false
+  },
+  "gate": {
+    "total": 15,
+    "mandatory_gaps": 2,
+    "recommended_gaps": 0,
+    "gap_items": [
+      {
+        "requirement": "PADOR registration — mandatory for PROSPECT submission",
+        "priority": "mandatory",
+        "evidence_or_action": "PADOR registration is in progress but not yet complete. This is a blocking requirement: CSIM cannot submit via PROSPECT without a valid PADOR registration. Complete PADOR registration immediately — this is the single highest-priority administrative action before the 18 May 2026 deadline.",
+        "evidence_label": "gap"
+      },
+      {
+        "requirement": "EU-eligible co-applicant with legal personality",
+        "priority": "mandatory",
+        "evidence_or_action": "CSIM has expressed appetite for a JV or subcontract with an EU-eligible partner but no co-applicant has been identified or confirmed. A co-applicant must be identified, their legal personality verified, and a partnership agreement or letter of intent drafted before the concept note submission. The co-applicant's PADOR registration must also be confirmed.",
+        "evidence_label": "gap"
+      }
+    ]
+  }
+}

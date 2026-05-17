@@ -10,6 +10,7 @@ import { extractTenderRequirements, generateProposalDraft } from "./llm";
 import { buildProposalEvidenceProfile } from "./evidence";
 import { loadEvidenceLibrary, formatEvidenceLibraryForPrompt } from "@/lib/applicant-evidence/query";
 import { summariseComplianceGate, isBlocked, withGateState } from "./gate";
+import { sweepCoverLetterPlaceholders } from "./sweep";
 import { renderProposalDocx, renderCoverLetterDocx } from "./docx";
 import { renderFinancialTemplateXlsx } from "./xlsx";
 import { renderComplianceMatrixPdf } from "./pdfDocs";
@@ -116,12 +117,27 @@ export async function generateProposalPackage({
       evidenceProfile,
     );
 
+    // Sprint 13b: deterministic post-generation sweep. The prompt forbids
+    // bracketed placeholders in the cover letter but the model still emits
+    // them on real runs. We strip the placeholder text (keeping [DATE]
+    // intact) and append a single composite item to missing_information so
+    // the dashboard remediation surface shows the applicant exactly what
+    // to provide before submission.
+    const { output: sweptOutput, sweep } = sweepCoverLetterPlaceholders(rawOutput);
+    if (sweep.count > 0) {
+      console.info("[proposal-draft:cover_letter_sweep]", {
+        workOrderId: order.id,
+        placeholdersFound: sweep.count,
+        placeholders: sweep.placeholders.slice(0, 10),
+      });
+    }
+
     // Sprint 11: compute the compliance gate. If any compliance_checklist
     // item is mandatory + needs_action, we hold the bundle. The output is
     // still persisted so the dashboard can render the remediation panel
     // and the applicant can resolve the gates and regenerate.
-    const gate = summariseComplianceGate(rawOutput);
-    const output = withGateState(rawOutput, gate);
+    const gate = summariseComplianceGate(sweptOutput);
+    const output = withGateState(sweptOutput, gate);
     const blocked = isBlocked(gate);
 
     let zipUrl: string | null = null;
