@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   DragDropContext,
@@ -9,6 +9,7 @@ import {
   type DropResult,
 } from "@hello-pangea/dnd";
 import { safeUrl } from "@/lib/url";
+import { trackClient } from "@/lib/telemetry/client";
 
 type Stage = "matched" | "evaluating" | "preparing" | "submitted" | "won" | "lost";
 
@@ -134,6 +135,9 @@ export default function PipelinePage() {
   const [adding, setAdding] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
+  // Fire match_evidence_expanded at most once per page session so the metric
+  // measures discoverability, not engagement-per-card.
+  const evidenceBeaconFiredRef = useRef(false);
   const [form, setForm] = useState({
     tender_title: "",
     tender_agency: "",
@@ -437,15 +441,19 @@ export default function PipelinePage() {
                                 <div
                                   ref={p.innerRef}
                                   {...p.draggableProps}
-                                  {...p.dragHandleProps}
                                   className={`rounded-md bg-white border p-3 text-[13px] transition-shadow ${
                                     s.isDragging
                                       ? "border-stone-700 shadow-lg"
                                       : "border-stone-200/70 hover:border-stone-300"
                                   }`}
                                 >
-                                  {/* Top row: bucket dot + ref id + manual badge */}
-                                  <div className="flex items-center gap-2 mb-1.5">
+                                  {/* Top row doubles as the drag handle. Title / Why-match /
+                                      actions below stay normal-cursor, click-only. */}
+                                  <div
+                                    {...p.dragHandleProps}
+                                    className="flex items-center gap-2 mb-1.5 -mx-1 -mt-1 px-1 pt-1 cursor-grab active:cursor-grabbing select-none"
+                                    title="Drag from here to move between stages"
+                                  >
                                     <span className={`shrink-0 h-1.5 w-1.5 rounded-full ${bucketDot}`} />
                                     <span
                                       className="text-[10px] tracking-wider text-stone-400"
@@ -461,6 +469,16 @@ export default function PipelinePage() {
                                     {item.match_reasons?.opportunityBucketLabel && (
                                       <span className="ml-auto text-[9px] uppercase tracking-wider font-semibold text-stone-500 truncate">
                                         {item.match_reasons.opportunityBucketLabel}
+                                      </span>
+                                    )}
+                                    {/* Drag-affordance glyph — right-aligned when no bucket label */}
+                                    {!item.match_reasons?.opportunityBucketLabel && (
+                                      <span
+                                        aria-hidden
+                                        className="ml-auto text-stone-300 text-[12px] leading-none"
+                                        style={{ fontFamily: MONO }}
+                                      >
+                                        ⋮⋮
                                       </span>
                                     )}
                                   </div>
@@ -481,7 +499,20 @@ export default function PipelinePage() {
                                   {item.match_reasons && (
                                     <button
                                       type="button"
-                                      onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                                      onClick={() => {
+                                        // First expand per session emits a discoverability beacon.
+                                        if (!isExpanded && !evidenceBeaconFiredRef.current) {
+                                          evidenceBeaconFiredRef.current = true;
+                                          trackClient("match_evidence_expanded", {
+                                            pipeline_item_id: item.id,
+                                            tender_id: item.tender_id,
+                                            stage: item.stage,
+                                            fit_score: item.fit_score,
+                                            opportunity_bucket: item.match_reasons?.opportunityBucket ?? null,
+                                          });
+                                        }
+                                        setExpandedId(isExpanded ? null : item.id);
+                                      }}
                                       aria-expanded={isExpanded}
                                       className="mt-1.5 inline-flex items-center gap-1 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-stone-400 hover:text-stone-700 transition-colors"
                                       style={{ fontFamily: MONO }}
@@ -618,10 +649,11 @@ export default function PipelinePage() {
                                           remove(item.id);
                                         }
                                       }}
-                                      className="text-stone-400 hover:text-red-600 transition-colors p-0.5"
+                                      aria-label={`Remove ${item.tender_title} from pipeline`}
+                                      className="text-stone-400 hover:text-red-600 transition-colors p-2 -mr-1 rounded-sm"
                                       title="Remove from pipeline"
                                     >
-                                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                       </svg>
                                     </button>
