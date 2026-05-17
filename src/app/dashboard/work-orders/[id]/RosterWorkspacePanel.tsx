@@ -8,6 +8,19 @@ interface DocumentRenameRule {
   note: string | null;
 }
 
+interface AgencyReadiness {
+  agency_slug: string;
+  agency_label: string;
+  readiness_0_10: number;
+  document_coverage_0_10: number;
+  category_fit_0_10: number;
+  geographic_fit_0_10: number;
+  recommendation: "start_here" | "viable" | "blocked";
+  rationale: string;
+  missing_documents: string[];
+  next_actions: string[];
+}
+
 interface RosterOutput {
   registration_checklist: string[];
   capability_statement_draft: string;
@@ -18,6 +31,9 @@ interface RosterOutput {
   document_renaming_rules: DocumentRenameRule[];
   missing_information: string[];
   next_steps: string[];
+  /** Sprint 14. Optional. Per-agency readiness leaderboard. Legacy
+   *  packages without this field hide the breakdown section cleanly. */
+  agency_readiness_breakdown?: AgencyReadiness[];
 }
 
 interface PackageRow {
@@ -348,6 +364,8 @@ export default function RosterWorkspacePanel({ workOrderId, paymentStatus, initi
         </p>
       </div>
 
+      <AgencyReadinessSection breakdown={out.agency_readiness_breakdown} />
+
       <div className="p-5 border-b border-stone-100">
         <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-2" style={{ fontFamily: MONO }}>
           Bundle contents
@@ -483,5 +501,108 @@ export default function RosterWorkspacePanel({ workOrderId, paymentStatus, initi
         </button>
       </div>
     </section>
+  );
+}
+
+/**
+ * Sprint 14. Per-agency readiness leaderboard. Renders the breakdown
+ * as a sorted list of agency cards, with the highest-readiness
+ * "start_here" agency surfaced prominently in emerald, "viable"
+ * alternates in neutral stone, and "blocked" agencies collapsed by
+ * default in amber with cited blockers. Legacy packages without the
+ * field render nothing.
+ */
+function AgencyReadinessSection({ breakdown }: { breakdown?: AgencyReadiness[] }) {
+  if (!breakdown || breakdown.length === 0) return null;
+  const startHere = breakdown.find((a) => a.recommendation === "start_here");
+  const viable = breakdown.filter((a) => a.recommendation === "viable");
+  const blocked = breakdown.filter((a) => a.recommendation === "blocked");
+
+  return (
+    <div className="p-5 border-b border-stone-100">
+      <div className="flex items-baseline justify-between mb-3">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400" style={{ fontFamily: MONO }}>
+          Agency readiness · where to start
+        </div>
+        <div className="text-[10.5px] text-stone-500" style={{ fontFamily: MONO }}>
+          {breakdown.length} agencies scored
+        </div>
+      </div>
+
+      {startHere && <AgencyCard agency={startHere} variant="start_here" />}
+
+      {viable.length > 0 && (
+        <div className="mt-3 space-y-2">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500" style={{ fontFamily: MONO }}>
+            Also viable
+          </div>
+          {viable.map((a) => <AgencyCard key={a.agency_slug} agency={a} variant="viable" />)}
+        </div>
+      )}
+
+      {blocked.length > 0 && (
+        <div className="mt-3 space-y-2">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500" style={{ fontFamily: MONO }}>
+            Skip for now
+          </div>
+          {blocked.map((a) => <AgencyCard key={a.agency_slug} agency={a} variant="blocked" />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AgencyCard({ agency, variant }: { agency: AgencyReadiness; variant: "start_here" | "viable" | "blocked" }) {
+  const tone = variant === "start_here"
+    ? { border: "border-emerald-300", bg: "bg-emerald-50/70", label: "Start here", labelBg: "bg-emerald-700", score: "text-emerald-900" }
+    : variant === "viable"
+    ? { border: "border-stone-200", bg: "bg-white", label: "Viable", labelBg: "bg-stone-700", score: "text-stone-900" }
+    : { border: "border-amber-200", bg: "bg-amber-50/40", label: "Blocked", labelBg: "bg-amber-700", score: "text-amber-900" };
+
+  return (
+    <div className={`rounded-sm border ${tone.border} ${tone.bg} p-4`}>
+      <div className="flex items-baseline gap-3 mb-1.5 flex-wrap">
+        <span className={`text-[14px] font-semibold ${tone.score}`} style={{ fontFamily: MONO }}>
+          {agency.agency_label}
+        </span>
+        <span className={`text-[16px] font-bold tabular-nums ${tone.score}`} style={{ fontFamily: MONO }}>
+          {agency.readiness_0_10}<span className="text-[11px] font-normal text-stone-500">/10</span>
+        </span>
+        <span
+          className={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-white ${tone.labelBg}`}
+          style={{ fontFamily: MONO }}
+        >
+          {tone.label}
+        </span>
+        <span className="text-[10.5px] text-stone-500 tabular-nums" style={{ fontFamily: MONO }}>
+          docs {agency.document_coverage_0_10}/10 · category {agency.category_fit_0_10}/10 · geo {agency.geographic_fit_0_10}/10
+        </span>
+      </div>
+      <p className="text-[12.5px] text-stone-800 leading-relaxed">{agency.rationale}</p>
+      {agency.missing_documents.length > 0 && (
+        <div className="mt-2.5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500 mb-1" style={{ fontFamily: MONO }}>
+            Missing
+          </div>
+          <ul className="text-[12px] text-stone-700 space-y-0.5">
+            {agency.missing_documents.map((d, i) => (
+              <li key={i} className="flex gap-1.5"><span className="text-stone-400 shrink-0">·</span><span>{d}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {variant !== "blocked" && agency.next_actions.length > 0 && (
+        <div className="mt-2.5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500 mb-1" style={{ fontFamily: MONO }}>
+            Next actions
+          </div>
+          <ul className="text-[12px] text-stone-800 space-y-0.5">
+            {agency.next_actions.map((a, i) => (
+              <li key={i} className="flex gap-1.5"><span className="text-emerald-700 shrink-0">→</span><span>{a}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
