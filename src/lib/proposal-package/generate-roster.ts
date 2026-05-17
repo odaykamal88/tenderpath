@@ -14,8 +14,10 @@ import {
   AGENCY_PACKAGES,
   findAgencyPackage,
   inferAgencySlug,
+  formatAgencyCatalogueForPrompt,
   type AgencyPackage,
 } from "./roster-packages";
+import { loadEvidenceLibrary, formatEvidenceLibraryForPrompt } from "@/lib/applicant-evidence/query";
 import {
   loadWorkOrder,
   loadExistingPackage,
@@ -132,9 +134,34 @@ export async function generateRosterFastTrack({
   const companyName = assessment?.company_name ?? order.email ?? "Vendor";
 
   try {
+    // Sprint 14. Pull the applicant's evidence library so the LLM can
+    // score per-agency document_coverage against what's actually in the
+    // vault, not against a generic "you'll need certifications" handwave.
+    // Empty for anonymous/email-only flows (no user_id) — the prompt
+    // falls back to scoring against the company profile in that case.
+    const evidenceLibrary = order.user_id != null
+      ? await loadEvidenceLibrary(order.user_id).catch((err) => {
+          console.warn("[roster-fast-track:evidence_library_load_failed]", {
+            workOrderId: order.id,
+            userId: order.user_id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          return [];
+        })
+      : [];
+    const evidenceLibrarySummary = formatEvidenceLibraryForPrompt(evidenceLibrary);
+    const rosterAgencyCatalogue = formatAgencyCatalogueForPrompt(AGENCY_PACKAGES);
+
     const requirements = await extractTenderRequirements(tenderText);
     const output = await generateRosterPackage(
-      { tenderText, companyContext, intakeSummary, rosterAgencyContext },
+      {
+        tenderText,
+        companyContext,
+        intakeSummary,
+        rosterAgencyContext,
+        rosterAgencyCatalogue,
+        evidenceLibrarySummary,
+      },
       requirements,
     );
 

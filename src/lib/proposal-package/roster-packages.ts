@@ -304,6 +304,31 @@ export function findAgencyPackage(slug: string | null | undefined): AgencyPackag
  * Infer the agency slug from a free-form `target_agency` intake string.
  * Returns null if no high-confidence match.
  */
+/**
+ * Sprint 14. Compressed, prompt-friendly summary of the full agency
+ * catalogue. Fed to the roster generator so it can compute the
+ * agency_readiness_breakdown against every plausible agency, not just
+ * the picked one.
+ *
+ * Format: one block per agency with the fields the breakdown needs —
+ * slug, label, why, requiredDocuments (the doc-coverage scoring axis),
+ * categoryHints (the category-fit scoring axis), and notes (geographic
+ * + operational signals). Skips submissionSteps because the breakdown
+ * doesn't score the workflow.
+ */
+export function formatAgencyCatalogueForPrompt(packages: AgencyPackage[] = AGENCY_PACKAGES): string {
+  return packages
+    .map((a) => [
+      `slug=${a.slug}`,
+      `label=${a.label}`,
+      `why=${a.why}`,
+      `required_documents=${a.requiredDocuments.join("; ")}`,
+      `category_hints=${a.categoryHints.join("; ")}`,
+      `notes=${a.notes.join(" | ")}`,
+    ].join("\n"))
+    .join("\n---\n");
+}
+
 export function inferAgencySlug(targetAgency: string | null | undefined): string | null {
   if (!targetAgency) return null;
   const t = targetAgency.toLowerCase();

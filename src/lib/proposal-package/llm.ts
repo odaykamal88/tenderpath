@@ -74,6 +74,15 @@ export interface GenerationInputs {
   companyContext: string;
   intakeSummary: string;
   rosterAgencyContext?: string;
+  /** Sprint 14. Compressed catalogue of ALL plausible agencies so the
+   *  generator can produce agency_readiness_breakdown — not just the
+   *  picked agency. Format: one block per agency with slug/label/why/
+   *  required-docs/category-hints. Roster-only. */
+  rosterAgencyCatalogue?: string;
+  /** Sprint 14. Evidence library summary so the LLM can score per-agency
+   *  document_coverage against what the applicant actually has in their
+   *  vault. Reuses formatEvidenceLibraryForPrompt from Sprint 10. */
+  evidenceLibrarySummary?: string;
 }
 
 export interface ExtractRequirementsInputs {
@@ -245,7 +254,13 @@ export async function generateRosterPackage(
   const client = getClient();
   const response = await client.messages.create({
     model: SONNET_MODEL,
-    max_tokens: 4000,
+    // Sprint 14. Bumped 4000 -> 12000 to accommodate the new
+    // agency_readiness_breakdown. First live MEFOSA run hit 8000 and
+    // truncated at ~31k chars of output. 12000 matches the
+    // Proposal Draft budget (same Sonnet model, similar output shape
+    // with the breakdown items pushing roster past 8k). Same class of
+    // failure as the Proposal Draft schema expansions in Sprints 8-11.
+    max_tokens: 12000,
     temperature: 0.3,
     messages: [
       {
@@ -256,8 +271,14 @@ You prepare a self-serve roster registration package that the user can submit th
 COMPANY PROFILE:
 ${inputs.companyContext}
 
-TARGET AGENCY / ROSTER:
+APPLICANT EVIDENCE LIBRARY (documents the applicant has already uploaded):
+${inputs.evidenceLibrarySummary || "No evidence library available — score document_coverage based on what the COMPANY PROFILE states the applicant has."}
+
+PRIMARY TARGET AGENCY / ROSTER (write the full narrative against this one):
 ${inputs.rosterAgencyContext ?? "(none specified — use the user intake)"}
+
+ALL PLAUSIBLE AGENCIES (compute agency_readiness_breakdown against ALL of these):
+${inputs.rosterAgencyCatalogue ?? "(none provided — return an empty agency_readiness_breakdown)"}
 
 EXTRACTED REQUIREMENTS / SOURCE TEXT:
 ${JSON.stringify(requirements, null, 2)}
@@ -267,22 +288,41 @@ ${inputs.intakeSummary || "None provided."}
 
 Return a strict-shape JSON object with EXACTLY these keys:
 {
-  "registration_checklist": string[] — 8-15 step-by-step actions the user follows to register, in order.,
-  "capability_statement_draft": string — a 3-4 paragraph capability statement tailored to the target agency. Include the company name, primary sector, geographies served, and 2-3 differentiators.,
-  "required_documents": string[] — complete list of documents (10-20 items),
-  "organization_profile_notes": string[] — guidance on the company's profile fields the agency expects (e.g. UNSPSC codes, NCAGE, financial statements format),
-  "cover_letter_draft": string — short cover letter for the registration submission (1-2 paragraphs),
-  "submission_guidance": string[] — practical submission tips, common rejection reasons, and portal navigation notes,
+  "registration_checklist": string[] — 8-15 step-by-step actions the user follows to register WITH THE PRIMARY TARGET AGENCY, in order.,
+  "capability_statement_draft": string — a 3-4 paragraph capability statement tailored to the PRIMARY TARGET AGENCY. Include the company name, primary sector, geographies served, and 2-3 differentiators.,
+  "required_documents": string[] — complete list of documents required by the PRIMARY TARGET AGENCY (10-20 items),
+  "organization_profile_notes": string[] — guidance on the profile fields the PRIMARY TARGET AGENCY expects (e.g. UNSPSC codes, NCAGE, financial statements format),
+  "cover_letter_draft": string — short cover letter for the registration submission to the PRIMARY TARGET AGENCY (1-2 paragraphs),
+  "submission_guidance": string[] — practical submission tips, common rejection reasons, and portal navigation notes for the PRIMARY TARGET AGENCY,
   "document_renaming_rules": [
     { "document_type": string, "required_filename": string, "note": string | null }
-  ] — 5-12 items. The agency expects specific filenames (e.g. "01_Company_Profile.pdf"). If the agency does not enforce filenames, return an empty array.,
-  "missing_information": string[] — specific gaps the user must fill,
-  "next_steps": string[] — ordered immediate actions
+  ] — 5-12 items. Even if the PRIMARY TARGET AGENCY does not publish a strict filename convention, propose a standard UN-friendly numbering convention (e.g. "01_Company_Profile_<COMPANY_LEGAL_NAME>.pdf", "02_Commercial_Registration_<COUNTRY>.pdf", "03_Audited_Financials_<YEAR>.pdf"). Include a note explaining "agency does not enforce filenames — convention follows UN procurement best practice" when applicable. Empty array is only acceptable when the agency uploads via a structured form (not file upload).,
+  "missing_information": string[] — specific gaps the user must fill (cross-agency, not just primary),
+  "next_steps": string[] — ordered immediate actions,
+  "agency_readiness_breakdown": [
+    {
+      "agency_slug": string — must match a slug from ALL PLAUSIBLE AGENCIES,
+      "agency_label": string — must match the label,
+      "readiness_0_10": integer 0-10 — average of the three sub-scores, rounded,
+      "document_coverage_0_10": integer 0-10 — fraction of the agency's required documents that the applicant can produce TODAY from their evidence library + company profile. 10 = all docs covered; 5 = roughly half; 0 = effectively none.,
+      "category_fit_0_10": integer 0-10 — how well the applicant's actual capabilities map onto the agency's procurement categories (categoryHints). A food-safety advisor scores 9-10 on WFP/FAO, 2-3 on UNICEF supply contracts.,
+      "geographic_fit_0_10": integer 0-10 — geographic and operational reach alignment. A Lebanon-only vendor scores 7-8 on UNGM (global), 5-6 on FAO (Rome HQ + regional), 4-5 on agencies that route primarily through country offices the applicant has no presence in.,
+      "recommendation": "start_here" | "viable" | "blocked" — exactly ONE agency may be "start_here". CRITICAL: "start_here" is awarded purely on the highest composite readiness_0_10 score in the breakdown, NOT on whether the user named that agency as the primary target. If the user's PRIMARY TARGET AGENCY is not the highest-scoring agency, the PRIMARY narrative still targets it (capability_statement, cover_letter, registration_checklist) but the breakdown honestly flags the higher-scoring agency as "start_here" and routes the user there for fastest wins. "viable" means ≥6.0 composite readiness with at most 1-2 missing docs. "blocked" means <6.0 OR ≥3 missing critical docs.,
+      "rationale": string — ONE sentence citing specific evidence and specific gaps. e.g. "HACCP cert (HACCP_2024.pdf) + KPMG audit + 3 SIDA references cover 8 of 10 WFP required documents; only fleet capacity statement and humanitarian-response reference are missing.",
+      "missing_documents": string[] — specific documents from the agency's requiredDocuments list that the applicant cannot currently produce. Empty array if fully covered.,
+      "next_actions": string[] — 1-4 specific, time-boxed actions to lift readiness for THIS agency. e.g. "Obtain HACCP recertification from BSI Lebanon (4-6 weeks, ~$2,400)" not "improve documentation".
+    }
+  ] — Include EVERY agency from ALL PLAUSIBLE AGENCIES (do not skip any). Order: highest readiness first.
 }
 
 Rules:
-- Be specific to the target agency. Reference its actual portal, its actual category codes, its actual submission timing if known.
+- The PRIMARY narrative (capability_statement, cover_letter, registration_checklist, etc.) targets ONE agency — the one the user selected or the one with the highest plausible readiness.
+- The agency_readiness_breakdown is per-agency, evidence-anchored, and brutally honest. If the applicant has no presence in West Africa, FAO West Africa rosters are blocked, not viable.
+- Score document_coverage by mapping the agency's requiredDocuments list against the evidence library + company profile capabilities. Cite specific file names where possible.
+- Exactly ONE agency carries "start_here" — typically the PRIMARY TARGET AGENCY if its score is highest, otherwise the highest-scoring agency.
+- missing_documents in each breakdown item names ONLY documents from THAT agency's requiredDocuments list, not generic ones.
 - Do NOT invent facts about the company; missing details go in missing_information.
+- Do NOT invent facts about agencies; rely on the ALL PLAUSIBLE AGENCIES catalogue.
 - Document filenames in document_renaming_rules should follow the agency's known convention if any.
 - Return ONLY valid JSON.`,
       },
@@ -346,6 +386,12 @@ function normalizeProposal(raw: Partial<ProposalOutput>): ProposalOutput {
   return out;
 }
 
+function clamp010(n: unknown): number {
+  const v = typeof n === "number" ? n : Number(n);
+  if (!Number.isFinite(v)) return 0;
+  return Math.max(0, Math.min(10, Math.round(v)));
+}
+
 function normalizeRoster(raw: Partial<RosterOutput>): RosterOutput {
   const out: RosterOutput = { ...DEFAULT_ROSTER_OUTPUT, ...raw };
   out.capability_statement_draft = clampString(out.capability_statement_draft, 4000);
@@ -353,7 +399,12 @@ function normalizeRoster(raw: Partial<RosterOutput>): RosterOutput {
   out.registration_checklist = clampStringArray(out.registration_checklist, 20, 400);
   out.required_documents = clampStringArray(out.required_documents, 25, 280);
   out.organization_profile_notes = clampStringArray(out.organization_profile_notes, 15, 400);
-  out.submission_guidance = clampStringArray(out.submission_guidance, 15, 400);
+  // Sprint 14. Widened 400 -> 800 chars/item. Sprint 14 grader caught
+  // submission_guidance item 0 truncated mid-word at the old 400 clamp
+  // ("before investing in a full portal sub"). The prompt now asks for
+  // multi-sentence guidance per item so the clamp follows the same
+  // pattern as financial_template_notes (Sprint 13b: 400 -> 1200).
+  out.submission_guidance = clampStringArray(out.submission_guidance, 15, 800);
   out.missing_information = clampStringArray(out.missing_information, 12, 400);
   out.next_steps = clampStringArray(out.next_steps, 12, 400);
   out.document_renaming_rules = Array.isArray(out.document_renaming_rules)
@@ -366,5 +417,44 @@ function normalizeRoster(raw: Partial<RosterOutput>): RosterOutput {
         }))
         .filter((r) => r.document_type.length > 0 && r.required_filename.length > 0)
     : [];
+  // Sprint 14. Per-agency readiness breakdown. Clamp every numeric to
+  // 0-10, enforce single "start_here", validate recommendation enum,
+  // cap missing_documents/next_actions sizes. Order by readiness desc
+  // so the dashboard can render the leaderboard without re-sorting.
+  if (Array.isArray(out.agency_readiness_breakdown) && out.agency_readiness_breakdown.length > 0) {
+    const VALID_REC = new Set(["start_here", "viable", "blocked"] as const);
+    const normalized = out.agency_readiness_breakdown
+      .slice(0, 12)
+      .map((a) => {
+        const recommendation = (typeof a?.recommendation === "string" && VALID_REC.has(a.recommendation as never))
+          ? (a.recommendation as "start_here" | "viable" | "blocked")
+          : "blocked";
+        return {
+          agency_slug: clampString(a?.agency_slug, 64),
+          agency_label: clampString(a?.agency_label, 120),
+          readiness_0_10: clamp010(a?.readiness_0_10),
+          document_coverage_0_10: clamp010(a?.document_coverage_0_10),
+          category_fit_0_10: clamp010(a?.category_fit_0_10),
+          geographic_fit_0_10: clamp010(a?.geographic_fit_0_10),
+          recommendation,
+          rationale: clampString(a?.rationale, 600),
+          missing_documents: clampStringArray(a?.missing_documents, 12, 200),
+          next_actions: clampStringArray(a?.next_actions, 6, 400),
+        };
+      })
+      .filter((a) => a.agency_slug.length > 0)
+      .sort((a, b) => b.readiness_0_10 - a.readiness_0_10);
+    // Enforce single "start_here": demote any extras to "viable".
+    let startHereSeen = false;
+    for (const a of normalized) {
+      if (a.recommendation === "start_here") {
+        if (startHereSeen) a.recommendation = "viable";
+        else startHereSeen = true;
+      }
+    }
+    out.agency_readiness_breakdown = normalized;
+  } else {
+    out.agency_readiness_breakdown = [];
+  }
   return out;
 }
