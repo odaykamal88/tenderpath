@@ -21,6 +21,21 @@ interface ProposalOutput {
   capability_statement_draft?: string;
   organization_profile_notes?: string[];
   submission_guidance?: string[];
+  // Sprint 14: per-agency readiness leaderboard for roster packages.
+  agency_readiness_breakdown?: AgencyReadiness[];
+}
+
+interface AgencyReadiness {
+  agency_slug: string;
+  agency_label: string;
+  readiness_0_10: number;
+  document_coverage_0_10: number;
+  category_fit_0_10: number;
+  geographic_fit_0_10: number;
+  recommendation: "start_here" | "viable" | "blocked";
+  rationale: string;
+  missing_documents: string[];
+  next_actions: string[];
 }
 
 interface ComplianceItem {
@@ -420,8 +435,15 @@ function ProposalDraftView({
 }
 
 function RosterPackageView({ output }: { output: ProposalOutput }) {
+  const breakdown = output.agency_readiness_breakdown ?? [];
   return (
     <div className="space-y-5">
+      {breakdown.length > 0 && (
+        <Section index="00" title="Agency readiness · where to start">
+          <AgencyReadinessLeaderboard breakdown={breakdown} />
+        </Section>
+      )}
+
       <Section index="01" title="Registration checklist">
         <CheckList items={output.registration_checklist ?? []} />
       </Section>
@@ -453,6 +475,89 @@ function RosterPackageView({ output }: { output: ProposalOutput }) {
       <Section index="08" title="Next steps">
         <NumberedList items={output.next_steps ?? []} />
       </Section>
+    </div>
+  );
+}
+
+/**
+ * Sprint 14. Per-agency readiness leaderboard for the roster package
+ * view (the /dashboard/proposals/[id] surface — secondary to the
+ * /dashboard/work-orders/[id] workspace panel but shown alongside the
+ * proposal-draft view in the same route). Same shape as the workspace
+ * panel's AgencyReadinessSection, lighter chrome to fit the
+ * Section/BulletList visual idiom of this surface.
+ */
+function AgencyReadinessLeaderboard({ breakdown }: { breakdown: AgencyReadiness[] }) {
+  const startHere = breakdown.find((a) => a.recommendation === "start_here");
+  const viable = breakdown.filter((a) => a.recommendation === "viable");
+  const blocked = breakdown.filter((a) => a.recommendation === "blocked");
+  return (
+    <div className="space-y-3">
+      {startHere && <AgencyLeaderCard agency={startHere} variant="start_here" />}
+      {viable.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500" style={{ fontFamily: MONO }}>
+            Also viable
+          </div>
+          {viable.map((a) => <AgencyLeaderCard key={a.agency_slug} agency={a} variant="viable" />)}
+        </div>
+      )}
+      {blocked.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500" style={{ fontFamily: MONO }}>
+            Skip for now
+          </div>
+          {blocked.map((a) => <AgencyLeaderCard key={a.agency_slug} agency={a} variant="blocked" />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AgencyLeaderCard({ agency, variant }: { agency: AgencyReadiness; variant: "start_here" | "viable" | "blocked" }) {
+  const tone = variant === "start_here"
+    ? { border: "border-emerald-300", bg: "bg-emerald-50/70", label: "Start here", labelBg: "bg-emerald-700", score: "text-emerald-900" }
+    : variant === "viable"
+    ? { border: "border-stone-200", bg: "bg-white", label: "Viable", labelBg: "bg-stone-700", score: "text-stone-900" }
+    : { border: "border-amber-200", bg: "bg-amber-50/40", label: "Blocked", labelBg: "bg-amber-700", score: "text-amber-900" };
+  return (
+    <div className={`rounded-sm border ${tone.border} ${tone.bg} p-4`}>
+      <div className="flex items-baseline gap-3 mb-1.5 flex-wrap">
+        <span className={`text-[14px] font-semibold ${tone.score}`} style={{ fontFamily: MONO }}>{agency.agency_label}</span>
+        <span className={`text-[16px] font-bold tabular-nums ${tone.score}`} style={{ fontFamily: MONO }}>
+          {agency.readiness_0_10}<span className="text-[11px] font-normal text-stone-500">/10</span>
+        </span>
+        <span
+          className={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-white ${tone.labelBg}`}
+          style={{ fontFamily: MONO }}
+        >
+          {tone.label}
+        </span>
+        <span className="text-[10.5px] text-stone-500 tabular-nums" style={{ fontFamily: MONO }}>
+          docs {agency.document_coverage_0_10}/10 · category {agency.category_fit_0_10}/10 · geo {agency.geographic_fit_0_10}/10
+        </span>
+      </div>
+      <p className="text-[12.5px] text-stone-800 leading-relaxed">{agency.rationale}</p>
+      {agency.missing_documents.length > 0 && (
+        <div className="mt-2.5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500 mb-1" style={{ fontFamily: MONO }}>Missing</div>
+          <ul className="text-[12px] text-stone-700 space-y-0.5">
+            {agency.missing_documents.map((d, i) => (
+              <li key={i} className="flex gap-1.5"><span className="text-stone-400 shrink-0">·</span><span>{d}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {variant !== "blocked" && agency.next_actions.length > 0 && (
+        <div className="mt-2.5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500 mb-1" style={{ fontFamily: MONO }}>Next actions</div>
+          <ul className="text-[12px] text-stone-800 space-y-0.5">
+            {agency.next_actions.map((a, i) => (
+              <li key={i} className="flex gap-1.5"><span className="text-emerald-700 shrink-0">→</span><span>{a}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

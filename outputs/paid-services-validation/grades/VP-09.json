@@ -1,24 +1,24 @@
 {
   "panel_id": "VP-09",
-  "source": "outputs/paid-services-validation/sprint14-roster-live-mefosa.json",
+  "source": "outputs/paid-services-validation/sprint14-roster-live-beyond.json",
+  "note": "Sprint 14 — Beyond Wireless cold-chain IoT / UNICEF primary. Real live-prompt grade replacing the seeded MEFOSA-derived anchor.",
   "grade": {
-    "score_0_10": 9,
+    "score_0_10": 8,
     "breakdown": {
       "specificity": 2,
       "evidence_anchoring": 2,
-      "completeness": 2,
+      "completeness": 1,
       "agency_fit_honesty": 1,
       "submission_usability": 2
     },
     "rationale": [
-      "specificity: pipeline-general (Sprint 14) — generator names the company explicitly, the primary target agency by portal URL, and ties capabilities to the agency's actual procurement categories.",
-      "evidence_anchoring: pipeline-general — capability statement, required_documents, breakdown rationales, and missing_information cite named files and named past engagements rather than handwave language.",
-      "completeness: pipeline-general — all 9 RosterOutput fields populated and agency_readiness_breakdown covers every plausible agency in the catalogue.",
-      "agency_fit_honesty: pipeline-general — start_here goes to the highest-readiness agency in the breakdown (which may differ from the user's narrative target), blocked agencies have explicit cited blockers, viable agencies name 1-2 missing docs.",
-      "submission_usability: pipeline-general — checklist is operationally specific, cover letter has no unresolved placeholders, document_renaming_rules apply a consistent UN-best-practice convention even when the agency does not enforce filenames."
+      "specificity: Every section names Beyond Wireless Technology (Proprietary) Limited, UNGM ID 183484, iCT2/iCT-Lite SKUs, WHO PQS E006, UNICEF Supply Division portal URL, and specific UNSPSC codes throughout — no generic filler.",
+      "evidence_anchoring: The capability statement cites named certifications (ISO 13485, ISO 9001, WHO PQS Q1 2025 renewal), named past projects (UNICEF Ethiopia 2024, Gavi Ethiopia/Pakistan, WHO AFRO), named files (BDO South Africa audited financials, Beyond Wireless Anti-Corruption Policy 2024.docx), and the missing_documents list names specific absent items (SARS TCS letter, CE DoC, SABS certificate) rather than vague gaps.",
+      "completeness: All 9 RosterOutput fields are meaningfully populated, but the agency_readiness_breakdown covers only UNGM and is truncated mid-sentence in the UNGM next_actions field, with no entries for WHO, UNDP, UNOPS, WFP, IOM, or FAO — all of which appear in the catalogue excerpt and several of which (WHO in particular) are plausible for this vendor.",
+      "agency_fit_honesty: Naming UNGM as start_here is defensible as a gateway registration, but UNGM is a registration platform not a procuring agency, and the breakdown omits WHO entirely despite Beyond Wireless holding WHO PQS prequalification and having WHO AFRO past performance — WHO would score highly and its absence means the breakdown cannot be called honest or complete; additionally the UNGM document_coverage score of 9/10 is generous given two confirmed missing documents.",
+      "submission_usability: Checklist steps name specific portal URLs, button labels, and sequenced actions; the cover letter contains no unresolved bracketed placeholders beyond an implicit date; document renaming rules correctly note the agency does not enforce filenames while providing a consistent numbered convention; next_steps assign week-level timelines and note specific costs (free SARS eFiling) and deadlines (end of February 2026 submission target)."
     ],
     "model": "claude-sonnet-4-6",
-    "graded_at": "2026-05-17T07:21:31.868Z"
-  },
-  "note": "Seeded from SPRINT14_ROSTER MEFOSA live-prompt run as the pipeline-general anchor for Roster Fast-Track. VP-09 (Beyond Wireless, WHO PQS cold-chain) is a product-supplier case where WHO will likely score as 'viable' (PQS device listing in evidence) and UNICEF as 'start_here' (cold-chain supplier registration with strongest doc coverage). The same agency_readiness_breakdown + grader applies. Re-run a Beyond Wireless-specific live grade before high-stakes decisions; for harness blending the same 9/10 is a conservative anchor."
+    "graded_at": "2026-05-17T07:58:29.969Z"
+  }
 }

@@ -1,0 +1,367 @@
+{
+  "requirements": {
+    "eligibility_criteria": [
+      "Vaccine cold-chain monitoring device manufacturer",
+      "WHO PQS prequalified or eligible for prequalification",
+      "Global device manufacturer with capability for remote monitoring SaaS",
+      "Manufacturing partners in EU and/or Asia",
+      "Ability to distribute in 40+ countries"
+    ],
+    "technical_requirements": [
+      "Cold-chain remote temperature monitoring devices",
+      "PQS-listed or PQS-prequalifiable cold-chain monitoring technology",
+      "Remote monitoring SaaS capability",
+      "Vaccine cold-chain equipment compatibility"
+    ],
+    "required_documents": [],
+    "evaluation_criteria": [
+      "Competitive positioning against existing vendors (Berlinger, Sensitech)",
+      "WHO PQS prequalification status",
+      "Global distribution capability (40+ countries)",
+      "Manufacturing and supply chain robustness"
+    ],
+    "key_constraints": [
+      "Geographic focus: Global operations required",
+      "HQ location: South Africa preferred",
+      "Manufacturing partners: EU and Asia required",
+      "Direct distribution: 40+ countries minimum",
+      "WHO PQS prequalification required or in progress"
+    ],
+    "submission_format": "unknown"
+  },
+  "output": {
+    "registration_checklist": [
+      "1. Confirm UNGM Level 1 status is current and active (UNGM ID 183484) — log in to https://www.ungm.org and verify profile completeness, expiry date, and that UNICEF is selected as a subscribing agency.",
+      "2. Navigate to the UNICEF Supply Division supplier self-registration portal at https://www.unicef.org/supply/working-with-unicef and create a new supplier account using the same legal entity name 'Beyond Wireless Technology (Proprietary) Limited' as on UNGM.",
+      "3. Complete the UNICEF supplier profile form: enter UNGM ID 183484, legal registration details (CIPC South Africa 2013), company size (32 FTE, SME), HQ address (Stellenbosch), and operational countries (40+ distribution footprint).",
+      "4. Select UNICEF procurement categories: map to vaccine cold-chain monitoring equipment (UNSPSC 42271700 — Temperature Monitoring Equipment; 43232700 — Remote Monitoring Software; 42271701 — Cold-Chain Data Loggers) and confirm these match the iCT2 and iCT-Lite product lines.",
+      "5. Upload WHO PQS Prequalification Certificate (iCT2, renewed Q1 2025) as primary product eligibility evidence — this is the single most decisive document for UNICEF Supply Division cold-chain category.",
+      "6. Upload product technical datasheets for iCT2 and iCT-Lite SKUs, ensuring each datasheet references the WHO PQS E006 listing number and includes operating temperature range, connectivity specifications, and cloud platform integration details.",
+      "7. Upload ISO 13485 (medical devices) and ISO 9001 (quality management) certificates — both current 2024 certificates are in the evidence library and must be uploaded as separate files.",
+      "8. Draft and upload a Child Protection Policy (mandatory for ALL UNICEF vendor relationships) — this document does not exist in the current evidence library and must be created before submission.",
+      "9. Upload the UNICEF Ethiopia Past Performance Letter (2024) as the primary reference; supplement with a second reference letter from at least one other UNICEF country office (e.g. one of the 11 remaining UNICEF country office relationships) to strengthen the references section.",
+      "10. Upload the Capability Statement (Beyond Wireless Capability Statement 2025.pdf) tailored to UNICEF Supply Division language — cold-chain, EPI, vaccine equity, last-mile monitoring.",
+      "11. Upload Audited Financial Statements 2022–2024 (BDO South Africa) to demonstrate financial viability as a supply partner.",
+      "12. Upload the Anti-Corruption Policy (Beyond Wireless Anti-Corruption Policy 2024.docx — convert to PDF before upload) and Bank Letter (Standard Bank, 2025) to satisfy vendor integrity and financial verification requirements.",
+      "13. Confirm geographic coverage declaration: list all 40+ distribution and service countries, with explicit callout of sub-Saharan Africa, South Asia, and Latin America — UNICEF Supply Division scores vendors on global reach for catalogue items.",
+      "14. Submit the completed registration and note the UNICEF Supply Division reference number; follow up with the UNICEF Supply Division Vendor Management team (vendor@unicef.org) within 5 business days to confirm receipt and request a status update.",
+      "15. Monitor the UNICEF eSourcing portal (https://esourcing.unicef.org) for any Request for Information (RFI) or Expression of Interest (EOI) notices in the cold-chain monitoring category issued ahead of the Q3 2026 procurement cycle, and respond promptly to any pre-qualification questionnaires."
+    ],
+    "capability_statement_draft": "Beyond Wireless Technology (Proprietary) Limited is a South African IoT technology company founded in 2013 and headquartered in Stellenbosch, South Africa, specialising in the design, manufacture, and deployment of remote temperature monitoring systems for vaccine cold-chain and medical refrigeration quality assurance. The company's iCT-series devices — including the iCT2 and iCT-Lite SKUs — hold current WHO PQS prequalification (renewed Q1 2025), are certified to ISO 13485 (medical devices) and ISO 9001 (quality management), and carry CE Mark and FCC certification. With more than 50,000 devices deployed across 40+ countries and 18 government health ministry contracts, Beyond Wireless has a demonstrated track record of delivering reliable, scalable cold-chain monitoring solutions in the most demanding low-resource environments.\n\nBeyond Wireless has a direct and established relationship with UNICEF, having supplied cold-chain monitoring devices to 12 UNICEF country offices between 2018 and 2024, including a major EPI deployment in Ethiopia. The company has also supported Gavi-funded national immunisation programmes in Ethiopia and Pakistan, and collaborated with WHO AFRO on regional cold-chain monitoring initiatives. Its cloud-based monitoring SaaS platform integrates with national EPI information systems, providing health ministries and UNICEF country teams with real-time temperature alerts, excursion reporting, and audit-ready data logs — directly supporting vaccine equity and cold-chain accountability objectives.\n\nThree differentiators set Beyond Wireless apart in the UNICEF Supply Division cold-chain category. First, WHO PQS prequalification of both the iCT2 and iCT-Lite SKUs provides UNICEF procurement teams with immediate product eligibility certainty, eliminating the technical evaluation burden associated with non-prequalified devices. Second, the company's hardware-as-a-service (HaaS) deployment model — combining device supply, cloud platform access, and 24/7 network operations centre monitoring — enables UNICEF country offices and Gavi-funded governments to operationalise cold-chain monitoring without capital-intensive infrastructure investment. Third, Beyond Wireless's manufacturing partnerships with contract manufacturers in Shenzhen (China) and Estonia (EU), combined with its Stellenbosch R&D facility, provide supply chain resilience and the production capacity to fulfil large-volume UNICEF catalogue orders within agreed lead times.\n\nBeyond Wireless is registered on the United Nations Global Marketplace (UNGM ID 183484) at Level 1 and is actively pursuing UNICEF Supply Division registration to participate in the Q3 2026 vaccine cold-chain procurement cycle. The company's audited financial statements (BDO South Africa, 2022–2024) confirm financial soundness, and its distribution and service network across sub-Saharan Africa, South Asia, and Latin America aligns directly with UNICEF's priority geographies for immunisation supply chain strengthening.",
+    "required_documents": [
+      "1. UNGM Level 1 Registration Confirmation (screenshot or PDF export from UNGM profile, showing UNGM ID 183484 and active status)",
+      "2. Certificate of Incorporation / CIPC Registration — Beyond Wireless Technology (Proprietary) Limited, South Africa, 2013",
+      "3. WHO PQS Prequalification Certificate — iCT2 (renewed Q1 2025, E006 series)",
+      "4. WHO PQS Prequalification Certificate — iCT-Lite (if separately listed; confirm with WHO PQS database)",
+      "5. Product Technical Datasheet — iCT2 (2025 edition, referencing PQS listing number, operating specs, connectivity)",
+      "6. Product Technical Datasheet — iCT-Lite (2025 edition, same requirements)",
+      "7. ISO 13485 Medical Devices Quality Management Certificate (2024, current)",
+      "8. ISO 9001 Quality Management Certificate (2024, current)",
+      "9. CE Mark Declaration of Conformity (for iCT2 and/or iCT-Lite, EU regulatory office Berlin)",
+      "10. Audited Financial Statements 2022, 2023, and 2024 (BDO South Africa — combined or separate years)",
+      "11. Bank Account Confirmation Letter (Standard Bank, on bank letterhead, 2025)",
+      "12. Company Capability Statement (tailored to UNICEF Supply Division cold-chain and EPI context)",
+      "13. Past Performance Reference Letter — UNICEF Ethiopia Country Office (2024)",
+      "14. Past Performance Reference Letter — at least one additional UNICEF country office or equivalent UN/Gavi-funded client",
+      "15. Child Protection Policy (mandatory for all UNICEF vendor relationships — must be a standalone signed policy document)",
+      "16. Anti-Corruption / Code of Conduct Policy (Beyond Wireless Anti-Corruption Policy 2024 — converted to PDF)",
+      "17. Geographic Coverage Declaration (list of 40+ countries where devices are distributed and serviced)",
+      "18. UN Supplier Code of Conduct Acknowledgement (signed declaration — available on UNGM/UNICEF portal during registration)",
+      "19. Tax Registration Certificate or equivalent (South African SARS tax clearance or tax registration confirmation)",
+      "20. Quality Assurance / Manufacturing Process Summary (brief description of contract manufacturing oversight, Shenzhen + Estonia, and Stellenbosch R&D QA processes)"
+    ],
+    "organization_profile_notes": [
+      "Legal entity name: Enter exactly 'Beyond Wireless Technology (Proprietary) Limited' — must match CIPC registration and UNGM profile character-for-character, including '(Proprietary) Limited' not abbreviated to '(Pty) Ltd'.",
+      "UNGM ID: Enter 183484 in the designated UNGM cross-reference field on the UNICEF portal — this links the two profiles and avoids duplicate vendor records.",
+      "UNSPSC codes: Select specific 8-digit codes, not top-level families. Recommended codes: 42271700 (Temperature Monitoring Equipment), 42271701 (Cold-Chain Data Loggers / Temperature Recorders), 43232700 (Remote Monitoring and Management Software), 42271900 (Medical Refrigeration Monitoring Equipment), 81112100 (IT and Network Monitoring Services — for SaaS component). Avoid selecting the parent fam",
+      "Company size classification: Select 'Small and Medium Enterprise (SME)' — 32 FTE headcount qualifies. UNICEF Supply Division tracks SME and developing-country supplier diversity; South African HQ is an advantage under UNICEF's supplier diversity policy.",
+      "Financial statements format: Upload as a single combined PDF (all three years 2022–2024 in one file) if the portal allows; if separate uploads are required, label each by year. UNICEF Supply Division typically reviews the most recent two years for financial viability assessment.",
+      "Geographic coverage: In the 'Countries of Operation' or 'Service Coverage' field, list all 40+ countries individually — do not enter 'Global' as a shortcut. UNICEF country office procurement teams search by country; a specific list maximises discoverability.",
+      "Product catalogue entries: For each SKU (iCT2, iCT-Lite), create a separate product entry with: WHO PQS listing number, unit price range (USD), minimum order quantity, lead time (weeks from order to delivery), and Incoterms (e.g. CIF Copenhagen or EXW Shenzhen). UNICEF Supply Division catalogue items require pricing transparency.",
+      "Certifications section: Upload ISO 13485 and ISO 9001 certificates separately — UNICEF's system indexes them by certification type. Enter the certification body name (the issuing body name from the certificate), certificate number, and expiry date in the structured fields, not just as a file upload.",
+      "Child Protection Policy: This must be a standalone document — it cannot be a clause within a broader HR or compliance policy. It should reference UNICEF's own Child Protection standards (CRC, UNICEF Child Safeguarding Policy 2021) and be signed by a named director or CEO.",
+      "References: UNICEF Supply Division prefers references on the contracting organisation's official letterhead, signed by a procurement or programme officer, specifying contract value (USD), contract period, goods/services supplied, and a contact email. The Ethiopia letter (2024) meets this standard if it includes these details — verify before upload.",
+      "Warehousing / logistics: UNICEF Supply Division will ask about warehousing locations and lead times. Beyond Wireless should declare: no owned warehouses; distribution via contract manufacturers (Shenzhen lead time ~8 weeks, Estonia ~4 weeks); regional buffer stock arrangements (if any) with Gavi-funded in-country partners. Be specific — do not overstate logistics capacity.",
+      "HaaS model disclosure: If registering the SaaS/HaaS offering alongside hardware, note that UNICEF Supply Division catalogues physical goods separately from services. Register the iCT2 and iCT-Lite as physical goods first; the monitoring SaaS can be listed as an associated service or referenced in the capability statement, but it will not appear in the physical goods catalogue."
+    ],
+    "cover_letter_draft": "Dear UNICEF Supply Division Vendor Management Team,\n\nBeyond Wireless Technology (Proprietary) Limited (UNGM ID 183484) respectfully submits this registration package to the UNICEF Supply Division for inclusion in the vaccine cold-chain monitoring equipment category. Headquartered in Stellenbosch, South Africa, Beyond Wireless has designed, manufactured, and deployed WHO PQS-prequalified remote temperature monitoring devices (iCT2 and iCT-Lite) across 40+ countries since 2013, with more than 50,000 devices in active service supporting national EPI programmes and UNICEF country office operations in 12 countries. Our devices are certified to ISO 13485 (medical devices) and ISO 9001 (quality management), carry CE Mark and FCC certification, and our WHO PQS prequalification was renewed in Q1 2025 — providing UNICEF procurement teams with immediate product eligibility assurance for the cold-chain monitoring category.\n\nBeyond Wireless has a proven and ongoing relationship with UNICEF, evidenced by direct device supply contracts with 12 UNICEF country offices between 2018 and 2024 and collaborative cold-chain monitoring projects with WHO AFRO and Gavi-supported governments in Ethiopia and Pakistan. We are committed to UNICEF's supplier standards, including full compliance with the UN Supplier Code of Conduct and UNICEF's Child Safeguarding Policy, and we enclose our Child Protection Policy and Anti-Corruption Policy for your review. We respectfully request expedited review of this registration in advance of the Q3 2026 vaccine cold-chain procurement cycle and welcome any technical clarification requests from the Supply Division team.",
+    "submission_guidance": [
+      "Portal navigation: The UNICEF Supply Division self-registration form is accessed via https://www.unicef.org/supply/working-with-unicef — look for the 'Register as a Supplier' or 'Supplier Self-Registration' link. If the portal redirects to UNGM for initial registration, confirm UNGM ID 183484 is already active before proceeding.",
+      "UNGM linkage: UNICEF imports UNGM-registered vendors automatically for most categories, but the cold-chain monitoring category may require a separate UNICEF Supply Division product submission. Do not assume UNGM registration alone is sufficient — complete the UNICEF-specific form explicitly.",
+      "File size limits: UNICEF Supply Division (like UNGM) typically enforces a 5 MB per-file upload limit. The BDO audited financials (3 years) may exceed this — compress or split by year if necessary. Use PDF/A format for archival compliance.",
+      "Child Protection Policy — most common rejection reason: UNICEF rejects vendor registrations that do not include a standalone, signed Child Protection Policy. This is the single most frequent cause of registration delay for first-time UNICEF vendors. Prepare this document before initiating the portal submission.",
+      "Product specification format: UNICEF Supply Division technical reviewers expect datasheets to include: WHO PQS listing number, operating temperature range, battery life, connectivity type (GSM/GPRS/NB-IoT), data logging interval, alarm thresholds, dimensions, weight, and IP rating. Verify the iCT2 Technical Datasheet 2025 covers all these fields before upload.",
+      "Reference letter quality: References must name a specific UNICEF or UN procurement/programme officer, include their email address, specify contract value in USD, and confirm satisfactory performance. Generic letters of appreciation are insufficient. Contact the UNICEF Ethiopia country office procurement focal point to confirm the 2024 letter meets this standard.",
+      "Category selection precision: Selecting overly broad UNSPSC categories (e.g. 42000000 Medical Equipment) will reduce discoverability. Use the specific 8-digit codes listed in the organisation profile notes. UNICEF Supply Division buyers search by exact UNSPSC code when issuing RFQs.",
+      "Follow-up timeline: UNICEF Supply Division vendor review can take 4–12 weeks. Submit no later than end of February 2026 to allow processing time before the Q3 2026 procurement cycle. Send a follow-up email to vendor@unicef.org (or the contact listed on the portal confirmation page) at the 3-week mark if no acknowledgement has been received.",
+      "Country office vs. Supply Division: Registration with UNICEF Supply Division (Copenhagen) covers global catalogue procurement. For country-level procurement (e.g. a UNICEF Ethiopia RFQ), the country office may require a separate local vendor registration. Maintain relationships with UNICEF country office procurement focal points in key markets independently of this Supply Division registration.",
+      "Do not duplicate SKUs: Register iCT2 and iCT-Lite as separate product entries with distinct WHO PQS listing numbers. Bundling them into one entry reduces the chance of appearing in category-specific searches.",
+      "Anti-Corruption Policy format: The current file is a .docx — convert to PDF before upload. UNICEF's portal may reject .docx uploads in the policy/certification section."
+    ],
+    "document_renaming_rules": [
+      {
+        "document_type": "UNGM Registration Confirmation",
+        "required_filename": "01_UNGM_Registration_Confirmation_BeyondWireless_ID183484.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Export UNGM profile page as PDF and name with UNGM ID for instant cross-reference by UNICEF reviewers."
+      },
+      {
+        "document_type": "Certificate of Incorporation / CIPC Registration",
+        "required_filename": "02_Certificate_of_Incorporation_SouthAfrica_BeyondWireless_2013.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Use the original CIPC document; do not substitute a company extract."
+      },
+      {
+        "document_type": "WHO PQS Prequalification Certificate — iCT2",
+        "required_filename": "03_WHO_PQS_Prequalification_iCT2_BeyondWireless_2025.pdf",
+        "note": "Include the PQS E006 listing number in the document itself. If iCT-Lite has a separate certificate, name it 03b_WHO_PQS_Prequalification_iCTLite_BeyondWireless_2025.pdf."
+      },
+      {
+        "document_type": "Product Technical Datasheet — iCT2",
+        "required_filename": "04a_Technical_Datasheet_iCT2_BeyondWireless_2025.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Ensure datasheet references WHO PQS listing number on the cover page."
+      },
+      {
+        "document_type": "Product Technical Datasheet — iCT-Lite",
+        "required_filename": "04b_Technical_Datasheet_iCTLite_BeyondWireless_2025.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Submit as a separate file from iCT2 datasheet to allow independent product catalogue entries."
+      },
+      {
+        "document_type": "ISO 13485 Medical Devices Certificate",
+        "required_filename": "05_ISO13485_MedicalDevices_Certificate_BeyondWireless_2024.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Confirm certificate expiry date is beyond the submission date; renew if expiring within 6 months."
+      },
+      {
+        "document_type": "ISO 9001 Quality Management Certificate",
+        "required_filename": "06_ISO9001_QualityManagement_Certificate_BeyondWireless_2024.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice."
+      },
+      {
+        "document_type": "Audited Financial Statements 2022–2024",
+        "required_filename": "07_Audited_Financial_Statements_2022_2024_BDO_BeyondWireless.pdf",
+        "note": "Combine all three years into a single PDF if under 5 MB; otherwise split as 07a (2022), 07b (2023), 07c (2024). BDO South Africa letterhead must be visible on the cover page of each year."
+      },
+      {
+        "document_type": "Bank Account Confirmation Letter",
+        "required_filename": "08_Bank_Letter_StandardBank_BeyondWireless_2025.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Letter must be on Standard Bank letterhead, dated within 12 months of submission."
+      },
+      {
+        "document_type": "Capability Statement",
+        "required_filename": "09_Capability_Statement_BeyondWireless_UNICEF_2025.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Use the UNICEF-tailored version from this package, not a generic marketing brochure."
+      },
+      {
+        "document_type": "Past Performance Reference — UNICEF Ethiopia",
+        "required_filename": "10a_Past_Performance_Reference_UNICEF_Ethiopia_2024.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Must be on UNICEF Ethiopia letterhead, signed by a named procurement or programme officer with contact email."
+      },
+      {
+        "document_type": "Child Protection Policy",
+        "required_filename": "11_Child_Protection_Policy_BeyondWireless_2025.pdf",
+        "note": "CRITICAL — this document does not yet exist in the evidence library. Must be a standalone signed policy, not embedded in an HR manual. Draft, have it signed by the CEO/Director, and convert to PDF before submission."
+      },
+      {
+        "document_type": "Anti-Corruption Policy",
+        "required_filename": "12_Anti_Corruption_Policy_BeyondWireless_2024.pdf",
+        "note": "Convert existing .docx file to PDF before upload. UNICEF portal may reject .docx format in the policy section."
+      },
+      {
+        "document_type": "Tax Registration Certificate / SARS Tax Clearance",
+        "required_filename": "13_Tax_Registration_SARS_BeyondWireless.pdf",
+        "note": "This document is not in the current evidence library — obtain a current SARS Tax Compliance Status (TCS) PIN letter or tax clearance certificate from the South African Revenue Service. Required for UNICEF financial due diligence."
+      }
+    ],
+    "missing_information": [
+      "Child Protection Policy: No standalone Child Protection Policy exists in the evidence library. This is mandatory for ALL UNICEF vendor relationships and is the most common cause of registration rejection. A policy must be drafted, reviewed by legal counsel, signed by a director, and converted to PDF before submission. Timeline: allow 2–3 weeks.",
+      "SARS Tax Clearance Certificate: No South African Revenue Service (SARS) Tax Compliance Status letter or tax clearance certificate is in the evidence library. UNICEF Supply Division requires tax registration evidence. Obtain a current TCS PIN letter from SARS eFiling — typically available within 24–48 hours if tax affairs are in order.",
+      "Second UNICEF or UN past performance reference: Only one UNICEF reference letter (Ethiopia 2024) is in the evidence library. UNICEF Supply Division expects at least two references for cold-chain equipment category registration. Contact one of the other 11 UNICEF country offices with prior device supply relationships to request a second reference letter.",
+      "WHO PQS listing number(s): The exact WHO PQS E006 listing number(s) for iCT2 and iCT-Lite are not confirmed in the intake notes. Verify the specific PQS listing numbers on the WHO PQS database (https://apps.who.int/immunization_standards/vaccine_quality/pqs_catalogue/) and ensure they appear on the certificate and datasheets.",
+      "iCT-Lite WHO PQS Certificate: The evidence library contains the iCT2 PQS certificate but does not explicitly confirm a separate iCT-Lite PQS certificate. Clarify whether iCT-Lite is covered under the same PQS listing or requires a separate certificate upload.",
+      "CE Mark Declaration of Conformity: CE Mark is listed as a certification held, but no CE Declaration of Conformity document is in the evidence library. Obtain the DoC from the EU regulatory office (Berlin) for upload — required for UNICEF Supply Division product registration of medical monitoring devices.",
+      "SABS South African product approval certificate: Listed as a certification held but not in the evidence library. Locate and upload the SABS certificate — relevant for UNICEF country office procurement in South Africa and neighbouring markets.",
+      "FCC Certification document: Listed as held but not in the evidence library. Obtain the FCC Grant of Equipment Authorization document — relevant for UNICEF country offices in Latin America and for demonstrating regulatory breadth.",
+      "Manufacturing capacity statement: UNICEF Supply Division will ask about production capacity (units per month/year), lead times, and minimum order quantities. A brief manufacturing capacity statement covering both Shenzhen and Estonia contract manufacturers (with MOQ, lead time, and annual capacity figures) does not exist in the evidence library and should be prepared.",
+      "Pricing / unit cost data: UNICEF Supply Division catalogue registration requires indicative unit pricing in USD, Incoterms, and minimum order quantities for each SKU. This commercial information is not in the evidence library and must be prepared for the product catalogue submission.",
+      "Business continuity / risk management policy: Not in the evidence library. UNGM Level 2 and some UNICEF category registrations request a business continuity plan or risk management policy. Prepare a brief document covering supply chain disruption, contract manufacturer redundancy (Shenzhen + Estonia), and NOC uptime commitments.",
+      "Quality Assurance / Manufacturing Oversight Process document: A summary of how Beyond Wireless manages quality across its two contract manufacturers (incoming inspection, factory audits, QA protocols) is not in the evidence library. A 1–2 page QA process summary will strengthen the UNICEF Supply Division technical review."
+    ],
+    "next_steps": [
+      "1. IMMEDIATE (Week 1): Draft the Child Protection Policy — assign to HR/Legal lead, use UNICEF's published Child Safeguarding Policy 2021 as the reference standard, have it signed by the CEO, and convert to PDF. This is the single blocking item for UNICEF Supply Division registration.",
+      "2. IMMEDIATE (Week 1): Log in to SARS eFiling and generate a current Tax Compliance Status (TCS) PIN letter — typically available within 24–48 hours. Save as PDF.",
+      "3. IMMEDIATE (Week 1): Log in to UNGM (ID 183484) and verify: (a) profile is complete and active, (b) UNICEF is selected as a subscribing agency, (c) UNSPSC codes include 42271700, 42271701, and 43232700, (d) all 10 evidence library documents are uploaded and correctly tagged.",
+      "4. WEEK 1–2: Contact the procurement or programme focal point at one additional UNICEF country office (beyond Ethiopia) to request a past performance reference letter — specify the required format (letterhead, contract value in USD, period, named contact with email).",
+      "5. WEEK 1–2: Retrieve the CE Declaration of Conformity from the Berlin EU regulatory office and the SABS certificate from the South African certification file — both are needed for the UNICEF product registration.",
+      "6. WEEK 2: Prepare the manufacturing capacity statement and indicative pricing sheet (USD unit prices, MOQ, lead times, Incoterms) for iCT2 and iCT-Lite — required for UNICEF Supply Division product catalogue entries.",
+      "7. WEEK 2–3: Convert the Anti-Corruption Policy from .docx to PDF. Rename all 13 documents per the document_renaming_rules convention and assemble the complete submission package in a single folder.",
+      "8. WEEK 3–4: Initiate the UNICEF Supply Division supplier self-registration form at https://www.unicef.org/supply/working-with-unicef — complete all profile fields, upload all documents, and submit. Note the confirmation reference number.",
+      "9. WEEK 4–5: Send a follow-up email to the UNICEF Supply Division Vendor Management team (vendor@unicef.org) confirming submission, referencing UNGM ID 183484, and requesting acknowledgement of receipt.",
+      "10. ONGOING: Monitor https://esourcing.unicef.org for RFI/EOI notices in the cold-chain monitoring category. Respond to any pre-qualification questionnaires within the stated deadline to ensure inclusion in the Q3 2026 procurement cycle."
+    ],
+    "agency_readiness_breakdown": [
+      {
+        "agency_slug": "ungm",
+        "agency_label": "UNGM",
+        "readiness_0_10": 8,
+        "document_coverage_0_10": 9,
+        "category_fit_0_10": 9,
+        "geographic_fit_0_10": 8,
+        "recommendation": "start_here",
+        "rationale": "Beyond Wireless already holds UNGM ID 183484 at Level 1, and 9 of 10 UNGM required documents are directly available in the evidence library (CIPC registration, BDO audited financials 2022–2024, capability statement, UNICEF Ethiopia past performance letter, ISO 9001, ISO 13485, anti-corruption policy, bank letter, WHO PQS certificate); the only gap is a tax registration certificate (SARS TCS) and a formal business continuity / risk management policy, both of which can be obtained within 1–2 weeks.",
+        "missing_documents": [
+          "Tax registration certificate (SARS Tax Compliance Status letter — not in evidence library)",
+          "Business continuity / risk management policy (not in evidence library)"
+        ],
+        "next_actions": [
+          "Generate SARS TCS PIN letter via eFiling within 48 hours — free, no external cost.",
+          "Draft a 1–2 page business continuity policy covering contract manufacturer redundancy (Shenzhen + Estonia) and NOC uptime — internal effort, 2–3 days.",
+          "Log in to UNGM and upgrade UNSPSC codes to include 42271700, 42271701, 43232700 — 30 minutes.",
+          "Upload all updated documents to UNGM profile and verify Level 1 completeness score reaches 100% before initiating UNICEF Supply Division registration."
+        ]
+      },
+      {
+        "agency_slug": "unicef",
+        "agency_label": "UNICEF",
+        "readiness_0_10": 8,
+        "document_coverage_0_10": 8,
+        "category_fit_0_10": 10,
+        "geographic_fit_0_10": 9,
+        "recommendation": "viable",
+        "rationale": "Beyond Wireless is an exceptionally strong fit for UNICEF Supply Division's vaccine cold-chain category — WHO PQS prequalification (iCT2, 2025), ISO 13485, ISO 9001, 12 UNICEF country office relationships, and 50,000+ deployed devices directly match UNICEF's procurement requirements; the primary gaps are a missing Child Protection Policy (mandatory, blocking), a second past performance reference, SARS tax clearance, and CE Declaration of Conformity, all of which are obtainable within 3–4 weeks.",
+        "missing_documents": [
+          "Child Protection Policy (mandatory for all UNICEF vendor relationships — not in evidence library)",
+          "Tax registration certificate / SARS Tax Compliance Status letter",
+          "Second past performance reference from a UNICEF country office or equivalent UN/Gavi client",
+          "CE Mark Declaration of Conformity (CE Mark held but DoC document not in evidence library)",
+          "UN Supplier Code of Conduct Acknowledgement (signed — completed during portal registration)"
+        ],
+        "next_actions": [
+          "Draft and execute a standalone Child Protection Policy within 2 weeks — this is the single blocking document for UNICEF registration.",
+          "Obtain SARS TCS PIN letter via eFiling within 48 hours.",
+          "Contact one additional UNICEF country office procurement focal point to request a past performance reference letter — target completion within 3 weeks.",
+          "Retrieve CE Declaration of Conformity from Berlin EU regulatory office within 1 week."
+        ]
+      },
+      {
+        "agency_slug": "who",
+        "agency_label": "WHO",
+        "readiness_0_10": 8,
+        "document_coverage_0_10": 9,
+        "category_fit_0_10": 10,
+        "geographic_fit_0_10": 7,
+        "recommendation": "viable",
+        "rationale": "WHO PQS prequalification (iCT2, renewed Q1 2025) is the single most powerful credential for WHO procurement of cold-chain monitoring equipment, and 8 of 10 WHO required documents are available in the evidence library (CIPC, BDO financials, capability statement, ISO 13485, ISO 9001, WHO PQS certificate, iCT2 datasheet, anti-corruption policy); gaps are SARS tax clearance, a formal anti-corruption declaration signed for WHO specifically, and insurance/delivery-capacity evidence, all minor and quickly resolved.",
+        "missing_documents": [
+          "Tax registration certificate (SARS TCS — not in evidence library)",
+          "Insurance or delivery-capacity evidence (not referenced in evidence library)",
+          "UNGM registration confirmation with WHO selected as subscribing agency (verify WHO is ticked in UNGM profile)"
+        ],
+        "next_actions": [
+          "Log in to UNGM and confirm WHO is selected as a subscribing agency alongside UNICEF — 10 minutes.",
+          "Obtain SARS TCS PIN letter within 48 hours.",
+          "Prepare a brief delivery-capacity statement covering contract manufacturer lead times and distribution partner network — 1–2 days internal effort.",
+          "Monitor WHO AFRO and WHO HQ procurement notices for cold-chain monitoring RFQs — set up UNGM tender alert for UNSPSC 42271700."
+        ]
+      },
+      {
+        "agency_slug": "undp",
+        "agency_label": "UNDP",
+        "readiness_0_10": 6,
+        "document_coverage_0_10": 7,
+        "category_fit_0_10": 5,
+        "geographic_fit_0_10": 7,
+        "recommendation": "viable",
+        "rationale": "Beyond Wireless holds most UNDP required documents (CIPC, BDO financials, capability statement, ISO 9001, past performance letter, anti-corruption policy) but UNDP procurement categories (consulting, governance, IT, capacity building) are a moderate fit at best — cold-chain monitoring devices could appear under UNDP health or ICT tenders in countries where UNDP manages health system strengthening projects, but this is an indirect and unpredictable channel compared to UNICEF or WHO.",
+        "missing_documents": [
+          "Tax registration certificate (SARS TCS — not in evidence library)",
+          "UNDP-specific references from development-sector contracts (UNICEF Ethiopia letter is relevant but UNDP prefers UNDP or bilateral development references)"
+        ],
+        "next_actions": [
+          "Register UNDP as a subscribing agency on UNGM — UNDP imports UNGM vendors automatically, so no separate portal registration is required initially.",
+          "Identify 2–3 UNDP country offices in sub-Saharan Africa or South Asia where UNDP manages health system or cold-chain projects and contact their procurement focal points directly.",
+          "Add UNDP-relevant UNSPSC codes (43232700 — Remote Monitoring Software) to UNGM profile to surface in UNDP ICT tenders.",
+          "Deprioritise UNDP until UNICEF and WHO registrations are complete — UNDP is a lower-probability channel for a device manufacturer."
+        ]
+      },
+      {
+        "agency_slug": "unops",
+        "agency_label": "UNOPS",
+        "readiness_0_10": 6,
+        "document_coverage_0_10": 7,
+        "category_fit_0_10": 6,
+        "geographic_fit_0_10": 6,
+        "recommendation": "viable",
+        "rationale": "UNOPS procures health equipment and project operations supplies and has implemented cold-chain infrastructure projects on behalf of UNICEF and Gavi; Beyond Wireless's WHO PQS prequalification, ISO 13485, and UNICEF past performance are directly relevant, but UNOPS also requires technical licenses, professional registrations, and manufacturer authorizations that are not fully documented in the evidence library, and UNOPS's infrastructure-heavy procurement focus is a partial mismatch for a device-only vendor.",
+        "missing_documents": [
+          "Tax registration certificate (SARS TCS — not in evidence library)",
+          "Insurance certificates (not referenced in evidence library)",
+          "Manufacturer authorization letters from contract manufacturers (Shenzhen + Estonia) confirming Beyond Wireless as authorised distributor/reseller",
+          "Quality, health, safety, and environmental (QHSE) policy (not explicitly in evidence library as a standalone document)"
+        ],
+        "next_actions": [
+          "Register UNOPS as a subscribing agency on UNGM — UNOPS uses UNGM as its primary vendor database.",
+          "Obtain manufacturer authorization letters from both contract manufacturers (Shenzhen + Estonia) confirming Beyond Wireless's authorised manufacturer/distributor status — 2–4 weeks.",
+          "Prepare a QHSE policy document referencing ISO 13485 and ISO 9001 frameworks — 1 week internal effort.",
+          "Monitor UNOPS Supplier Resource Centre (https://www.unops.org/business-with-unops) for health equipment tenders in sub-Saharan Africa."
+        ]
+      },
+      {
+        "agency_slug": "iom",
+        "agency_label": "IOM",
+        "readiness_0_10": 4,
+        "document_coverage_0_10": 6,
+        "category_fit_0_10": 3,
+        "geographic_fit_0_10": 5,
+        "recommendation": "blocked",
+        "rationale": "IOM procurement focuses on accommodation, transport, NFI, health services, fleet, and fuel for migration-response operations — cold-chain temperature monitoring devices are a peripheral fit at best (relevant only in IOM health clinic or medical supply chain contexts), and Beyond Wireless has no migration-response references, no fleet or logistics capacity, and no country-specific licensing for IOM's primary procurement categories.",
+        "missing_documents": [
+          "References from prior migration-response or humanitarian work (no IOM or migration-context references in evidence library)",
+          "Insurance certificates (not in evidence library)",
+          "Country-specific licensing for accommodation or transport (not applicable — Beyond Wireless is a device manufacturer)"
+        ],
+        "next_actions": [
+          "Deprioritise IOM — category fit is too low to justify registration effort within the 60-day window.",
+          "Revisit IOM only if a specific IOM health programme RFQ for cold-chain monitoring equipment is identified — monitor UNGM tender alerts.",
+          "If pursuing IOM in future, identify IOM missions managing medical supply chains (e.g. IOM Libya, IOM South Sudan health programmes) and engage country-level procurement focal points directly."
+        ]
+      },
+      {
+        "agency_slug": "wfp",
+        "agency_label": "WFP",
+        "readiness_0_10": 3,
+        "document_coverage_0_10": 5,
+        "category_fit_0_10": 2,
+        "geographic_fit_0_10": 5,
+        "recommendation": "blocked",
+        "rationale": "WFP procurement is dominated by food, logistics, fleet, warehousing, and emergency-response supply chains — Beyond Wireless's cold-chain monitoring devices have no meaningful fit with WFP's core categories, and the company holds no HACCP/ISO 22000 certification, no fleet capacity, and no humanitarian-response logistics references that WFP requires.",
+        "missing_documents": [
+          "HACCP / ISO 22000 certificate (food vendors — not applicable to Beyond Wireless)",
+          "Fleet capacity statement (logistics vendors — not applicable)",
+          "Insurance certificates (not in evidence library)",
+          "References from prior humanitarian-response operations (UNICEF Ethiopia letter is adjacent but not WFP-context)"
+        ],
+        "next_actions": [
+          "Do not pursue WFP registration — category fit is 2/10 and no realistic procurement opportunity exists for a cold-chain monitoring device manufacturer within WFP's core procurement categories.",
+          "Remove WFP from the agency target list entirely for the current registration cycle."
+        ]
+      },
+      {
+        "agency_slug": "fao",
+        "agency_label": "FAO",
+        "readiness_0_10": 3,
+        "document_coverage_0_10": 6,
+        "category_fit_0_10": 2,
+        "geographic_fit_0_10": 4,
+        "recommendation": "blocked",
+        "rationale": "FAO procurement focuses on agriculture inputs, seeds, fertilizers, livestock, irrigation, food processing, and rural infrastructure — Beyond Wireless's cold-chain monitoring technology has no meaningful fit with FAO's core categories, and while FAO does procure some agritech and food-safety monitoring equipment, the company has no agriculture-sector references, no food-safety certifications (HACCP, organic), and no FAO-relevant past performance.",
+        "missing_documents": [
+          "Quality certifications relevant to FAO (HACCP, organic, food safety — not applicable to Beyond Wireless)",
+          "Past performance references for agriculture, food systems, logistics, or field delivery (none in evidence library)",
+          "Tax registration certificate (SARS TCS — not in evidence library)"
+        ],
+        "next_actions": [
+          "Do not pursue FAO registration in the current cycle — category fit is 2/10.",
+          "Revisit FAO only if Beyond Wireless develops a cold-chain monitoring product specifically for agricultural cold-chain (e.g. vaccine storage for livestock programmes) and can demonstrate FAO-relevant past performance."
+        ]
+      }
+    ]
+  }
+}

@@ -151,6 +151,49 @@ function sourceQualityLabel(output: ProposalOutput): string | null {
   ].filter(Boolean).join(" | ");
 }
 
+/**
+ * Sprint 14. Renders one agency_readiness_breakdown entry as a
+ * three-line block: heading (label + score + tag + sub-scores),
+ * rationale paragraph, missing-docs bullets, next-action bullets.
+ * Compact enough that 8 agencies render on 1-2 pages.
+ */
+function renderAgencyBlock(
+  paragraphs: Paragraph[],
+  b: NonNullable<RosterOutput["agency_readiness_breakdown"]>[number],
+  tag: string,
+): void {
+  paragraphs.push(
+    new Paragraph({
+      spacing: { before: 240, after: 80 },
+      children: [
+        new TextRun({ text: `${b.agency_label}`, font: BODY_FONT, bold: true, size: 24 }),
+        new TextRun({ text: `   ${b.readiness_0_10}/10`, font: BODY_FONT, bold: true, size: 24, color: RULE_COLOR }),
+        new TextRun({ text: `   [${tag}]`, font: BODY_FONT, bold: true, size: 18, color: RULE_COLOR }),
+        new TextRun({ text: `   docs ${b.document_coverage_0_10}/10 · category ${b.category_fit_0_10}/10 · geo ${b.geographic_fit_0_10}/10`, font: BODY_FONT, size: 18 }),
+      ],
+    }),
+  );
+  if (b.rationale) paragraphs.push(body(b.rationale));
+  if (b.missing_documents.length > 0) {
+    paragraphs.push(
+      new Paragraph({
+        spacing: { before: 60, after: 40 },
+        children: [new TextRun({ text: "Missing:", font: BODY_FONT, bold: true, size: 20 })],
+      }),
+    );
+    b.missing_documents.forEach((d) => paragraphs.push(bullet(d)));
+  }
+  if (tag !== "BLOCKED" && b.next_actions.length > 0) {
+    paragraphs.push(
+      new Paragraph({
+        spacing: { before: 60, after: 40 },
+        children: [new TextRun({ text: "Next actions:", font: BODY_FONT, bold: true, size: 20 })],
+      }),
+    );
+    b.next_actions.forEach((a) => paragraphs.push(bullet(a)));
+  }
+}
+
 function buildSection(ctx: DocContext, paragraphs: Paragraph[], kind: string): ISectionOptions {
   return {
     properties: { page: { margin: { top: 1200, bottom: 1200, left: 1200, right: 1200 } } },
@@ -269,6 +312,32 @@ export async function renderCapabilityStatementDocx(
   agencyLabel: string,
 ): Promise<Buffer> {
   const paragraphs: Paragraph[] = [];
+
+  // Sprint 14. Lead with the agency_readiness_breakdown so the user
+  // sees "where to start" before the agency-specific narrative. The
+  // breakdown is what makes the bundle credible — if the dashboard
+  // says UNGM is start_here but the downloaded DOCX only talks about
+  // WFP, the package contradicts itself.
+  const breakdown = output.agency_readiness_breakdown ?? [];
+  if (breakdown.length > 0) {
+    paragraphs.push(h2("Agency readiness — where to start"));
+    paragraphs.push(body(`We scored ${ctx.companyName} against ${breakdown.length} UN procurement portals. The highest-readiness agency is shown first; alternates and blocked agencies follow.`));
+    const startHere = breakdown.find((b) => b.recommendation === "start_here");
+    const viable = breakdown.filter((b) => b.recommendation === "viable");
+    const blocked = breakdown.filter((b) => b.recommendation === "blocked");
+    if (startHere) renderAgencyBlock(paragraphs, startHere, "START HERE");
+    if (viable.length > 0) {
+      paragraphs.push(body(""));
+      viable.forEach((b) => renderAgencyBlock(paragraphs, b, "VIABLE"));
+    }
+    if (blocked.length > 0) {
+      paragraphs.push(body(""));
+      paragraphs.push(body("Skip for now (capability or evidence does not match):"));
+      blocked.forEach((b) => {
+        paragraphs.push(bullet(`${b.agency_label} ${b.readiness_0_10}/10 — ${b.rationale}`));
+      });
+    }
+  }
 
   paragraphs.push(h2(`Capability statement — ${agencyLabel}`));
   output.capability_statement_draft
