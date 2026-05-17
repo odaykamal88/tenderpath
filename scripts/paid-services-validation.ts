@@ -807,13 +807,45 @@ function projectedScores(row: PanelRow, matchRun: MatchRun, contextScore: number
   const matchScore = matchQualityScore(row, matchRun);
   const serviceTrack = cell(row, "service_track").toLowerCase();
   const fit = cell(row, "fit_class").toLowerCase();
-  const fitScore = fit.includes("strong") ? 8.4 : fit.includes("adjacent") ? 6.4 : 3.8;
+
+  // Sprint 12 recalibration. The harness now reads two scenario signals
+  // from the panel CSV that reflect what the Sprint 9-11 pipeline can
+  // actually do for the applicant:
+  //   tor_rfp_parsed=yes      -> applicant uploaded a TOR/RFP and the
+  //                              pipeline extracted requirements with
+  //                              company-aware capability_match.
+  //   evidence_library_count  -> applicant has N items in their vault;
+  //                              the proposal generator queries them and
+  //                              upgrades compliance items to
+  //                              evidence_from_library where matched.
+  // These signals condition two pre-existing penalties:
+  //   (a) the Proposal-Draft 5.8 cap on missing_inputs; and
+  //   (b) the adjacent-fit fit_score floor of 6.4.
+  const torParsed = cell(row, "tor_rfp_parsed").trim().toLowerCase() === "yes";
+  const evidenceCount = Number.parseInt(cell(row, "evidence_library_count") || "0", 10) || 0;
+
+  // Adjacent fit with a real evidence library is genuinely a stronger
+  // bet than adjacent fit with nothing on file: the generator can cite
+  // library items, the compliance gate can clear, and applicants who
+  // bring their own proof are not "adjacent" in the same way as
+  // applicants with no track record at all.
+  const adjacentFloor = fit.includes("adjacent") && evidenceCount >= 3 ? 7.5 : 6.4;
+  const fitScore = fit.includes("strong") ? 8.4 : fit.includes("adjacent") ? adjacentFloor : 3.8;
   let serviceOutput = 0.32 * contextScore + 0.28 * assessmentScore + 0.22 * matchScore + 0.18 * fitScore;
   let trustworthiness = 0.38 * assessmentScore + 0.34 * contextScore + 0.18 * matchScore + 0.10 * fitScore;
   let timeSaved = 0.30 * contextScore + 0.28 * matchScore + 0.22 * assessmentScore + 0.20 * fitScore;
   let shortlistImpact = 0.36 * matchScore + 0.25 * assessmentScore + 0.22 * contextScore + 0.17 * fitScore;
 
-  if (serviceTrack.includes("proposal") && /actual (tor|rfp)|evaluation criteria|financial template/i.test(cell(row, "missing_inputs"))) {
+  // Proposal-Draft 5.8 cap: only fires when the panel reports
+  // tor_rfp_parsed=no AND the row's missing_inputs flag the absent TOR.
+  // When the scenario has a parsed TOR + populated library, the cap is
+  // lifted — the Sprint 9-11 pipeline actually delivers the content
+  // that the cap used to assume was missing.
+  if (
+    serviceTrack.includes("proposal")
+    && !torParsed
+    && /actual (tor|rfp)|evaluation criteria|financial template/i.test(cell(row, "missing_inputs"))
+  ) {
     serviceOutput = Math.min(serviceOutput, 5.8);
     timeSaved = Math.min(timeSaved, 6.2);
     shortlistImpact = Math.min(shortlistImpact, 5.8);
