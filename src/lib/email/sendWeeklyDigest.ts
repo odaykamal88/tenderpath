@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { defaultEmailMeta } from "@/lib/email/defaults";
 import type { MatchedGrant, MatchedTender } from "@/lib/types";
 
 interface SendWeeklyDigestArgs {
@@ -127,6 +128,7 @@ export async function sendWeeklyDigestEmail(args: SendWeeklyDigestArgs): Promise
       subject: `Your weekly Tenderpath matches: ${args.tenders.length} tenders, ${args.grants.length} grants`,
       html: renderHtml(args),
       text: renderText(args),
+      ...defaultEmailMeta(),
     });
     if (error) sendError = error.message;
   } catch (err) {

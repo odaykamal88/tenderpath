@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { sql } from "@/lib/db";
+import { defaultEmailMeta } from "@/lib/email/defaults";
 import type { TierSlug, Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
 import { notifyAdmin } from "@/lib/email/notifyAdmin";
 import { generateAssessmentPdf } from "@/lib/email/assessmentPdf";
@@ -112,6 +113,7 @@ export async function sendAssessmentEmail(args: SendArgs): Promise<void> {
       subject: `Your TenderPath Readiness Score: ${args.readinessScore}/100`,
       html,
       text,
+      ...defaultEmailMeta(),
       ...(pdfAttachment ? { attachments: [pdfAttachment] } : {}),
     });
     if (error) sendError = error.message;

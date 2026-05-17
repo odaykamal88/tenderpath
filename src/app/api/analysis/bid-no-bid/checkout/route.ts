@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
 import { getStripe } from "@/lib/stripe";
+import { assertTenderDeadlineIsLive } from "@/lib/tender-deadline-guard";
 
 export async function POST(request: Request) {
   const guard = await requireAuth(request);
@@ -17,6 +18,17 @@ export async function POST(request: Request) {
 
   if (!pipeline_item_id) {
     return NextResponse.json({ error: "pipeline_item_id is required" }, { status: 400 });
+  }
+
+  const deadlineErr = await assertTenderDeadlineIsLive({
+    pipelineItemId: pipeline_item_id,
+    plan: "bid-no-bid",
+  });
+  if (deadlineErr) {
+    return NextResponse.json(
+      { error: deadlineErr.message, code: deadlineErr.code, deadline_iso: deadlineErr.deadline_iso },
+      { status: 409 },
+    );
   }
 
   const priceId = process.env.STRIPE_BIDNOBID_PRICE_ID;

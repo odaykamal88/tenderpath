@@ -3,6 +3,7 @@ import { getStripe } from "@/lib/stripe";
 import { getUserFromRequest } from "@/lib/auth";
 import { track } from "@/lib/telemetry/funnel";
 import { evaluateServiceFulfillmentGate } from "@/lib/service-fulfillment-gates";
+import { assertTenderDeadlineIsLive } from "@/lib/tender-deadline-guard";
 
 const SLUG_TO_PRICE_ENV: Record<string, string> = {
   "bid-no-bid":              "STRIPE_BIDNOBID_PRICE_ID",
@@ -66,6 +67,25 @@ export async function POST(request: Request) {
     const pipelineItemId = metadataValue(String(body.pipeline_item_id ?? ""));
     const workOrderId = metadataValue(String(body.work_order_id ?? ""));
     const parsedWorkOrderId = workOrderId && /^\d+$/.test(workOrderId) ? Number(workOrderId) : null;
+
+    // Block tender-anchored paid services when the deadline has already passed
+    // or is too close. Subscription plans + roster-fast-track skip this.
+    if (plan === "bid-no-bid" || plan === "proposal-draft") {
+      const parsedPipelineItemId = pipelineItemId && /^\d+$/.test(pipelineItemId)
+        ? Number(pipelineItemId)
+        : null;
+      const deadlineErr = await assertTenderDeadlineIsLive({
+        pipelineItemId: parsedPipelineItemId,
+        workOrderId: parsedWorkOrderId,
+        plan,
+      });
+      if (deadlineErr) {
+        return NextResponse.json(
+          { error: deadlineErr.message, code: deadlineErr.code, deadline_iso: deadlineErr.deadline_iso },
+          { status: 409 },
+        );
+      }
+    }
 
     const gate = await evaluateServiceFulfillmentGate({
       plan,

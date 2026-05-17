@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { defaultEmailMeta } from "@/lib/email/defaults";
 
 export interface DailyDigestPayload {
   generatedAt: string;
@@ -147,7 +148,7 @@ export async function sendDailyDigest(payload: DailyDigestPayload): Promise<{
 
   try {
     const resend = new Resend(apiKey);
-    await resend.emails.send({ from, to, subject, text: body });
+    await resend.emails.send({ from, to, subject, text: body, ...defaultEmailMeta() });
     return { sent: true, recipient: to };
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown send error";

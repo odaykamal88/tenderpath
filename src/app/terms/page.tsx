@@ -110,7 +110,27 @@ export default function TermsPage() {
         <p className="text-sm font-medium text-gray-800 mt-2 mb-1">Refunds:</p>
         <ul className="list-disc pl-5 space-y-1 text-sm">
           <li><strong>Subscription fees</strong> paid beyond the current billing period are refunded on a pro-rated basis.</li>
-          <li><strong>One-off service fees</strong> (bid/no-bid analysis, proposal packages, etc.) are non-refundable once the service has been delivered.</li>
+          <li><strong>One-off service fees</strong> (bid/no-bid analysis, proposal packages, roster fast-track) are non-refundable once the service has been delivered.</li>
+          <li>
+            <strong>Tender already closed.</strong> If you paid for a Bid/No-Bid or Proposal Package
+            tied to a tender whose deadline had passed at checkout — and we failed to block the
+            purchase — we refund in full within 5 business days. Email{" "}
+            <a href="mailto:info@tenderpath.me" className="underline">info@tenderpath.me</a> with
+            your Stripe session ID.
+          </li>
+          <li>
+            <strong>Compliance gate held your order.</strong> If our compliance gate detects a
+            mandatory eligibility blocker after payment (e.g. you can&apos;t meet an ineligibility
+            criterion the call requires), no service deliverable is generated. You can either
+            (a) provide the missing evidence within 30 days and we&apos;ll generate the deliverable,
+            or (b) request a full refund within 30 days by emailing{" "}
+            <a href="mailto:info@tenderpath.me" className="underline">info@tenderpath.me</a>.
+          </li>
+          <li>
+            <strong>Generation failed on our side.</strong> If we are unable to deliver the
+            Bid/No-Bid, Proposal Package, or Roster Fast-Track within 72 hours of payment due to
+            a TenderPath technical failure (not a missing input from you), we refund in full.
+          </li>
         </ul>
       </Section>
 
