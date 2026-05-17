@@ -1,0 +1,24 @@
+{
+  "panel_id": "SPRINT16_ROSTER_MEFOSA",
+  "source": "outputs/paid-services-validation/sprint14-roster-live-mefosa.json",
+  "note": "Sprint 16 re-grade of the MEFOSA Sprint 14 roster output (grader cap 80k).",
+  "grade": {
+    "score_0_10": 9,
+    "breakdown": {
+      "specificity": 2,
+      "evidence_anchoring": 2,
+      "completeness": 2,
+      "agency_fit_honesty": 1,
+      "submission_usability": 2
+    },
+    "rationale": [
+      "specificity: The package names MEFOSA-MENA Food Safety Associates S.A.R.L. and WFP by name throughout every section, references the specific WFP portal URL, WFP Lebanon and Jordan country offices, UNGM ID 454934, and MEFOSA-specific capabilities (HACCP advisory, ISO 17025 Tripoli lab partner, USAID Lebanon CSP, UNDP Lebanon ToT) with no generic filler.",
+      "evidence_anchoring: The capability_statement_draft cites named projects (USAID Lebanon CSP 2020–2023, UNDP Lebanon ToT 2022), named files (MEFOSA Audited Financials 2022-2024 BDO.pdf, USAID Lebanon CSP Reference Letter 2024.pdf), and the readiness rationales consistently count specific available documents against specific required-document lists, with missing_documents entries naming concrete absent items.",
+      "completeness: All nine RosterOutput fields are meaningfully populated with substantive content, and the agency_readiness_breakdown covers all eight agencies in the catalogue excerpt (UNGM, WFP, FAO, UNDP, IOM, UNICEF, WHO, UNOPS), each with readiness scores, rationale, missing documents, and next actions.",
+      "agency_fit_honesty: The single 'start_here' designation goes to UNGM rather than WFP, which is defensible on document-readiness grounds, but the primary target agency WFP is scored only 6/10 readiness and marked 'viable' while UNGM (also 7/10) gets 'start_here' — the logic is sound but the FAO category_fit score of 9/10 is slightly generous given MEFOSA has no direct FAO past performance and FAO's geographic-fit score of 6 is inconsistently low against the same evidence base; no agency is egregiously over-scored but the FAO 9/10 category fit nudges toward mild inflation.",
+      "submission_usability: Checklist steps name specific portal sections ('My Profile' → 'Subscribing Organizations'), specific buttons, and specific UNSPSC codes; the cover letter contains no unresolved bracketed placeholders beyond the implicit date; document_renaming_rules correctly state 'Agency does not enforce filenames — convention follows UN procurement best practice' for each entry; and next_steps cite week-level deadlines and cost estimates (e.g. '$1,500–$3,000 from a Lebanese certification body') throughout."
+    ],
+    "model": "claude-sonnet-4-6",
+    "graded_at": "2026-05-17T08:20:04.114Z"
+  }
+}

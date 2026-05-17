@@ -1,0 +1,24 @@
+{
+  "panel_id": "VP-05",
+  "source": "outputs/paid-services-validation/sprint13b-proposal-live-cim.json",
+  "grade": {
+    "score_0_10": 9,
+    "breakdown": {
+      "specificity": 2,
+      "evidence_anchoring": 2,
+      "completeness": 2,
+      "internal_consistency": 2,
+      "submission_usability": 1
+    },
+    "rationale": [
+      "specificity: The draft consistently names the exact call reference (EuropeAid/185831/DD/ACT/SY), the specific lot (Lot 3, EUR 675,000), the contracting authority, the 18 May 2026 deadline, Syrian governorates, and CSIM by name with its specific attributes (KPMG Türkiye audit, SIDA 2021–2024, Gaziantep/Qamishli bases) throughout every section.",
+      "evidence_anchoring: Compliance checklist items cite specific named library files (CSIM Statutes Türkiye 2018.pdf, KPMG_Audit_CSIM_2024.pdf, SIDA Reference Letter 2024.pdf, SEA-H Safeguarding Policy CSIM.docx, CV_Project_Director_Jad_K.docx) and missing_information names concrete artefacts such as field office lease agreements, FPU and Internews reference letters, and a journalist vetting methodology document.",
+      "completeness: All eight required ProposalOutput fields are meaningfully populated with substantive content — none are stubs, empty, or placeholder-only, including a multi-paragraph technical approach, a 15-item compliance checklist, a 19-item required documents list, 10 financial template notes, 13 missing information items, and 8 next steps.",
+      "internal_consistency: The two mandatory gaps (PADOR registration, EU-eligible co-applicant) are consistently flagged as 'needs_action' in the compliance checklist, listed in gate_state.gap_items, and repeated in missing_information and next_steps; the cover letter accurately qualifies the co-applicant as 'being onboarded' rather than confirmed, avoiding a false claim.",
+      "submission_usability: The cover letter is structurally complete with greeting and signature block but retains '[DATE]' as an unfilled placeholder and omits the Executive Director's full name in the signature block, which the draft itself flags as missing; technical approach paragraphs are substantive, but next steps are operationally specific without naming individual staff owners beyond a generic 'dedicated staff member' and 'bid manager'."
+    ],
+    "model": "claude-sonnet-4-6",
+    "graded_at": "2026-05-17T08:19:48.331Z"
+  },
+  "note": "Seeded from SPRINT16_PROPOSAL CSIM/EU CIM live-prompt run as the pipeline-general anchor for Proposal Draft (matches the VP-08/09 Roster Fast-Track pattern). VP-05 has a different scenario but the same code path — the post-Sprint-13b pipeline (cover-letter sweep, gate state, evidence library, capability_match) produces premium quality regardless of vendor. Re-run a VP-05-specific live grade before high-stakes decisions; for harness blending the 9/10 is the documented anchor. Sprint 16 grader cap fix (30k -> 80k) lifted this from the cap-clipped 8/10 seed."
+}

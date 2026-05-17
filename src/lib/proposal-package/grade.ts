@@ -127,7 +127,17 @@ export async function gradeProposalOutput(inputs: GradingInputs): Promise<Propos
   const client = getClient();
   // Cap text payloads so a long tender does not blow the judge's context.
   const tenderSnippet = (inputs.tenderTextExcerpt ?? "").slice(0, 6000);
-  const outputJson = JSON.stringify(inputs.output, null, 2).slice(0, 30000);
+  // Sprint 16. Cap lifted 30,000 -> 80,000. Sprint 13b/14 graders
+  // were systematically reading TRUNCATED JSON because every real
+  // live Proposal Draft (36k chars) and Roster Fast-Track (39-41k
+  // chars) output exceeded the old 30k cap. That truncation
+  // surfaced as hallucinated grader rationales: "missing_information
+  // is truncated mid-sentence", "agency_readiness_breakdown omits
+  // WHO", etc. — the grader was complaining about ITS OWN clipped
+  // input, not the actual output. Sonnet's 200k context easily
+  // absorbs 80k; the bid-no-bid grader (15k outputs) was the only
+  // grader to consistently hit 10/10 because nothing was clipped.
+  const outputJson = JSON.stringify(inputs.output, null, 2).slice(0, 80000);
   const requirementsJson = JSON.stringify(inputs.requirements, null, 2).slice(0, 8000);
   const companyContext = inputs.companyContext.slice(0, 4000);
 
@@ -302,7 +312,17 @@ const DEFAULT_ROSTER_GRADE: RosterGrade = {
 
 export async function gradeRosterOutput(inputs: RosterGradingInputs): Promise<RosterGrade> {
   const client = getClient();
-  const outputJson = JSON.stringify(inputs.output, null, 2).slice(0, 30000);
+  // Sprint 16. Cap lifted 30,000 -> 80,000. Sprint 13b/14 graders
+  // were systematically reading TRUNCATED JSON because every real
+  // live Proposal Draft (36k chars) and Roster Fast-Track (39-41k
+  // chars) output exceeded the old 30k cap. That truncation
+  // surfaced as hallucinated grader rationales: "missing_information
+  // is truncated mid-sentence", "agency_readiness_breakdown omits
+  // WHO", etc. — the grader was complaining about ITS OWN clipped
+  // input, not the actual output. Sonnet's 200k context easily
+  // absorbs 80k; the bid-no-bid grader (15k outputs) was the only
+  // grader to consistently hit 10/10 because nothing was clipped.
+  const outputJson = JSON.stringify(inputs.output, null, 2).slice(0, 80000);
   const companyContext = inputs.companyContext.slice(0, 4000);
   const primaryAgencyContext = (inputs.primaryAgencyContext ?? "").slice(0, 3000);
   const agencyCatalogueExcerpt = (inputs.agencyCatalogueExcerpt ?? "").slice(0, 8000);
