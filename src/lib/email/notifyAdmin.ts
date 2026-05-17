@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { defaultEmailMeta } from "@/lib/email/defaults";
 
 const DEFAULT_OPS_INBOX = "info@tenderpath.me";
 
@@ -14,6 +15,7 @@ export async function notifyAdmin(subject: string, body: string): Promise<void> 
       to: adminEmail,
       subject: `[TenderPath Alert] ${subject}`,
       text: body,
+      ...defaultEmailMeta(),
     });
   } catch {
     // Never let alert failures surface — they must not break the main flow

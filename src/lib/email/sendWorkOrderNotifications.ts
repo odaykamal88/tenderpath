@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { defaultEmailMeta } from "@/lib/email/defaults";
 
 interface WorkOrderNotification {
   id: number;
@@ -85,6 +86,7 @@ export async function sendWorkOrderPaidNotifications(order: WorkOrderNotificatio
         "The TenderPath team will review the intake and follow up with the next step.",
         `${appUrl}/dashboard/services`,
       ].join("\n"),
+      ...defaultEmailMeta(),
     });
   }
 
@@ -119,6 +121,7 @@ export async function sendWorkOrderPaidNotifications(order: WorkOrderNotificatio
       holdBlock,
       `${appUrl}/admin/work-orders`,
     ].filter(Boolean).join("\n"),
+    ...defaultEmailMeta(),
   });
 }
 
@@ -159,5 +162,6 @@ export async function sendWorkOrderStatusNotification(order: WorkOrderStatusNoti
       "",
       `View status: ${appUrl}/dashboard/work-orders/${order.id}`,
     ].filter(Boolean).join("\n"),
+    ...defaultEmailMeta(),
   });
 }

@@ -6,6 +6,16 @@ import { createWorkOrderFromCheckout } from "@/lib/work-orders";
 import { notifyAdmin } from "@/lib/email/notifyAdmin";
 import { track } from "@/lib/telemetry/funnel";
 
+// Sprint 18. The webhook synchronously calls createWorkOrderFromCheckout
+// which uses Next.js after() to kick off Bid/No-Bid generation. The
+// after() continuation runs against the same function instance and the
+// same maxDuration ceiling, so the default 10s budget would kill the
+// generator mid-LLM-call on cold-start Stripe retries. 300s aligns with
+// the dashboard generator routes and matches what we already grant
+// proposals/generate.
+export const runtime = "nodejs";
+export const maxDuration = 300;
+
 /**
  * FIX #1: Proper Stripe webhook with constructEvent verification.
  * Replaces broken client-side-only payment recording from Polsia build.

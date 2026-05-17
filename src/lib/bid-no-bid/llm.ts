@@ -17,7 +17,12 @@ function getClient(): Anthropic {
   if (!_anthropic) {
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) throw new Error("ANTHROPIC_API_KEY is not set");
-    _anthropic = new Anthropic({ apiKey: key });
+    // Sprint 18. Bump retries from the SDK default (2) and pin a per-request
+    // timeout so a stalled generation can't hold the Vercel function open
+    // until maxDuration. The SDK backs off exponentially on 429/5xx between
+    // attempts, which absorbs the rate-limit bursts we expect during the
+    // marketing blitz.
+    _anthropic = new Anthropic({ apiKey: key, maxRetries: 5, timeout: 90_000 });
   }
   return _anthropic;
 }

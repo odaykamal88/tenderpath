@@ -19,7 +19,10 @@ function getClient(): Anthropic {
   if (!_anthropic) {
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) throw new Error("ANTHROPIC_API_KEY is not set");
-    _anthropic = new Anthropic({ apiKey: key });
+    // Sprint 18. See bid-no-bid/llm.ts for the rationale. Per-request timeout
+    // is set above the maximum observed Sonnet+12k-token completion (~60s)
+    // with headroom for retry exponential backoff.
+    _anthropic = new Anthropic({ apiKey: key, maxRetries: 5, timeout: 120_000 });
   }
   return _anthropic;
 }

@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { defaultEmailMeta } from "@/lib/email/defaults";
 
 export interface BidReadyEmailArgs {
   email: string;
@@ -74,6 +75,7 @@ export async function sendBidNoBidReadyEmail(args: BidReadyEmailArgs): Promise<v
     to: args.email,
     subject,
     text: body,
+    ...defaultEmailMeta(),
     ...(hasAttachment && args.pdfBuffer
       ? {
           attachments: [

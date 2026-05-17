@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
 import { getStripe } from "@/lib/stripe";
 import { evaluateServiceFulfillmentGate } from "@/lib/service-fulfillment-gates";
+import { assertTenderDeadlineIsLive } from "@/lib/tender-deadline-guard";
 
 const PLAN_CONFIG: Record<string, { priceEnv: string; label: string }> = {
   "proposal-draft": {
@@ -36,6 +37,24 @@ export async function POST(request: Request) {
   if (!work_order_id) {
     return NextResponse.json({ error: "work_order_id is required" }, { status: 400 });
   }
+
+  // Block proposal-draft purchases when the underlying tender already closed
+  // or is too close for a 48-72h delivery. Roster-fast-track has no
+  // per-tender deadline so the guard returns null for it.
+  if (plan === "proposal-draft") {
+    const deadlineErr = await assertTenderDeadlineIsLive({
+      pipelineItemId: pipeline_item_id ?? null,
+      workOrderId: work_order_id,
+      plan,
+    });
+    if (deadlineErr) {
+      return NextResponse.json(
+        { error: deadlineErr.message, code: deadlineErr.code, deadline_iso: deadlineErr.deadline_iso },
+        { status: 409 },
+      );
+    }
+  }
+
   const gate = await evaluateServiceFulfillmentGate({
     plan,
     workOrderId: work_order_id,

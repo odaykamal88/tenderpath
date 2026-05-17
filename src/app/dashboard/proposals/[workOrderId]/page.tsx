@@ -372,6 +372,14 @@ function GateBanner({ gate, onRegenerate, regenerating }: {
           {gate.recommended_gaps} additional recommended improvements are flagged in the checklist below — they affect scoring but won&apos;t block submission.
         </p>
       )}
+      <p className="mt-3 border-t border-red-200 pt-2.5 text-[11.5px] leading-relaxed text-red-900/80">
+        Stuck? You have 30 days to upload the missing evidence and regenerate, or to request a
+        full refund — email{" "}
+        <a href="mailto:info@tenderpath.me" className="underline">info@tenderpath.me</a> with this
+        work-order ID. See{" "}
+        <Link href="/terms" className="underline">Terms section 6</Link> for the full refund
+        policy.
+      </p>
     </div>
   );
 }
