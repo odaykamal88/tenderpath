@@ -58,9 +58,9 @@ export async function upsertPackage(args: UpsertArgs): Promise<number> {
     ` as unknown as Array<{ id: number }>;
     return rows[0]?.id ?? args.existingPackageId;
   }
-  if (args.userId == null) {
-    throw new Error("Cannot create proposal_packages row without user_id");
-  }
+  // Sprint 17. user_id may be null for anonymous (email-only) paid
+  // orders. The DB column was relaxed in the matching migration; the
+  // runtime guard that previously threw here is removed.
   const rows = await sql`
     INSERT INTO proposal_packages (
       user_id, work_order_id, pipeline_item_id, plan,
@@ -100,7 +100,9 @@ export async function markFailure(args: FailureArgs): Promise<void> {
     `;
     return;
   }
-  if (args.userId == null) return;
+  // Sprint 17. user_id may be null for anonymous orders; persist a
+  // failure row regardless so the dashboard surfaces the error
+  // instead of looking like nothing happened.
   await sql`
     INSERT INTO proposal_packages (
       user_id, work_order_id, plan,

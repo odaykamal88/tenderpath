@@ -9,7 +9,7 @@ const journey = [
   { n: "02", label: "Match", price: "$49/mo", body: "Weekly digest of 5–10 best-fit tenders + grants. AR + EN." },
   { n: "03", label: "Decide", price: "$39", body: "Bid/no-bid memo per tender. Fit reasoning + checklist." },
   { n: "04", label: "Submit", price: "$299", body: "80% complete proposal package, delivered in 48–72 hrs." },
-  { n: "05", label: "Roster", price: "$749", body: "Full vendor registration for one target UN agency." },
+  { n: "05", label: "Roster", price: "$749", body: "Per-agency readiness leaderboard across 8 UN portals + full registration package for the highest-fit agency." },
 ];
 
 export default function Services() {

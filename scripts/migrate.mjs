@@ -316,6 +316,7 @@ ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS generation_attempts INTEG
 ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS error_message TEXT;
 ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS parsed_requirements JSONB;
 ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS gate_state JSONB;
+ALTER TABLE proposal_packages ALTER COLUMN user_id DROP NOT NULL;
 CREATE INDEX IF NOT EXISTS proposal_packages_work_order_plan ON proposal_packages (work_order_id, plan, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS weekly_digest_logs (

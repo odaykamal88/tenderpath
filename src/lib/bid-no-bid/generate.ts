@@ -470,10 +470,9 @@ async function upsertPackage(args: UpsertArgs): Promise<number> {
     return rows[0]?.id ?? args.existingPackageId;
   }
 
-  // Insert path; user_id is non-null in schema, so skip when missing.
-  if (args.userId == null) {
-    throw new Error("Cannot create proposal_packages row without user_id");
-  }
+  // Sprint 17. user_id may be null for anonymous (email-only) paid
+  // orders. The DB column was relaxed in the matching migration; the
+  // runtime guard that previously threw here is removed.
   const rows = await sql`
     INSERT INTO proposal_packages (
       user_id, work_order_id, pipeline_item_id, plan,

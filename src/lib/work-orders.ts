@@ -168,6 +168,20 @@ export async function createWorkOrderFromCheckout(
       && (fulfillmentGate?.auto_fulfill_allowed ?? true);
 
     if (!autoFulfillAllowed) {
+      // Sprint 17. Forward the gate state into the ops email so the
+      // subject can prefix [HOLD · <mode>] and the body lists the
+      // specific missing inputs / code. AUTO_FULFILLED_PLANS without
+      // a gate hold (subscription tiers etc.) pass undefined and the
+      // email behaves as before.
+      const fulfillmentHold = fulfillmentGate
+        && (fulfillmentGate.mode === "human_review" || fulfillmentGate.mode === "blocked")
+        ? {
+            mode: fulfillmentGate.mode,
+            code: fulfillmentGate.code,
+            message: fulfillmentGate.message,
+            missingInputs: fulfillmentGate.missing_inputs,
+          }
+        : undefined;
       sendWorkOrderPaidNotifications({
         id: orderId,
         plan: orderPlan,
@@ -178,6 +192,7 @@ export async function createWorkOrderFromCheckout(
         paymentStatus: order.payment_status as string | null,
         amountCents: order.amount_cents as number | null,
         currency: order.currency as string | null,
+        fulfillmentHold,
       }).catch((err) => {
         console.error("[tp:work_order_email:failed]", {
           workOrderId: orderId,
