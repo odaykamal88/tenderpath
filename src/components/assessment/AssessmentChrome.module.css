@@ -79,6 +79,10 @@
   align-items: baseline;
   border-bottom: 1px solid var(--tp2-rule);
   margin-bottom: 22px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--tp2-paper);
 }
 .tab {
   padding: 10px 20px 12px;

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import styles from "./AssessmentTabs.module.css";
 
 export type Dimension = { label: string; value: number };
@@ -11,6 +12,7 @@ export type TenderPeek = {
   sector?: string | null;
   matchReason?: string | null;
   confidence?: "high" | "medium" | "low" | null;
+  sourceUrl?: string | null;
 };
 
 function peekDotColor(confidence: TenderPeek["confidence"]): string {
@@ -50,7 +52,6 @@ export function ScoreTab({
             </div>
           </div>
         </div>
-        <p className={styles.summary}>{summary}</p>
         <ul className={styles.dimList}>
           {dimensions.map((d) => (
             <li key={d.label} className={styles.dimRow}>
@@ -72,6 +73,7 @@ export function ScoreTab({
             </li>
           ))}
         </ul>
+        <p className={styles.summary}>{summary}</p>
       </section>
 
       <aside>
@@ -96,7 +98,20 @@ export function ScoreTab({
                   {t.code} · {t.agency}
                   {t.sector && <> · {t.sector}</>}
                 </div>
-                <div className={styles.peekTitle}>{t.title}</div>
+                <div className={styles.peekTitle}>
+                  {t.sourceUrl ? (
+                    <a
+                      href={t.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "inherit", textDecoration: "none" }}
+                    >
+                      {t.title} ↗
+                    </a>
+                  ) : (
+                    t.title
+                  )}
+                </div>
                 {t.matchReason && (
                   <div
                     style={{
@@ -127,7 +142,7 @@ export function ScoreTab({
             {recommendedTier.name} — {recommendedTier.price}
           </div>
           <p className={styles.ctaPitch}>{recommendedTier.pitch}</p>
-          <button className={styles.ctaButton}>Subscribe →</button>
+          <Link href="/pay?plan=grants-tenders-matching" className={styles.ctaButton} style={{ display: "inline-block", textDecoration: "none" }}>Subscribe →</Link>
         </div>
       </aside>
     </div>

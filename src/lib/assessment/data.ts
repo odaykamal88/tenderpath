@@ -312,7 +312,7 @@ export async function getCurrentUserAssessment(): Promise<AssessmentReport | nul
   return rowToReport(rows[0] as DBRow);
 }
 
-export async function getThisWeek(reportId: string): Promise<{ kind: string; title: string; due: string }[]> {
+export async function getThisWeek(reportId: string): Promise<{ kind: string; title: string; due: string; url?: string | null }[]> {
   const rows = await sql`
     SELECT matched_tenders, matched_grants
     FROM assessments
@@ -325,25 +325,25 @@ export async function getThisWeek(reportId: string): Promise<{ kind: string; tit
   const grants: MatchedGrant[] = rows[0].matched_grants ?? [];
   const cutoff = Date.now() + 14 * 86_400_000;
 
-  const items: { kind: string; title: string; due: string; ts: number }[] = [];
+  const items: { kind: string; title: string; due: string; ts: number; url?: string | null }[] = [];
 
   for (const t of tenders) {
     if (!t.deadline) continue;
     const ts = new Date(t.deadline).getTime();
     if (ts <= cutoff) {
-      items.push({ kind: "Tender", title: t.title, due: t.deadline, ts });
+      items.push({ kind: "Tender", title: t.title, due: t.deadline, ts, url: t.source_url });
     }
   }
   for (const g of grants) {
     if (!g.deadline) continue;
     const ts = new Date(g.deadline).getTime();
     if (ts <= cutoff) {
-      items.push({ kind: "Grant", title: g.title, due: g.deadline, ts });
+      items.push({ kind: "Grant", title: g.title, due: g.deadline, ts, url: g.source_url });
     }
   }
 
   return items
     .sort((a, b) => a.ts - b.ts)
     .slice(0, 6)
-    .map(({ kind, title, due }) => ({ kind, title, due }));
+    .map(({ kind, title, due, url }) => ({ kind, title, due, url }));
 }

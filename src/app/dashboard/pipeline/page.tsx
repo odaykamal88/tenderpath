@@ -243,28 +243,6 @@ export default function PipelinePage() {
 
   return (
     <div className="px-8 py-8 max-w-[1400px]">
-      {/* Sub-tab bar (kanban / applications / bid analysis) */}
-      <div className="flex gap-6 mb-7 border-b border-stone-200/70">
-        <Link
-          href="/dashboard/pipeline"
-          className="pb-3 text-[12px] font-semibold uppercase tracking-[0.15em] text-stone-900 border-b border-stone-900 -mb-px"
-        >
-          Kanban
-        </Link>
-        <Link
-          href="/dashboard/applications"
-          className="pb-3 text-[12px] font-semibold uppercase tracking-[0.15em] text-stone-400 hover:text-stone-700 transition-colors"
-        >
-          Applications
-        </Link>
-        <Link
-          href="/dashboard/bid-analysis"
-          className="pb-3 text-[12px] font-semibold uppercase tracking-[0.15em] text-stone-400 hover:text-stone-700 transition-colors"
-        >
-          Bid analysis
-        </Link>
-      </div>
-
       {/* Header */}
       <header className="flex flex-wrap items-end justify-between gap-3 sm:gap-6 mb-2">
         <div className="min-w-0 flex-1">
@@ -282,8 +260,8 @@ export default function PipelinePage() {
             Pipeline
           </h1>
           <p className="mt-1 max-w-2xl text-[13.5px] sm:text-[15px] leading-relaxed text-stone-600">
-            <span className="hidden sm:inline">Drag tenders between stages. Use the buttons on each card to advance — or click <em>Why this match?</em> to see the evidence.</span>
-            <span className="sm:hidden">Tap a card to expand. Use stage buttons to advance.</span>
+            <span className="hidden sm:inline">Drag tenders between stages — or click a card title to see match evidence.</span>
+            <span className="sm:hidden">Tap a card to expand.</span>
           </p>
         </div>
         <button
@@ -485,8 +463,19 @@ export default function PipelinePage() {
                                     )}
                                   </div>
 
-                                  {/* Title */}
-                                  <div className="font-medium text-stone-900 leading-snug line-clamp-2 text-[13.5px]">
+                                  {/* Title — clickable to expand when match reasons exist */}
+                                  <div
+                                    className={`font-medium text-stone-900 leading-snug line-clamp-2 text-[13.5px] ${item.match_reasons ? "cursor-pointer hover:text-stone-600" : ""}`}
+                                    onClick={() => item.match_reasons && setExpandedId(isExpanded ? null : item.id)}
+                                  >
+                                    {item.match_reasons && (
+                                      <svg
+                                        className={`inline-block h-3 w-3 mr-1 mb-0.5 text-stone-400 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                                      >
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                      </svg>
+                                    )}
                                     {item.tender_title}
                                   </div>
 
@@ -530,75 +519,54 @@ export default function PipelinePage() {
                                     )}
                                   </div>
 
-                                  {/* Why match toggle */}
-                                  {item.match_reasons && (
-                                    <div className="mt-2">
-                                      <button
-                                        onClick={() => setExpandedId(isExpanded ? null : item.id)}
-                                        className="text-[11px] text-stone-500 hover:text-stone-900 flex items-center gap-1 underline-offset-2 hover:underline"
-                                      >
-                                        <svg className={`h-3 w-3 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                        </svg>
-                                        Why this match?
-                                      </button>
-                                      {isExpanded && (
-                                        <div className="mt-2 rounded-sm bg-stone-50 border border-stone-200/70 p-2.5 text-[11px] leading-relaxed text-stone-700 space-y-1">
-                                          {item.match_reasons.summary?.map((s, i) => (
-                                            <div key={i}>· {s}</div>
-                                          ))}
-                                          {item.match_reasons.matchedSectors && item.match_reasons.matchedSectors.length > 0 && (
-                                            <div className="text-stone-500">
-                                              <span className="font-semibold uppercase tracking-wider text-[9px] text-stone-400">Sectors </span>
-                                              {item.match_reasons.matchedSectors.join(", ")}
-                                            </div>
-                                          )}
-                                          {item.match_reasons.matchedCapabilities && item.match_reasons.matchedCapabilities.length > 0 && (
-                                            <div className="text-stone-500">
-                                              <span className="font-semibold uppercase tracking-wider text-[9px] text-stone-400">Capabilities </span>
-                                              {item.match_reasons.matchedCapabilities.join(", ")}
-                                            </div>
-                                          )}
-                                          {item.match_reasons.matchedKeywords && item.match_reasons.matchedKeywords.length > 0 && (
-                                            <div className="text-stone-500">
-                                              <span className="font-semibold uppercase tracking-wider text-[9px] text-stone-400">Keywords </span>
-                                              {item.match_reasons.matchedKeywords.join(", ")}
-                                            </div>
-                                          )}
-                                          {item.match_reasons.geographyAlignment?.mode && item.match_reasons.geographyAlignment.mode !== "unknown" && (
-                                            <div className="text-stone-500">
-                                              <span className="font-semibold uppercase tracking-wider text-[9px] text-stone-400">Geography </span>
-                                              {item.match_reasons.geographyAlignment.mode.replace(/-/g, " ")}
-                                              {item.match_reasons.geographyAlignment.tenderCountry ? ` · ${item.match_reasons.geographyAlignment.tenderCountry}` : ""}
-                                            </div>
-                                          )}
-                                          {item.match_reasons.opportunityBucketReason && (
-                                            <div className="italic text-stone-500 pt-1">{item.match_reasons.opportunityBucketReason}</div>
-                                          )}
-                                          {item.match_reasons.confidence != null && (
-                                            <div className="text-stone-500">
-                                              <span className="font-semibold uppercase tracking-wider text-[9px] text-stone-400">Confidence </span>
-                                              {Math.round(item.match_reasons.confidence * 100)}%
-                                            </div>
-                                          )}
-                                          {item.match_reasons.caveats?.map((c, i) => (
-                                            <div key={i} className="text-amber-700">⚠ {c}</div>
-                                          ))}
+                                  {/* Why match — expanded on title click */}
+                                  {item.match_reasons && isExpanded && (
+                                    <div className="mt-2 rounded-sm bg-stone-50 border border-stone-200/70 p-2.5 text-[11px] leading-relaxed text-stone-700 space-y-1">
+                                      {item.match_reasons.summary?.map((s, i) => (
+                                        <div key={i}>· {s}</div>
+                                      ))}
+                                      {item.match_reasons.matchedSectors && item.match_reasons.matchedSectors.length > 0 && (
+                                        <div className="text-stone-500">
+                                          <span className="font-semibold uppercase tracking-wider text-[9px] text-stone-400">Sectors </span>
+                                          {item.match_reasons.matchedSectors.join(", ")}
                                         </div>
                                       )}
+                                      {item.match_reasons.matchedCapabilities && item.match_reasons.matchedCapabilities.length > 0 && (
+                                        <div className="text-stone-500">
+                                          <span className="font-semibold uppercase tracking-wider text-[9px] text-stone-400">Capabilities </span>
+                                          {item.match_reasons.matchedCapabilities.join(", ")}
+                                        </div>
+                                      )}
+                                      {item.match_reasons.matchedKeywords && item.match_reasons.matchedKeywords.length > 0 && (
+                                        <div className="text-stone-500">
+                                          <span className="font-semibold uppercase tracking-wider text-[9px] text-stone-400">Keywords </span>
+                                          {item.match_reasons.matchedKeywords.join(", ")}
+                                        </div>
+                                      )}
+                                      {item.match_reasons.geographyAlignment?.mode && item.match_reasons.geographyAlignment.mode !== "unknown" && (
+                                        <div className="text-stone-500">
+                                          <span className="font-semibold uppercase tracking-wider text-[9px] text-stone-400">Geography </span>
+                                          {item.match_reasons.geographyAlignment.mode.replace(/-/g, " ")}
+                                          {item.match_reasons.geographyAlignment.tenderCountry ? ` · ${item.match_reasons.geographyAlignment.tenderCountry}` : ""}
+                                        </div>
+                                      )}
+                                      {item.match_reasons.opportunityBucketReason && (
+                                        <div className="italic text-stone-500 pt-1">{item.match_reasons.opportunityBucketReason}</div>
+                                      )}
+                                      {item.match_reasons.confidence != null && (
+                                        <div className="text-stone-500">
+                                          <span className="font-semibold uppercase tracking-wider text-[9px] text-stone-400">Confidence </span>
+                                          {Math.round(item.match_reasons.confidence * 100)}%
+                                        </div>
+                                      )}
+                                      {item.match_reasons.caveats?.map((c, i) => (
+                                        <div key={i} className="text-amber-700">⚠ {c}</div>
+                                      ))}
                                     </div>
                                   )}
 
                                   {/* Actions */}
                                   <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
-                                    {STAGE_GUIDANCE[item.stage].moveTo && (
-                                      <button
-                                        onClick={() => moveStage(item.id, STAGE_GUIDANCE[item.stage].moveTo!)}
-                                        className="text-[10.5px] font-semibold uppercase tracking-wider text-stone-700 border border-stone-300 rounded-sm px-2 py-1 bg-white hover:border-stone-700 hover:text-stone-900 transition-colors"
-                                      >
-                                        → {STAGE_GUIDANCE[item.stage].button}
-                                      </button>
-                                    )}
                                     <Link
                                       href={serviceHref("bid-no-bid", item)}
                                       title="Get win probability, criteria breakdown, and gap analysis ($39)"
@@ -619,6 +587,16 @@ export default function PipelinePage() {
                                       >
                                         Roster
                                       </Link>
+                                    )}
+                                    {(item.manual_source_url ?? item.source_url) && (
+                                      <a
+                                        href={(item.manual_source_url ?? item.source_url)!}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[10.5px] font-semibold uppercase tracking-wider text-stone-500 border border-stone-200 rounded-sm px-2 py-1 bg-white hover:border-stone-400 transition-colors"
+                                      >
+                                        View ↗
+                                      </a>
                                     )}
                                     <div className="flex-1" />
                                     <button
