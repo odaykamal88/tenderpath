@@ -135,7 +135,11 @@ const DEFAULT_BID_GRADE: BidGrade = {
 export async function gradeBidNoBidOutput(inputs: BidGradingInputs): Promise<BidGrade> {
   const client = getClient();
   const tenderSnippet = (inputs.tenderTextExcerpt ?? "").slice(0, 6000);
-  const outputJson = JSON.stringify(inputs.output, null, 2).slice(0, 30000);
+  // Sprint 16. Cap lifted 30,000 -> 80,000 to match the proposal +
+  // roster graders. Current Bid/No-Bid outputs (~15k chars) fit
+  // comfortably either way, but future schema expansions could
+  // push past 30k. Sonnet 200k context absorbs 80k easily.
+  const outputJson = JSON.stringify(inputs.output, null, 2).slice(0, 80000);
   const requirementsJson = JSON.stringify(inputs.requirements, null, 2).slice(0, 6000);
   const companyContext = inputs.companyContext.slice(0, 4000);
 

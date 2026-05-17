@@ -1,24 +1,24 @@
 {
   "panel_id": "VP-08",
   "source": "outputs/paid-services-validation/sprint14-roster-live-powergen.json",
-  "note": "Sprint 14 — PowerGen renewable energy / UNDP primary. Real live-prompt grade replacing the seeded MEFOSA-derived anchor.",
+  "note": "Sprint 16 re-grade — PowerGen, grader cap 80k. Replaces Sprint 14 cap-clipped grade.",
   "grade": {
-    "score_0_10": 8,
+    "score_0_10": 9,
     "breakdown": {
       "specificity": 2,
       "evidence_anchoring": 2,
-      "completeness": 1,
+      "completeness": 2,
       "agency_fit_honesty": 1,
       "submission_usability": 2
     },
     "rationale": [
-      "specificity: Every section names POWERGEN RENEWABLE ENERGY EAST AFRICA LIMITED explicitly, references UNDP eTendering by URL, cites UNGM ID 263073, and ties capabilities (mini-grid EPC, ISO 9001/45001, USAID Power Africa, AfDB SEFA, 60+ mini-grids, 45,000+ households) to the specific agency mandate throughout — no generic filler.",
-      "evidence_anchoring: The capability_statement_draft names specific file-sourced evidence (Deloitte 2024 consolidated audit, USAID Power Africa Reference Letter 2024, AfDB SEFA Project Completion Report 2023, ISO certificates), the readiness rationales cite exact document counts and named files, and missing_documents identifies concrete named gaps (Kenya KRA PIN certificate, standalone QA policy, business continuity policy) rather than vague categories.",
-      "completeness: All 9 RosterOutput fields are meaningfully populated, but the agency_readiness_breakdown covers only two agencies (UNGM and UNDP) when the catalogue excerpt contains seven plausible agencies (WFP, UNICEF, IOM, FAO, UNOPS, WHO are all absent), so the breakdown is materially incomplete against the rubric's 'one entry per plausible agency' requirement.",
-      "agency_fit_honesty: Designating UNGM as 'start_here' is defensible (it is the foundational registration unlocking ~30 agencies), but UNDP is the declared primary target agency and is the stronger 'start_here' candidate given the company's direct SDG-7 alignment and active UNDP country offices across its five operating markets; additionally, UNOPS — which has high readiness given PowerGen's EPC track record and ISO certifications — is entirely absent from the breakdown, and no agency is marked 'blocked' despite WHO, WFP, and UNICEF being clearly outside PowerGen's capability scope.",
-      "submission_usability: Checklist steps name specific portal URLs, button labels ('Register', 'Search Tenders'), and upload sequences; the cover letter contains zero unresolved bracketed placeholders; document_renaming_rules correctly state the agency does not enforce filenames while providing a consistent numbered convention; and next_steps assign week-level deadlines with cost notes (e.g. 'same-day, no cost' for KRA PIN) throughout."
+      "specificity: Every section names POWERGEN RENEWABLE ENERGY EAST AFRICA LIMITED explicitly, references UNDP eTendering at the correct URL, cites UNGM ID 263073, and maps PowerGen's actual capabilities (60+ mini-grids, USAID Power Africa, AfDB SEFA, ISO 9001+45001, Deloitte audit) to UNDP's specific procurement categories throughout.",
+      "evidence_anchoring: The capability_statement_draft names specific files (USAID Power Africa Reference Letter 2024.pdf, AfDB SEFA Project Completion Report 2023.pdf, Deloitte consolidated audit), the readiness rationales cite exact document counts from the evidence library, and missing_documents lists concrete named items (Kenya KRA PIN certificate, standalone business continuity policy) rather than generic gaps.",
+      "completeness: All 9 RosterOutput fields are meaningfully populated with substantive content, and the agency_readiness_breakdown covers all 8 agencies in the catalogue excerpt with individual rationales, scores, missing documents, and next actions.",
+      "agency_fit_honesty: The 'start_here' designation goes to UNGM rather than UNDP, which is defensible and well-argued (one registration exposes PowerGen to ~30 agencies), but UNGM and UNDP are both scored identically at 8/8/8/9 across all sub-dimensions despite UNDP lacking an active portal account — a concrete operational gap that should have depressed UNDP's readiness score relative to UNGM; additionally, UNOPS category_fit of 9 is generous given no UNOPS-specific past performance exists in the evidence library.",
+      "submission_usability: Registration checklist steps name specific portal buttons and sections, the cover letter contains no unresolved bracketed placeholders, document_renaming_rules correctly note that UNDP does not enforce filenames while still providing a consistent convention, and next_steps assign specific week-by-week deadlines with same-day/no-cost annotations where applicable."
     ],
     "model": "claude-sonnet-4-6",
-    "graded_at": "2026-05-17T07:57:51.724Z"
+    "graded_at": "2026-05-17T08:20:17.591Z"
   }
 }

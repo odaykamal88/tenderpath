@@ -1,24 +1,24 @@
 {
   "panel_id": "VP-09",
   "source": "outputs/paid-services-validation/sprint14-roster-live-beyond.json",
-  "note": "Sprint 14 — Beyond Wireless cold-chain IoT / UNICEF primary. Real live-prompt grade replacing the seeded MEFOSA-derived anchor.",
+  "note": "Sprint 16 re-grade — Beyond Wireless, grader cap 80k. Replaces Sprint 14 cap-clipped grade.",
   "grade": {
-    "score_0_10": 8,
+    "score_0_10": 9,
     "breakdown": {
       "specificity": 2,
       "evidence_anchoring": 2,
-      "completeness": 1,
+      "completeness": 2,
       "agency_fit_honesty": 1,
       "submission_usability": 2
     },
     "rationale": [
       "specificity: Every section names Beyond Wireless Technology (Proprietary) Limited, UNGM ID 183484, iCT2/iCT-Lite SKUs, WHO PQS E006, UNICEF Supply Division portal URL, and specific UNSPSC codes throughout — no generic filler.",
-      "evidence_anchoring: The capability statement cites named certifications (ISO 13485, ISO 9001, WHO PQS Q1 2025 renewal), named past projects (UNICEF Ethiopia 2024, Gavi Ethiopia/Pakistan, WHO AFRO), named files (BDO South Africa audited financials, Beyond Wireless Anti-Corruption Policy 2024.docx), and the missing_documents list names specific absent items (SARS TCS letter, CE DoC, SABS certificate) rather than vague gaps.",
-      "completeness: All 9 RosterOutput fields are meaningfully populated, but the agency_readiness_breakdown covers only UNGM and is truncated mid-sentence in the UNGM next_actions field, with no entries for WHO, UNDP, UNOPS, WFP, IOM, or FAO — all of which appear in the catalogue excerpt and several of which (WHO in particular) are plausible for this vendor.",
-      "agency_fit_honesty: Naming UNGM as start_here is defensible as a gateway registration, but UNGM is a registration platform not a procuring agency, and the breakdown omits WHO entirely despite Beyond Wireless holding WHO PQS prequalification and having WHO AFRO past performance — WHO would score highly and its absence means the breakdown cannot be called honest or complete; additionally the UNGM document_coverage score of 9/10 is generous given two confirmed missing documents.",
-      "submission_usability: Checklist steps name specific portal URLs, button labels, and sequenced actions; the cover letter contains no unresolved bracketed placeholders beyond an implicit date; document renaming rules correctly note the agency does not enforce filenames while providing a consistent numbered convention; next_steps assign week-level timelines and note specific costs (free SARS eFiling) and deadlines (end of February 2026 submission target)."
+      "evidence_anchoring: Capability statement cites named files (BDO audited financials, UNICEF Ethiopia Past Performance Letter 2024, ISO 13485/9001 2024 certificates), breakdown rationales reference specific evidence-library items by name, and missing_documents lists concrete named gaps (SARS TCS PIN letter, CE Declaration of Conformity, Child Protection Policy).",
+      "completeness: All nine RosterOutput fields are substantively populated and the agency_readiness_breakdown covers all eight catalogue agencies (UNGM, UNICEF, WHO, UNDP, UNOPS, IOM, WFP, FAO) with scored entries.",
+      "agency_fit_honesty: UNGM is correctly flagged start_here and UNICEF/WHO are correctly viable, but assigning UNGM a 9/10 document_coverage while simultaneously listing two missing documents (SARS TCS and business continuity policy) is a minor inflation; more critically, UNICEF — which has WHO PQS prequalification, 12 country-office relationships, and direct category alignment — scores identically to UNGM on readiness (8/10) despite being the stronger substantive fit, suggesting the scoring logic slightly undervalues the primary target relative to the gateway registration.",
+      "submission_usability: Checklist steps name specific portal URLs, button labels, and sequenced actions; the cover letter contains no unresolved bracketed placeholders beyond an implicit date; document_renaming_rules correctly note the agency does not enforce filenames while providing a consistent convention; next_steps assign week-numbered deadlines and note specific costs (free SARS eFiling, 48-hour turnaround)."
     ],
     "model": "claude-sonnet-4-6",
-    "graded_at": "2026-05-17T07:58:29.969Z"
+    "graded_at": "2026-05-17T08:20:31.379Z"
   }
 }
