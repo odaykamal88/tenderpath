@@ -1,0 +1,24 @@
+{
+  "panel_id": "SPRINT14_ROSTER",
+  "source": "outputs/paid-services-validation/sprint14-roster-live-mefosa.json",
+  "note": "Sprint 14 — Roster Fast-Track with agency_readiness_breakdown + gradeRosterOutput judge. MEFOSA / WFP primary, 8 agencies scored, evidence library wired.",
+  "grade": {
+    "score_0_10": 9,
+    "breakdown": {
+      "specificity": 2,
+      "evidence_anchoring": 2,
+      "completeness": 2,
+      "agency_fit_honesty": 1,
+      "submission_usability": 2
+    },
+    "rationale": [
+      "specificity: Every section names MEFOSA-MENA Food Safety Associates S.A.R.L explicitly, references WFP by portal URL and registration pathway, and ties capabilities (HACCP, ISO 22000, Codex Alimentarius, Tripoli ISO 17025 lab, USAID Lebanon CSP, UNDP Lebanon ToT) to WFP-specific requirements throughout.",
+      "evidence_anchoring: The capability_statement_draft names specific engagements (USAID Lebanon CSP 2020-2023, UNDP Lebanon 2022), specific file names (USAID Lebanon CSP Reference Letter 2024.pdf, MEFOSA Audited Financials 2022-2024 BDO.pdf) appear in required_documents and renaming rules, and readiness rationales cite exact document counts and named gaps rather than generic language.",
+      "completeness: All nine RosterOutput fields are meaningfully populated with substantive content, and the agency_readiness_breakdown covers all seven catalogue agencies (UNGM, WFP, FAO, UNDP, IOM, UNICEF, UNOPS, WHO) — though the WFP entry is conspicuously absent from the breakdown array despite being the primary target agency, which is a structural gap.",
+      "agency_fit_honesty: UNGM is named start_here rather than WFP, which is defensible given UNGM is the prerequisite gateway, but the primary target agency WFP has no dedicated breakdown entry at all, meaning the package fails to score or explicitly position the agency it was built around; additionally UNDP document_coverage is scored 8/10 when the UNDP reference letter — the only direct UN past-performance document — is missing, which is a mild over-score.",
+      "submission_usability: Checklist steps name specific portal sections (UNGM 'My Profile' → 'Subscribing Organizations'), cover letter contains no unresolved bracketed placeholders beyond the implicit date, document_renaming_rules correctly state the agency does not enforce filenames while providing a consistent convention, and next_steps assign specific week-by-week deadlines with effort estimates."
+    ],
+    "model": "claude-sonnet-4-6",
+    "graded_at": "2026-05-17T07:21:31.868Z"
+  }
+}

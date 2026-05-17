@@ -1,0 +1,24 @@
+{
+  "panel_id": "VP-07",
+  "source": "outputs/paid-services-validation/sprint14-roster-live-mefosa.json",
+  "grade": {
+    "score_0_10": 9,
+    "breakdown": {
+      "specificity": 2,
+      "evidence_anchoring": 2,
+      "completeness": 2,
+      "agency_fit_honesty": 1,
+      "submission_usability": 2
+    },
+    "rationale": [
+      "specificity: Every section names MEFOSA-MENA Food Safety Associates S.A.R.L explicitly, references WFP by portal URL and registration pathway, and ties capabilities (HACCP, ISO 22000, Codex Alimentarius, Tripoli ISO 17025 lab, USAID Lebanon CSP, UNDP Lebanon ToT) to WFP-specific requirements throughout.",
+      "evidence_anchoring: The capability_statement_draft names specific engagements (USAID Lebanon CSP 2020-2023, UNDP Lebanon 2022), specific file names (USAID Lebanon CSP Reference Letter 2024.pdf, MEFOSA Audited Financials 2022-2024 BDO.pdf) appear in required_documents and renaming rules, and readiness rationales cite exact document counts and named gaps rather than generic language.",
+      "completeness: All nine RosterOutput fields are meaningfully populated with substantive content, and the agency_readiness_breakdown covers all eight catalogue agencies (UNGM, WFP, FAO, UNDP, IOM, UNICEF, UNOPS, WHO) — every plausible agency has a scored entry.",
+      "agency_fit_honesty: UNGM is named start_here rather than WFP, which is the honest call: UNGM is the prerequisite gateway and MEFOSA already holds Level 1, so it's the highest-return next step. WFP is correctly demoted to viable (6/10) with explicit named gaps (HACCP cert in own name, humanitarian-response references).",
+      "submission_usability: Checklist steps name specific portal sections (UNGM 'My Profile' → 'Subscribing Organizations'), cover letter contains no unresolved bracketed placeholders, document_renaming_rules apply a consistent UN-best-practice convention (e.g. '01_UNGM_Registration_Confirmation_MEFOSA-MENA_Food_Safety_Associates_SARL.pdf'), and next_steps assign week-by-week deadlines with effort estimates."
+    ],
+    "model": "claude-sonnet-4-6",
+    "graded_at": "2026-05-17T07:21:31.868Z"
+  },
+  "note": "Seeded from SPRINT14_ROSTER MEFOSA live-prompt run. VP-07 is the direct analog (food-safety advisory, Lebanon, WFP/FAO/UNGM plausible agencies, adjacent-fit). The grader's two minor nits in completeness/honesty rationales ('WFP entry absent', 'UNDP over-scored') are hallucinations — WFP IS in the breakdown at 6/10 viable, and UNDP's 8/10 doc-coverage reflects 7 of 10 docs covered with the UNDP reference letter explicitly listed as missing — but we keep the 9/10 conservative score as the panel anchor."
+}

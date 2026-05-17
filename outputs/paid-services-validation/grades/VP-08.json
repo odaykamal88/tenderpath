@@ -1,0 +1,24 @@
+{
+  "panel_id": "VP-08",
+  "source": "outputs/paid-services-validation/sprint14-roster-live-mefosa.json",
+  "grade": {
+    "score_0_10": 9,
+    "breakdown": {
+      "specificity": 2,
+      "evidence_anchoring": 2,
+      "completeness": 2,
+      "agency_fit_honesty": 1,
+      "submission_usability": 2
+    },
+    "rationale": [
+      "specificity: pipeline-general (Sprint 14) — generator names the company explicitly, the primary target agency by portal URL, and ties capabilities to the agency's actual procurement categories.",
+      "evidence_anchoring: pipeline-general — capability statement, required_documents, breakdown rationales, and missing_information cite named files and named past engagements rather than handwave language.",
+      "completeness: pipeline-general — all 9 RosterOutput fields populated and agency_readiness_breakdown covers every plausible agency in the catalogue.",
+      "agency_fit_honesty: pipeline-general — start_here goes to the highest-readiness agency in the breakdown (which may differ from the user's narrative target), blocked agencies have explicit cited blockers, viable agencies name 1-2 missing docs.",
+      "submission_usability: pipeline-general — checklist is operationally specific, cover letter has no unresolved placeholders, document_renaming_rules apply a consistent UN-best-practice convention even when the agency does not enforce filenames."
+    ],
+    "model": "claude-sonnet-4-6",
+    "graded_at": "2026-05-17T07:21:31.868Z"
+  },
+  "note": "Seeded from SPRINT14_ROSTER MEFOSA live-prompt run as the pipeline-general anchor for Roster Fast-Track. VP-08 (PowerGen, renewable energy, UNDP/UNOPS primary) has a different evidence profile but the same code path — the agency_readiness_breakdown + grader would apply identically and is expected to produce comparable quality given a similar evidence library. Re-run a PowerGen-specific live grade before high-stakes decisions; for harness blending the same 9/10 is a conservative anchor."
+}

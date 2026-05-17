@@ -90,6 +90,49 @@ export interface RosterOutput {
   document_renaming_rules: DocumentRenameRule[];
   missing_information: string[];
   next_steps: string[];
+  /** Sprint 14. Optional. Per-agency readiness breakdown. The roster
+   *  output picks ONE primary agency to write the full narrative
+   *  against, but a competent vendor can usually register with 2-3
+   *  agencies — and they have different document requirements, category
+   *  fits, and geographic reach. This breakdown scores the applicant
+   *  against every plausible agency so the dashboard can surface
+   *  "start here because…" and "blocked on…" guidance. Legacy rows
+   *  without this field render unchanged. */
+  agency_readiness_breakdown?: AgencyReadiness[];
+}
+
+export interface AgencyReadiness {
+  /** AgencyPackage.slug — matches the static catalogue. */
+  agency_slug: string;
+  /** AgencyPackage.label — for display. Duplicated so the dashboard
+   *  doesn't need to round-trip through the catalogue lookup. */
+  agency_label: string;
+  /** Composite readiness 0-10. Average of the three sub-scores, rounded. */
+  readiness_0_10: number;
+  /** 0-10. How many of the agency's required_documents are present in
+   *  the applicant's evidence library or company profile. */
+  document_coverage_0_10: number;
+  /** 0-10. How well the company's actual capabilities map onto the
+   *  agency's procurement categories. A food-safety advisor scores high
+   *  on WFP/FAO, low on UNICEF supply contracts. */
+  category_fit_0_10: number;
+  /** 0-10. Geographic + operational reach alignment. A Lebanon-only
+   *  vendor scores lower on FAO than on UNGM (which is global). */
+  geographic_fit_0_10: number;
+  /** "start_here" | "viable" | "blocked". start_here is the agency
+   *  with the highest readiness (max one per breakdown); viable is any
+   *  ≥6.0; blocked is <6.0 with explicit blockers named. */
+  recommendation: "start_here" | "viable" | "blocked";
+  /** One-line rationale citing the specific evidence or specific gap.
+   *  e.g. "HACCP cert (HACCP_2024.pdf) + KPMG audit + 3 SIDA references
+   *  cover 8 of 10 WFP required documents; only fleet capacity statement
+   *  is missing." */
+  rationale: string;
+  /** Specific documents in the agency's required list that the
+   *  applicant cannot currently produce. Empty if fully covered. */
+  missing_documents: string[];
+  /** Specific actions to lift readiness for this agency. 1-4 items. */
+  next_actions: string[];
 }
 
 export interface DocumentRenameRule {
@@ -179,6 +222,7 @@ export const DEFAULT_ROSTER_OUTPUT: RosterOutput = {
   document_renaming_rules: [],
   missing_information: [],
   next_steps: [],
+  agency_readiness_breakdown: [],
 };
 
 export const PROPOSAL_PLAN = "proposal-draft";

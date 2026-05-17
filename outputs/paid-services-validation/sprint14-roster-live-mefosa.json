@@ -1,0 +1,339 @@
+{
+  "requirements": {
+    "eligibility_criteria": [
+      "Vendor must be capable of providing food-safety advisory services",
+      "Vendor must be capable of providing HACCP certification services",
+      "Vendor must be capable of providing ISO 22000 certification services",
+      "Vendor must have existing or demonstrated footprint in MENA and Levant regions"
+    ],
+    "technical_requirements": [
+      "Food-safety advisory service delivery",
+      "HACCP certification services",
+      "ISO 22000 certification services",
+      "Service delivery capability in Lebanon, Jordan, Iraq, and Syria"
+    ],
+    "required_documents": [],
+    "evaluation_criteria": [],
+    "key_constraints": [
+      "Geographic focus: MENA + Levant region",
+      "Primary target: WFP country offices in Lebanon, Jordan, Iraq, Syria",
+      "Secondary agencies: FAO, UNICEF, UNGM"
+    ],
+    "submission_format": "unknown"
+  },
+  "output": {
+    "registration_checklist": [
+      "1. Confirm UNGM Level 1 status is active and that WFP is selected as a subscribing agency in your UNGM profile (log in at https://www.ungm.org, navigate to 'My Profile' → 'Subscribing Organizations', tick WFP).",
+      "2. Navigate to the WFP Procurement portal at https://www.wfp.org/procurement and locate the 'Become a Supplier' or 'Supplier Registration' section to confirm current supplementary registration requirements for service vendors.",
+      "3. Prepare and rename all supporting documents according to the UN-friendly filename convention (see document_renaming_rules) before uploading — WFP portals flag mismatched or unlabelled files during review.",
+      "4. Log in to UNGM and update your UNSPSC category codes to include food-safety-specific codes: 70141700 (Food safety services), 85121806 (Food testing and inspection), 70141600 (Quality assurance consulting), 86101500 (Vocational training / food handler training) — remove any overly broad codes.",
+      "5. In your UNGM profile, update the 'Geographic Areas of Operation' to explicitly list Lebanon, Jordan, Iraq, and Syria (even if Syria is dormant — note 'pre-2020, currently dormant' in the remarks field).",
+      "6. Draft and upload a WFP-specific Capability Statement (see capability_statement_draft) as a standalone PDF — do not rely solely on the generic company profile.",
+      "7. Prepare a Food-Safety Policy document (1-2 pages) that references HACCP principles, ISO 22000 alignment, and Codex Alimentarius standards — WFP requires food vendors to submit food-safety policies; adapt this for advisory/testing services.",
+      "8. Compile a Past Performance Summary sheet listing the USAID Lebanon CSP engagement (2020-2023) and UNDP Lebanon training-of-trainers (2022) with contract values, scope, client contact details, and outcomes — attach the USAID Reference Letter as supporting evidence.",
+      "9. Obtain a formal letter or certificate from your Tripoli ISO 17025 lab partner confirming the partnership arrangement, scope of testing services covered, and geographic reach — WFP will want to verify lab capacity is not solely self-declared.",
+      "10. Contact the WFP Lebanon Country Office procurement focal point (Beirut) directly to introduce MEFOSA and confirm whether a country-office-level supplementary registration or expression of interest is required in addition to the UNGM/portal registration.",
+      "11. Contact the WFP Jordan Country Office (Amman) procurement team similarly, referencing your 3 active clients in Jordan as evidence of in-country operational presence.",
+      "12. Upload all documents to the WFP supplier portal (or UNGM profile if WFP routes through UNGM for service vendors) and submit — retain the submission confirmation email and reference number.",
+      "13. Set a 30-day calendar reminder to follow up with both WFP Lebanon and WFP Jordan country office procurement focal points if no acknowledgement is received.",
+      "14. Monitor WFP's UNGM tender notices and the WFP procurement portal for food-safety advisory RFQs or LTA calls in Lebanon, Jordan, and Iraq — respond to at least one open tender within 90 days to establish a transactional record."
+    ],
+    "capability_statement_draft": "MEFOSA – MENA Food Safety Associates S.A.R.L is a Beirut-headquartered food-safety advisory and laboratory-testing firm founded in 2014, delivering end-to-end food-safety solutions across Lebanon, Jordan, and Iraq. With a team of four senior consultants, six field auditors, and accredited laboratory access through our ISO 17025-certified Tripoli partner, MEFOSA provides HACCP system design and implementation, ISO 22000 certification advisory, Codex Alimentarius alignment for food exporters, and microbiological and chemical laboratory testing. Our services are delivered in Arabic, English, and French, enabling direct engagement with local food producers, SMEs, and government counterparts across the Levant and broader MENA region.\n\nMEFOSA has a demonstrated track record of delivering food-safety advisory services under donor-funded programmes, including a multi-year USAID Lebanon Country Support Programme engagement (2020–2023) supporting food-safety compliance for Lebanese SMEs, and a UNDP Lebanon training-of-trainers programme (2022) building national food-handler capacity. These engagements — totalling six sub-million-USD advisory contracts with no audit qualifications — confirm MEFOSA's ability to operate within UN and donor procurement frameworks, meet reporting requirements, and deliver measurable outcomes in complex operating environments.\n\nThree differentiators position MEFOSA as a high-value partner for WFP country offices in the Levant: (1) Regulatory fluency — MEFOSA maintains active liaison with the Lebanese Ministry of Agriculture and has deep familiarity with national food-safety regulatory frameworks across Lebanon, Jordan, and Iraq, enabling rapid contextualisation of international standards for local food-system actors; (2) Accredited laboratory access — through our ISO 17025-certified Tripoli lab partner, MEFOSA can provide microbiological and chemical testing to internationally recognised standards without reliance on external referral chains; and (3) Bilingual training capacity — our Arabic-language food-safety training and training-of-trainers programmes are directly deployable to WFP-supported food-system beneficiaries, local NGO partners, and government counterparts, reducing translation and adaptation costs.\n\nMEFOSA is registered on the UN Global Marketplace (UNGM ID 454934) and holds a clean 2024 audit from BDO Lebanon. We are actively seeking to register on the WFP supplier database to support WFP Lebanon, Jordan, and Iraq country offices with food-safety advisory, HACCP implementation, food-handler training, and laboratory-testing services aligned with WFP's food-safety and quality assurance requirements.",
+    "required_documents": [
+      "1. UNGM Level 1 Registration Confirmation (screenshot or PDF export from UNGM profile showing UNGM ID 454934 and active status)",
+      "2. Certificate of Commercial Registration – Lebanon (MEFOSA Commercial Registration Lebanon 2014.pdf)",
+      "3. Audited Financial Statements – 3 years (MEFOSA Audited Financials 2022-2024 BDO.pdf)",
+      "4. Company Profile / Capability Statement – WFP-tailored version (to be drafted; MEFOSA Company Profile 2025.pdf as base)",
+      "5. ISO 17025 Lab Partner Accreditation Certificate (MEFOSA ISO 17025 Lab Partner Accreditation 2024.pdf)",
+      "6. Food-Safety Policy Document referencing HACCP principles and ISO 22000 alignment (to be drafted — not yet in evidence library)",
+      "7. HACCP Implementation Evidence or Certificate (to be obtained — not yet in evidence library; advisory firm should document HACCP methodology applied in client engagements)",
+      "8. Past Performance Summary / References List (to be compiled from existing engagements; USAID Lebanon CSP Reference Letter 2024.pdf as anchor document)",
+      "9. USAID Lebanon CSP Reference Letter (USAID Lebanon CSP Reference Letter 2024.pdf)",
+      "10. UNDP Lebanon Reference Letter or Contract Completion Certificate (not yet in evidence library — request from UNDP Lebanon)",
+      "11. Bank Account Details Letter on Bank Letterhead (Bank Letter Bank Audi MEFOSA 2025.pdf)",
+      "12. Code of Conduct / Anti-Corruption Policy (MEFOSA Code of Conduct 2025.docx — convert to PDF before upload)",
+      "13. Insurance Certificate(s) – Professional Indemnity and/or General Liability (not yet in evidence library — obtain from insurer)",
+      "14. Lab Partner Confirmation Letter – signed letter from Tripoli ISO 17025 partner confirming partnership scope and geographic coverage (not yet in evidence library — request from lab partner)",
+      "15. Tax Registration Certificate – Lebanon (not yet in evidence library — obtain from Lebanese tax authority)"
+    ],
+    "organization_profile_notes": [
+      "UNGM UNSPSC Codes: Select 3–8 specific codes. Recommended: 70141700 (Food safety services), 85121806 (Food testing and inspection services), 70141600 (Quality assurance consulting), 86101500 (Vocational training), 70151500 (Regulatory compliance consulting), 85121800 (Testing and certification services). Avoid parent-level codes like 70000000 (Business services) — these are too broad and suppress ",
+      "Geographic Coverage: In UNGM and WFP portal fields, list Lebanon, Jordan, Iraq explicitly. For Syria, add a note 'pre-2020 engagement, currently dormant' — do not omit it as WFP Syria operations may become relevant. Do not claim coverage in countries where you have no operational history.",
+      "Company Size / Headcount: WFP profile fields typically ask for employee count — enter 14 (total headcount). If asked for 'technical staff', enter 10 (4 senior consultants + 6 auditors). Do not inflate.",
+      "Annual Turnover: BDO audited financials (2022–2024) should be used to populate financial capacity fields. If WFP portal asks for a single annual revenue figure, use the most recent audited year (2024). Do not self-declare figures not supported by the BDO audit.",
+      "Legal Name Consistency: Use 'MEFOSA-MENA Food Safety Associates S.A.R.L' exactly as it appears on the Commercial Registration on every document, portal field, and cover letter. Any abbreviation (e.g. 'MEFOSA S.A.R.L') must match the registration exactly — UNGM cross-checks legal names.",
+      "UNGM Subscribing Organizations: Ensure WFP, FAO, and UNDP are all ticked as subscribing organizations in your UNGM profile — this makes your profile visible to buyers at all three agencies simultaneously at no additional cost.",
+      "Vendor Category (WFP): WFP classifies vendors as 'Food', 'Non-Food', 'Services', or 'Logistics'. MEFOSA should register under 'Services' (food-safety advisory, training, laboratory testing). Do NOT register under 'Food' — WFP food vendor registration requires commodity supply capacity (warehousing, fleet, cold chain) that MEFOSA does not have.",
+      "Financial Statements Format: BDO Lebanon is a Big Four affiliate — WFP will accept these. Ensure the PDF includes the auditor's signed opinion page, balance sheet, income statement, and notes. If the portal has a file size limit (typically 5 MB), compress the PDF before upload.",
+      "Code of Conduct: Convert MEFOSA Code of Conduct 2025.docx to PDF before upload. UNGM and WFP portals do not accept .docx files for compliance documents.",
+      "NCAGE Code: Not mandatory for service vendors, but if WFP or UNGM prompts for a NATO Commercial and Government Entity code, leave blank or enter 'N/A — service vendor, not a manufacturer or defence supplier'.",
+      "WFP Country Office Registration: WFP's country offices (Lebanon, Jordan, Iraq) maintain their own vendor lists in addition to the global portal. After completing the portal registration, email the country office procurement focal point with your UNGM ID, a one-page capability summary, and the WFP-tailored capability statement. This is not optional — country offices often source locally without che"
+    ],
+    "cover_letter_draft": "Dear WFP Procurement Team,\n\nMEFOSA – MENA Food Safety Associates S.A.R.L (UNGM ID: 454934) respectfully submits this registration package for inclusion in the WFP supplier database under the Services category, specifically for food-safety advisory, HACCP implementation, ISO 22000 certification advisory, and food-handler training services. Headquartered in Beirut, Lebanon, with active client engagements in Jordan and Iraq, MEFOSA has delivered food-safety advisory and training programmes under USAID and UNDP-funded projects since 2014, working directly with food-system SMEs, government counterparts, and local NGO partners across the Levant. Our ISO 17025-accredited laboratory partner in Tripoli enables us to provide microbiological and chemical food-safety testing to internationally recognised standards in support of WFP food-safety and quality assurance requirements.\n\nWe are committed to WFP's procurement principles of transparency, accountability, and value for money, and we hold a clean 2024 audit from BDO Lebanon. We are actively engaged with WFP Lebanon and WFP Jordan country offices and are prepared to respond rapidly to requests for food-safety advisory, HACCP gap assessments, food-handler training-of-trainers programmes, and laboratory testing services. We welcome the opportunity to support WFP's food-safety and quality assurance objectives across Lebanon, Jordan, and Iraq, and we are available for any clarification or pre-qualification discussion at the procurement team's convenience.",
+    "submission_guidance": [
+      "WFP does not maintain a fully open self-registration portal for service vendors in the same way UNGM does — confirm the current registration pathway at https://www.wfp.org/procurement before uploading documents, as the process may route through UNGM for service categories.",
+      "UNGM visibility to WFP: Ensure WFP is ticked as a subscribing organization in your UNGM profile (Step 1 of checklist) — this is the primary mechanism by which WFP buyers discover service vendors. Do not assume WFP buyers search the portal proactively; they often search UNGM directly.",
+      "Common rejection reason — category mismatch: WFP buyers filter by UNSPSC code. If your codes are too broad (e.g. 70000000 Business Services) your profile will not surface in food-safety-specific searches. Use the specific codes listed in organization_profile_notes.",
+      "Common rejection reason — missing food-safety policy: WFP requires food vendors to submit a food-safety policy. Even though MEFOSA is an advisory firm (not a food supplier), submit a food-safety policy document describing your internal quality assurance methodology — this signals professionalism and reduces the risk of being filtered out.",
+      "Common rejection reason — no humanitarian-response reference: WFP procurement is emergency-response oriented. The USAID Lebanon CSP reference is strong but is a development (not humanitarian) reference. If possible, obtain a letter from UNDP Lebanon or any humanitarian-response client that references MEFOSA's ability to mobilise quickly.",
+      "Country office outreach is not optional: WFP Lebanon (Beirut) and WFP Jordan (Amman) country offices procure locally and often do not rely on the global portal for service vendors. Email the country office procurement focal point directly after portal submission — include your UNGM ID, a one-page capability summary, and the cover letter.",
+      "File size: WFP and UNGM portals typically enforce a 5 MB per-file limit. The BDO audited financials (3 years) may exceed this — compress the PDF or split into separate annual files (e.g. 03a_Audited_Financials_2022.pdf, 03b_Audited_Financials_2023.pdf, 03c_Audited_Financials_2024.pdf).",
+      "Do not register under 'Food Vendor' category: MEFOSA has no warehousing, fleet, or commodity supply capacity. Registering under food-supply categories will trigger a capacity verification WFP cannot confirm, leading to rejection or de-listing. Register strictly under 'Services'.",
+      "LTA opportunity: WFP Lebanon has historically issued Long-Term Agreements for food-safety advisory and training services. Monitor the WFP UNGM tender page and the WFP Lebanon country office procurement notices — an LTA converts one successful bid into 1–3 years of repeat work.",
+      "Retain all submission confirmations: Save the UNGM profile update confirmation, any WFP portal submission reference numbers, and all email correspondence with country office procurement focal points. These are required if you need to appeal a rejection or escalate a delayed review."
+    ],
+    "document_renaming_rules": [
+      {
+        "document_type": "UNGM Level 1 Registration Confirmation",
+        "required_filename": "01_UNGM_Registration_Confirmation_MEFOSA-MENA_Food_Safety_Associates_SARL.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Export as PDF from UNGM profile; include UNGM ID 454934 visible on the page."
+      },
+      {
+        "document_type": "Commercial Registration Certificate",
+        "required_filename": "02_Commercial_Registration_Lebanon_MEFOSA-MENA_Food_Safety_Associates_SARL.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Source file: MEFOSA Commercial Registration Lebanon 2014.pdf."
+      },
+      {
+        "document_type": "Audited Financial Statements",
+        "required_filename": "03_Audited_Financials_2022-2024_BDO_MEFOSA-MENA_Food_Safety_Associates_SARL.pdf",
+        "note": "If file exceeds 5 MB portal limit, split into 03a_Audited_Financials_2022.pdf, 03b_Audited_Financials_2023.pdf, 03c_Audited_Financials_2024.pdf. Source file: MEFOSA Audited Financials 2022-2024 BDO.pdf."
+      },
+      {
+        "document_type": "Company Profile / Capability Statement",
+        "required_filename": "04_Capability_Statement_WFP_MEFOSA-MENA_Food_Safety_Associates_SARL.pdf",
+        "note": "Use the WFP-tailored capability statement (see capability_statement_draft), not the generic company profile. Source base: MEFOSA Company Profile 2025.pdf — revise and re-export as WFP-specific version."
+      },
+      {
+        "document_type": "ISO 17025 Lab Partner Accreditation Certificate",
+        "required_filename": "05_ISO17025_Lab_Partner_Accreditation_2024_MEFOSA.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Source file: MEFOSA ISO 17025 Lab Partner Accreditation 2024.pdf."
+      },
+      {
+        "document_type": "Food-Safety Policy Document",
+        "required_filename": "06_Food_Safety_Policy_MEFOSA-MENA_Food_Safety_Associates_SARL.pdf",
+        "note": "Document does not yet exist — must be drafted. Should reference HACCP principles, ISO 22000 alignment, and Codex Alimentarius standards. 1–2 pages; signed by Managing Director."
+      },
+      {
+        "document_type": "Past Performance Summary / References List",
+        "required_filename": "07_Past_Performance_Summary_MEFOSA-MENA_Food_Safety_Associates_SARL.pdf",
+        "note": "Compile a 1–2 page table listing all 6 advisory engagements with client name, contract value range, scope, dates, and client contact. Attach USAID reference letter as a separate file."
+      },
+      {
+        "document_type": "USAID Lebanon CSP Reference Letter",
+        "required_filename": "08_Reference_Letter_USAID_Lebanon_CSP_2024_MEFOSA.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Source file: USAID Lebanon CSP Reference Letter 2024.pdf."
+      },
+      {
+        "document_type": "Bank Account Details Letter",
+        "required_filename": "09_Bank_Letter_BankAudi_MEFOSA-MENA_Food_Safety_Associates_SARL.pdf",
+        "note": "Agency does not enforce filenames — convention follows UN procurement best practice. Source file: Bank Letter Bank Audi MEFOSA 2025.pdf."
+      },
+      {
+        "document_type": "Code of Conduct / Anti-Corruption Policy",
+        "required_filename": "10_Code_of_Conduct_MEFOSA-MENA_Food_Safety_Associates_SARL.pdf",
+        "note": "Convert from .docx to PDF before upload — portals do not accept .docx for compliance documents. Source file: MEFOSA Code of Conduct 2025.docx."
+      },
+      {
+        "document_type": "Insurance Certificate",
+        "required_filename": "11_Insurance_Certificate_MEFOSA-MENA_Food_Safety_Associates_SARL.pdf",
+        "note": "Document does not yet exist — obtain Professional Indemnity and/or General Liability certificate from insurer. Must show coverage period, policy number, and insured legal name matching Commercial Registration."
+      },
+      {
+        "document_type": "Lab Partner Confirmation Letter",
+        "required_filename": "12_Lab_Partner_Confirmation_Letter_Tripoli_ISO17025_MEFOSA.pdf",
+        "note": "Document does not yet exist — request signed letter from Tripoli ISO 17025 lab partner on their letterhead confirming partnership scope, testing services covered, and geographic reach."
+      },
+      {
+        "document_type": "Tax Registration Certificate",
+        "required_filename": "13_Tax_Registration_Certificate_Lebanon_MEFOSA-MENA_Food_Safety_Associates_SARL.pdf",
+        "note": "Document not yet in evidence library — obtain from Lebanese Ministry of Finance or relevant tax authority. Must show current registration status and legal company name."
+      }
+    ],
+    "missing_information": [
+      "HACCP Certificate or formal HACCP methodology documentation: MEFOSA designs and implements HACCP systems for clients but does not appear to hold a standalone HACCP certificate for its own operations or a documented internal HACCP methodology statement. WFP and FAO will expect this for food-safety service vendors. Draft a 1–2 page HACCP Methodology Statement describing MEFOSA's approach, or obtain ",
+      "Food-Safety Policy Document: No internal food-safety policy exists in the evidence library. Draft a 1–2 page policy referencing HACCP principles, ISO 22000, and Codex Alimentarius — required by WFP and strongly recommended for FAO.",
+      "UNDP Lebanon Reference Letter or Contract Completion Certificate: The UNDP Lebanon training-of-trainers engagement (2022) is referenced in the company profile but no reference letter or completion certificate is in the evidence library. Request this from UNDP Lebanon — it is a critical UN-funded reference.",
+      "Insurance Certificate (Professional Indemnity / General Liability): No insurance certificate is in the evidence library. Required by WFP and IOM; strongly recommended for UNDP and FAO. Obtain from MEFOSA's insurer.",
+      "Tax Registration Certificate (Lebanon): Not in the evidence library. Required by UNGM, WFP, FAO, and UNDP. Obtain from the Lebanese Ministry of Finance.",
+      "Lab Partner Confirmation Letter: The ISO 17025 accreditation certificate covers the Tripoli lab partner's own accreditation but does not confirm the partnership arrangement with MEFOSA. A signed letter from the lab partner on their letterhead is needed to substantiate MEFOSA's lab-testing capability claims.",
+      "Contract values for past engagements: The profile states '6 sub-million-USD advisory engagements' but does not specify individual contract values. UN portals and evaluation committees expect specific figures (even ranges). Compile a past performance table with approximate contract values per engagement.",
+      "Iraq engagement details: The profile references a 'recent engagement' in Iraq but provides no client name, contract value, scope, or reference contact. This limits the credibility of Iraq as an operational geography. Obtain a reference letter or at minimum document the engagement details internally.",
+      "Syria operational status clarification: Syria is listed as 'pre-2020 work, dormant' — this should be explicitly noted in all portal geographic coverage fields to avoid misrepresentation. Confirm whether any residual relationships or sub-contractor arrangements exist that could support a WFP Syria engagement if required.",
+      "Child-Protection Policy: Not in the evidence library. Required by UNICEF for all vendor relationships. If UNICEF registration is pursued, a standalone child-protection policy must be drafted and adopted.",
+      "Business Continuity / Risk Management Policy: Not in the evidence library. Required by UNGM for full profile completion and recommended for FAO and UNDP. Draft a 1–2 page policy covering operational continuity in Lebanon's complex environment.",
+      "Quality Assurance Policy: Not explicitly in the evidence library as a standalone document (the Code of Conduct covers ethics but not QA). UNGM and FAO expect a QA policy. Draft a 1-page QA policy referencing ISO 22000 and ISO 17025 alignment."
+    ],
+    "next_steps": [
+      "1. THIS WEEK: Log in to UNGM (https://www.ungm.org), confirm WFP, FAO, and UNDP are ticked as subscribing organizations, update UNSPSC codes to the specific codes listed in organization_profile_notes, and update geographic coverage to include Lebanon, Jordan, Iraq, and Syria (dormant).",
+      "2. THIS WEEK: Convert MEFOSA Code of Conduct 2025.docx to PDF and rename all existing documents per the document_renaming_rules convention.",
+      "3. WEEK 1–2: Draft the Food-Safety Policy document (1–2 pages, signed by Managing Director) and the HACCP Methodology Statement — these are the two most critical missing documents for WFP and FAO registration.",
+      "4. WEEK 1–2: Request the UNDP Lebanon reference letter or contract completion certificate from your UNDP Lebanon counterpart — this is a high-value UN-funded reference that significantly strengthens your profile.",
+      "5. WEEK 1–2: Request the Lab Partner Confirmation Letter from your Tripoli ISO 17025 partner — signed, on their letterhead, confirming the partnership scope and geographic coverage.",
+      "6. WEEK 2: Obtain the Tax Registration Certificate from the Lebanese Ministry of Finance and the Insurance Certificate (Professional Indemnity) from your insurer.",
+      "7. WEEK 2–3: Draft the WFP-tailored Capability Statement (use capability_statement_draft as the base), compile the Past Performance Summary table, and assemble the full WFP document package per the required_documents list.",
+      "8. WEEK 3: Submit the complete WFP registration package via the WFP procurement portal and/or confirm UNGM profile is fully updated and visible to WFP buyers.",
+      "9. WEEK 3–4: Email WFP Lebanon Country Office (Beirut) and WFP Jordan Country Office (Amman) procurement focal points directly — introduce MEFOSA, attach the one-page capability summary and cover letter, and reference your UNGM ID 454934.",
+      "10. WEEK 4–6: Begin FAO registration — FAO is the second-highest readiness agency. Update UNGM profile to ensure FAO is a subscribing organization and prepare any FAO-specific supplementary materials (FAO vendor registration interfaces with UNGM).",
+      "11. DAY 60–90: Monitor WFP UNGM tender notices and WFP Lebanon/Jordan country office procurement pages for food-safety advisory RFQs or LTA calls — submit a bid response to at least one open tender to establish a transactional record before the 90-day mark."
+    ],
+    "agency_readiness_breakdown": [
+      {
+        "agency_slug": "ungm",
+        "agency_label": "UNGM",
+        "readiness_0_10": 7,
+        "document_coverage_0_10": 7,
+        "category_fit_0_10": 8,
+        "geographic_fit_0_10": 7,
+        "recommendation": "start_here",
+        "rationale": "MEFOSA already holds UNGM Level 1 (ID 454934) and can produce 7 of 10 required documents today (Commercial Registration, BDO Audited Financials 2022-2024, Company Profile, ISO 17025 Lab Accreditation, USAID Reference Letter, Code of Conduct, Bank Letter); gaps are Tax Registration Certificate, Business Continuity Policy, and Quality Assurance Policy — all obtainable within 2–3 weeks.",
+        "missing_documents": [
+          "Tax registration certificate (Lebanon) — not in evidence library",
+          "Business continuity / risk management policy — not in evidence library",
+          "Quality assurance policy — not in evidence library as standalone document"
+        ],
+        "next_actions": [
+          "Obtain Tax Registration Certificate from Lebanese Ministry of Finance (1–2 weeks, low cost)",
+          "Draft a 1-page Quality Assurance Policy referencing ISO 22000 and ISO 17025 alignment (internal effort, 2–3 days)",
+          "Draft a 1-page Business Continuity Policy covering Lebanon operational risk (internal effort, 2–3 days)",
+          "Update UNGM UNSPSC codes to specific food-safety codes (70141700, 85121806, 70141600, 86101500) and confirm WFP, FAO, UNDP are ticked as subscribing organizations (30 minutes, immediate)"
+        ]
+      },
+      {
+        "agency_slug": "fao",
+        "agency_label": "FAO",
+        "readiness_0_10": 7,
+        "document_coverage_0_10": 7,
+        "category_fit_0_10": 9,
+        "geographic_fit_0_10": 6,
+        "recommendation": "viable",
+        "rationale": "MEFOSA's HACCP, ISO 22000, Codex Alimentarius, and food-system advisory capabilities are a near-perfect fit for FAO's food-safety and agriculture technical assistance categories, and 7 of 10 FAO required documents are available today (Commercial Registration, BDO Financials, Company Profile, ISO 17025, USAID Reference, Code of Conduct, Bank Letter); gaps are Tax Registration Certificate, Food-Safety Policy, and Anti-Fraud/Anti-Corruption Policy as a standalone declaration, plus FAO's geographic focus on Rome HQ and regional offices means country-office relationships in Lebanon and Jordan must ",
+        "missing_documents": [
+          "Tax registration certificate — not in evidence library",
+          "Food-safety policy document — not in evidence library",
+          "Anti-fraud / anti-corruption policy or signed declaration (Code of Conduct exists but may need to be supplemented with a specific FAO declaration)"
+        ],
+        "next_actions": [
+          "Confirm FAO is ticked as a subscribing organization in UNGM profile — FAO's vendor registration interfaces with UNGM (immediate, 10 minutes)",
+          "Draft Food-Safety Policy document (1–2 pages) referencing HACCP, ISO 22000, and Codex Alimentarius (internal effort, 3–5 days)",
+          "Contact FAO Lebanon and FAO Jordan country office procurement focal points to introduce MEFOSA and confirm any supplementary registration requirements (Week 4–6)",
+          "Obtain Tax Registration Certificate from Lebanese Ministry of Finance (1–2 weeks)"
+        ]
+      },
+      {
+        "agency_slug": "undp",
+        "agency_label": "UNDP",
+        "readiness_0_10": 7,
+        "document_coverage_0_10": 8,
+        "category_fit_0_10": 7,
+        "geographic_fit_0_10": 7,
+        "recommendation": "viable",
+        "rationale": "MEFOSA has a direct UNDP Lebanon past-performance reference (training-of-trainers, 2022) and can produce 4 of 5 UNDP required documents today (UNGM Level 1, Company Profile, BDO Financials, USAID Reference); the UNDP reference letter itself is missing from the evidence library and must be requested, and UNDP's category focus on consulting, governance, and capacity building aligns well with MEFOSA's food-safety advisory and training capabilities.",
+        "missing_documents": [
+          "References from prior development-sector contracts — UNDP Lebanon reference letter not yet in evidence library (engagement exists but letter not obtained)"
+        ],
+        "next_actions": [
+          "Request UNDP Lebanon reference letter or contract completion certificate from your UNDP Lebanon counterpart immediately — this is the single highest-value action for UNDP readiness (target: within 2 weeks)",
+          "Monitor UNDP Lebanon, UNDP Jordan, and UNDP Iraq country office tender pages for food-safety, agriculture, and capacity-building RFPs — UNDP procurement is highly decentralised and country-office-driven",
+          "Ensure UNDP is ticked as a subscribing organization in UNGM profile (immediate, 10 minutes)"
+        ]
+      },
+      {
+        "agency_slug": "wfp",
+        "agency_label": "WFP",
+        "readiness_0_10": 6,
+        "document_coverage_0_10": 6,
+        "category_fit_0_10": 7,
+        "geographic_fit_0_10": 7,
+        "recommendation": "viable",
+        "rationale": "MEFOSA covers 6 of WFP's required documents today (UNGM Level 1 confirmation, ISO 17025 Lab Accreditation as proxy for HACCP/ISO 22000 evidence, USAID Reference Letter, Bank Letter, Code of Conduct, BDO Financials); however, WFP's required documents include a HACCP/ISO 22000 certificate (MEFOSA has no standalone cert — only advisory capability), a Food-Safety Policy, an Insurance Certificate, and a humanitarian-response reference — all currently missing — and WFP's emergency-response orientation is a moderate fit for an advisory firm without fast-turnaround commodity or logistics capacity.",
+        "missing_documents": [
+          "HACCP / ISO 22000 certificate (food vendors) — MEFOSA provides advisory services but holds no standalone HACCP or ISO 22000 certificate for its own operations",
+          "Food-safety policy document — not in evidence library",
+          "Insurance certificates — not in evidence library",
+          "References from prior humanitarian-response operations — USAID CSP is development, not humanitarian-response"
+        ],
+        "next_actions": [
+          "Draft a HACCP Methodology Statement (1–2 pages) documenting MEFOSA's internal HACCP approach as a proxy for a standalone certificate — or explore obtaining a third-party HACCP validation (4–8 weeks, ~$1,500–$3,000 from a Lebanese certification body)",
+          "Draft Food-Safety Policy document (1–2 pages) referencing HACCP principles and ISO 22000 (internal effort, 3–5 days)",
+          "Obtain Professional Indemnity Insurance Certificate from MEFOSA's insurer (1–2 weeks)",
+          "Request UNDP Lebanon reference letter emphasising rapid mobilisation and training delivery capacity — this is the closest available humanitarian-adjacent reference (2–3 weeks)"
+        ]
+      },
+      {
+        "agency_slug": "iom",
+        "agency_label": "IOM",
+        "readiness_0_10": 5,
+        "document_coverage_0_10": 5,
+        "category_fit_0_10": 4,
+        "geographic_fit_0_10": 6,
+        "recommendation": "blocked",
+        "rationale": "IOM's primary procurement categories (accommodation, transport, NFI, health services, fleet, fuel, food commodity supply) are a poor fit for MEFOSA's food-safety advisory and training capabilities; MEFOSA can produce approximately 3 of 5 IOM required documents today (UNGM Level 1, Company Profile, USAID Reference), but lacks Insurance Certificates and country-specific licensing for IOM-relevant services, and has no migration-response operational history.",
+        "missing_documents": [
+          "Insurance certificates — not in evidence library",
+          "References from prior migration-response or humanitarian work — MEFOSA has no migration-response history"
+        ],
+        "next_actions": [
+          "Do not prioritise IOM registration in the 60–90 day window — category fit is too low to justify the effort",
+          "Revisit IOM only if MEFOSA secures a food-safety advisory sub-contract under an IOM-led programme in Lebanon or Jordan (opportunistic, not proactive)"
+        ]
+      },
+      {
+        "agency_slug": "unicef",
+        "agency_label": "UNICEF",
+        "readiness_0_10": 4,
+        "document_coverage_0_10": 5,
+        "category_fit_0_10": 3,
+        "geographic_fit_0_10": 6,
+        "recommendation": "blocked",
+        "rationale": "UNICEF's primary procurement categories (NFI, child-protection supplies, education materials, WASH equipment, vaccine cold-chain) are a poor fit for MEFOSA's food-safety advisory capabilities; MEFOSA can produce approximately 3 of 5 UNICEF required documents today (UNGM Level 1, Company Profile, USAID Reference), but lacks a Child-Protection Policy (mandatory for all UNICEF vendor relationships), product specifications/technical data sheets (not applicable for a service firm), and UNICEF or similar humanitarian contract references.",
+        "missing_documents": [
+          "Child-protection policy — mandatory for all UNICEF vendor relationships; not in evidence library",
+          "Product specifications / technical data sheets — not applicable for a service firm; MEFOSA would need to reframe as service specifications",
+          "References from prior UNICEF or similar humanitarian contracts — MEFOSA has no UNICEF history"
+        ],
+        "next_actions": [
+          "Do not prioritise UNICEF registration in the 60–90 day window — category fit is too low (3/10) to justify effort",
+          "If UNICEF nutrition QA or food-safety training opportunities emerge in Lebanon or Jordan, draft a Child-Protection Policy (1–2 pages) and reframe MEFOSA's capability statement around nutrition quality assurance — then reassess readiness"
+        ]
+      },
+      {
+        "agency_slug": "who",
+        "agency_label": "WHO",
+        "readiness_0_10": 4,
+        "document_coverage_0_10": 5,
+        "category_fit_0_10": 3,
+        "geographic_fit_0_10": 5,
+        "recommendation": "blocked",
+        "rationale": "WHO's procurement categories (medical equipment, diagnostics, laboratory supplies, health ICT, GMP/WHO-prequalified health commodities) are a poor fit for MEFOSA's food-safety advisory services; MEFOSA can produce approximately 4 of 8 WHO required documents today (UNGM Level 1, Commercial Registration, BDO Financials, Company Profile), but lacks WHO prequalification, GMP certification, product technical data sheets, and health-sector references — and the user intake notes explicitly exclude WHO PQS as out of scope.",
+        "missing_documents": [
+          "Quality and regulatory certifications (GMP, CE, WHO prequalification) — not applicable; MEFOSA is not a health commodity manufacturer",
+          "Product technical specifications / data sheets — not applicable for a service firm",
+          "Past performance references in health, public sector, or emergency-response work — MEFOSA's references are food-safety advisory, not health-sector"
+        ],
+        "next_actions": [
+          "Do not pursue WHO registration — explicitly out of scope per user intake notes and category fit is too low (3/10)",
+          "No further actions required for WHO in the 60–90 day window"
+        ]
+      },
+      {
+        "agency_slug": "unops",
+        "agency_label": "UNOPS",
+        "readiness_0_10": 3,
+        "document_coverage_0_10": 5,
+        "category_fit_0_10": 2,
+        "geographic_fit_0_10": 4,
+        "recommendation": "blocked",
+        "rationale": "UNOPS procurement categories (infrastructure, engineering, construction supervision, health equipment, vehicles, project operations) are a very poor fit for MEFOSA's food-safety advisory and training capabilities; MEFOSA can produce approximately 4 of 9 UNOPS required documents today (UNGM Level 1, Commercial Registration, BDO Financials, Company Profile), but lacks technical licenses, professional registrations, manufacturer authorizations, insurance certificates for works/logistics, and past performance in infrastructure or engineering — and the user intake notes explicitly exclude UNOPS inf",
+        "missing_documents": [
+          "Technical licenses, professional registrations, or manufacturer authorizations — not applicable for a food-safety advisory firm",
+          "Insurance certificates for works/logistics — not in evidence library",
+          "Past performance references and completion certificates for infrastructure or technical supply — MEFOSA has no infrastructure history"
+        ],
+        "next_actions": [
+          "Do not pursue UNOPS registration — explicitly out of scope per user intake notes and category fit is too low (2/10)",
+          "No further actions required for UNOPS in the 60–90 day window"
+        ]
+      }
+    ]
+  }
+}
