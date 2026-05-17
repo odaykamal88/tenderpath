@@ -59,7 +59,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [state, setState] = useState<AccessState | null>(null);
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [servicesOpen, setServicesOpen] = useState(false);
+  // null = use the default (open when on a services route OR for non-paid users
+  // so the upsell menu stays visible); true/false = user has explicitly toggled.
+  const [servicesOpen, setServicesOpen] = useState<boolean | null>(null);
 
   // Close drawer on route change
   useEffect(() => {
@@ -122,11 +124,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!state) return null;
 
+  const isPaid = state.user.is_super_admin || state.user.subscription_status === "active";
   const servicesActive =
     (pathname ?? "").startsWith("/dashboard/services") ||
     (pathname ?? "").startsWith("/dashboard/bid-analysis") ||
     (pathname ?? "").startsWith("/dashboard/applications");
-  const servicesExpanded = servicesOpen || servicesActive;
+  // Default-open when on a services route OR when the user is non-paid (keeps the
+  // upsell menu in peripheral vision). Once the user toggles, their choice wins.
+  const servicesDefaultOpen = servicesActive || !isPaid;
+  const servicesExpanded = servicesOpen === null ? servicesDefaultOpen : servicesOpen;
 
   const workbench = [
     { href: "/dashboard", label: "Overview" },
@@ -136,7 +142,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: "/dashboard/vault", label: "Document vault", requiresPaid: true },
     { href: "/dashboard/settings", label: "Settings" },
   ];
-  const isPaid = state.user.is_super_admin || state.user.subscription_status === "active";
 
   // Active page label for the mobile top bar
   const allItems = [
@@ -310,39 +315,41 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </span>
         </div>
         <nav className="flex flex-col gap-0.5">
-          {/* Services — collapsible with sub-items */}
+          {/* Services — parent label navigates, chevron toggles independently */}
           <div>
-            <button
-              onClick={() => setServicesOpen((v) => !v)}
-              className={`group relative flex w-full items-center justify-between gap-2.5 rounded-sm pl-3 pr-2.5 py-2 lg:py-1.5 text-[14px] lg:text-[13px] transition-colors ${
+            <div
+              className={`group relative flex w-full items-stretch rounded-sm transition-colors ${
                 servicesActive
                   ? "bg-stone-900 text-white"
                   : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
               }`}
             >
-              <span className="flex items-center gap-2.5 min-w-0">
+              <Link
+                href="/dashboard/services"
+                className="flex flex-1 items-center gap-2.5 min-w-0 pl-3 pr-1 py-2 lg:py-1.5 text-[14px] lg:text-[13px]"
+              >
                 <NavIcon path={NAV_ICONS["/dashboard/services"]} />
                 <span className="truncate">Services</span>
-              </span>
-              <svg
-                className={`h-3 w-3 shrink-0 transition-transform ${servicesExpanded ? "rotate-90" : ""}`}
-                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              </Link>
+              <button
+                type="button"
+                onClick={() => setServicesOpen(!servicesExpanded)}
+                aria-expanded={servicesExpanded}
+                aria-label={servicesExpanded ? "Collapse services menu" : "Expand services menu"}
+                className={`shrink-0 px-2.5 py-2 lg:py-1.5 flex items-center justify-center rounded-r-sm transition-colors ${
+                  servicesActive ? "hover:bg-stone-800" : "hover:bg-stone-200/60"
+                }`}
               >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
+                <svg
+                  className={`h-3 w-3 transition-transform ${servicesExpanded ? "rotate-90" : ""}`}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
             {servicesExpanded && (
               <div className="mt-0.5 ml-8 flex flex-col border-l border-stone-200/70 pl-2.5">
-                <Link
-                  href="/dashboard/services"
-                  className={`block rounded-sm px-2 py-1.5 text-[12.5px] transition-colors ${
-                    pathname === "/dashboard/services"
-                      ? "text-stone-900 font-medium"
-                      : "text-stone-500 hover:text-stone-900"
-                  }`}
-                >
-                  All services
-                </Link>
                 <Link
                   href="/dashboard/bid-analysis"
                   className={`block rounded-sm px-2 py-1.5 text-[12.5px] transition-colors ${

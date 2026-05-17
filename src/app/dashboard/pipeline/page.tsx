@@ -261,7 +261,7 @@ export default function PipelinePage() {
             Pipeline
           </h1>
           <p className="mt-1 max-w-2xl text-[13.5px] sm:text-[15px] leading-relaxed text-stone-600">
-            <span className="hidden sm:inline">Drag tenders between stages — or click a card title to see match evidence.</span>
+            <span className="hidden sm:inline">Drag tenders between stages — open <em>Why match</em> to see the evidence behind each fit.</span>
             <span className="sm:hidden">Tap a card to expand.</span>
           </p>
         </div>
@@ -465,19 +465,8 @@ export default function PipelinePage() {
                                     )}
                                   </div>
 
-                                  {/* Title — clickable to expand when match reasons exist */}
-                                  <div
-                                    className={`font-medium text-stone-900 leading-snug line-clamp-2 text-[13.5px] ${item.match_reasons ? "cursor-pointer hover:text-stone-600" : ""}`}
-                                    onClick={() => item.match_reasons && setExpandedId(isExpanded ? null : item.id)}
-                                  >
-                                    {item.match_reasons && (
-                                      <svg
-                                        className={`inline-block h-3 w-3 mr-1 mb-0.5 text-stone-400 transition-transform ${isExpanded ? "rotate-90" : ""}`}
-                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                                      >
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                      </svg>
-                                    )}
+                                  {/* Title */}
+                                  <div className="font-medium text-stone-900 leading-snug line-clamp-2 text-[13.5px]">
                                     {item.tender_title}
                                   </div>
 
@@ -486,6 +475,25 @@ export default function PipelinePage() {
                                     <div className="mt-1 text-[11.5px] text-stone-500 truncate">
                                       {item.tender_agency}
                                     </div>
+                                  )}
+
+                                  {/* Why match — explicit, keyboard-accessible expander */}
+                                  {item.match_reasons && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                                      aria-expanded={isExpanded}
+                                      className="mt-1.5 inline-flex items-center gap-1 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-stone-400 hover:text-stone-700 transition-colors"
+                                      style={{ fontFamily: MONO }}
+                                    >
+                                      <svg
+                                        className={`h-2.5 w-2.5 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                                      >
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                      </svg>
+                                      {isExpanded ? "Hide match" : "Why match"}
+                                    </button>
                                   )}
 
                                   {/* Meta strip — deadline / value / fit */}
@@ -521,7 +529,7 @@ export default function PipelinePage() {
                                     )}
                                   </div>
 
-                                  {/* Why match — expanded on title click */}
+                                  {/* Match evidence — expanded by the Why-match button */}
                                   {item.match_reasons && isExpanded && (
                                     <div className="mt-2 rounded-sm bg-stone-50 border border-stone-200/70 p-2.5 text-[11px] leading-relaxed text-stone-700 space-y-1">
                                       {item.match_reasons.summary?.map((s, i) => (
@@ -578,6 +586,7 @@ export default function PipelinePage() {
                                     </Link>
                                     <Link
                                       href={serviceHref("proposal", item)}
+                                      title="Technical narrative, compliance checklist, cover letter, and financial template ($299)"
                                       className="text-[10.5px] font-semibold uppercase tracking-wider text-stone-700 border border-stone-300 rounded-sm px-2 py-1 bg-white hover:border-stone-700 hover:text-stone-900 transition-colors"
                                     >
                                       Proposal
@@ -585,22 +594,24 @@ export default function PipelinePage() {
                                     {isRosterAgency(item.tender_agency) && (
                                       <Link
                                         href={serviceHref("lta-roster", item)}
+                                        title="Agency-specific registration package, capability statement, and follow-up support ($749)"
                                         className="text-[10.5px] font-semibold uppercase tracking-wider text-amber-800 border border-amber-300 rounded-sm px-2 py-1 bg-amber-50 hover:border-amber-500 transition-colors"
                                       >
                                         Roster
                                       </Link>
                                     )}
+                                    <div className="flex-1" />
                                     {itemSourceUrl && (
                                       <a
                                         href={itemSourceUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-[10.5px] font-semibold uppercase tracking-wider text-stone-500 border border-stone-200 rounded-sm px-2 py-1 bg-white hover:border-stone-400 transition-colors"
+                                        title="Open source page in a new tab"
+                                        className="text-[10.5px] lowercase tracking-wider text-stone-400 hover:text-stone-700 transition-colors"
                                       >
-                                        View ↗
+                                        view ↗
                                       </a>
                                     )}
-                                    <div className="flex-1" />
                                     <button
                                       onClick={() => {
                                         if (confirm(`Remove "${item.tender_title}" from your pipeline?`)) {
