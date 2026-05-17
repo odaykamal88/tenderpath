@@ -104,6 +104,12 @@ type ProfileResult = {
   missing_context_inputs: string[];
   critical_missing_context_inputs: string[];
   prior_panel_status?: string;
+  /** Sprint 13a. The raw Sonnet-judged output-quality grade (0-10) when one
+   *  was supplied for this panel row via outputs/.../grades/<panel_id>.json.
+   *  null = no grade available (the static service_output_quality stands alone). */
+  output_quality_grade_0_10: number | null;
+  /** Path/identifier of the proposal-output JSON the grade was computed from. */
+  output_quality_grade_source: string | null;
 };
 
 function parseArgs(): Args {
@@ -185,6 +191,7 @@ function toCsv(results: ProfileResult[]): string {
     "dashboard_continuity_0_10",
     "service_context_completeness_0_10",
     "service_output_quality_0_10",
+    "output_quality_grade_0_10",
     "procurement_effort_collapsed_0_10",
     "paid_service_readiness_0_10",
     "top_match_relevance_0_10",
@@ -209,6 +216,7 @@ function toCsv(results: ProfileResult[]): string {
       result.dashboard_continuity_0_10,
       result.service_context_completeness_0_10,
       result.service_output_quality_0_10,
+      result.output_quality_grade_0_10,
       result.procurement_effort_collapsed_0_10,
       result.paid_service_readiness_0_10,
       result.top_match_relevance_0_10,
@@ -917,12 +925,79 @@ function highestLeverageFix(row: PanelRow, failureCategory: FailureCategory, mis
   return "Carry assessment evidence, selected match, missing inputs and service-specific caveats into one work-order context packet.";
 }
 
+/**
+ * Sprint 13a: read an optional output-quality grade for a panel row.
+ * When `outputs/paid-services-validation/grades/<panel_id>.json` exists,
+ * it represents a Sonnet-judged 0-10 score of an actual generated draft
+ * for that scenario. The harness blends it 50/50 into service_output
+ * and recomputes paid_service_readiness so the recorded number reflects
+ * both input-completeness (the original harness signal) and real
+ * generated-output quality.
+ *
+ * When no grade file exists, the harness behaves exactly as before
+ * (this is additive — no panel row is penalised for the absence of a
+ * grade; the static score stands alone).
+ */
+interface LoadedGrade {
+  panelId: string;
+  score_0_10: number;
+  source?: string;
+}
+
+function loadGrade(panelId: string): LoadedGrade | null {
+  if (!panelId) return null;
+  const candidate = path.resolve("outputs/paid-services-validation/grades", `${panelId}.json`);
+  if (!fs.existsSync(candidate)) return null;
+  try {
+    const raw = JSON.parse(fs.readFileSync(candidate, "utf-8")) as {
+      panel_id?: string;
+      source?: string;
+      grade?: { score_0_10?: number };
+    };
+    const score = raw?.grade?.score_0_10;
+    if (typeof score !== "number" || !Number.isFinite(score)) return null;
+    return { panelId, score_0_10: Math.max(0, Math.min(10, score)), source: raw.source };
+  } catch (err) {
+    console.warn(`[validation:grade_load_failed]`, { panelId, error: err instanceof Error ? err.message : String(err) });
+    return null;
+  }
+}
+
+function blendWithGrade(staticService: number, grade: LoadedGrade | null): number {
+  if (!grade) return staticService;
+  return clampScore(0.5 * staticService + 0.5 * grade.score_0_10);
+}
+
 function validateProfile(row: PanelRow, matchRun: MatchRun): ProfileResult {
   const context = contextResult(row, matchRun);
   const relevance = topTenderRelevance(row, matchRun);
   const scores = projectedScores(row, matchRun, context.score);
   const failure = dominantFailure(context.checks, matchRun);
-  const status = readinessStatus(scores.paidReadiness, context.criticalMissing, failure);
+
+  // Sprint 13a: blend optional output-quality grade into serviceOutput
+  // and recompute downstream readiness with the blended value.
+  const panelId = cell(row, "panel_id");
+  const grade = loadGrade(panelId);
+  const blendedServiceOutput = blendWithGrade(scores.serviceOutput, grade);
+  const blendedPaidReadiness = grade
+    ? clampScore(
+        0.30 * blendedServiceOutput
+        + 0.25 * context.score
+        + 0.20 * scores.trustworthiness
+        + 0.15 * scores.dashboardContinuity
+        + 0.10 * scores.assessmentScore,
+      )
+    : scores.paidReadiness;
+  const blendedProcurementEffort = grade
+    ? clampScore(
+        0.30 * scores.timeSaved
+        + 0.25 * blendedServiceOutput
+        + 0.25 * scores.dashboardContinuity
+        + 0.20 * scores.trustworthiness,
+      )
+    : scores.procurementEffortCollapsed;
+
+  const status = readinessStatus(blendedPaidReadiness, context.criticalMissing, failure);
   const failurePoints = unique([
     ...context.criticalMissing,
     ...context.missing.slice(0, 4),
@@ -930,7 +1005,7 @@ function validateProfile(row: PanelRow, matchRun: MatchRun): ProfileResult {
   ]).slice(0, 6);
 
   return {
-    panel_id: cell(row, "panel_id"),
+    panel_id: panelId,
     prospect_company: cell(row, "prospect_company"),
     source_row_id: cell(row, "source_row_id"),
     website: cell(row, "website"),
@@ -946,12 +1021,12 @@ function validateProfile(row: PanelRow, matchRun: MatchRun): ProfileResult {
     assessment_quality_0_10: scores.assessmentScore,
     dashboard_continuity_0_10: scores.dashboardContinuity,
     service_context_completeness_0_10: context.score,
-    service_output_quality_0_10: scores.serviceOutput,
+    service_output_quality_0_10: blendedServiceOutput,
     trustworthiness_0_10: scores.trustworthiness,
     time_saved_0_10: scores.timeSaved,
     shortlist_impact_0_10: scores.shortlistImpact,
-    procurement_effort_collapsed_0_10: scores.procurementEffortCollapsed,
-    paid_service_readiness_0_10: scores.paidReadiness,
+    procurement_effort_collapsed_0_10: blendedProcurementEffort,
+    paid_service_readiness_0_10: blendedPaidReadiness,
     top_match_relevance_0_10: relevance.score,
     relevant_top_tender_count: relevance.relevantCount,
     readiness_status: status,
@@ -962,6 +1037,8 @@ function validateProfile(row: PanelRow, matchRun: MatchRun): ProfileResult {
     missing_context_inputs: context.missing,
     critical_missing_context_inputs: context.criticalMissing,
     prior_panel_status: cell(row, "overall_status") || undefined,
+    output_quality_grade_0_10: grade ? grade.score_0_10 : null,
+    output_quality_grade_source: grade?.source ?? null,
   };
 }
 

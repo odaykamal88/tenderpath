@@ -1,0 +1,23 @@
+{
+  "panel_id": "SPRINT9_CIM",
+  "source": "outputs/paid-services-validation/sprint9-proposal-live-cim.json",
+  "grade": {
+    "score_0_10": 7,
+    "breakdown": {
+      "specificity": 2,
+      "evidence_anchoring": 2,
+      "completeness": 1,
+      "internal_consistency": 1,
+      "submission_usability": 1
+    },
+    "rationale": [
+      "specificity: The draft consistently names the exact call reference (EuropeAid/185831/DD/ACT/SY), Lot 3 by full title, the fixed EUR 675,000 grant amount, the 18 May 2026 deadline, specific geographies (Qamishli, Gaziantep, Erbil, Istanbul), and CSIM's named past donors (SIDA, Free Press Unlimited, Internews) and auditor (KPMG Türkiye) throughout every section.",
+      "evidence_anchoring: Compliance checklist items cite named past grants with years (SIDA 2021–2024, Free Press Unlimited 2022, Internews subaward 2023), specific audit evidence (KPMG Türkiye clean audit 2024), and named system requirements (PADOR, PROSPECT), while missing_information items name concrete artefacts such as the SIDA bridge-financing letter, signed statutes, and co-applicant commitment letter rather than generic placeholders.",
+      "completeness: The draft populates executive_summary, technical_approach, compliance_checklist, required_documents, cover_letter_draft, financial_template_notes, and missing_information meaningfully, but the 'next_steps' field is entirely absent from the output, reducing the populated field count to seven of eight required fields.",
+      "internal_consistency: The cover letter correctly avoids claiming the PADOR registration is complete and flags it as pending, consistent with the compliance checklist and missing_information; however, the executive_summary states a 'lead-applicant role on a small EU project in 2023' and a 'co-applicant on a USAID award in 2022' as established facts, while the company profile does not document these specific roles, introducing a minor unsupported assertion not present in the source profile.",
+      "submission_usability: The cover letter has a complete greeting, substantive body paragraphs, and a signature block, but retains three bracketed placeholders ([Name of Executive Director], [official CSIM contact email], [official CSIM contact number], [PADOR ID]) that require manual completion before submission, and the financial_template_notes are truncated mid-sentence in multiple entries, requiring significant editing to be usable."
+    ],
+    "model": "claude-sonnet-4-6",
+    "graded_at": "2026-05-17T06:31:34.435Z"
+  }
+}

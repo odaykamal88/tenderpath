@@ -1,0 +1,23 @@
+{
+  "panel_id": "SPRINT10_CIM",
+  "source": "outputs/paid-services-validation/sprint10-proposal-live-cim.json",
+  "grade": {
+    "score_0_10": 8,
+    "breakdown": {
+      "specificity": 2,
+      "evidence_anchoring": 2,
+      "completeness": 1,
+      "internal_consistency": 2,
+      "submission_usability": 1
+    },
+    "rationale": [
+      "specificity: The draft consistently names the exact call reference (EuropeAid/185831/DD/ACT/SY), Lot 3 by full title, the EUR 675,000 fixed grant amount, the 18 May 2026 deadline, specific geographies (Gaziantep, Erbil, Qamishli), and CSIM's named capabilities, donors, and audit firm throughout every section.",
+      "evidence_anchoring: Compliance checklist items cite specific file names (CSIM Statutes Türkiye 2018.pdf, KPMG_Audit_CSIM_2024.pdf, SIDA Reference Letter 2024.pdf, SEA-H Safeguarding Policy CSIM.docx, CSIM Strategic Deck 2025.pdf) and missing_information names concrete artefacts (standalone M&E framework, anti-disinformation methodology note, cross-cutting issues statement) rather than generic placeholders.",
+      "completeness: The 'next_steps' field is entirely absent from the generated output — it is referenced in missing_information and compliance_checklist items but never populated as a standalone field — reducing meaningful field count to seven of eight required ProposalOutput fields.",
+      "internal_consistency: Items flagged as 'partial' or 'needs_action' in the compliance checklist (PADOR, M&E framework, anti-disinformation evidence, cross-cutting issues, co-applicant) are consistently echoed in missing_information, and the cover letter correctly hedges on co-applicant confirmation rather than claiming it as done, with no contradictions between gate status and narrative claims.",
+      "submission_usability: The cover letter is structurally complete with greeting and body but retains multiple bracketed placeholders ([Name of Executive Director], [CSIM Istanbul Office Address], [CSIM institutional email], [CSIM telephone], [Insert upon completion of registration]) that would require resolution before submission, and the financial_template_notes third bullet is visibly truncated mid-sentence."
+    ],
+    "model": "claude-sonnet-4-6",
+    "graded_at": "2026-05-17T06:31:56.448Z"
+  }
+}

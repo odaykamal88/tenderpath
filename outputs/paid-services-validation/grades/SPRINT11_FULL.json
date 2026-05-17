@@ -1,0 +1,23 @@
+{
+  "panel_id": "SPRINT11_FULL",
+  "source": "outputs/paid-services-validation/sprint11-full-cim.json",
+  "grade": {
+    "score_0_10": 7,
+    "breakdown": {
+      "specificity": 2,
+      "evidence_anchoring": 2,
+      "completeness": 1,
+      "internal_consistency": 1,
+      "submission_usability": 1
+    },
+    "rationale": [
+      "specificity: The draft consistently names the exact call reference (EuropeAid/185831/DD/ACT/SY), Lot 3 by full title, the EUR 675,000 fixed ceiling, the 18 May 2026 deadline, Syrian governorates, and CSIM's specific capabilities (KPMG Türkiye audit, SIDA/FPU/Internews history, Gaziantep/Erbil/Qamishli nodes) throughout every section.",
+      "evidence_anchoring: Compliance checklist items consistently cite named library files (KPMG_Audit_CSIM_2024.pdf, SEA-H Safeguarding Policy CSIM.docx, CV_Project_Director_Jad_K.docx, CSIM Strategic Deck 2025.pdf, SIDA Reference Letter 2024) and distinguish evidence_from_library from user_claim and gap labels with concrete artefact names.",
+      "completeness: The draft is missing two of the eight required ProposalOutput fields — 'missing_information' and 'next_steps' are entirely absent from the JSON output, dropping the score to 1 despite the six populated fields being substantively developed.",
+      "internal_consistency: The cover letter correctly avoids claiming the 100% co-financing rate and flags PADOR as incomplete, consistent with the checklist; however, the technical_approach describes a fully designed Journalist Protection Mechanism and co-applicant partnership as settled facts, while the compliance checklist correctly flags both as gaps requiring action — a minor but real contradiction in confidence register.",
+      "submission_usability: The cover letter is structurally complete with greeting and signature block but retains multiple bracketed placeholders ([Name of Executive Director], [Email address], [Telephone number], [PADOR registration number]), and the financial_template_notes contain truncated sentences mid-word, making both sections require significant editing before use."
+    ],
+    "model": "claude-sonnet-4-6",
+    "graded_at": "2026-05-17T06:32:20.963Z"
+  }
+}
