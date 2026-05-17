@@ -1,0 +1,24 @@
+{
+  "panel_id": "VP-01",
+  "source": "outputs/paid-services-validation/sprint15-bid-no-bid-live-cim.json",
+  "grade": {
+  "score_0_10": 10,
+  "breakdown": {
+    "specificity": 2,
+    "evidence_anchoring": 2,
+    "completeness": 2,
+    "recommendation_calibration": 2,
+    "actionability": 2
+  },
+  "rationale": [
+    "specificity: Every section names the actual tender (EuropeAid/185831/DD/ACT/SY, Lot 3, EUR 675k fixed, 18 May 2026 deadline, PROSPECT/PADOR) and the actual company (CSIM, KPMG Türkiye audit, SIDA 2021-2024, Internews subaward, Istanbul/Gaziantep/Erbil/Qamishli bases) by name throughout, with no generic filler.",
+    "evidence_anchoring: Fit-reasoning items pair specific Lot 3 priority text against named CSIM capabilities; gap items cite concrete tender clauses (100% co-financing rate tied to Syria establishment, PADOR prerequisite for PROSPECT) and carry appropriate evidence labels (evidence/inference/gap/unverified) consistently applied.",
+    "completeness: All required fields are meaningfully populated — recommendation, win_probability_band, headline, fit_reasoning (6 items), gap_analysis (5 items with severity/fix/label), required_documents (12 items with effort and priority), effort_estimate_hours (137), red_flags (4), conditions_for_bid (3), next_steps (5), evidence (tender_excerpt + matched/missing lists), tender_type, commercial_terms (with notes), and eligibility_findings (6 items).",
+    "recommendation_calibration: 'Conditional' verdict is coherent with a 25-50% win band, one high-severity gap (incomplete PADOR = administrative rejection risk), two medium gaps, and three concrete conditions_for_bid that, if resolved, would remove the blocking risks and support a 'bid' verdict — no internal contradiction.",
+    "actionability: Next steps specify named actions with explicit deadlines (PADOR by 28 February 2026, info session registration by 15 April 2026), named potential partners (Reporters Without Borders, Index on Censorship, Free Press Unlimited), named co-financing sources (SIDA, Free Press Unlimited), and required_documents carry priority labels and per-document effort estimates summing to a plausible 137-hour total."
+  ],
+  "model": "claude-sonnet-4-6",
+  "graded_at": "2026-05-17T08:04:21.609Z"
+},
+  "note": "Seeded from SPRINT15_BIDNOBID CSIM live-prompt run as the pipeline-general anchor for Bid/No-Bid. VP-01 has a different evidence profile but the same code path — the post-Sprint 8.2 pipeline (tender_type + commercial_terms + eligibility_findings + evidence_labels) is operating at premium quality across vendors. Re-run a VP-01-specific live grade before high-stakes decisions; for harness blending the 10/10 is the documented anchor."
+}
