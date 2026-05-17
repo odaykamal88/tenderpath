@@ -80,7 +80,9 @@
   border-bottom: 1px solid var(--tp2-rule);
   margin-bottom: 22px;
   position: sticky;
-  top: 0;
+  /* Each host context sets --tabbar-sticky-top to clear any fixed header above it
+     (e.g. the dashboard layout's 56px mobile top bar). Defaults to 0. */
+  top: var(--tabbar-sticky-top, 0px);
   z-index: 20;
   background: var(--tp2-paper);
 }

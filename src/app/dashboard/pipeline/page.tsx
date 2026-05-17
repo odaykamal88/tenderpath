@@ -8,6 +8,7 @@ import {
   Draggable,
   type DropResult,
 } from "@hello-pangea/dnd";
+import { safeUrl } from "@/lib/url";
 
 type Stage = "matched" | "evaluating" | "preparing" | "submitted" | "won" | "lost";
 
@@ -122,7 +123,7 @@ function serviceHref(
     tender: item.tender_title,
   });
   if (item.tender_agency) params.set("agency", item.tender_agency);
-  const sourceUrl = item.manual_source_url ?? item.source_url;
+  const sourceUrl = safeUrl(item.manual_source_url ?? item.source_url);
   if (sourceUrl) params.set("tender_url", sourceUrl);
   return `/dashboard/services/${service}?${params.toString()}`;
 }
@@ -425,6 +426,7 @@ export default function PipelinePage() {
                           const bucketDot = BUCKET_DOT[item.match_reasons?.opportunityBucket ?? "watchlist"] ?? "bg-stone-300";
                           const isExpanded = expandedId === item.id;
                           const days = daysUntilDeadline(item.tender_deadline);
+                          const itemSourceUrl = safeUrl(item.manual_source_url ?? item.source_url);
                           return (
                             <Draggable
                               key={item.id}
@@ -588,9 +590,9 @@ export default function PipelinePage() {
                                         Roster
                                       </Link>
                                     )}
-                                    {(item.manual_source_url ?? item.source_url) && (
+                                    {itemSourceUrl && (
                                       <a
-                                        href={(item.manual_source_url ?? item.source_url)!}
+                                        href={itemSourceUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-[10.5px] font-semibold uppercase tracking-wider text-stone-500 border border-stone-200 rounded-sm px-2 py-1 bg-white hover:border-stone-400 transition-colors"

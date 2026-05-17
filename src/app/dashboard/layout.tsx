@@ -502,7 +502,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 min-w-0 pt-14 lg:pt-0">
+      <main className="flex-1 min-w-0 pt-14 lg:pt-0 [--tabbar-sticky-top:56px] lg:[--tabbar-sticky-top:0px]">
         {children}
       </main>
     </div>
