@@ -1,0 +1,24 @@
+{
+  "panel_id": "SPRINT13B_FULL",
+  "source": "outputs/paid-services-validation/sprint13b-proposal-live-cim.json",
+  "note": "Sprint 13b — cover-letter rule tightened, financial_template_notes clamp 400->1200, post-generation placeholder sweep wired.",
+  "grade": {
+    "score_0_10": 8,
+    "breakdown": {
+      "specificity": 2,
+      "evidence_anchoring": 2,
+      "completeness": 1,
+      "internal_consistency": 2,
+      "submission_usability": 1
+    },
+    "rationale": [
+      "specificity: The draft consistently names the exact call reference (EuropeAid/185831/DD/ACT/SY), the specific lot (Lot 3, EUR 675,000), the submission deadline (18 May 2026, 12:00 Brussels time), named geographies (Gaziantep, Qamishli, Northwest/Northeast Syria, Damascus), and the company by name with specific capabilities, donors (SIDA, Free Press Unlimited, Internews), and certifications (KPMG Türkiye 2024) throughout.",
+      "evidence_anchoring: Every compliance checklist item cites a specific named library file (e.g. 'CSIM Statutes (Türkiye) 2018.pdf', 'KPMG_Audit_CSIM_2024.pdf', 'SIDA Reference Letter 2024.pdf', 'SEA-H Safeguarding Policy CSIM.docx') or explicitly labels claims as 'user_claim' or 'gap' with named concrete artefacts required to close each gap.",
+      "completeness: The draft populates executive_summary, technical_approach, compliance_checklist, required_documents, cover_letter_draft, financial_template_notes, and missing_information meaningfully, but the 'next_steps' field is entirely absent from the output, reducing the populated field count to seven of eight required fields.",
+      "internal_consistency: The cover letter correctly flags PADOR as in-progress rather than claiming it is complete, the compliance checklist statuses (needs_action, partial, gap) align with the missing_information entries for the same items, and the technical approach references only capabilities the company profile and library documents support.",
+      "submission_usability: The cover letter is structurally complete with greeting, substantive body, and signature block, and contains only one legitimate placeholder ('[DATE]'), but the missing next_steps field means the document cannot be handed to a bid team without additional editorial work to produce an action plan, and the missing_information section is truncated mid-sentence."
+    ],
+    "model": "claude-sonnet-4-6",
+    "graded_at": "2026-05-17T06:48:42.521Z"
+  }
+}

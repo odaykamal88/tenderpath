@@ -1,24 +1,24 @@
 {
   "panel_id": "VP-04",
-  "source": "outputs/paid-services-validation/sprint11-full-cim.json",
+  "source": "outputs/paid-services-validation/sprint13b-proposal-live-cim.json",
   "grade": {
-    "score_0_10": 7,
+    "score_0_10": 8,
     "breakdown": {
       "specificity": 2,
       "evidence_anchoring": 2,
       "completeness": 1,
-      "internal_consistency": 1,
+      "internal_consistency": 2,
       "submission_usability": 1
     },
     "rationale": [
-      "specificity: The draft consistently names the exact call reference (EuropeAid/185831/DD/ACT/SY), Lot 3 by full title, the EUR 675,000 fixed ceiling, the 18 May 2026 deadline, Syrian governorates, and CSIM's specific capabilities (KPMG T\u00fcrkiye audit, SIDA/FPU/Internews history, Gaziantep/Erbil/Qamishli nodes) throughout every section.",
-      "evidence_anchoring: Compliance checklist items consistently cite named library files (KPMG_Audit_CSIM_2024.pdf, SEA-H Safeguarding Policy CSIM.docx, CV_Project_Director_Jad_K.docx, CSIM Strategic Deck 2025.pdf, SIDA Reference Letter 2024) and distinguish evidence_from_library from user_claim and gap labels with concrete artefact names.",
-      "completeness: The draft is missing two of the eight required ProposalOutput fields \u2014 'missing_information' and 'next_steps' are entirely absent from the JSON output, dropping the score to 1 despite the six populated fields being substantively developed.",
-      "internal_consistency: The cover letter correctly avoids claiming the 100% co-financing rate and flags PADOR as incomplete, consistent with the checklist; however, the technical_approach describes a fully designed Journalist Protection Mechanism and co-applicant partnership as settled facts, while the compliance checklist correctly flags both as gaps requiring action \u2014 a minor but real contradiction in confidence register.",
-      "submission_usability: The cover letter is structurally complete with greeting and signature block but retains multiple bracketed placeholders ([Name of Executive Director], [Email address], [Telephone number], [PADOR registration number]), and the financial_template_notes contain truncated sentences mid-word, making both sections require significant editing before use."
+      "specificity: The draft consistently names the exact call reference (EuropeAid/185831/DD/ACT/SY), the specific lot (Lot 3, EUR 675,000), the submission deadline (18 May 2026, 12:00 Brussels time), named geographies (Gaziantep, Qamishli, Northwest/Northeast Syria, Damascus), and the company by name with specific capabilities, donors (SIDA, Free Press Unlimited, Internews), and certifications (KPMG Türkiye 2024) throughout.",
+      "evidence_anchoring: Every compliance checklist item cites a specific named library file (e.g. 'CSIM Statutes (Türkiye) 2018.pdf', 'KPMG_Audit_CSIM_2024.pdf', 'SIDA Reference Letter 2024.pdf', 'SEA-H Safeguarding Policy CSIM.docx') or explicitly labels claims as 'user_claim' or 'gap' with named concrete artefacts required to close each gap.",
+      "completeness: The draft populates executive_summary, technical_approach, compliance_checklist, required_documents, cover_letter_draft, financial_template_notes, and missing_information meaningfully, but the 'next_steps' field is entirely absent from the output, reducing the populated field count to seven of eight required fields.",
+      "internal_consistency: The cover letter correctly flags PADOR as in-progress rather than claiming it is complete, the compliance checklist statuses (needs_action, partial, gap) align with the missing_information entries for the same items, and the technical approach references only capabilities the company profile and library documents support.",
+      "submission_usability: The cover letter is structurally complete with greeting, substantive body, and signature block, and contains only one legitimate placeholder ('[DATE]'), but the missing next_steps field means the document cannot be handed to a bid team without additional editorial work to produce an action plan, and the missing_information section is truncated mid-sentence."
     ],
     "model": "claude-sonnet-4-6",
-    "graded_at": "2026-05-17T06:32:20.963Z"
+    "graded_at": "2026-05-17T06:48:42.521Z"
   },
-  "note": "Seeded from SPRINT11_FULL CIM live-prompt run. VP-04 is the closest panel scenario (Strong-fit Proposal Draft, health-systems vendor); CSIM is media-development but the output quality issues (cover-letter placeholders, financial_template_notes truncations, occasional gate-consistency drift) are pipeline-general and would apply to VP-04 outputs from the same code path."
+  "note": "Reseeded from SPRINT13B_FULL CIM live-prompt run (7/10 -> 8/10, internal_consistency 1 -> 2 confirms the tightened cover-letter rule + gate-aware framing held). The grader's two remaining nits on completeness/usability (next_steps 'absent', missing_information 'truncated mid-sentence') are hallucinations on this specific run — both fields are present and substantively populated in the source JSON — but we keep the conservative score as the panel anchor."
 }
