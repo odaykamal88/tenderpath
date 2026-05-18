@@ -127,6 +127,18 @@
 .sevHigh { background: var(--tp2-neg); }
 .sevMed  { background: var(--tp2-warn); }
 .sevLow  { background: var(--tp2-paper-2); color: var(--tp2-ink); }
+.sevDone { background: var(--tp2-pos, #1f7a4d); }
+.gapRow[data-resolved="true"] .gapTitle,
+.gapRow[data-resolved="true"] .gapWhy,
+.gapRow[data-resolved="true"] .gapFix { opacity: 0.62; }
+.gapResolved {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--tp2-pos, #1f7a4d);
+  justify-self: end;
+  align-self: center;
+  padding: 0 8px;
+}
 .gapTitle { font-size: 15px; color: var(--tp2-ink); font-weight: 600; margin-bottom: 4px; }
 .gapWhy   { font-size: 12.5px; color: var(--tp2-ink-2); line-height: 1.5; margin: 0 0 4px; }
 .gapFix   { font-size: 11px; color: var(--tp2-accent); letter-spacing: 0.04em; }
@@ -177,10 +189,11 @@
 .gridRow {
   padding: 11px 0;
   border-bottom: 1px solid var(--tp2-rule);
-  align-items: baseline;
+  align-items: start;
   font-size: 12.5px;
 }
-.tendersGrid { display: grid; grid-template-columns: 150px 1fr 100px 80px 100px 90px; gap: 16px; }
+.gridRow > * { min-width: 0; }
+.tendersGrid { display: grid; grid-template-columns: 130px 1fr 100px 80px 100px 90px; gap: 16px; }
 .grantsGrid  { display: grid; grid-template-columns: 200px 1fr 110px 130px 100px 80px; gap: 16px; }
 @media (max-width: 768px) {
   .gridHead { display: none; }
@@ -194,7 +207,13 @@
   .tendersGrid > :nth-child(3), .grantsGrid > :nth-child(4) { display: none; }
 }
 
-.refCell { color: var(--tp2-ink-2); font-size: 11px; }
+.refCell {
+  color: var(--tp2-ink-2);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .cellMeta { font-size: 10px; color: var(--tp2-mute); margin-top: 2px; }
 .cellSecondary { color: var(--tp2-ink-2); }
 .fitCell { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; color: var(--tp2-ink); }

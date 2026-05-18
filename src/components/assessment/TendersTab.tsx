@@ -90,9 +90,11 @@ export function TendersTab({
 
         return (
           <div key={t.code} className={`${styles.gridRow} ${styles.tendersGrid}`}>
-            <span className={`${styles.refCell} tp-mono`}>
+            <span
+              className={`${styles.refCell} tp-mono`}
+              title={`${t.code} — ${confidenceLabel(t.confidence)}`}
+            >
               <span
-                title={confidenceLabel(t.confidence)}
                 aria-label={confidenceLabel(t.confidence)}
                 style={{
                   display: "inline-block",
@@ -102,6 +104,7 @@ export function TendersTab({
                   background: confidenceDot(t.confidence),
                   marginRight: 6,
                   verticalAlign: "middle",
+                  flexShrink: 0,
                 }}
               />
               {t.code}
