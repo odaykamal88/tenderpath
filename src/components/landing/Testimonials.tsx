@@ -35,7 +35,7 @@ export default function Testimonials() {
                 </p>
               </div>
               <p className="font-mono text-[10px] tracking-[0.08em] uppercase text-mute hidden sm:block">
-                Amman · Beirut
+                Cairo, Egypt
               </p>
             </div>
 

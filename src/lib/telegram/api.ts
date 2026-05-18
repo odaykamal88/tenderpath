@@ -27,7 +27,10 @@ export async function sendMessage(
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    console.error("[tg:sendMessage:error]", chatId, await res.text());
+    // Log status + body so blocked-bot (403) and rate-limit (429) failures
+    // are searchable in Vercel logs, not just opaque "tg:sendMessage:error".
+    const errText = await res.text().catch(() => "<no body>");
+    console.error("[tg:sendMessage:fail]", JSON.stringify({ chatId, status: res.status, error: errText }));
   }
 }
 

@@ -301,7 +301,7 @@ function renderHtml(d: SendArgs & { tier: { name: string; price: string; pitch: 
     <!-- Footer -->
     <div style="border-top:1px solid ${RULE};margin-top:28px;padding-top:18px;">
       <p style="font-family:${MONO};font-size:10px;color:${MUTE};text-align:center;margin:0;text-transform:uppercase;letter-spacing:0.12em;line-height:1.6;">
-        TenderPath · Amman · Beirut<br>
+        TenderPath · Cairo, Egypt<br>
         You received this because you ran a free assessment at TenderPath.
       </p>
     </div>

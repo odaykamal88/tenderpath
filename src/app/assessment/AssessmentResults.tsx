@@ -54,12 +54,15 @@ export default function AssessmentResults({
   data, onReset,
 }: { data: AssessmentData; onReset: () => void }) {
   const tier = TIER_INFO_BY_SLUG[data.recommended_tier];
-  const dims = data.readiness_dimensions as Partial<ReadinessDimensions> & Record<string, number | undefined>;
+  // Keys must match the canonical ReadinessDimensions schema produced by the
+  // AI pipeline (src/lib/ai.ts) and persisted on assessments.ai_analysis. The
+  // dashboard's label map in src/lib/assessment/data.ts uses the same names.
+  const dims = data.readiness_dimensions as Partial<ReadinessDimensions>;
   const dimensionEntries = [
-    { label: "Sector fit", score: dims.sector_fit ?? dims.sector ?? 0 },
-    { label: "Geography", score: dims.geography ?? 0 },
-    { label: "Compliance", score: dims.compliance ?? 0 },
-    { label: "Track record", score: dims.experience ?? 0 },
+    { label: "Technical capability", score: dims.technical_capability ?? 0 },
+    { label: "Compliance", score: dims.compliance_readiness ?? 0 },
+    { label: "Geography", score: dims.geographic_reach ?? 0 },
+    { label: "Track record", score: dims.experience_relevance ?? 0 },
   ];
 
   return (
