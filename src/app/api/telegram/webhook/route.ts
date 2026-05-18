@@ -7,10 +7,26 @@ import { MAIN_MENU, LOGIN_MENU, FAQ_MENU, FAQ_BACK, ESCALATE_BACK, WELCOME, FAQ_
 const ADMIN_CHAT_ID = Number(process.env.TELEGRAM_ADMIN_CHAT_ID ?? "5825303923");
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.tenderpath.me";
 
-interface TgUser { id: number; first_name?: string; username?: string }
-interface TgMessage { chat: { id: number }; from?: TgUser; text?: string }
+interface TgUser { id: number; first_name?: string; username?: string; language_code?: string }
+interface TgMessage {
+  chat: { id: number };
+  from?: TgUser;
+  text?: string;
+  // Non-text payloads we don't process but need to detect so we can reply
+  // instead of silently dropping the update.
+  photo?: unknown;
+  voice?: unknown;
+  audio?: unknown;
+  video?: unknown;
+  video_note?: unknown;
+  document?: unknown;
+  sticker?: unknown;
+  animation?: unknown;
+  location?: unknown;
+  contact?: unknown;
+}
 interface TgCallbackQuery { id: string; from: TgUser; message?: TgMessage; data?: string }
-interface TgUpdate { message?: TgMessage; callback_query?: TgCallbackQuery }
+interface TgUpdate { update_id?: number; message?: TgMessage; callback_query?: TgCallbackQuery }
 
 interface AssessmentRow {
   company_name: string;
@@ -183,9 +199,33 @@ async function finalizeEscalation(chatId: number, email: string, message: string
   );
 }
 
+function isNonTextPayload(msg: TgMessage): boolean {
+  return Boolean(
+    msg.photo || msg.voice || msg.audio || msg.video || msg.video_note ||
+    msg.document || msg.sticker || msg.animation || msg.location || msg.contact
+  );
+}
+
 async function handleMessage(msg: TgMessage): Promise<void> {
   const chatId = msg.chat.id;
   const text = msg.text?.trim() ?? "";
+
+  // Always respond to non-text payloads instead of silently dropping. A user
+  // who voice-notes or stickers the bot and gets nothing back assumes it's
+  // broken — they don't know it only handles text.
+  if (!text && isNonTextPayload(msg)) {
+    return sendMessage(
+      chatId,
+      "I can only read text messages right now. Tap a button or type /start to see what I can help with:",
+      MAIN_MENU
+    );
+  }
+
+  if (!text) {
+    // Empty text + no recognised payload — still acknowledge so the user
+    // doesn't see a silent void.
+    return sendMessage(chatId, "Didn't catch that — try /start:", MAIN_MENU);
+  }
 
   if (text === "/start" || text === "/help") {
     await clearSession(chatId);
@@ -218,6 +258,9 @@ async function handleMessage(msg: TgMessage): Promise<void> {
 export async function POST(request: Request): Promise<Response> {
   const secret = request.headers.get("x-telegram-bot-api-secret-token");
   if (process.env.TELEGRAM_WEBHOOK_SECRET && secret !== process.env.TELEGRAM_WEBHOOK_SECRET) {
+    // Surface secret-token mismatches so a misconfigured webhook is
+    // diagnosable — previously this silently returned 200.
+    console.warn("[tg:webhook:secret_mismatch]", JSON.stringify({ haveSecret: Boolean(secret) }));
     return NextResponse.json({ ok: true });
   }
 
@@ -225,14 +268,32 @@ export async function POST(request: Request): Promise<Response> {
   try {
     update = (await request.json()) as TgUpdate;
   } catch {
+    console.warn("[tg:webhook:bad_json]");
     return NextResponse.json({ ok: true });
   }
 
+  // Always log every update so prod logs reveal which users actually reach the
+  // webhook — critical when a specific user reports "nothing happened" and we
+  // need to determine whether their message arrived at all.
+  const m = update.message;
+  const cq = update.callback_query;
+  console.log("[tg:webhook:update]", JSON.stringify({
+    update_id: update.update_id,
+    kind: cq ? "callback_query" : m ? "message" : "other",
+    chat_id: cq?.message?.chat.id ?? m?.chat.id ?? null,
+    user_id: cq?.from.id ?? m?.from?.id ?? null,
+    username: cq?.from.username ?? m?.from?.username ?? null,
+    lang: cq?.from.language_code ?? m?.from?.language_code ?? null,
+    text: m?.text ? m.text.slice(0, 80) : null,
+    data: cq?.data ?? null,
+    has_non_text: m ? isNonTextPayload(m) : false,
+  }));
+
   try {
-    if (update.callback_query) {
-      await handleCallback(update.callback_query);
-    } else if (update.message?.text) {
-      await handleMessage(update.message);
+    if (cq) {
+      await handleCallback(cq);
+    } else if (m) {
+      await handleMessage(m);
     }
   } catch (err) {
     console.error("[tg:webhook:error]", err);

@@ -26,7 +26,6 @@ const PLAN_MIN_USDT: Record<string, number> = {
   "grants-tenders-matching": 46_550_000,
   "proposal-draft":         284_050_000,
   "roster-fast-track":      711_750_000,
-  "founding-member":        370_500_000,
 };
 
 interface TronScanTransfer {

@@ -44,7 +44,7 @@ export default function Footer() {
               across the global south.
             </p>
             <p className="mt-5 font-mono text-[10px] tracking-[0.08em] uppercase text-mute leading-relaxed">
-              Amman · Beirut<br />
+              Cairo, Egypt<br />
               Built {new Date().getFullYear()}
             </p>
           </div>

@@ -8,6 +8,7 @@
  * ISR cache windows when the underlying assessment row mutates.
  */
 
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AssessmentChrome } from "@/components/assessment/AssessmentChrome";
 import { ScoreTab } from "@/components/assessment/ScoreTab";
@@ -23,13 +24,82 @@ export const dynamic = "force-dynamic";
 
 type Tab = "score" | "gaps" | "tenders" | "grants" | "next";
 
+const SERIF = "'Fraunces', 'Times New Roman', serif";
+const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
+
+// Signed-in users with no completed assessment land here. Render an empty
+// dashboard state instead of bouncing to /assessment — the dashboard layout
+// already supplies sidebar, email, and trial chrome, so the user can see they
+// are signed in rather than being dumped on the anonymous landing.
+function EmptyDashboard() {
+  return (
+    <div className="px-6 sm:px-8 py-10 sm:py-14 max-w-[1400px]">
+      <p
+        className="text-[10px] font-semibold uppercase tracking-[0.22em] text-stone-400 mb-3"
+        style={{ fontFamily: MONO }}
+      >
+        Overview · No assessment yet
+      </p>
+      <h1
+        className="text-[34px] sm:text-[44px] font-medium tracking-tight text-stone-900 leading-[1.05] mb-4"
+        style={{ fontFamily: SERIF }}
+      >
+        Run your first assessment.
+      </h1>
+      <p className="text-[14.5px] sm:text-[15px] text-stone-600 leading-relaxed max-w-xl mb-8">
+        Your dashboard fills in once you complete an assessment — readiness score across five
+        dimensions, gap analysis, matched tenders and grants, and a 90-day action plan.
+        It takes about five minutes.
+      </p>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+        <Link
+          href="/assessment"
+          className="inline-flex items-center bg-stone-900 px-6 py-3 text-[13px] font-semibold text-white hover:bg-orange-500 transition-colors"
+        >
+          Start assessment →
+        </Link>
+        <span
+          className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+          style={{ fontFamily: MONO }}
+        >
+          Free · 5 minutes
+        </span>
+      </div>
+
+      <div className="mt-12 grid sm:grid-cols-3 gap-px bg-stone-200 border border-stone-200 max-w-3xl">
+        {[
+          { kicker: "01", title: "Score", body: "Five readiness dimensions benchmarked against UN buyer expectations." },
+          { kicker: "02", title: "Match", body: "Live tenders and grants ranked by fit for your sectors and country focus." },
+          { kicker: "03", title: "Act", body: "A 90-day plan with the gaps to close first and the bids worth pursuing now." },
+        ].map((step) => (
+          <div key={step.kicker} className="bg-white p-5">
+            <p
+              className="text-[10px] font-semibold uppercase tracking-[0.2em] text-stone-400 mb-2 tabular-nums"
+              style={{ fontFamily: MONO }}
+            >
+              Step {step.kicker}
+            </p>
+            <p
+              className="text-[18px] font-medium text-stone-900 mb-1.5 leading-tight"
+              style={{ fontFamily: SERIF }}
+            >
+              {step.title}
+            </p>
+            <p className="text-[12.5px] text-stone-600 leading-snug">{step.body}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
   searchParams: Promise<{ tab?: string }>;
 }) {
   const data = await getCurrentUserAssessment();
-  if (!data) redirect("/assessment");
+  if (!data) return <EmptyDashboard />;
   if (data.status === "computing" || data.status === "failed") {
     redirect(`/assessment/${data.reportId}`);
   }

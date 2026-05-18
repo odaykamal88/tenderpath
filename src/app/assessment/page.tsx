@@ -324,7 +324,27 @@ export default function AssessmentPage() {
   const [results, setResults] = useState<AssessmentResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [analysisMsg, setAnalysisMsg] = useState(0);
+  const [authedEmail, setAuthedEmail] = useState<string | null>(null);
   const msgTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Detect signed-in users so the page can show its auth state instead of
+  // looking like an anonymous landing — otherwise users bounced here from
+  // /dashboard (when they have no assessment yet) assume they're signed out.
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+    if (!token) return;
+    let cancelled = false;
+    fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.email) return;
+        setAuthedEmail(data.email as string);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const patch = useCallback((p: Partial<WizardData>) => setWizard((d) => ({ ...d, ...p })), []);
 
@@ -412,16 +432,30 @@ export default function AssessmentPage() {
     <div className="min-h-screen bg-paper text-ink">
       {/* Editorial header */}
       <nav className="border-b border-rule bg-paper">
-        <div className="mx-auto max-w-6xl px-6 lg:px-8 flex h-16 items-center justify-between">
+        <div className="mx-auto max-w-6xl px-6 lg:px-8 flex h-16 items-center justify-between gap-4">
           <Link href="/" className="font-serif text-[22px] font-medium tracking-[-0.01em] text-ink">
             Tender<span className="text-accent">·</span>Path
           </Link>
-          <Link
-            href="/"
-            className="font-mono text-[11px] tracking-[0.12em] uppercase text-ink-3 hover:text-ink transition-colors"
-          >
-            ← Back to home
-          </Link>
+          {authedEmail ? (
+            <div className="flex items-center gap-4 sm:gap-6 min-w-0">
+              <span className="hidden sm:inline font-mono text-[10px] tracking-[0.12em] uppercase text-ink-3 truncate max-w-[180px]">
+                {authedEmail}
+              </span>
+              <Link
+                href="/dashboard"
+                className="bg-ink text-paper font-mono text-[11px] tracking-[0.12em] uppercase px-4 py-2 hover:bg-accent transition-colors whitespace-nowrap"
+              >
+                Open dashboard →
+              </Link>
+            </div>
+          ) : (
+            <Link
+              href="/"
+              className="font-mono text-[11px] tracking-[0.12em] uppercase text-ink-3 hover:text-ink transition-colors"
+            >
+              ← Back to home
+            </Link>
+          )}
         </div>
       </nav>
 
@@ -429,7 +463,7 @@ export default function AssessmentPage() {
       {phase === "entry" && (
         <div className="mx-auto max-w-6xl px-6 lg:px-8 py-14 lg:py-20">
           <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-accent mb-6">
-            Free · No login · 5 minutes
+            {authedEmail ? `Signed in · Start a new assessment · 5 minutes` : `Free · No login · 5 minutes`}
           </p>
           <div className="grid lg:grid-cols-[1.2fr_1fr] gap-10 lg:gap-16 items-start">
             {/* Left — pitch + form */}

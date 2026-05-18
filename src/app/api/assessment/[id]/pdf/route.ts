@@ -49,12 +49,14 @@ export async function GET(
     ? (row.matched_grants as Array<Record<string, unknown>>)
     : [];
 
+  // Keys must match the canonical ReadinessDimensions schema (src/lib/ai.ts).
+  // Earlier code used ghost keys (sector_fit/geography/compliance/experience)
+  // that never exist on the persisted object, so every bar rendered as 0.
   const dimensionRows = [
-    { label: "Sector fit",    score: Number(dims.sector_fit ?? dims.sector ?? 0) },
-    { label: "Geography",     score: Number(dims.geography ?? 0) },
-    { label: "Compliance",    score: Number(dims.compliance ?? 0) },
-    { label: "Track record",  score: Number(dims.experience ?? 0) },
-    { label: "Documentation", score: Number(dims.documentation ?? 0) },
+    { label: "Technical capability", score: Number(dims.technical_capability ?? 0) },
+    { label: "Compliance",           score: Number(dims.compliance_readiness ?? 0) },
+    { label: "Geography",            score: Number(dims.geographic_reach ?? 0) },
+    { label: "Track record",         score: Number(dims.experience_relevance ?? 0) },
   ];
 
   const dimBars = dimensionRows.map((d) => {

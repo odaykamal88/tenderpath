@@ -10,10 +10,9 @@ const SLUG_TO_PRICE_ENV: Record<string, string> = {
   "grants-tenders-matching": "STRIPE_PRICE_TENDER_INTELLIGENCE",
   "proposal-draft":          "STRIPE_PRICE_SUBMISSION_PACKAGE",
   "roster-fast-track":       "STRIPE_PRICE_STRATEGIC_PARTNERSHIP",
-  "founding-member":         "STRIPE_PRICE_FOUNDING_MEMBER",
 };
 
-const SUBSCRIPTION_PLANS = new Set(["grants-tenders-matching", "founding-member"]);
+const SUBSCRIPTION_PLANS = new Set(["grants-tenders-matching"]);
 
 function metadataValue(value: unknown): string {
   if (typeof value !== "string") return "";

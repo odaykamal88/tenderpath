@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { createToken } from "@/lib/auth";
 import { sql } from "@/lib/db";
-import { verifyPassword } from "@/lib/password";
+import { hashPassword, verifyPassword } from "@/lib/password";
 
 const DEMO_EMAIL = "demo@tenderpath.me";
+// Must match scripts/create-demo-user.mjs and the hint shown on /login.
+// Credentials are publicly displayed, so it is safe to self-heal on every login.
+const DEMO_PASSWORD = "TenderDemo2026!";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -15,6 +18,21 @@ export async function POST(request: Request) {
       { error: "Email and password are required" },
       { status: 400 },
     );
+  }
+
+  // Self-heal: keep the demo account password in sync with the displayed hint.
+  // Prevents UI/DB drift from locking visitors out of the public demo.
+  if (email === DEMO_EMAIL) {
+    const hash = await hashPassword(DEMO_PASSWORD);
+    const now = new Date().toISOString();
+    await sql`
+      INSERT INTO users (email, password_hash, subscription_status, tier, trial_start_date, created_at)
+      VALUES (${DEMO_EMAIL}, ${hash}, 'active', 'pro', ${now}, ${now})
+      ON CONFLICT (email) DO UPDATE SET
+        password_hash       = EXCLUDED.password_hash,
+        subscription_status = 'active',
+        tier                = 'pro'
+    `;
   }
 
   const users = await sql`
