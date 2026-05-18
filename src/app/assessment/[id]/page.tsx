@@ -5,11 +5,12 @@ import { GapsTab } from "@/components/assessment/GapsTab";
 import { TendersTab } from "@/components/assessment/TendersTab";
 import { GrantsTab } from "@/components/assessment/GrantsTab";
 import { NextStepsTab } from "@/components/assessment/NextStepsTab";
+import { ThisWeekStrip } from "@/components/assessment/ThisWeekStrip";
 import { LoadingState } from "@/components/assessment/states/LoadingState";
 import { ErrorState } from "@/components/assessment/states/ErrorState";
 import { getAssessment, getThisWeek } from "@/lib/assessment";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -42,11 +43,13 @@ export default async function AssessmentPage({ params, searchParams }: Props) {
     : "score";
 
   const counts = {
-    gaps: data.gaps.length,
+    gaps: data.gaps.filter((g) => !g.resolved).length,
     tenders: data.tenders.length,
     grants: data.grants.length,
     next: data.totalSteps,
   };
+
+  const week = await getThisWeek(id);
 
   return (
     <AssessmentChrome
@@ -55,6 +58,8 @@ export default async function AssessmentPage({ params, searchParams }: Props) {
       companyName={data.companyName}
       counts={counts}
     >
+      <ThisWeekStrip rows={week} />
+
       {activeTab === "score" && (
         <ScoreTab
           score={data.score}
@@ -84,7 +89,7 @@ export default async function AssessmentPage({ params, searchParams }: Props) {
       )}
       {activeTab === "next" && (
         <NextStepsTab
-          groups={[]}
+          groups={data.nextStepsGroups}
           totalSteps={data.totalSteps}
           projectedDelta={data.projectedDelta}
         />

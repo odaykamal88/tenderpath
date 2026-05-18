@@ -6,6 +6,8 @@ export type Gap = {
   why: string;
   fix: string;
   cta: string;
+  /** True when the user's vault carries evidence that maps to this gap. */
+  resolved?: boolean;
 };
 
 export function GapsTab({
@@ -23,31 +25,54 @@ export function GapsTab({
     <div className={styles.gapsGrid}>
       <section>
         <div className={styles.eyebrow}>
-          {gaps.length} gaps · estimated 14 days to close
+          {(() => {
+            const open = gaps.filter((g) => !g.resolved).length;
+            const done = gaps.length - open;
+            if (open === 0) {
+              return `${gaps.length} gap${gaps.length === 1 ? "" : "s"} · all covered by your vault`;
+            }
+            return done > 0
+              ? `${open} open · ${done} covered · ~${Math.max(7, open * 2)} days to close`
+              : `${open} gap${open === 1 ? "" : "s"} · estimated ${Math.max(7, open * 2)} days to close`;
+          })()}
         </div>
         <h2 className={styles.sectionTitle}>
-          Compliance is the only thing between you and Tier 1.
+          {gaps.filter((g) => !g.resolved).length === 0
+            ? "Compliance handled — focus on bids."
+            : "Compliance is the only thing between you and Tier 1."}
         </h2>
         <ol className={styles.gapList}>
           {gaps.map((g, i) => (
-            <li key={i} className={styles.gapRow}>
+            <li key={i} className={styles.gapRow} data-resolved={g.resolved ? "true" : undefined}>
               <span
                 className={`${styles.sev} ${
-                  g.severity === "High"
+                  g.resolved
+                    ? styles.sevDone
+                    : g.severity === "High"
                     ? styles.sevHigh
                     : g.severity === "Med"
                     ? styles.sevMed
                     : styles.sevLow
                 }`}
               >
-                {g.severity}
+                {g.resolved ? "Done" : g.severity}
               </span>
               <div>
                 <div className={styles.gapTitle}>{g.title}</div>
                 <p className={styles.gapWhy}>{g.why}</p>
                 <div className={`${styles.gapFix} tp-mono`}>{g.fix}</div>
               </div>
-              <button className={styles.rowCta}>{g.cta}</button>
+              {g.resolved ? (
+                <span
+                  className={styles.gapResolved}
+                  aria-label="Evidence on file"
+                  title="Evidence on file in your vault"
+                >
+                  ✓
+                </span>
+              ) : (
+                <button className={styles.rowCta}>{g.cta}</button>
+              )}
             </li>
           ))}
         </ol>

@@ -1,8 +1,11 @@
 /* /dashboard — D2 tabbed report pinned to the user's latest assessment.
  *
- * Same five-tab chrome as /assessment/[id], with a "This week" dark strip pinned
- * above the tabs for the closest tender/grant deadlines. If the user has no
- * assessment yet, redirect to /assessment so they can run one.
+ * Renders the same chrome as /assessment/[id]. Both routes share rowToReport
+ * and ThisWeekStrip, so the two URLs converge on identical data and visuals
+ * once the user has at least one completed assessment.
+ *
+ * Forced dynamic so this view and /assessment/[id] cannot diverge on Next.js
+ * ISR cache windows when the underlying assessment row mutates.
  */
 
 import { redirect } from "next/navigation";
@@ -12,12 +15,11 @@ import { GapsTab } from "@/components/assessment/GapsTab";
 import { TendersTab } from "@/components/assessment/TendersTab";
 import { GrantsTab } from "@/components/assessment/GrantsTab";
 import { NextStepsTab } from "@/components/assessment/NextStepsTab";
+import { ThisWeekStrip } from "@/components/assessment/ThisWeekStrip";
 import { FunnelBeacon } from "@/components/telemetry/FunnelBeacon";
 import { getCurrentUserAssessment, getThisWeek } from "@/lib/assessment";
-import { safeUrl, withUtm } from "@/lib/url";
-import dashStyles from "@/components/assessment/dashboard.module.css";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 type Tab = "score" | "gaps" | "tenders" | "grants" | "next";
 
@@ -42,7 +44,7 @@ export default async function DashboardPage({
   const week = await getThisWeek(data.reportId);
 
   const counts = {
-    gaps: data.gaps.length,
+    gaps: data.gaps.filter((g) => !g.resolved).length,
     tenders: data.tenders.length,
     grants: data.grants.length,
     next: data.totalSteps,
@@ -64,32 +66,7 @@ export default async function DashboardPage({
           tier: data.tier,
         }}
       />
-      {week.length > 0 && (
-        <section className={dashStyles.thisWeek} aria-label="This week">
-          <span className={dashStyles.eyebrow}>This week</span>
-          <ul className={dashStyles.weekList}>
-            {week.map((row, i) => {
-              const cleanUrl = safeUrl(row.url);
-              const externalUrl = cleanUrl ? withUtm(cleanUrl, "this_week") : null;
-              const href = externalUrl || `/pay?plan=grants-tenders-matching`;
-              return (
-                <li key={i} className={dashStyles.weekRow}>
-                  <a
-                    href={href}
-                    target={externalUrl ? "_blank" : undefined}
-                    rel={externalUrl ? "noopener noreferrer" : undefined}
-                    className={dashStyles.weekRowLink}
-                  >
-                    <span className={dashStyles.weekKind}>{row.kind}</span>
-                    <span className={dashStyles.weekTitle}>{row.title}</span>
-                    <span className={dashStyles.weekDue}>{row.due} ↗</span>
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+      <ThisWeekStrip rows={week} />
 
       {activeTab === "score" && (
         <ScoreTab
@@ -118,7 +95,7 @@ export default async function DashboardPage({
       {activeTab === "grants" && <GrantsTab grants={data.grants} />}
       {activeTab === "next" && (
         <NextStepsTab
-          groups={[]}
+          groups={data.nextStepsGroups}
           totalSteps={data.totalSteps}
           projectedDelta={data.projectedDelta}
         />

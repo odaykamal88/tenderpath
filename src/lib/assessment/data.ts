@@ -8,6 +8,87 @@ import type { Gap as D2Gap } from "@/components/assessment/GapsTab";
 import type { Tender } from "@/components/assessment/TendersTab";
 import type { Grant } from "@/components/assessment/GrantsTab";
 import type { TenderPeek } from "@/components/assessment/ScoreTab";
+import type { MoveGroup } from "@/components/assessment/NextStepsTab";
+
+// Maps a gap's text against the applicant-evidence tag taxonomy.
+// When the user's vault carries any of these tags the gap is treated as
+// covered: the Gaps-tab CTA flips to a tick and the score impact for that
+// gap is added back into the effective score. Patterns mirror the LLM gap
+// language produced by analyze.ts, not the raw UN regulation vocabulary.
+const GAP_TAG_RULES: { pattern: RegExp; tags: string[] }[] = [
+  { pattern: /\bUNGM\b|UN Global Marketplace|vendor registration/i, tags: ["ungm"] },
+  { pattern: /\bISO\s*9001|quality management/i, tags: ["iso-9001"] },
+  { pattern: /\bISO\s*27001|information security management/i, tags: ["iso-27001"] },
+  { pattern: /\bISO\s*14001|environmental management/i, tags: ["iso-14001"] },
+  { pattern: /\bISO\s*45001|occupational health/i, tags: ["iso-45001"] },
+  { pattern: /\bSA\s*8000\b|social accountability/i, tags: ["sa-8000"] },
+  { pattern: /audited?.*financial|audited statement|financial statement|balance sheet|profit (?:and|&) loss/i, tags: ["external-audit", "audited-financials", "financials"] },
+  { pattern: /credit rating|bank reference/i, tags: ["financials"] },
+  { pattern: /past performance|track record|reference contracts?|project references?/i, tags: ["past-performance", "reference-letter", "contract-award"] },
+  { pattern: /consortium|joint venture|partnership agreement|co-applicant/i, tags: ["partnership", "co-applicant"] },
+  { pattern: /SEA[\b-]|safeguarding|PSEA|sexual exploitation/i, tags: ["safeguarding", "psea"] },
+  { pattern: /PADOR|EuropeAid (registration|ID)/i, tags: ["pador", "europeaid-id"] },
+  { pattern: /DUNS|UEI|SAM\.gov registration|CAGE/i, tags: ["duns", "uei", "ncage"] },
+  { pattern: /capability statement|company profile/i, tags: ["capability-statement"] },
+  { pattern: /risk register|risk management|risk matrix/i, tags: ["risk-management"] },
+  { pattern: /M&E|monitoring (?:and|&) evaluation|logframe|logical framework/i, tags: ["monitoring-evaluation"] },
+  { pattern: /key personnel|team leader|project manager.*CV/i, tags: ["cv", "key-personnel"] },
+];
+
+function tagsRequiredForGap(gap: Gap): string[] {
+  const haystack = `${gap.gap}\n${gap.fix}\n${(gap.action_steps ?? []).join("\n")}`;
+  const tags = new Set<string>();
+  for (const { pattern, tags: t } of GAP_TAG_RULES) {
+    if (pattern.test(haystack)) for (const tag of t) tags.add(tag);
+  }
+  return [...tags];
+}
+
+function gapIsCovered(gap: Gap, vaultTags: Set<string>): boolean {
+  if (vaultTags.size === 0) return false;
+  const required = tagsRequiredForGap(gap);
+  if (required.length === 0) return false;
+  return required.some((tag) => vaultTags.has(tag));
+}
+
+const NEXT_STEPS_BUCKETS: { when: string; severity: "High" | "Med" | "Low"; eta: string }[] = [
+  { when: "Days 1 – 14",  severity: "High", eta: "≤14 days" },
+  { when: "Days 15 – 45", severity: "Med",  eta: "≤45 days" },
+  { when: "Days 46 – 90", severity: "Low",  eta: "≤90 days" },
+];
+
+function deriveNextStepsGroups(gaps: Gap[], vaultTags: Set<string>): { groups: MoveGroup[]; totalSteps: number } {
+  const grouped = new Map<"High" | "Med" | "Low", { gap: Gap; mapped: D2Gap; covered: boolean }[]>([
+    ["High", []],
+    ["Med", []],
+    ["Low", []],
+  ]);
+  for (const g of gaps) {
+    if (gapIsCovered(g, vaultTags)) continue; // covered gaps don't need a 90-day step
+    const mappedSev = mapSeverity(g.severity);
+    grouped.get(mappedSev)!.push({ gap: g, mapped: mapGapForUI(g, false), covered: false });
+  }
+
+  const groups: MoveGroup[] = [];
+  let total = 0;
+  for (const bucket of NEXT_STEPS_BUCKETS) {
+    const rows = grouped.get(bucket.severity) ?? [];
+    if (rows.length === 0) continue;
+    const items = rows.flatMap(({ gap, mapped }) => {
+      const steps = (gap.action_steps ?? []).slice(0, 2);
+      const effectiveSteps = steps.length > 0 ? steps : [gap.fix];
+      return effectiveSteps.map((step) => ({
+        title: step,
+        why: mapped.title,
+        eta: bucket.eta,
+        cta: mapped.cta,
+      }));
+    });
+    total += items.length;
+    groups.push({ when: bucket.when, items });
+  }
+  return { groups, totalSteps: total };
+}
 
 const DIM_LABELS: Record<keyof ReadinessDimensions, string> = {
   technical_capability: "Technical capability",
@@ -29,18 +110,25 @@ function mapSeverity(s: string): "High" | "Med" | "Low" {
   return "Low";
 }
 
-function mapGapsForUI(gaps: Gap[]): D2Gap[] {
-  return gaps.map((g) => ({
+function mapGapForUI(g: Gap, resolved: boolean): D2Gap {
+  return {
     severity: mapSeverity(g.severity),
     title: g.gap,
     why: g.fix,
     fix: g.action_steps[0] ?? g.fix,
-    cta: g.upsell_tier === "submission-package"
+    cta: resolved
+      ? "Evidence on file ✓"
+      : g.upsell_tier === "submission-package"
       ? "Get submission package →"
       : g.upsell_tier === "strategic-partnership"
       ? "Start partnership plan →"
       : "View intelligence →",
-  }));
+    resolved,
+  };
+}
+
+function mapGapsForUI(gaps: Gap[], vaultTags: Set<string>): D2Gap[] {
+  return gaps.map((g) => mapGapForUI(g, gapIsCovered(g, vaultTags)));
 }
 
 function pickReasons(t: MatchedTender): string[] {
@@ -169,6 +257,7 @@ export type AssessmentReport = {
   countsByFilter: { all: number; strong: number; closing: number };
   totalSteps: number;
   projectedDelta: number;
+  nextStepsGroups: MoveGroup[];
   pdfGaps: { title: string; dim: string; lift: number; effort: string; unlock: string; src: string }[];
   pdfTenders: { title: string; value: string; due: string; fit: number; readiness: string; note: string }[];
   pdfGrants: { title: string; value: string; status: string; due: string; note: string }[];
@@ -195,7 +284,28 @@ type DBRow = {
   created_at: string;
 };
 
-function rowToReport(row: DBRow): AssessmentReport {
+// Aggregates the user's vault-document tags for an assessment owner. Falls back
+// to an empty set if anything goes wrong — gap-resolution is additive, so a DB
+// hiccup must not regress the page to a "everything still missing" view.
+async function loadVaultTagsForEmail(email: string | null | undefined): Promise<Set<string>> {
+  if (!email) return new Set();
+  try {
+    const rows = await sql`
+      SELECT array_agg(DISTINCT tag) AS tags
+      FROM vault_documents vd
+      JOIN users u ON u.id = vd.user_id
+      LEFT JOIN LATERAL unnest(COALESCE(vd.tags, '{}'::text[])) AS tag ON TRUE
+      WHERE LOWER(u.email) = LOWER(${email})
+    `;
+    const tags = (rows[0]?.tags as string[] | null) ?? [];
+    return new Set(tags.filter(Boolean));
+  } catch (err) {
+    console.warn("[assessment/data] loadVaultTagsForEmail failed", { email, err });
+    return new Set();
+  }
+}
+
+function rowToReport(row: DBRow, vaultTags: Set<string>): AssessmentReport {
   // Older assessment rows persisted with a 5th `financial_stability` field;
   // we read whatever is there and ignore it. The UI no longer renders it.
   const rawDims = row.ai_analysis?.readiness_dimensions as Partial<ReadinessDimensions> | undefined;
@@ -211,15 +321,44 @@ function rowToReport(row: DBRow): AssessmentReport {
     : row.assessment_status === "running" || row.assessment_status === "queued" ? "computing"
     : "ready";
 
-  const gaps = mapGapsForUI(row.gaps ?? []);
+  const rawGaps = row.gaps ?? [];
+  const gaps = mapGapsForUI(rawGaps, vaultTags);
   const tenders = mapTendersForUI(row.matched_tenders ?? []);
   const grants = mapGrantsForUI(row.matched_grants ?? []);
-  const score = row.readiness_score ?? row.ai_analysis?.overall_score ?? 0;
+  const baseScore = row.readiness_score ?? row.ai_analysis?.overall_score ?? 0;
+
+  // Score impact deltas are anchored to the first three gaps in their original
+  // order. Each resolved gap among that anchor set adds its delta back into the
+  // effective readiness score. We never increase past 100.
+  const SCORE_DELTAS = [8, 6, 4];
+  const resolvedFlags = rawGaps.map((g) => gapIsCovered(g, vaultTags));
+  const resolvedBonus = resolvedFlags
+    .slice(0, SCORE_DELTAS.length)
+    .reduce((sum, isResolved, i) => sum + (isResolved ? SCORE_DELTAS[i] : 0), 0);
+  const score = Math.min(100, baseScore + resolvedBonus);
 
   const nowTs = Date.now();
   const closingSoon = tenders.filter(
     (t) => t.deadline && new Date(t.deadline).getTime() - nowTs < 14 * 86_400_000
   );
+
+  // Score-impact card only surfaces gaps the user has not already covered.
+  // Resolved gaps fold their delta into the live score above; showing them in
+  // the projected impact column would double-count.
+  const openTopGaps: { gap: D2Gap; delta: number }[] = [];
+  let openIdx = 0;
+  for (let i = 0; i < gaps.length && openTopGaps.length < SCORE_DELTAS.length; i += 1) {
+    if (gaps[i].resolved) continue;
+    openTopGaps.push({ gap: gaps[i], delta: SCORE_DELTAS[openIdx++] ?? 3 });
+  }
+  let cumulative = score;
+  const scoreImpact = openTopGaps.map(({ gap, delta }) => {
+    cumulative = Math.min(100, cumulative + delta);
+    return { label: gap.title, delta, projected: cumulative };
+  });
+
+  const { groups: nextStepsGroups, totalSteps: nextStepsCount } = deriveNextStepsGroups(rawGaps, vaultTags);
+  const projectedDelta = openTopGaps.reduce((sum, x) => sum + x.delta, 0);
 
   return {
     reportId: String(row.id),
@@ -228,7 +367,7 @@ function rowToReport(row: DBRow): AssessmentReport {
     companyName: decodeHtmlEntities(row.company_name) || row.company_name,
     sector: row.sector ?? "General",
     score,
-    scoreDelta: 0,
+    scoreDelta: resolvedBonus,
     tier: tierLabel(row.recommended_tier),
     summary: row.ai_analysis?.summary ?? "Assessment completed.",
     dimensions: mapDimensions(dims),
@@ -241,18 +380,15 @@ function rowToReport(row: DBRow): AssessmentReport {
       price: tierPrice(row.recommended_tier),
       pitch: tierPitch(row.recommended_tier),
     },
-    scoreImpact: gaps.slice(0, 3).map((g, i) => ({
-      label: g.title,
-      delta: [8, 6, 4][i] ?? 3,
-      projected: score + ([8, 14, 18][i] ?? 3),
-    })),
+    scoreImpact,
     countsByFilter: {
       all: tenders.length,
       strong: tenders.filter((t) => t.fit >= 70).length,
       closing: closingSoon.length,
     },
-    totalSteps: gaps.length * 2,
-    projectedDelta: 16,
+    totalSteps: nextStepsCount,
+    projectedDelta,
+    nextStepsGroups,
     pdfGaps: (row.gaps ?? []).map((g) => ({
       title: g.gap,
       dim: "compliance",
@@ -290,7 +426,9 @@ export async function getAssessment(id: string): Promise<AssessmentReport | null
     LIMIT 1
   `;
   if (!rows[0]) return null;
-  return rowToReport(rows[0] as DBRow);
+  const row = rows[0] as DBRow;
+  const vaultTags = await loadVaultTagsForEmail(row.email);
+  return rowToReport(row, vaultTags);
 }
 
 export async function getCurrentUserAssessment(): Promise<AssessmentReport | null> {
@@ -310,7 +448,9 @@ export async function getCurrentUserAssessment(): Promise<AssessmentReport | nul
     LIMIT 1
   `;
   if (!rows[0]) return null;
-  return rowToReport(rows[0] as DBRow);
+  const row = rows[0] as DBRow;
+  const vaultTags = await loadVaultTagsForEmail(row.email ?? claims.email);
+  return rowToReport(row, vaultTags);
 }
 
 export async function getThisWeek(reportId: string): Promise<{ kind: string; title: string; due: string; url?: string | null }[]> {
