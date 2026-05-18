@@ -86,6 +86,26 @@ Additional work done outside the prompt sequence:
 
 ## Current Status
 
+## Latest Session Update — 2026-05-18 (Sprint 23, post-Sprint-22)
+
+- **Agent**: Claude Code
+- **Date**: 2026-05-18
+- **Task Completed**: Sprint 23 — assessment-tab feedback fixes raised against report No. 197 (beSharp). Five separate issues, fixed in a single PR, merged and deployed.
+- **What shipped**:
+  - **Gap-resolution loop wired to the vault** (`src/lib/assessment/data.ts`): new `GAP_TAG_RULES` map gap text against the applicant-evidence tag taxonomy (`ungm`, `iso-9001`, `iso-27001`, `external-audit`, `audited-financials`, `past-performance`, `partnership`, `safeguarding`, `pador`, `duns`, `risk-management`, `monitoring-evaluation`, `cv`/`key-personnel`). `loadVaultTagsForEmail` JOINs `assessments.email → users.id → vault_documents.tags`, aggregates the set, fails open on DB errors. `rowToReport` now takes `vaultTags`, flips covered gaps to `resolved: true`, adds the matching delta back into the displayed `score` (capped at 100), and rewrites `scoreImpact` to only list open top gaps so deltas don't double-count.
+  - **GapsTab UI** (`src/components/assessment/GapsTab.tsx` + `AssessmentTabs.module.css`): resolved rows render a green ✓ ("Evidence on file in your vault") instead of the upsell CTA, severity badge flips to "Done" (`.sevDone`), row content dims via `.gapRow[data-resolved="true"]` opacity. Eyebrow + section title also flip to a "compliance handled — focus on bids" state when all gaps are covered.
+  - **Next Steps tab now reads from data** (`src/lib/assessment/data.ts` + `NextStepsTab.tsx`): `deriveNextStepsGroups` buckets unresolved gaps by severity into Days 1-14 / 15-45 / 46-90 and emits 1-2 Moves per gap from `Gap.action_steps[]`. `totalSteps` and `projectedDelta` are now derived from the actual queue (no more hard-coded `gaps.length * 2` and `16`). Empty state copy renders cleanly when nothing remains.
+  - **Tenders table ref-column overflow fix** (`AssessmentTabs.module.css` + `TendersTab.tsx`): tenders grid first column shrunk 150 → 130 px, `.refCell` gets `overflow: hidden; text-overflow: ellipsis; white-space: nowrap`. `.gridRow > *` now has `min-width: 0`, `.gridRow` aligned `start` instead of baseline. Full ref + confidence available on hover via the `title` attribute. Long SAM- IDs (e.g. `SAM-d4734e8e6e0e49858010e8a1e856aa113`) can no longer bleed into the title column.
+  - **Route convergence** (`/dashboard` + `/assessment/[id]`): both flipped from `export const revalidate = 60` to `export const dynamic = "force-dynamic"`. Eliminates the per-route ISR cache window that allowed identical assessment rows to render different counts depending on which URL was hit first. "This week" strip extracted into a shared `ThisWeekStrip` component (`src/components/assessment/ThisWeekStrip.tsx`) and rendered on both routes, so the two URLs are visually identical when showing the same assessment.
+  - **Country diagnostic** (`scripts/_assessment-country-diag.ts`): new `npx tsx scripts/_assessment-country-diag.ts <id>` prints stored `countries`, expanded alias set, source/country breakdown of `matched_tenders`, and the SAM.gov source-rules verdict. Lets ops answer "why are we seeing only US tenders for this user" without re-running the pipeline. Designed for the beSharp question specifically — SAM.gov dominance must be either an explicit US country selection or an assessment that predates the current `source-rules.ts` build.
+- **Tab counts** in `AssessmentChrome` now read `gaps.filter(g => !g.resolved).length` so resolved gaps don't inflate the open-work indicator.
+- **Verified**: `tsc --noEmit` clean, `npm run build` clean, both `/dashboard` and `/assessment/[id]` register as `ƒ (Dynamic)` server-rendered routes. Lint touches none of the modified files (52 pre-existing errors all in unrelated landing/email components).
+- **Not yet verified locally**: visual rendering and DB-backed flows — authenticated dashboard routes redirect to `/login` without a local `DATABASE_URL`. Deferred to Vercel preview per the standing local-dev memory note.
+- **Open follow-ups**:
+  - Country investigation for beSharp (assessment 197): run the new diag script against prod to confirm whether `countries` includes "United States" (which would explain SAM.gov dominance under current `source-rules.ts`) or whether the assessment predates the gate.
+  - Vault upload UX should hint at which gap each evidence type closes — round-trip the user from gap → vault → back to assessment with the ✓ now visible. Not in this PR.
+  - `gap.action_steps` is the source of the 90-day Move titles; LLM quality on action steps now visibly drives the tab. Worth a separate audit pass on `analyze.ts` prompt.
+
 ## Latest Session Update — 2026-05-18
 
 - **Agent**: Claude Code
