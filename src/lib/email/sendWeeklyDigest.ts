@@ -1,6 +1,14 @@
 import { Resend } from "resend";
 import { defaultEmailMeta } from "@/lib/email/defaults";
+import { isEmailSuppressed } from "@/lib/email/suppression";
 import type { MatchedGrant, MatchedTender } from "@/lib/types";
+
+export class EmailSuppressedError extends Error {
+  constructor(public readonly email: string) {
+    super(`Email ${email} is on the suppression list`);
+    this.name = "EmailSuppressedError";
+  }
+}
 
 interface SendWeeklyDigestArgs {
   email: string;
@@ -118,6 +126,10 @@ export async function sendWeeklyDigestEmail(args: SendWeeklyDigestArgs): Promise
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) throw new Error("RESEND_API_KEY missing");
 
+  if (await isEmailSuppressed(args.email)) {
+    throw new EmailSuppressedError(args.email);
+  }
+
   const resend = new Resend(apiKey);
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? "TenderPath <no-reply@tenderpath.me>";
   let sendError: string | null = null;
@@ -128,7 +140,7 @@ export async function sendWeeklyDigestEmail(args: SendWeeklyDigestArgs): Promise
       subject: `Your weekly Tenderpath matches: ${args.tenders.length} tenders, ${args.grants.length} grants`,
       html: renderHtml(args),
       text: renderText(args),
-      ...defaultEmailMeta(),
+      ...defaultEmailMeta(args.email),
     });
     if (error) sendError = error.message;
   } catch (err) {

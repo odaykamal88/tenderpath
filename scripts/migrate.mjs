@@ -348,6 +348,19 @@ CREATE TABLE IF NOT EXISTS demo_sessions (
 );
 CREATE INDEX IF NOT EXISTS demo_sessions_email_idx ON demo_sessions (email, logged_at DESC);
 CREATE INDEX IF NOT EXISTS demo_sessions_logged_at_idx ON demo_sessions (logged_at DESC);
+
+-- Sprint 22. Email opt-out registry. Populated by the one-click HTTPS
+-- unsubscribe endpoint (List-Unsubscribe-Post, RFC 8058) and by manual ops
+-- review of replies to unsubscribe@tenderpath.me. Every user-facing email
+-- sender consults this table before dispatching to Resend.
+CREATE TABLE IF NOT EXISTS email_suppressions (
+  email TEXT PRIMARY KEY,
+  source TEXT NOT NULL,
+  unsubscribed_at TIMESTAMPTZ DEFAULT NOW(),
+  user_agent TEXT,
+  notes TEXT
+);
+CREATE INDEX IF NOT EXISTS email_suppressions_unsubscribed_at ON email_suppressions (unsubscribed_at DESC);
 `;
 
 async function migrate() {
