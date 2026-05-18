@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { defaultEmailMeta } from "@/lib/email/defaults";
+import { isEmailSuppressed } from "@/lib/email/suppression";
 
 function envValue(key: string): string | null {
   const value = process.env[key]?.trim();
@@ -28,6 +29,10 @@ export async function sendProposalReadyEmail(args: ProposalReadyEmailArgs): Prom
     console.warn("[tp:proposal_email:skipped]", { workOrderId: args.workOrderId, reason: "RESEND_API_KEY missing" });
     return;
   }
+  if (await isEmailSuppressed(args.email)) {
+    console.log("[tp:proposal_email:skipped_unsubscribed]", { workOrderId: args.workOrderId, email: args.email });
+    return;
+  }
   const resend = new Resend(apiKey);
   const subject = `Your proposal package is ready · ${args.tenderTitle ?? `Work order #${args.workOrderId}`}`;
   const body = [
@@ -52,7 +57,7 @@ export async function sendProposalReadyEmail(args: ProposalReadyEmailArgs): Prom
     `— TenderPath`,
   ].filter(Boolean).join("\n");
 
-  const { error } = await resend.emails.send({ from: fromAddress(), to: args.email, subject, text: body, ...defaultEmailMeta() });
+  const { error } = await resend.emails.send({ from: fromAddress(), to: args.email, subject, text: body, ...defaultEmailMeta(args.email) });
   if (error) {
     throw new Error(`Resend send rejected (proposal): ${error.message ?? JSON.stringify(error)}`);
   }
@@ -78,6 +83,10 @@ export async function sendRosterReadyEmail(args: RosterReadyEmailArgs): Promise<
   const apiKey = envValue("RESEND_API_KEY");
   if (!apiKey) {
     console.warn("[tp:roster_email:skipped]", { workOrderId: args.workOrderId, reason: "RESEND_API_KEY missing" });
+    return;
+  }
+  if (await isEmailSuppressed(args.email)) {
+    console.log("[tp:roster_email:skipped_unsubscribed]", { workOrderId: args.workOrderId, email: args.email });
     return;
   }
   const resend = new Resend(apiKey);
@@ -124,7 +133,7 @@ export async function sendRosterReadyEmail(args: RosterReadyEmailArgs): Promise<
     `— TenderPath`,
   ].filter(Boolean).join("\n");
 
-  const { error } = await resend.emails.send({ from: fromAddress(), to: args.email, subject, text: body, ...defaultEmailMeta() });
+  const { error } = await resend.emails.send({ from: fromAddress(), to: args.email, subject, text: body, ...defaultEmailMeta(args.email) });
   if (error) {
     throw new Error(`Resend send rejected (roster): ${error.message ?? JSON.stringify(error)}`);
   }

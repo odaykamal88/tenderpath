@@ -86,6 +86,23 @@ Additional work done outside the prompt sequence:
 
 ## Current Status
 
+## Latest Session Update — 2026-05-18
+
+- **Agent**: Claude Code
+- **Date**: 2026-05-18
+- **Task Completed**: Sprint 22 — automatic unsubscribe end-to-end. The `unsubscribe@tenderpath.me` Zoho alias was already minted but had no machinery behind it: the `List-Unsubscribe` header pointed at the mailto only, no suppression list existed, and no send function checked anything before dispatching. The `List-Unsubscribe-Post: One-Click` header was technically inert without a paired HTTPS URL.
+- **What shipped**:
+  - **Suppression registry** (`email_suppressions` table in `scripts/migrate.mjs`): one row per opted-out address keyed by lowercased email. `source` records where the opt-out came from (`one-click-post`, `one-click-get`, future inbound-mail import).
+  - **`src/lib/email/suppression.ts`** — HMAC-SHA256-signed token (`base64url(email).base64url(hmac)`), `signUnsubscribeToken / verifyUnsubscribeToken`, `isEmailSuppressed`, `suppressEmail`. HMAC key reads `UNSUBSCRIBE_SECRET` first, falls back to `RESEND_API_KEY` so deployments work without a new env var. `isEmailSuppressed` fails open on DB errors (worse to silence every send than to occasionally re-mail an unsubscribed user during a transient outage).
+  - **`src/lib/email/defaults.ts` rewrite** — `defaultEmailMeta(recipient?)` now mints a per-recipient HTTPS URL and emits both forms in `List-Unsubscribe` when a recipient is passed (Gmail/Yahoo POST to the HTTPS URL when their button is clicked). Ops digests (`sendDailyDigest`, `notifyAdmin`) call with no arg and stay mailto-only.
+  - **`/api/email/unsubscribe`** (Sprint 22) — `POST` is the RFC 8058 one-click endpoint; `GET` suppresses immediately and renders a branded confirmation page. Both verify the HMAC token before recording the opt-out.
+  - **Send gating** — `sendAssessmentEmail`, `sendBidNoBidReadyEmail`, `sendProposalReadyEmail`, `sendRosterReadyEmail`, `sendWorkOrderPaidNotifications` (user-side block only — ops-side still fires), `sendWorkOrderStatusNotification`, `sendWeeklyDigestEmail` all check `isEmailSuppressed` before calling Resend. `sendAssessmentEmail` writes `status='skipped_unsubscribed'` to `email_queue` so the audit trail records the skip.
+  - **Weekly digest orchestrator** — new `EmailSuppressedError` thrown by `sendWeeklyDigestEmail` is caught in `runWeeklyDigest`, marked as `skipped_unsubscribed` in `weekly_digest_logs`, and **does not page ops** via `notifyAdmin` (previously every skip would have looked like a failure).
+- **Zoho alias handling**: stays as the human fallback for replies to `unsubscribe@tenderpath.me`. Zoho doesn't have a first-class inbound-mail webhook, so automatic processing of the mailbox would need either IMAP polling or MX rerouting through an inbound parser (SendGrid Parse / Mailgun / Cloudflare Email Workers). Deferred — the HTTPS one-click route handles ~all real-world unsubscribes (Gmail/Yahoo button) without round-tripping through Zoho.
+- **Verified**: `npm run lint` shows zero new errors in changed files (existing repo errors unchanged); `tsc --noEmit` clean; `npm run build` clean and registers `/api/email/unsubscribe` as a dynamic route.
+- **Not yet verified**: live one-click POST from Gmail (requires deploy + a real test send). Will exercise on Vercel preview before merging.
+- **Open env-var docs**: `UNSUBSCRIBE_SECRET` is optional but recommended for production token stability; without it, rotating `RESEND_API_KEY` invalidates outstanding unsubscribe links.
+
 ## Latest Session Update — 2026-05-17
 
 - **Agent**: Claude Code

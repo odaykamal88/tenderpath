@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { defaultEmailMeta } from "@/lib/email/defaults";
+import { isEmailSuppressed } from "@/lib/email/suppression";
 
 export interface BidReadyEmailArgs {
   email: string;
@@ -35,6 +36,14 @@ export async function sendBidNoBidReadyEmail(args: BidReadyEmailArgs): Promise<v
     console.warn("[tp:bid_email:skipped]", {
       workOrderId: args.workOrderId,
       reason: "RESEND_API_KEY missing",
+    });
+    return;
+  }
+
+  if (await isEmailSuppressed(args.email)) {
+    console.log("[tp:bid_email:skipped_unsubscribed]", {
+      workOrderId: args.workOrderId,
+      email: args.email,
     });
     return;
   }
@@ -75,7 +84,7 @@ export async function sendBidNoBidReadyEmail(args: BidReadyEmailArgs): Promise<v
     to: args.email,
     subject,
     text: body,
-    ...defaultEmailMeta(),
+    ...defaultEmailMeta(args.email),
     ...(hasAttachment && args.pdfBuffer
       ? {
           attachments: [

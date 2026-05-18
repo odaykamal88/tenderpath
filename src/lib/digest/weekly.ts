@@ -1,6 +1,6 @@
 import { sql } from "@/lib/db";
 import { matchGrants, matchTenders } from "@/lib/assessment/match";
-import { sendWeeklyDigestEmail } from "@/lib/email/sendWeeklyDigest";
+import { sendWeeklyDigestEmail, EmailSuppressedError } from "@/lib/email/sendWeeklyDigest";
 import { notifyAdmin } from "@/lib/email/notifyAdmin";
 import type { AIAnalysis, MatchedTender, MatchReason } from "@/lib/types";
 
@@ -302,6 +302,35 @@ export async function runWeeklyDigest(options: {
         pipelineUpdated: pipeline.updated,
       });
     } catch (err) {
+      // Suppressed users are an expected outcome, not a failure — log as
+      // skipped so the audit trail is clean and ops doesn't get paged.
+      if (err instanceof EmailSuppressedError) {
+        if (logId) {
+          await updateLog(logId, {
+            status: "skipped_unsubscribed",
+            provider: "resend",
+            error: null,
+          });
+        }
+        console.log("[tp:weekly-digest:skipped_unsubscribed]", {
+          userId: subscriber.id,
+          email: subscriber.email,
+          assessmentId: assessment.id,
+        });
+        results.push({
+          userId: subscriber.id,
+          email: subscriber.email,
+          status: "skipped",
+          assessmentId: assessment.id,
+          tenderCount: 0,
+          grantCount: 0,
+          pipelineAdded: 0,
+          pipelineUpdated: 0,
+          error: "unsubscribed",
+        });
+        continue;
+      }
+
       const message = err instanceof Error ? err.message : String(err);
       if (logId) {
         await updateLog(logId, {

@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { sql } from "@/lib/db";
 import { defaultEmailMeta } from "@/lib/email/defaults";
+import { isEmailSuppressed } from "@/lib/email/suppression";
 import type { TierSlug, Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
 import { notifyAdmin } from "@/lib/email/notifyAdmin";
 import { generateAssessmentPdf } from "@/lib/email/assessmentPdf";
@@ -71,6 +72,20 @@ export async function sendAssessmentEmail(args: SendArgs): Promise<void> {
     return;
   }
 
+  if (await isEmailSuppressed(args.email)) {
+    console.log("[tp:email:skipped_unsubscribed]", { assessmentId: args.assessmentId, email: args.email });
+    await sql`
+      UPDATE email_queue SET
+        status = 'skipped_unsubscribed',
+        attempts = attempts + 1,
+        provider = 'resend',
+        error = NULL,
+        sent_at = NOW()
+      WHERE assessment_id = ${args.assessmentId} AND status = 'pending'
+    `.catch(() => {});
+    return;
+  }
+
   const tier = TIER_COPY[args.recommendedTier];
   const resultsUrl = `${appUrl}/dashboard`;
   const ctaUrl = `${appUrl}/#services`;
@@ -113,7 +128,7 @@ export async function sendAssessmentEmail(args: SendArgs): Promise<void> {
       subject: `Your TenderPath Readiness Score: ${args.readinessScore}/100`,
       html,
       text,
-      ...defaultEmailMeta(),
+      ...defaultEmailMeta(args.email),
       ...(pdfAttachment ? { attachments: [pdfAttachment] } : {}),
     });
     if (error) sendError = error.message;

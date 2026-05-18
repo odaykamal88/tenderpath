@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { defaultEmailMeta } from "@/lib/email/defaults";
+import { isEmailSuppressed } from "@/lib/email/suppression";
 
 interface WorkOrderNotification {
   id: number;
@@ -74,20 +75,24 @@ export async function sendWorkOrderPaidNotifications(order: WorkOrderNotificatio
 
   const userEmail = order.email;
   if (userEmail) {
-    await resend.emails.send({
-      from,
-      to: userEmail,
-      subject: `TenderPath received your ${plan} order`,
-      text: [
-        `We received your ${plan} order.`,
-        "",
-        context,
-        "",
-        "The TenderPath team will review the intake and follow up with the next step.",
-        `${appUrl}/dashboard/services`,
-      ].join("\n"),
-      ...defaultEmailMeta(),
-    });
+    if (await isEmailSuppressed(userEmail)) {
+      console.log("[tp:work_order_email:skipped_unsubscribed]", { workOrderId: order.id, email: userEmail });
+    } else {
+      await resend.emails.send({
+        from,
+        to: userEmail,
+        subject: `TenderPath received your ${plan} order`,
+        text: [
+          `We received your ${plan} order.`,
+          "",
+          context,
+          "",
+          "The TenderPath team will review the intake and follow up with the next step.",
+          `${appUrl}/dashboard/services`,
+        ].join("\n"),
+        ...defaultEmailMeta(userEmail),
+      });
+    }
   }
 
   // Sprint 17. When the service-fulfillment gate holds the order
@@ -143,6 +148,14 @@ export async function sendWorkOrderStatusNotification(order: WorkOrderStatusNoti
     return;
   }
 
+  if (await isEmailSuppressed(order.email)) {
+    console.log("[tp:work_order_status_email:skipped_unsubscribed]", {
+      workOrderId: order.id,
+      email: order.email,
+    });
+    return;
+  }
+
   const from = envValue("RESEND_FROM_EMAIL") ?? "TenderPath <no-reply@tenderpath.me>";
   const appUrl = envValue("NEXT_PUBLIC_APP_URL") ?? "https://www.tenderpath.me";
   const resend = new Resend(resendKey);
@@ -162,6 +175,6 @@ export async function sendWorkOrderStatusNotification(order: WorkOrderStatusNoti
       "",
       `View status: ${appUrl}/dashboard/work-orders/${order.id}`,
     ].filter(Boolean).join("\n"),
-    ...defaultEmailMeta(),
+    ...defaultEmailMeta(order.email),
   });
 }
