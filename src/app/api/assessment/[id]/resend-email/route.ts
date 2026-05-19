@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/auth";
+import { resolveAssessmentRef } from "@/lib/assessment/authz";
 import { sendAssessmentEmail } from "@/lib/email/sendAssessment";
 import type { Gap, MatchedGrant, MatchedTender, ReadinessDimensions, TierSlug } from "@/lib/types";
 
@@ -52,10 +53,13 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const assessmentId = Number(id);
-  if (!Number.isFinite(assessmentId)) {
-    return NextResponse.json({ error: "Invalid assessment id" }, { status: 400 });
+  // Accept UUID or legacy int. Ownership check happens below — capability URL
+  // is intentionally NOT sufficient for mutation; only the owner can resend.
+  const ref = await resolveAssessmentRef(id);
+  if (!ref) {
+    return NextResponse.json({ error: "Assessment not found" }, { status: 404 });
   }
+  const assessmentId = ref.intId;
 
   const rows = await sql`
     SELECT id, company_name, email, sector, readiness_score, grant_readiness_score,

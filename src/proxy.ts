@@ -24,8 +24,12 @@ const PUBLIC_PATHS = new Set([
   "/api/telegram/webhook",
 ]);
 
-// Matches /api/assessment/{numeric-id} only — not subpaths like /pdf
-const PUBLIC_ASSESSMENT_POLL_RE = /^\/api\/assessment\/\d+$/;
+// Matches /api/assessment/{numeric-id-or-uuid} only — not subpaths like /pdf.
+// UUID is the canonical post-IDOR-fix form; the numeric-id branch is kept for
+// in-flight polling sessions that fetched their poll_url before deploy.
+// Authorization on the row itself happens in authorizeAssessmentRead, not here.
+const PUBLIC_ASSESSMENT_POLL_RE =
+  /^\/api\/assessment\/(\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true;

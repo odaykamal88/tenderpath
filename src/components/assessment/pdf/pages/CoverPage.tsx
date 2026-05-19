@@ -27,7 +27,7 @@ export function CoverPage({ data }: { data: ReportData }) {
         </div>
       </div>
       <footer className={styles.coverFoot}>
-        <span>Report ID {data.reportId}</span>
+        <span>Report No. {data.displayNumber}</span>
         <span>Confidential — internal stakeholders</span>
         <span>{data.preparedAt}</span>
       </footer>

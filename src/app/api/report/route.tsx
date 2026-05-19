@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
 
   const reportData = {
     reportId: data.reportId,
+    displayNumber: data.displayNumber,
     preparedAt: data.preparedAt,
     companyName: data.companyName,
     sector: data.sector,
@@ -86,7 +87,7 @@ export async function GET(req: NextRequest) {
     return new NextResponse(Buffer.from(pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="tenderpath-${slug}-${data.reportId}.pdf"`,
+        "Content-Disposition": `attachment; filename="tenderpath-${slug}-${data.displayNumber}.pdf"`,
         "Cache-Control": "private, max-age=3600",
       },
     });
