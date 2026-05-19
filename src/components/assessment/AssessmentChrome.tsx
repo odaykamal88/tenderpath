@@ -15,14 +15,18 @@ const TABS: { key: TabKey; label: string }[] = [
 export function AssessmentHeader({
   companyName,
   reportId,
+  displayNumber,
 }: {
   companyName: string;
+  // UUID — capability identifier used in URLs (resend, PDF, deep links).
   reportId: string;
+  // Zero-padded internal number — the human-readable label only.
+  displayNumber: string;
 }) {
   return (
     <header className={styles.header}>
       <div>
-        <div className={styles.eyebrow}>Vendor readiness · No. {reportId}</div>
+        <div className={styles.eyebrow}>Vendor readiness · No. {displayNumber}</div>
         <h1 className={styles.title}>{companyName}</h1>
       </div>
       <nav className={styles.actions}>
@@ -67,19 +71,21 @@ export function AssessmentTabs({
 export function AssessmentChrome({
   activeTab,
   reportId,
+  displayNumber,
   companyName,
   counts,
   children,
 }: {
   activeTab: TabKey;
   reportId: string;
+  displayNumber: string;
   companyName: string;
   counts?: Partial<Record<TabKey, number>>;
   children: React.ReactNode;
 }) {
   return (
     <main className={styles.chrome}>
-      <AssessmentHeader companyName={companyName} reportId={reportId} />
+      <AssessmentHeader companyName={companyName} reportId={reportId} displayNumber={displayNumber} />
       <AssessmentTabs active={activeTab} reportId={reportId} counts={counts} />
       <div className={`${styles.tabContent} tp2-tab-panel`}>{children}</div>
     </main>

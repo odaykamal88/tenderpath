@@ -54,7 +54,8 @@ export default async function AssessmentPage({ params, searchParams }: Props) {
   return (
     <AssessmentChrome
       activeTab={activeTab}
-      reportId={id}
+      reportId={data.reportId}
+      displayNumber={data.displayNumber}
       companyName={data.companyName}
       counts={counts}
     >

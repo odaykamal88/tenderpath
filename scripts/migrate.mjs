@@ -7,6 +7,8 @@ config({ path: resolve(process.cwd(), ".env.local") });
 const sql = neon(process.env.DATABASE_URL);
 
 const tables = `
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
@@ -70,6 +72,13 @@ CREATE TABLE IF NOT EXISTS assessments (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE assessments ADD COLUMN IF NOT EXISTS include_consultancies BOOLEAN DEFAULT false;
+
+-- T1 / launch-audit 2026-05-19: unguessable public identifier for assessment URLs.
+-- DEFAULT gen_random_uuid() backfills every existing row with a fresh UUID at
+-- column-add time; the UNIQUE constraint holds because the default is volatile.
+-- Existing /assessment/{int} URLs continue to work via the legacy-int fallback
+-- in src/lib/assessment/authz.ts, but only for the assessment owner.
+ALTER TABLE assessments ADD COLUMN IF NOT EXISTS public_id UUID UNIQUE NOT NULL DEFAULT gen_random_uuid();
 
 CREATE TABLE IF NOT EXISTS tenders (
   id SERIAL PRIMARY KEY,

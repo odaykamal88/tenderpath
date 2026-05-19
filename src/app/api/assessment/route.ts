@@ -47,9 +47,10 @@ export async function POST(request: Request) {
       });
       return NextResponse.json({
         id: queued.id,
+        public_id: queued.public_id,
         status: "queued",
         queued: true,
-        poll_url: `/api/assessment/${queued.id}`,
+        poll_url: `/api/assessment/${queued.public_id}`,
         created_at: queued.created_at,
       }, { status: 202 });
     }

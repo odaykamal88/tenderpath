@@ -124,6 +124,7 @@ export default async function DashboardPage({
     <AssessmentChrome
       activeTab={activeTab}
       reportId={data.reportId}
+      displayNumber={data.displayNumber}
       companyName={data.companyName}
       counts={counts}
     >

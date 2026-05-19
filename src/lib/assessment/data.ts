@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { sql } from "@/lib/db";
 import { verifyToken } from "@/lib/auth";
+import { authorizeAssessmentRead } from "./authz";
 import { decodeHtmlEntities } from "@/lib/text/entities";
 import { safeUrl } from "@/lib/url";
 import type { Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
@@ -237,7 +238,11 @@ function tierPitch(slug: string | null): string {
 }
 
 export type AssessmentReport = {
+  // Unguessable UUID — used in URLs (/assessment/{reportId}, /api/report?id=).
   reportId: string;
+  // Zero-padded internal row number — used only for the "No. 0123" eyebrow
+  // label. Never appears in URLs after the IDOR fix (launch-audit 2026-05-19).
+  displayNumber: string;
   preparedAt: string;
   status: "computing" | "ready" | "failed";
   errorId?: string;
@@ -267,6 +272,7 @@ export type AssessmentReport = {
 
 type DBRow = {
   id: number;
+  public_id: string;
   company_name: string;
   email: string;
   sector: string | null;
@@ -361,7 +367,8 @@ function rowToReport(row: DBRow, vaultTags: Set<string>): AssessmentReport {
   const projectedDelta = openTopGaps.reduce((sum, x) => sum + x.delta, 0);
 
   return {
-    reportId: String(row.id),
+    reportId: row.public_id,
+    displayNumber: String(row.id).padStart(4, "0"),
     preparedAt: new Date(row.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
     status,
     companyName: decodeHtmlEntities(row.company_name) || row.company_name,
@@ -417,12 +424,16 @@ function rowToReport(row: DBRow, vaultTags: Set<string>): AssessmentReport {
   };
 }
 
-export async function getAssessment(id: string): Promise<AssessmentReport | null> {
+// IDOR-safe public reader. Accepts UUID (capability) or legacy int (owner-only,
+// logged). See src/lib/assessment/authz.ts for the authorization model.
+export async function getAssessment(idOrUuid: string): Promise<AssessmentReport | null> {
+  const authorized = await authorizeAssessmentRead(idOrUuid);
+  if (!authorized) return null;
   const rows = await sql`
-    SELECT id, company_name, email, sector, readiness_score, recommended_tier,
+    SELECT id, public_id, company_name, email, sector, readiness_score, recommended_tier,
            ai_analysis, gaps, matched_tenders, matched_grants, assessment_status, created_at
     FROM assessments
-    WHERE id = ${Number(id)}
+    WHERE id = ${authorized.intId}
     LIMIT 1
   `;
   if (!rows[0]) return null;
@@ -440,7 +451,7 @@ export async function getCurrentUserAssessment(): Promise<AssessmentReport | nul
   if (!claims) return null;
 
   const rows = await sql`
-    SELECT id, company_name, email, sector, readiness_score, recommended_tier,
+    SELECT id, public_id, company_name, email, sector, readiness_score, recommended_tier,
            ai_analysis, gaps, matched_tenders, matched_grants, assessment_status, created_at
     FROM assessments
     WHERE email = ${claims.email}
@@ -453,11 +464,14 @@ export async function getCurrentUserAssessment(): Promise<AssessmentReport | nul
   return rowToReport(row, vaultTags);
 }
 
-export async function getThisWeek(reportId: string): Promise<{ kind: string; title: string; due: string; url?: string | null }[]> {
+// Accepts UUID or legacy int; same authorization rules as getAssessment.
+export async function getThisWeek(idOrUuid: string): Promise<{ kind: string; title: string; due: string; url?: string | null }[]> {
+  const authorized = await authorizeAssessmentRead(idOrUuid);
+  if (!authorized) return [];
   const rows = await sql`
     SELECT matched_tenders, matched_grants
     FROM assessments
-    WHERE id = ${Number(reportId)}
+    WHERE id = ${authorized.intId}
     LIMIT 1
   `;
   if (!rows[0]) return [];

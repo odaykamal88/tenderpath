@@ -10,7 +10,10 @@ import {
 } from "./pages/RemainingPages";
 
 export type ReportData = {
+  // UUID — capability identifier, used in deep links from the PDF.
   reportId: string;
+  // Zero-padded internal row number — what the human reads ("No. 0123").
+  displayNumber: string;
   preparedAt: string;
   companyName: string;
   sector: string;

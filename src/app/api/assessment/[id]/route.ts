@@ -1,22 +1,24 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { ensureAssessmentRuntimeColumns } from "@/lib/assessment/run";
+import { authorizeAssessmentRead } from "@/lib/assessment/authz";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const assessmentId = parseInt(id, 10);
-
-  if (isNaN(assessmentId)) {
-    return NextResponse.json({ error: "Invalid assessment ID" }, { status: 400 });
-  }
 
   await ensureAssessmentRuntimeColumns();
 
+  // IDOR-safe: UUID = capability, int = owner-only (logged).
+  const authorized = await authorizeAssessmentRead(id);
+  if (!authorized) {
+    return NextResponse.json({ error: "Assessment not found" }, { status: 404 });
+  }
+
   const rows = await sql`
-    SELECT * FROM assessments WHERE id = ${assessmentId}
+    SELECT * FROM assessments WHERE id = ${authorized.intId}
   `;
 
   if (rows.length === 0) {
@@ -27,6 +29,7 @@ export async function GET(
 
   return NextResponse.json({
     id: row.id,
+    public_id: row.public_id,
     company_name: row.company_name,
     email: row.email,
     website: row.website,

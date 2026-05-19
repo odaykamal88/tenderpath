@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { authorizeAssessmentRead } from "@/lib/assessment/authz";
 
 function esc(s: unknown): string {
   if (typeof s !== "string") return String(s ?? "");
@@ -22,10 +23,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const assessmentId = parseInt(id, 10);
-  if (isNaN(assessmentId)) {
-    return new NextResponse("Invalid assessment ID", { status: 400 });
+
+  // IDOR-safe: UUID = capability, int = owner-only (logged).
+  const authorized = await authorizeAssessmentRead(id);
+  if (!authorized) {
+    return new NextResponse("Assessment not found", { status: 404 });
   }
+  const assessmentId = authorized.intId;
 
   const rows = await sql`SELECT * FROM assessments WHERE id = ${assessmentId}`;
   if (rows.length === 0) {

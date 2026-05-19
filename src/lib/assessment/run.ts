@@ -22,6 +22,8 @@ export type AssessmentRunMode = "public" | "authenticated";
 
 export type AssessmentRunResult = {
   id: number;
+  // UUID for URL construction; only the int id remains for internal joins.
+  public_id: string;
   company_name: string;
   email: string;
   sector: string;
@@ -112,9 +114,13 @@ export async function createQueuedAssessment(body: Partial<AssessmentInput>) {
       ${cleanCompanyName(body.companyName)}, ${body.email ?? null}, ${body.website ?? null},
       ${description}, ${JSON.stringify(body.countries ?? [])}, ${body.orgType ?? null},
       ${JSON.stringify(body.devThemes ?? [])}, ${body.includeConsultancies ?? false}, 'queued'
-    ) RETURNING id, created_at
+    ) RETURNING id, public_id, created_at
   `;
-  return { id: rows[0].id as number, created_at: rows[0].created_at as string };
+  return {
+    id: rows[0].id as number,
+    public_id: rows[0].public_id as string,
+    created_at: rows[0].created_at as string,
+  };
 }
 
 export async function markAssessmentFailed(assessmentId: number, err: unknown, durationMs?: number, timings?: Record<string, number>) {
@@ -274,7 +280,7 @@ export async function runAssessmentPipeline(
               assessment_timings = ${JSON.stringify(timings)}::jsonb,
               assessment_completed_at = NOW()
           WHERE id = ${options.assessmentId}
-          RETURNING id
+          RETURNING id, public_id
         `
       : await sql`
           INSERT INTO assessments (
@@ -294,10 +300,11 @@ export async function runAssessmentPipeline(
             ${JSON.stringify(body.devThemes ?? [])}, ${JSON.stringify(matchedGrants)},
             ${grantScore}, ${body.includeConsultancies ?? false}, 'completed',
             ${durationMs}, ${JSON.stringify(timings)}, NOW(), NOW()
-          ) RETURNING id
+          ) RETURNING id, public_id
         `;
 
     const assessmentId = rows[0].id as number;
+    const publicId = rows[0].public_id as string;
     mark("persist");
     timings.persist = timings.persist ?? 0;
 
@@ -327,6 +334,7 @@ export async function runAssessmentPipeline(
 
     const result = {
       id: assessmentId,
+      public_id: publicId,
       company_name: cleanCompanyName(body.companyName) ?? body.companyName!,
       email: body.email!,
       sector: classification.detected_industry,
