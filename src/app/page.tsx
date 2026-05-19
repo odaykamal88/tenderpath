@@ -7,6 +7,7 @@ import WhyUs from "@/components/landing/WhyUs";
 import CTA from "@/components/landing/CTA";
 import Footer from "@/components/landing/Footer";
 import { getLandingTenders } from "@/lib/landing/recent-tenders";
+import { getViewerHero } from "@/lib/assessment";
 
 export const dynamic = "force-dynamic";
 
@@ -17,12 +18,15 @@ const STAT_BAR = [
 ];
 
 export default async function Home() {
-  const tenders = await getLandingTenders();
+  const [tenders, viewer] = await Promise.all([
+    getLandingTenders(),
+    getViewerHero(),
+  ]);
 
   return (
     <>
       <Navbar />
-      <Hero tenders={tenders} />
+      <Hero tenders={tenders} viewer={viewer} />
 
       {/* Stat bar — editorial, three columns, with sources */}
       <section className="bg-paper-2 border-y border-rule">

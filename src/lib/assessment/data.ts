@@ -467,6 +467,41 @@ export async function getCurrentUserAssessment(): Promise<AssessmentReport | nul
 }
 
 // Accepts UUID or legacy int; same authorization rules as getAssessment.
+// Lightweight reader for the landing-page Hero variant. Returns just enough
+// to render "Open {companyName} dashboard" — never the full report — so the
+// homepage SSR cost stays bounded. Returns null when there's no session or
+// the signed-in user has not run an assessment yet.
+// Audit 2026-05-19 P1 #5 (returning-visitor re-engagement).
+export async function getViewerHero(): Promise<{ companyName: string; reportId: string } | null> {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("tp_session")?.value;
+    if (!token) return null;
+    const claims = await verifyToken(token);
+    if (!claims) return null;
+
+    const rows = await sql`
+      SELECT company_name, public_id
+      FROM assessments
+      WHERE email = ${claims.email}
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    if (!rows[0]) return null;
+    return {
+      companyName: decodeHtmlEntities(rows[0].company_name as string) || (rows[0].company_name as string),
+      reportId: rows[0].public_id as string,
+    };
+  } catch (err) {
+    // Fail open: the hero falls back to its first-time variant. Better than
+    // server-500ing the entire homepage if the session cookie is malformed.
+    console.warn("[landing:hero:viewer_lookup_failed]", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
 export async function getThisWeek(idOrUuid: string): Promise<{ kind: string; title: string; due: string; url?: string | null }[]> {
   const authorized = await authorizeAssessmentRead(idOrUuid);
   if (!authorized) return [];

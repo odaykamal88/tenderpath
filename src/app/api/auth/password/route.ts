@@ -58,6 +58,20 @@ export async function POST(request: Request) {
   const valid = user ? await verifyPassword(password, user.password_hash as string | null) : false;
 
   if (!user || !valid) {
+    // Distinguish a magic-link-only account from a real bad-creds attempt.
+    // A user who signed up via magic link never sets a password_hash, so
+    // they hit the password tab and get "Invalid email or password" with
+    // no way out. Returning a distinct code lets the client offer a
+    // one-click switch back to magic link. Audit 2026-05-19 P1 #9.
+    if (user && !user.password_hash) {
+      return NextResponse.json(
+        {
+          error: "This account uses magic-link sign-in. Send a sign-in link to your inbox?",
+          code: "magic_link_only",
+        },
+        { status: 401 },
+      );
+    }
     return NextResponse.json(
       { error: "Invalid email or password" },
       { status: 401 },

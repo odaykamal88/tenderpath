@@ -25,6 +25,10 @@ function LoginForm() {
       ? "Google sign-in failed. Please try again or use a magic link."
       : null
   );
+  // Captures the email of a magic-link-only account whose password attempt
+  // just failed. When set, the shared error area renders a one-click switch
+  // to magic-link sign-in instead of "Invalid email or password". Audit P1 #9.
+  const [magicNudge, setMagicNudge] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -66,23 +70,36 @@ function LoginForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function request(e: React.FormEvent) {
-    e.preventDefault();
+  async function sendMagicLink(emailValue: string) {
     setBusy(true);
     setError(null);
-    const res = await fetch("/api/auth/signup", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
-    const body = await res.json();
+    setMagicNudge(null);
+    let res: Response;
+    try {
+      res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: emailValue }),
+      });
+    } catch {
+      setBusy(false);
+      setError("Couldn't reach the server. Check your connection and try again.");
+      return;
+    }
+    const body = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok) {
       setError(body.error || "Failed to send link");
       return;
     }
     setDevToken(body._devToken ?? null);
+    setLoginMode("magic");
     setStep("verify");
+  }
+
+  async function request(e: React.FormEvent) {
+    e.preventDefault();
+    await sendMagicLink(email);
   }
 
   async function verify(e: React.FormEvent) {
@@ -129,6 +146,10 @@ function LoginForm() {
     if (!res.ok) {
       if (res.status >= 500) {
         setError(body.error || "Server error — please try the magic link option below, or email info@tenderpath.me.");
+      } else if (body.code === "magic_link_only") {
+        // Surface the switch nudge instead of the generic bad-creds copy.
+        setMagicNudge(email);
+        setError(null);
       } else {
         setError(body.error || "Invalid email or password");
       }
@@ -205,6 +226,7 @@ function LoginForm() {
               setLoginMode("magic");
               setStep("request");
               setError(null);
+              setMagicNudge(null);
             }}
             className={`rounded-sm px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] transition-colors ${
               loginMode === "magic"
@@ -278,7 +300,7 @@ function LoginForm() {
                 className="mt-1 w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] text-stone-900 placeholder-stone-400 focus:border-stone-700 focus:outline-none"
                 placeholder="you@company.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); setMagicNudge(null); }}
                 required
               />
             </div>
@@ -319,7 +341,7 @@ function LoginForm() {
                 className="mt-1 w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] text-stone-900 placeholder-stone-400 focus:border-stone-700 focus:outline-none"
                 placeholder="you@company.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); setMagicNudge(null); }}
                 required
               />
             </div>
@@ -376,6 +398,28 @@ function LoginForm() {
               style={{ fontFamily: MONO }}
             >
               Use a different email
+            </button>
+          </div>
+        )}
+
+        {magicNudge && (
+          <div className="mt-3 rounded-sm border-l-2 border-blue-600 bg-blue-50/50 px-3.5 py-3 space-y-2">
+            <div
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-700"
+              style={{ fontFamily: MONO }}
+            >
+              Magic-link sign-in
+            </div>
+            <p className="text-[12px] text-stone-700 leading-relaxed">
+              This account uses magic-link sign-in. No password is set.
+            </p>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => sendMagicLink(magicNudge)}
+              className="w-full rounded-sm bg-stone-900 px-3 py-2 text-[11.5px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:opacity-50"
+            >
+              {busy ? "Sending…" : `Send sign-in link to ${magicNudge} →`}
             </button>
           </div>
         )}
