@@ -198,12 +198,6 @@ export default function Hero({ tenders }: { tenders: LandingTender[] }) {
                   Get my readiness score
                   <span className="font-mono text-[13px]">→</span>
                 </a>
-                <a
-                  href="#how-it-works"
-                  className="font-mono text-[11px] tracking-[0.12em] uppercase text-ink-3 hover:text-ink transition-colors border-b border-rule hover:border-ink pb-0.5 self-center sm:self-auto"
-                >
-                  How it works
-                </a>
               </div>
 
               <div
