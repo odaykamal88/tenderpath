@@ -4,6 +4,7 @@ import { getUserFromRequest } from "@/lib/auth";
 import { track } from "@/lib/telemetry/funnel";
 import { evaluateServiceFulfillmentGate } from "@/lib/service-fulfillment-gates";
 import { assertTenderDeadlineIsLive } from "@/lib/tender-deadline-guard";
+import { resolveTierSlug } from "@/lib/pricing";
 
 const SLUG_TO_PRICE_ENV: Record<string, string> = {
   "bid-no-bid":              "STRIPE_BIDNOBID_PRICE_ID",
@@ -27,14 +28,23 @@ export async function POST(request: Request) {
     pipeline_item_id?: string | number | null;
     work_order_id?: string | number | null;
   };
-  const { plan } = body;
+  const requestedPlan = body.plan;
 
-  if (!plan) {
+  if (!requestedPlan) {
     return NextResponse.json({ error: "plan is required" }, { status: 400 });
+  }
+
+  // Map legacy backend slugs (tender-intelligence etc.) to the canonical
+  // TIERS slugs the price-env table understands. See SLUG_ALIASES in pricing.ts.
+  const plan = resolveTierSlug(requestedPlan);
+  if (!plan) {
+    console.warn("[pay:slug:unknown]", { requestedPlan });
+    return NextResponse.json({ error: "Unknown plan" }, { status: 400 });
   }
 
   const priceEnvKey = SLUG_TO_PRICE_ENV[plan];
   if (!priceEnvKey) {
+    console.warn("[pay:slug:no_price_env]", { plan });
     return NextResponse.json({ error: "Unknown plan" }, { status: 400 });
   }
 

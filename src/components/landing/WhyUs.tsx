@@ -29,7 +29,7 @@ const reasons = [
   {
     n: "06",
     title: "Free to start.",
-    body: "No commitment. Take the readiness assessment in under 5 minutes and get your vendor report instantly. Upgrade only when you're ready to act on a specific tender.",
+    body: "No commitment. Take the readiness assessment in under 3 minutes and get your vendor report instantly. Upgrade only when you're ready to act on a specific tender.",
   },
 ];
 

@@ -165,8 +165,10 @@ function confidenceFrom(t: MatchedTender): "high" | "medium" | "low" | null {
 function mapTendersForUI(tenders: MatchedTender[]): Tender[] {
   return tenders.map((t) => ({
     code: t.reference_id ?? `T-${t.id}`,
-    title: t.title,
-    agency: t.agency,
+    // Decode at render: a crawler-stored "&amp;" or "&#x27;" otherwise renders
+    // literally in the dashboard. Audit 2026-05-19 P2 #13.
+    title: decodeHtmlEntities(t.title),
+    agency: decodeHtmlEntities(t.agency),
     fit: t.score,
     deadline: t.deadline,
     value: t.estimated_value != null ? String(t.estimated_value) : "—",
@@ -185,8 +187,8 @@ function mapTendersForUI(tenders: MatchedTender[]): Tender[] {
 
 function mapGrantsForUI(grants: MatchedGrant[]): Grant[] {
   return grants.map((g) => ({
-    funder: g.agency,
-    program: g.title,
+    funder: decodeHtmlEntities(g.agency),
+    program: decodeHtmlEntities(g.title),
     ceiling: g.value_range ?? "—",
     eligibility: g.sector,
     effort: "Medium",

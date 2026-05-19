@@ -234,7 +234,7 @@ export async function GET(
   <div style="margin-bottom:32px;">
     <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
       <tr>
-        <td><h2 style="border-bottom:2px solid #1a1a1a;padding-bottom:8px;margin-bottom:0;">Matched tenders</h2></td>
+        <td><h2 style="border-bottom:2px solid #1a1a1a;padding-bottom:8px;margin-bottom:0;">Matched opportunities · Tenders</h2></td>
         <td style="text-align:right;vertical-align:bottom;border-bottom:2px solid #1a1a1a;padding-bottom:8px;">
           <span style="font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:#8a8377;">${tenders.length} live</span>
         </td>
@@ -249,7 +249,7 @@ export async function GET(
   <div style="margin-bottom:32px;">
     <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
       <tr>
-        <td><h2 style="border-bottom:2px solid #1a1a1a;padding-bottom:8px;margin-bottom:0;">Matched grants</h2></td>
+        <td><h2 style="border-bottom:2px solid #1a1a1a;padding-bottom:8px;margin-bottom:0;">Matched opportunities · Grants</h2></td>
         <td style="text-align:right;vertical-align:bottom;border-bottom:2px solid #1a1a1a;padding-bottom:8px;">
           <span style="font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:#8a8377;">${grants.length} open</span>
         </td>

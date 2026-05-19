@@ -62,7 +62,7 @@ function EmptyDashboard() {
           className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-stone-400"
           style={{ fontFamily: MONO }}
         >
-          Free · 5 minutes
+          Free · 3 minutes
         </span>
       </div>
 

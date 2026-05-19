@@ -43,7 +43,7 @@ export function GapsPage({ data }: { data: ReportData }) {
 export function TendersPage({ data }: { data: ReportData }) {
   return (
     <section className={`tp2-pdf-page ${styles.page}`}>
-      <span className={styles.eyebrow}>05 · Matched tenders</span>
+      <span className={styles.eyebrow}>05 · Matched opportunities · Tenders</span>
       <h2 className={styles.h2}>Your best opportunities, ranked by fit.</h2>
       {data.tenders.map((t, i) => (
         <div key={i} className={styles.dimRow}>
@@ -61,7 +61,7 @@ export function TendersPage({ data }: { data: ReportData }) {
 export function GrantsPage({ data }: { data: ReportData }) {
   return (
     <section className={`tp2-pdf-page ${styles.page}`}>
-      <span className={styles.eyebrow}>06 · Matched grants</span>
+      <span className={styles.eyebrow}>06 · Matched opportunities · Grants</span>
       <h2 className={styles.h2}>Grant opportunities aligned to your profile.</h2>
       {data.grants.map((g, i) => (
         <div key={i} className={styles.dimRow}>

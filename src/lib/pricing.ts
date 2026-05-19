@@ -1,5 +1,25 @@
 import type { TierSlug } from "@/lib/types";
 
+// Legacy backend slugs → canonical TIERS slugs. The backend still emits
+// `TierSlug` (tender-intelligence / submission-package / strategic-partnership)
+// for assessment.recommended_tier; the user-facing TIERS array uses the new
+// product names. Without this map, any /pay?plan=tender-intelligence URL
+// (including the report CTA) hits "Unknown plan" before Stripe loads.
+// Audit 2026-05-19 P0 #2.
+export const SLUG_ALIASES: Record<string, string> = {
+  "tender-intelligence":   "grants-tenders-matching",
+  "submission-package":    "proposal-draft",
+  "strategic-partnership": "roster-fast-track",
+};
+
+// Resolves either a canonical or legacy slug to the canonical form, or null
+// if no TIERS entry matches even after aliasing.
+export function resolveTierSlug(slug: string | null | undefined): string | null {
+  if (!slug) return null;
+  const canonical = SLUG_ALIASES[slug] ?? slug;
+  return TIERS.some((t) => t.slug === canonical) ? canonical : null;
+}
+
 export interface Tier {
   slug: string;
   name: string;

@@ -30,7 +30,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "TenderPath — UN procurement readiness, scored.",
   description:
-    "$25.7B in UN contracts went to vendors who knew the system. Get your readiness score in 5 minutes — see exactly where you stand, what to fix, and which open tenders match.",
+    "$25.7B in UN contracts went to vendors who knew the system. Get your readiness score in 3 minutes — see exactly where you stand, what to fix, and which open tenders match.",
 };
 
 export default function RootLayout({
