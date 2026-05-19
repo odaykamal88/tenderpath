@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { LandingTender } from "@/lib/landing/recent-tenders";
 
 /* Hero — Direction A · editorial dossier · mobile-tuned at 375px */
@@ -162,7 +163,16 @@ function LiveTicker({ tenders }: { tenders: LandingTender[] }) {
   );
 }
 
-export default function Hero({ tenders }: { tenders: LandingTender[] }) {
+export default function Hero({
+  tenders,
+  viewer,
+}: {
+  tenders: LandingTender[];
+  // Set when the request came in with a valid tp_session cookie AND that
+  // user has at least one assessment. Drives the welcome-back CTA variant
+  // (audit 2026-05-19 P1 #5). null for first-time visitors.
+  viewer?: { companyName: string; reportId: string } | null;
+}) {
   return (
     <>
       <LiveTicker tenders={tenders} />
@@ -172,7 +182,7 @@ export default function Hero({ tenders }: { tenders: LandingTender[] }) {
             {/* Left: editorial column */}
             <div className="max-w-xl">
               <p className="eyebrow mb-5 sm:mb-7 text-[10px] sm:text-[11px]" style={{ animation: "fadeIn 0.4s ease-out 60ms both" }}>
-                Issue №01 · UN Procurement Brief
+                {viewer ? "Welcome back · Continue your file" : "Issue №01 · UN Procurement Brief"}
               </p>
               <h1
                 className="display text-[38px] sm:text-[56px] lg:text-[64px] leading-[1.04] sm:leading-[1.02] tracking-[-0.02em] text-ink mb-5 sm:mb-7 text-balance"
@@ -184,20 +194,38 @@ export default function Hero({ tenders }: { tenders: LandingTender[] }) {
                 className="text-[15px] sm:text-[17px] lg:text-lg text-ink-2 leading-[1.6] mb-7 sm:mb-9 max-w-lg"
                 style={{ animation: "fadeInUp 0.5s ease-out 240ms both" }}
               >
-                $25.7B went to UN suppliers in 2024 — most of it to vendors who already knew the system. Find out where you stand in five minutes, then decide whether to bid before the deadline closes.
+                $25.7B went to UN suppliers in 2024 — most of it to vendors who already knew the system. Find out where you stand in three minutes, then decide whether to bid before the deadline closes.
               </p>
 
               <div
                 className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-4 sm:gap-5"
                 style={{ animation: "fadeInUp 0.5s ease-out 360ms both" }}
               >
-                <a
-                  href="/assessment"
-                  className="inline-flex items-center justify-center sm:justify-start gap-3 bg-ink px-6 sm:px-7 py-4 text-[14px] font-medium text-paper hover:bg-accent transition-colors"
-                >
-                  Get my readiness score
-                  <span className="font-mono text-[13px]">→</span>
-                </a>
+                {viewer ? (
+                  <>
+                    <Link
+                      href="/dashboard"
+                      className="inline-flex items-center justify-center sm:justify-start gap-3 bg-ink px-6 sm:px-7 py-4 text-[14px] font-medium text-paper hover:bg-accent transition-colors"
+                    >
+                      Open {viewer.companyName} dashboard
+                      <span className="font-mono text-[13px]">→</span>
+                    </Link>
+                    <Link
+                      href="/assessment"
+                      className="inline-flex items-center justify-center sm:justify-start gap-2 px-1 py-2 text-[13px] font-medium text-ink-2 underline decoration-rule hover:decoration-ink hover:text-ink transition-colors"
+                    >
+                      Run a new assessment
+                    </Link>
+                  </>
+                ) : (
+                  <Link
+                    href="/assessment"
+                    className="inline-flex items-center justify-center sm:justify-start gap-3 bg-ink px-6 sm:px-7 py-4 text-[14px] font-medium text-paper hover:bg-accent transition-colors"
+                  >
+                    Get my readiness score
+                    <span className="font-mono text-[13px]">→</span>
+                  </Link>
+                )}
               </div>
 
               <div

@@ -1,2 +1,2 @@
-export { getAssessment, getCurrentUserAssessment, getThisWeek } from "./data";
+export { getAssessment, getCurrentUserAssessment, getThisWeek, getViewerHero } from "./data";
 export type { AssessmentReport } from "./data";
