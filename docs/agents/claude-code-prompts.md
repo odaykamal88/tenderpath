@@ -2,6 +2,29 @@
 
 Use these prompts in Claude Code after adding the repo docs.
 
+## Prompt 0 — Launch-discipline preamble (paste at the START of any session that touches auth, dashboard, assessment, pricing, telegram, or email)
+
+> Before you do any work, read these in order:
+>
+> 1. `AGENTS.md` and `CLAUDE.md`
+> 2. `docs/agents/launch-discipline.md` — the launch-failure retro and the rules that came out of it
+> 3. The user-memory file `~/.claude/projects/-Users-odaykamal-Desktop-TENDERPATH/memory/project_launch_flows.md` — the seven gateway flows
+> 4. The user-memory file `~/.claude/projects/-Users-odaykamal-Desktop-TENDERPATH/memory/feedback_shared_contracts.md` — the find-all-references rule
+> 5. The user-memory file `~/.claude/projects/-Users-odaykamal-Desktop-TENDERPATH/memory/feedback_first_user_journey.md` — the verification rule
+> 6. The user-memory file `~/.claude/projects/-Users-odaykamal-Desktop-TENDERPATH/memory/feedback_no_record_casts.md` — the TS anti-pattern
+> 7. The user-memory file `~/.claude/projects/-Users-odaykamal-Desktop-TENDERPATH/memory/feedback_no_silent_failures.md` — the logging rule
+>
+> Then, in your first response, before writing any code:
+>
+> 1. List which of the seven launch flows this task could plausibly affect (any uncertainty = tick the flow).
+> 2. List every shared contract you expect to touch (passwords, schema keys, public route paths, env var names, tier slugs). For each, name every file that consumes it — grep first.
+> 3. State the verification plan per affected flow: what you'll test locally vs what needs Vercel preview vs what you'll hand back to me to verify.
+> 4. Confirm you will not introduce new `Partial<T> & Record<string, X>` casts and will not add silent 200s on error branches.
+>
+> Then start the work. When you declare done, fill the PR template at `.github/pull_request_template.md` exactly — every launch flow you ticked must have a real verification line, not "should be fine."
+>
+> If you can't verify a flow that your change affects, say so explicitly and ask me to verify on Vercel preview before merge. Do not declare done on faith.
+
 ## Prompt 1 — Install the agent operating system
 
 Read `AGENTS.md`, `CLAUDE.md`, and all files in `docs/agents/`.

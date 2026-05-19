@@ -173,6 +173,7 @@ Tender Assessment and Tender Dashboard agents share ownership of proposal review
 
 Before changing a subsystem, read its companion docs in `docs/agents/`:
 
+- `docs/agents/launch-discipline.md` — **read first for any auth, dashboard, assessment, pricing, telegram, or email work.** Captures the launch-failure retro and the four rules (shared-contract grep, first-user walkthrough, no Record-cast widening, no silent failures) plus the PR template enforcement
 - `docs/agents/crawler-architecture.md`
 - `docs/agents/assessment-architecture.md`
 - `docs/agents/dashboard-architecture.md`
