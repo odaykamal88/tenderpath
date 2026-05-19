@@ -112,6 +112,9 @@ export async function POST(request: Request) {
       ui_mode: "embedded_page",
       mode: SUBSCRIPTION_PLANS.has(plan) ? "subscription" : "payment",
       line_items: [{ price: priceId, quantity: 1 }],
+      // Surfaces the "Add promotion code" field in the embedded checkout so
+      // Stripe-managed coupons (e.g. FREETEST) can be applied at the UI level.
+      allow_promotion_codes: true,
       return_url: `${origin}/pay/success?${returnParams.toString()}`,
       metadata: {
         plan,
