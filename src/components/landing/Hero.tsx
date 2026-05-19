@@ -198,12 +198,6 @@ export default function Hero({ tenders }: { tenders: LandingTender[] }) {
                   Get my readiness score
                   <span className="font-mono text-[13px]">→</span>
                 </a>
-                <a
-                  href="#how-it-works"
-                  className="font-mono text-[11px] tracking-[0.12em] uppercase text-ink-3 hover:text-ink transition-colors border-b border-rule hover:border-ink pb-0.5 self-center sm:self-auto"
-                >
-                  How it works
-                </a>
               </div>
 
               <div
@@ -214,10 +208,7 @@ export default function Hero({ tenders }: { tenders: LandingTender[] }) {
                   Built by someone who spent years inside WFP reviewing supplier bids — and kept seeing qualified vendors lose on paperwork.
                 </p>
                 <p className="font-mono text-[10px] text-mute mt-3 tracking-[0.06em]">
-                  1,200+ assessments · 15+ UN agencies ·{" "}
-                  <a href="/login" className="text-ink hover:text-accent border-b border-ink hover:border-accent">
-                    Sign in →
-                  </a>
+                  1,200+ assessments · 15+ UN agencies
                 </p>
               </div>
             </div>
