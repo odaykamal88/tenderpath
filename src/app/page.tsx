@@ -4,6 +4,7 @@ import Challenge from "@/components/landing/Challenge";
 import HowItWorks from "@/components/landing/HowItWorks";
 import Services from "@/components/landing/Services";
 import WhyUs from "@/components/landing/WhyUs";
+import MENACoverage from "@/components/landing/MENACoverage";
 import CTA from "@/components/landing/CTA";
 import Footer from "@/components/landing/Footer";
 import { getLandingTenders } from "@/lib/landing/recent-tenders";
@@ -54,6 +55,7 @@ export default async function Home() {
       <HowItWorks />
       <Services />
       <WhyUs />
+      <MENACoverage />
       <CTA />
       <Footer />
     </>
