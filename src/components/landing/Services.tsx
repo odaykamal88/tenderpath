@@ -17,18 +17,13 @@ export default function Services() {
     <section id="services" className="bg-paper py-16 sm:py-20 lg:py-28">
       <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="grid lg:grid-cols-[1fr_2fr] gap-6 sm:gap-10 lg:gap-16 mb-12 sm:mb-16 items-end">
-          <div>
-            <p className="font-mono text-[10px] sm:text-[11px] tracking-[0.16em] sm:tracking-[0.18em] uppercase text-accent mb-4 sm:mb-5">
-              Services
-            </p>
-            <h2 className="font-serif text-[34px] sm:text-[40px] lg:text-[52px] font-normal leading-[1.05] sm:leading-[1.0] tracking-[-0.02em] text-ink text-balance">
-              One service per stage.
-            </h2>
-          </div>
-          <p className="text-[15px] sm:text-[16px] text-ink-2 leading-[1.6] max-w-lg lg:pb-3">
-            Start with a free assessment. Subscribe to matching when you want a steady pipeline. Pay per-tender for bid/no-bid memos and proposal drafting only when an opportunity is worth the effort.
+        <div className="mb-12 sm:mb-16">
+          <p className="font-mono text-[10px] sm:text-[11px] tracking-[0.16em] sm:tracking-[0.18em] uppercase text-accent mb-4 sm:mb-5">
+            Services
           </p>
+          <h2 className="font-serif text-[34px] sm:text-[40px] lg:text-[52px] font-normal leading-[1.05] sm:leading-[1.0] tracking-[-0.02em] text-ink text-balance">
+            From assessment to award.
+          </h2>
         </div>
 
         {/* 5-stage journey diagram */}
