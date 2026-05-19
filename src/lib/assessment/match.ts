@@ -831,6 +831,12 @@ export async function matchTenders(
     skipAdjacent?: boolean;
     userEmail?: string;
     adjacentSectorLabels?: string[];
+    // Audit P1 #6: regional-geo adjacency (e.g. Egypt for a Jordan user) is
+    // OFF by default — the audit caught Persona 3 seeing Iraq + Egypt at the
+    // top of a Jordan-focused list. Set to true only when the user explicitly
+    // opts in via a future UI toggle. Sector adjacency is a separate axis
+    // controlled by adjacentSectorLabels.
+    includeRegionalAdjacency?: boolean;
     orgType?: string | null;
     candidateLimitPerSlug?: number;
     geographyCandidateLimit?: number;
@@ -1373,10 +1379,25 @@ export async function matchTenders(
   const out: MatchedTender[] = [];
   for (const s of strictPool.slice(0, 25)) out.push(stripMeta(s));
 
-  // Regional: lightly discount so country-specific still ranks higher.
-  const regionalDiscount = autoGeoOpen ? 0.85 : 0.75;
-  for (const s of regionalPool.slice(0, 10)) {
-    out.push({ ...stripMeta(s), score: Math.max(20, Math.round(s.score * regionalDiscount)) });
+  // Regional adjacency is OFF by default. Audit 2026-05-19 P1 #6: Persona 3
+  // (Jordan user) saw UNICEF Iraq + ILO Egypt + UNFPA Egypt at the top of
+  // their matched list because regionalPool was always pushed. The audit's
+  // recommended fix: hard-gate by country, render an honest empty state if
+  // the result is thin. Set options.includeRegionalAdjacency to admit
+  // neighbouring-country matches with the existing discount.
+  const wantRegional = options?.includeRegionalAdjacency ?? false;
+  if (wantRegional) {
+    const regionalDiscount = autoGeoOpen ? 0.85 : 0.75;
+    for (const s of regionalPool.slice(0, 10)) {
+      out.push({ ...stripMeta(s), score: Math.max(20, Math.round(s.score * regionalDiscount)) });
+    }
+  } else if (regionalPool.length > 0) {
+    console.log("[match:regional:gated]", {
+      dropped: regionalPool.length,
+      strictPool: strictPool.length,
+      autoGeoOpen,
+      hint: "includeRegionalAdjacency is off by default — pass true to admit neighbour-country matches",
+    });
   }
 
   // Global: only show when user opted in OR strict+regional supply is thin.

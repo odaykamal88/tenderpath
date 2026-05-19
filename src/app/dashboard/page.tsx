@@ -161,6 +161,7 @@ export default async function DashboardPage({
         <TendersTab
           tenders={data.tenders}
           countsByFilter={data.countsByFilter}
+          selectedCountries={data.countries}
         />
       )}
       {activeTab === "grants" && <GrantsTab grants={data.grants} />}

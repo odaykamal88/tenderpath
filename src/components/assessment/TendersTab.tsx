@@ -34,15 +34,34 @@ function confidenceLabel(confidence: Tender["confidence"]): string {
   return "confidence unknown";
 }
 
+function describeCountries(countries: string[]): string {
+  const cleaned = countries.filter(Boolean);
+  if (cleaned.length === 0) return "your selected countries";
+  if (cleaned.length === 1) return cleaned[0];
+  if (cleaned.length === 2) return `${cleaned[0]} or ${cleaned[1]}`;
+  return `${cleaned.slice(0, -1).join(", ")}, or ${cleaned[cleaned.length - 1]}`;
+}
+
+// Audit 2026-05-19 P1 #6: when the post-filter result list is empty or very
+// thin, render an honest empty-state instead of silently showing zero rows
+// (which previously would have been "filled" with off-country regional
+// matches like Egypt/Iraq for a Jordan user — the exact bug the audit caught).
+const THIN_RESULT_THRESHOLD = 3;
+
 export function TendersTab({
   tenders,
   filter = "all",
   countsByFilter,
+  selectedCountries = [],
 }: {
   tenders: Tender[];
   filter?: "all" | "strong" | "closing";
   countsByFilter: { all: number; strong: number; closing: number };
+  selectedCountries?: string[];
 }) {
+  const isThin = tenders.length <= THIN_RESULT_THRESHOLD;
+  const geoCopy = describeCountries(selectedCountries);
+
   return (
     <>
       <div className={styles.tableHead}>
@@ -70,6 +89,38 @@ export function TendersTab({
           ))}
         </div>
       </div>
+
+      {isThin && (
+        <div
+          className="tp-mono"
+          style={{
+            margin: "12px 0",
+            padding: "14px 16px",
+            borderLeft: "2px solid var(--tp2-warn, #b08530)",
+            background: "rgba(176, 133, 48, 0.06)",
+            fontSize: 12,
+            lineHeight: 1.55,
+            color: "var(--tp2-ink-2, #4a443a)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 10,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: "var(--tp2-warn, #b08530)",
+              marginBottom: 6,
+              fontWeight: 600,
+            }}
+          >
+            Thin country supply
+          </div>
+          {tenders.length === 0
+            ? `No live tenders matching ${geoCopy} this week.`
+            : `Only ${tenders.length} live tender${tenders.length === 1 ? "" : "s"} in ${geoCopy} this week.`}{" "}
+          We hard-filter by country so you don&rsquo;t see off-country noise — try broadening your geography by running a new assessment with more countries.
+        </div>
+      )}
 
       <div className={`${styles.gridHead} ${styles.tendersGrid}`}>
         <span>Reference</span>
