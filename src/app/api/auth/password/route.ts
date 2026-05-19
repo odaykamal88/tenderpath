@@ -22,17 +22,29 @@ export async function POST(request: Request) {
 
   // Self-heal: keep the demo account password in sync with the displayed hint.
   // Prevents UI/DB drift from locking visitors out of the public demo.
+  // Wrapped: if scrypt or the upsert throws (DB down, missing column), we want
+  // the failure visible in logs — silently 500ing here would surface to the UI
+  // as "Invalid email or password", indistinguishable from real bad creds.
+  // Audit 2026-05-19 P0 #3, launch-discipline rule 4.
   if (email === DEMO_EMAIL) {
-    const hash = await hashPassword(DEMO_PASSWORD);
-    const now = new Date().toISOString();
-    await sql`
-      INSERT INTO users (email, password_hash, subscription_status, tier, trial_start_date, created_at)
-      VALUES (${DEMO_EMAIL}, ${hash}, 'active', 'pro', ${now}, ${now})
-      ON CONFLICT (email) DO UPDATE SET
-        password_hash       = EXCLUDED.password_hash,
-        subscription_status = 'active',
-        tier                = 'pro'
-    `;
+    try {
+      const hash = await hashPassword(DEMO_PASSWORD);
+      const now = new Date().toISOString();
+      await sql`
+        INSERT INTO users (email, password_hash, subscription_status, tier, trial_start_date, created_at)
+        VALUES (${DEMO_EMAIL}, ${hash}, 'active', 'pro', ${now}, ${now})
+        ON CONFLICT (email) DO UPDATE SET
+          password_hash       = EXCLUDED.password_hash,
+          subscription_status = 'active',
+          tier                = 'pro'
+      `;
+    } catch (err) {
+      console.error("[auth:password:demo_self_heal_failed]", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      // Fall through — the SELECT below may still succeed against a row that
+      // was seeded earlier via scripts/create-demo-user.mjs.
+    }
   }
 
   const users = await sql`
