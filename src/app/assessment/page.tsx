@@ -1,10 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import type { AssessmentInput, TierSlug, Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
 import AssessmentResults from "./AssessmentResults";
 import { Step1, Step2, Step3, type WizardData, type CrawlPreview } from "./WizardSteps";
+
+// Audit 2026-05-19 P2 #14: landing-page CTAs pass ?goal=<intent> so the
+// wizard pre-selects the intent chip in Step 1. Saves a click and gives us
+// funnel attribution. Must stay in sync with INTENT_OPTIONS in WizardSteps.tsx.
+const VALID_GOAL_PARAMS = new Set([
+  "track-tenders",
+  "evaluate-tender",
+  "prepare-proposal",
+  "register-roster",
+]);
 
 interface AssessmentResponse {
   id: number;
@@ -316,11 +327,29 @@ function SampleReadinessCard() {
   );
 }
 
+// useSearchParams forces the consuming subtree into a Suspense boundary at
+// build time. Wrap the wizard so static prerender stays happy.
 export default function AssessmentPage() {
+  return (
+    <Suspense fallback={null}>
+      <AssessmentWizard />
+    </Suspense>
+  );
+}
+
+function AssessmentWizard() {
+  const searchParams = useSearchParams();
+  const goalParam = searchParams.get("goal");
+  const initialIntent =
+    goalParam && VALID_GOAL_PARAMS.has(goalParam) ? goalParam : "";
+
   const [phase, setPhase] = useState<WizardPhase>("entry");
   const [entryUrl, setEntryUrl] = useState("");
   const [preview, setPreview] = useState<CrawlPreview | null>(null);
-  const [wizard, setWizard] = useState<WizardData>(INITIAL_DATA);
+  const [wizard, setWizard] = useState<WizardData>({
+    ...INITIAL_DATA,
+    intent: initialIntent,
+  });
   const [results, setResults] = useState<AssessmentResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [analysisMsg, setAnalysisMsg] = useState(0);

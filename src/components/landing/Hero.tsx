@@ -102,7 +102,7 @@ function ReadinessCard() {
             Generated 5 min · 12 matches
           </span>
           <a
-            href="/assessment"
+            href="/assessment?goal=track-tenders"
             className="font-mono text-[10px] tracking-[0.08em] uppercase text-ink border-b border-ink hover:text-accent hover:border-accent transition-colors whitespace-nowrap"
           >
             Run mine →
@@ -141,7 +141,10 @@ function LiveTicker({ tenders }: { tenders: LandingTender[] }) {
         >
           <div
             className="flex gap-6 sm:gap-10 whitespace-nowrap py-2.5 hover:[animation-play-state:paused]"
-            style={{ animation: "ticker 40s linear infinite", width: "max-content" }}
+            // Audit 2026-05-19 P2 #12: 40s was too brisk to read agency/country
+            // before a card scrolled off — eye-twitch-inducing. 80s + the
+            // hover-pause makes the ticker scannable.
+            style={{ animation: "ticker 80s linear infinite", width: "max-content" }}
           >
             {[...items, ...items].map((item, i) => (
               <span key={i} className="flex items-center gap-3 text-[12px]">
@@ -211,7 +214,7 @@ export default function Hero({
                       <span className="font-mono text-[13px]">→</span>
                     </Link>
                     <Link
-                      href="/assessment"
+                      href="/assessment?goal=track-tenders"
                       className="inline-flex items-center justify-center sm:justify-start gap-2 px-1 py-2 text-[13px] font-medium text-ink-2 underline decoration-rule hover:decoration-ink hover:text-ink transition-colors"
                     >
                       Run a new assessment
@@ -219,7 +222,7 @@ export default function Hero({
                   </>
                 ) : (
                   <Link
-                    href="/assessment"
+                    href="/assessment?goal=track-tenders"
                     className="inline-flex items-center justify-center sm:justify-start gap-3 bg-ink px-6 sm:px-7 py-4 text-[14px] font-medium text-paper hover:bg-accent transition-colors"
                   >
                     Get my readiness score

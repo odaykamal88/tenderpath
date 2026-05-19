@@ -12,10 +12,24 @@ import { track } from "@/lib/telemetry/funnel";
 import { decodeHtmlEntities } from "@/lib/text/entities";
 import type { AssessmentInput, Gap, MatchedGrant, MatchedTender, ReadinessDimensions, TierSlug } from "@/lib/types";
 
+// Audit 2026-05-19 P2 #11: crawled company names came through with embedded
+// HTML, control chars, or 200+ chars of junk title — render-breaking in cards
+// and dashboard headers. Strip <, >, and ASCII control chars, collapse
+// whitespace, cap at 80 chars. Anything that collapses to empty returns null
+// so the caller can fall back to the user-supplied name.
+const COMPANY_NAME_MAX = 80;
+
 function cleanCompanyName(raw: string | null | undefined): string | null {
   if (raw === null || raw === undefined) return null;
-  const decoded = decodeHtmlEntities(raw).replace(/\s+/g, " ").trim();
-  return decoded.length > 0 ? decoded : null;
+  const decoded = decodeHtmlEntities(raw)
+    .replace(/[<>]/g, "")
+    .replace(/[\x00-\x1F\x7F]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (decoded.length === 0) return null;
+  return decoded.length > COMPANY_NAME_MAX
+    ? decoded.slice(0, COMPANY_NAME_MAX).trimEnd()
+    : decoded;
 }
 
 export type AssessmentRunMode = "public" | "authenticated";

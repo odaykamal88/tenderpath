@@ -2,12 +2,14 @@
 import Link from "next/link";
 
 export default function Footer() {
+  // Audit 2026-05-19 P2 #14: deep-link each service link to the matching
+  // wizard intent so Step 1 pre-selects the corresponding chip.
   const product = [
-    { label: "Free assessment", href: "/assessment" },
-    { label: "Weekly digest · $49/mo", href: "/assessment" },
-    { label: "Bid/no-bid analysis · $39", href: "/assessment" },
-    { label: "Proposal draft · $299", href: "/assessment" },
-    { label: "Roster fast-track · $749", href: "/assessment" },
+    { label: "Free assessment", href: "/assessment?goal=track-tenders" },
+    { label: "Weekly digest · $49/mo", href: "/assessment?goal=track-tenders" },
+    { label: "Bid/no-bid analysis · $39", href: "/assessment?goal=evaluate-tender" },
+    { label: "Proposal draft · $299", href: "/assessment?goal=prepare-proposal" },
+    { label: "Roster fast-track · $749", href: "/assessment?goal=register-roster" },
   ];
 
   const resources = [

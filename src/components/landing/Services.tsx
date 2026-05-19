@@ -117,7 +117,7 @@ export default function Services() {
 
         {/* Free tier promo strip */}
         <a
-          href="/assessment"
+          href="/assessment?goal=track-tenders"
           className="block bg-ink text-paper p-6 sm:p-8 lg:p-10 group hover:bg-accent transition-colors"
         >
           <div className="grid lg:grid-cols-[1fr_auto] gap-5 sm:gap-6 items-center">

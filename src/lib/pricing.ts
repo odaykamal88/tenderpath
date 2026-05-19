@@ -53,7 +53,9 @@ export const TIERS: Tier[] = [
       "Estimated effort & timeline",
     ],
     cta: "Analyze this tender",
-    ctaHref: "/assessment",
+    // Audit 2026-05-19 P2 #14: tier CTAs deep-link to the matching wizard
+    // intent so Step 1's "what do you want to do first?" chip is pre-selected.
+    ctaHref: "/assessment?goal=evaluate-tender",
     featured: false,
   },
   {
@@ -74,7 +76,7 @@ export const TIERS: Tier[] = [
       "Cancel anytime",
     ],
     cta: "Get weekly matched tenders & grants",
-    ctaHref: "/assessment",
+    ctaHref: "/assessment?goal=track-tenders",
     featured: true,
   },
   {
@@ -95,7 +97,7 @@ export const TIERS: Tier[] = [
       "Delivered in 48–72 hours",
     ],
     cta: "Draft my proposal",
-    ctaHref: "/assessment",
+    ctaHref: "/assessment?goal=prepare-proposal",
     featured: false,
   },
   {
@@ -116,7 +118,7 @@ export const TIERS: Tier[] = [
       "Submission & follow-up support",
     ],
     cta: "Fast-track my roster",
-    ctaHref: "/assessment",
+    ctaHref: "/assessment?goal=register-roster",
     featured: false,
   },
 ];
