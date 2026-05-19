@@ -83,6 +83,7 @@ export default async function AssessmentPage({ params, searchParams }: Props) {
         <TendersTab
           tenders={data.tenders}
           countsByFilter={data.countsByFilter}
+          selectedCountries={data.countries}
         />
       )}
       {activeTab === "grants" && (

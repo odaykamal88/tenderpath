@@ -250,6 +250,10 @@ export type AssessmentReport = {
   errorId?: string;
   companyName: string;
   sector: string;
+  // The user-selected countries the assessment was run against. Surfaced
+  // for the TendersTab thin-pool empty-state copy after the regional-match
+  // hard-gate (audit 2026-05-19 P1 #6).
+  countries: string[];
   score: number;
   scoreDelta: number;
   tier: string;
@@ -278,6 +282,7 @@ type DBRow = {
   company_name: string;
   email: string;
   sector: string | null;
+  countries: string[] | null;
   readiness_score: number;
   recommended_tier: string | null;
   ai_analysis: {
@@ -375,6 +380,7 @@ function rowToReport(row: DBRow, vaultTags: Set<string>): AssessmentReport {
     status,
     companyName: decodeHtmlEntities(row.company_name) || row.company_name,
     sector: row.sector ?? "General",
+    countries: Array.isArray(row.countries) ? row.countries.filter((c): c is string => typeof c === "string" && c.length > 0) : [],
     score,
     scoreDelta: resolvedBonus,
     tier: tierLabel(row.recommended_tier),
@@ -432,7 +438,7 @@ export async function getAssessment(idOrUuid: string): Promise<AssessmentReport 
   const authorized = await authorizeAssessmentRead(idOrUuid);
   if (!authorized) return null;
   const rows = await sql`
-    SELECT id, public_id, company_name, email, sector, readiness_score, recommended_tier,
+    SELECT id, public_id, company_name, email, sector, countries, readiness_score, recommended_tier,
            ai_analysis, gaps, matched_tenders, matched_grants, assessment_status, created_at
     FROM assessments
     WHERE id = ${authorized.intId}
@@ -453,7 +459,7 @@ export async function getCurrentUserAssessment(): Promise<AssessmentReport | nul
   if (!claims) return null;
 
   const rows = await sql`
-    SELECT id, public_id, company_name, email, sector, readiness_score, recommended_tier,
+    SELECT id, public_id, company_name, email, sector, countries, readiness_score, recommended_tier,
            ai_analysis, gaps, matched_tenders, matched_grants, assessment_status, created_at
     FROM assessments
     WHERE email = ${claims.email}
