@@ -108,15 +108,30 @@ function LoginForm() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const res = await fetch("/api/auth/password", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    // Differentiate 4xx (real auth fail) from 5xx (server problem) and from
+    // network errors. Without this split, a misconfigured backend or transient
+    // 500 surfaces to the user as "Invalid email or password" — the exact
+    // silent-failure pattern that hid the audit's P0 #3 from triage.
+    let res: Response;
+    try {
+      res = await fetch("/api/auth/password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+    } catch {
+      setBusy(false);
+      setError("Couldn't reach the server. Check your connection and try again.");
+      return;
+    }
     const body = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok) {
-      setError(body.error || "Invalid email or password");
+      if (res.status >= 500) {
+        setError(body.error || "Server error — please try the magic link option below, or email info@tenderpath.me.");
+      } else {
+        setError(body.error || "Invalid email or password");
+      }
       return;
     }
     localStorage.setItem("tp_token", body.token);
