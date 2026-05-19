@@ -31,6 +31,7 @@ export default function Navbar() {
   }, [mobileOpen]);
 
   return (
+    <>
     <nav className="sticky top-0 z-50 bg-paper/95 backdrop-blur-sm border-b border-rule">
       <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
         <div className="flex h-14 sm:h-16 items-center justify-between">
@@ -99,59 +100,68 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile full-screen sheet */}
-      {mobileOpen && (
-        <div className="md:hidden fixed inset-x-0 top-14 bottom-0 bg-paper z-40 flex flex-col overflow-y-auto">
-          <div className="px-5 pt-5 pb-7 flex flex-col gap-px">
-            {navLinks.map((link, i) => (
-              <a
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileOpen(false)}
-                className="grid grid-cols-[36px_1fr_auto] items-baseline gap-3 py-4 border-b border-rule"
-              >
-                <span className="font-mono text-[10px] tracking-[0.16em] text-mute tabular-nums">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <span className="font-serif text-[24px] leading-none tracking-[-0.01em] text-ink">
-                  {link.label}
-                </span>
-                <span className="font-mono text-[14px] text-mute">→</span>
-              </a>
-            ))}
-          </div>
+    </nav>
 
-          <div className="mt-auto px-5 pb-8 pt-6 border-t border-rule bg-paper-2/40">
-            {isAuthed ? (
+    {/*
+      Mobile full-screen sheet — MUST live OUTSIDE the <nav> above.
+      The nav has backdrop-blur-sm, and per CSS spec an ancestor with
+      backdrop-filter !== none creates a containing block for fixed-positioned
+      descendants. If the sheet were inside the nav, its `top-14 bottom-0`
+      would resolve against the 56px nav box (height = 0, invisible).
+      Hoisting it to a sibling makes it position against the viewport.
+    */}
+    {mobileOpen && (
+      <div className="md:hidden fixed inset-x-0 top-14 bottom-0 bg-paper z-40 flex flex-col overflow-y-auto">
+        <div className="px-5 pt-5 pb-7 flex flex-col gap-px">
+          {navLinks.map((link, i) => (
+            <a
+              key={link.href}
+              href={link.href}
+              onClick={() => setMobileOpen(false)}
+              className="grid grid-cols-[36px_1fr_auto] items-baseline gap-3 py-4 border-b border-rule"
+            >
+              <span className="font-mono text-[10px] tracking-[0.16em] text-mute tabular-nums">
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <span className="font-serif text-[24px] leading-none tracking-[-0.01em] text-ink">
+                {link.label}
+              </span>
+              <span className="font-mono text-[14px] text-mute">→</span>
+            </a>
+          ))}
+        </div>
+
+        <div className="mt-auto px-5 pb-8 pt-6 border-t border-rule bg-paper-2/40">
+          {isAuthed ? (
+            <a
+              href="/dashboard"
+              className="block bg-ink px-5 py-4 text-[14px] font-medium text-paper text-center"
+            >
+              Open dashboard →
+            </a>
+          ) : (
+            <div className="flex flex-col gap-3">
               <a
-                href="/dashboard"
+                href="/assessment"
                 className="block bg-ink px-5 py-4 text-[14px] font-medium text-paper text-center"
               >
-                Open dashboard →
+                Get my readiness score →
               </a>
-            ) : (
-              <div className="flex flex-col gap-3">
-                <a
-                  href="/assessment"
-                  className="block bg-ink px-5 py-4 text-[14px] font-medium text-paper text-center"
-                >
-                  Get my readiness score →
-                </a>
-                <a
-                  href="/login"
-                  className="block border border-ink px-5 py-3.5 text-[13px] font-medium text-ink text-center"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  Sign in
-                </a>
-              </div>
-            )}
-            <p className="mt-5 font-mono text-[10px] tracking-[0.1em] uppercase text-mute text-center">
-              No card · No login · 5 min
-            </p>
-          </div>
+              <a
+                href="/login"
+                className="block border border-ink px-5 py-3.5 text-[13px] font-medium text-ink text-center"
+                onClick={() => setMobileOpen(false)}
+              >
+                Sign in
+              </a>
+            </div>
+          )}
+          <p className="mt-5 font-mono text-[10px] tracking-[0.1em] uppercase text-mute text-center">
+            No card · No login · 5 min
+          </p>
         </div>
-      )}
-    </nav>
+      </div>
+    )}
+    </>
   );
 }
