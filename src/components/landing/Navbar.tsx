@@ -65,7 +65,7 @@ export default function Navbar() {
                 >
                   Sign in
                 </a>
-                <a href="/assessment" className="bg-ink px-5 py-2.5 text-[12px] font-medium text-paper hover:bg-accent transition-colors">
+                <a href="/assessment?goal=track-tenders" className="bg-ink px-5 py-2.5 text-[12px] font-medium text-paper hover:bg-accent transition-colors">
                   Free assessment
                 </a>
               </>
@@ -76,7 +76,7 @@ export default function Navbar() {
           <div className="md:hidden flex items-center gap-2">
             {!isAuthed && (
               <a
-                href="/assessment"
+                href="/assessment?goal=track-tenders"
                 className="bg-ink px-3.5 py-2 text-[11.5px] font-medium text-paper"
               >
                 Assess →
@@ -142,7 +142,7 @@ export default function Navbar() {
           ) : (
             <div className="flex flex-col gap-3">
               <a
-                href="/assessment"
+                href="/assessment?goal=track-tenders"
                 className="block bg-ink px-5 py-4 text-[14px] font-medium text-paper text-center"
               >
                 Get my readiness score →

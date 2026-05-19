@@ -27,7 +27,7 @@ export default function CTA() {
 
           <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-4 sm:gap-6 pt-5 sm:pt-6 border-t border-paper-2/15">
             <a
-              href="/assessment"
+              href="/assessment?goal=track-tenders"
               className="inline-flex items-center justify-center sm:justify-start gap-3 bg-paper px-6 sm:px-8 py-4 text-[14px] font-medium text-ink hover:bg-accent-2 hover:text-ink transition-colors"
             >
               Run the free assessment
