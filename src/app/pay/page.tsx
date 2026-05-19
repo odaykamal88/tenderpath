@@ -165,12 +165,6 @@ function CardTab({ plan, context, disabledReason }: { plan: string | null; conte
           >
             {status === "loading" ? "Loading secure checkout…" : "Pay with card →"}
           </button>
-          <p
-            className="flex items-center justify-center gap-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
-            style={{ fontFamily: MONO }}
-          >
-            Secured by Stripe · Visa · Mastercard · Amex
-          </p>
         </div>
       )}
     </div>
@@ -774,7 +768,11 @@ function PayPage() {
           </div>
 
           {/* Tab body */}
-          {activeTab === "card" && <CardTab plan={selectedSlug} context={context} disabledReason={disabledReason} />}
+          {/* key={selectedSlug} forces a remount when the plan changes — clears
+              stale "Unknown plan" error state from a previous selection and
+              tears down any half-mounted Stripe checkout iframe. Audit
+              2026-05-19 P0 #2. */}
+          {activeTab === "card" && <CardTab key={selectedSlug ?? "no-plan"} plan={selectedSlug} context={context} disabledReason={disabledReason} />}
           {activeTab === "usdt" && <UsdtTab plan={selectedSlug} context={context} disabledReason={disabledReason} />}
           {activeTab === "wire" && <WireTab plan={selectedSlug} context={context} />}
         </div>

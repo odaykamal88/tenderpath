@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import type { TierSlug, Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
-import { TIER_INFO_BY_SLUG } from "@/lib/pricing";
+import { TIER_INFO_BY_SLUG, SLUG_ALIASES } from "@/lib/pricing";
+import { decodeHtmlEntities } from "@/lib/text/entities";
 
 /* ============================================================
    AssessmentResults — Direction A (paper, serif, mono)
@@ -213,7 +214,7 @@ export default function AssessmentResults({
         <section className="mb-14">
           <div className="flex items-baseline justify-between mb-6 pb-3 border-b border-ink">
             <h2 className="font-serif text-[28px] lg:text-[32px] font-normal leading-tight tracking-[-0.02em] text-ink">
-              Matched tenders
+              Matched opportunities · Tenders
             </h2>
             <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-mute tabular-nums">
               {data.matched_tenders.length} live
@@ -230,10 +231,10 @@ export default function AssessmentResults({
                 </span>
                 <div>
                   <p className="text-[14px] text-ink leading-snug font-medium mb-1">
-                    {t.title}
+                    {decodeHtmlEntities(t.title)}
                   </p>
                   <p className="font-mono text-[10px] tracking-[0.04em] text-ink-3">
-                    {t.agency}
+                    {decodeHtmlEntities(t.agency)}
                     {t.country ? ` · ${t.country}` : ""}
                     {t.reference_id ? ` · ${t.reference_id}` : ""}
                   </p>
@@ -275,7 +276,7 @@ export default function AssessmentResults({
         <section className="mb-14">
           <div className="flex items-baseline justify-between mb-6 pb-3 border-b border-ink">
             <h2 className="font-serif text-[28px] lg:text-[32px] font-normal leading-tight tracking-[-0.02em] text-ink">
-              Matched grants
+              Matched opportunities · Grants
             </h2>
             <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-mute tabular-nums">
               {data.matched_grants.length} open
@@ -288,9 +289,9 @@ export default function AssessmentResults({
                   {String(i + 1).padStart(2, "0")}
                 </span>
                 <div>
-                  <p className="text-[14px] text-ink mb-1">{g.title}</p>
+                  <p className="text-[14px] text-ink mb-1">{decodeHtmlEntities(g.title)}</p>
                   <p className="font-mono text-[10px] tracking-[0.04em] text-ink-3">
-                    {g.agency}{g.sector ? ` · ${g.sector}` : ""}
+                    {decodeHtmlEntities(g.agency)}{g.sector ? ` · ${g.sector}` : ""}
                   </p>
                 </div>
                 {g.source_url && (
@@ -346,7 +347,7 @@ export default function AssessmentResults({
               <span className="font-mono text-[12px] text-paper-2/60">{tier.billingPeriod}</span>
             </div>
             <Link
-              href={`/pay?plan=${data.recommended_tier}`}
+              href={`/pay?plan=${SLUG_ALIASES[data.recommended_tier] ?? data.recommended_tier}`}
               className="bg-paper text-ink font-mono text-[11px] tracking-[0.14em] uppercase px-7 py-3.5 hover:bg-accent-2 transition-colors"
             >
               {tier.cta} →

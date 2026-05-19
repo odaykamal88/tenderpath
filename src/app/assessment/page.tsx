@@ -463,7 +463,7 @@ export default function AssessmentPage() {
       {phase === "entry" && (
         <div className="mx-auto max-w-6xl px-6 lg:px-8 py-14 lg:py-20">
           <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-accent mb-6">
-            {authedEmail ? `Signed in · Start a new assessment · 5 minutes` : `Free · No login · 5 minutes`}
+            {authedEmail ? `Signed in · Start a new assessment · 3 minutes` : `Free · No login · 3 minutes`}
           </p>
           <div className="grid lg:grid-cols-[1.2fr_1fr] gap-10 lg:gap-16 items-start">
             {/* Left — pitch + form */}
