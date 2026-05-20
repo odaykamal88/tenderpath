@@ -17,6 +17,11 @@ const PUBLIC_PATHS = new Set([
   "/api/cron/daily-digest",
   "/api/assessment/public",
   "/api/assessment/preview",
+  // PDF report — opened via `<a href="/api/report?id={uuid}">` so the browser
+  // can't supply a Bearer header (anchor nav drops Authorization). The route
+  // itself authorizes via UUID capability through authorizeAssessmentRead,
+  // same model as /api/assessment/{uuid}.
+  "/api/report",
   "/api/pay/checkout",
   "/api/pay/readiness",
   "/api/pay/verify-usdt",
