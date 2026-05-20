@@ -869,7 +869,9 @@ export async function matchTenders(
     WHERE status='open' AND deadline >= CURRENT_DATE
       AND LOWER(country) = ANY(${countryArr}::text[])`;
   const strictPoolSize = Number(strictProbe?.[0]?.n ?? 0);
-  const autoGeoOpen = !acceptsGlobal && strictPoolSize < 25;
+  // autoGeoOpen now uses the sector-aware strict pool count (computed after
+  // slugKeywordMap is in scope, below). Keep strictPoolSize around for logging
+  // and for the no-slug fallback path.
   const perSlugLimit = Math.min(300, Math.max(25, options?.candidateLimitPerSlug ?? 150));
   const geographyCandidateLimit = Math.min(600, Math.max(50, options?.geographyCandidateLimit ?? 400));
   const baselineCandidateLimit = Math.min(500, Math.max(50, options?.baselineCandidateLimit ?? 300));
@@ -993,6 +995,41 @@ export async function matchTenders(
     ],
     energy: ["energy", "solar", "electricity", "power", "renewable", "grid"],
   };
+
+  // Sector-aware strict supply probe. The naive strictPoolSize above counts
+  // every open tender in the user's countries regardless of sector relevance.
+  // Discovered on axiom.co.ke walkthrough (Kenya consulting profile): the user
+  // picked 8 countries that totalled 100+ strict tenders, but the corpus for
+  // those countries was dominated by construction / water / health — almost
+  // nothing matched a consulting profile. naive strictPoolSize > 25 so
+  // autoGeoOpen never fired, softSectorFloor stayed at the strict 40, and the
+  // 184 country='Global' consulting tenders in the corpus never had a chance
+  // to enter the result set.
+  //
+  // The right question is "how many RELEVANT tenders are in the user's
+  // countries", not "how many tenders period". When sector-relevant strict
+  // supply is thin, fire autoGeoOpen so the global pool flows in with the
+  // softer 20-point sector floor.
+  let strictSectorPoolSize = strictPoolSize;
+  if (effectiveUserSlugs.size > 0 && countryArr.length > 0) {
+    const sectorKws = new Set<string>();
+    for (const slug of effectiveUserSlugs) {
+      for (const k of slugKeywordMap[slug] ?? [slug.replace(/_/g, " ")]) sectorKws.add(k);
+    }
+    if (sectorKws.size > 0) {
+      const sectorPatterns = [...sectorKws].map((k) => `%${k}%`);
+      const sectorAwareProbe = await sql`
+        SELECT COUNT(*)::int AS n FROM tenders
+        WHERE status='open' AND deadline >= CURRENT_DATE
+          AND LOWER(country) = ANY(${countryArr}::text[])
+          AND (
+            title ILIKE ANY(${sectorPatterns}::text[])
+            OR sector ILIKE ANY(${sectorPatterns}::text[])
+          )`;
+      strictSectorPoolSize = Number(sectorAwareProbe?.[0]?.n ?? 0);
+    }
+  }
+  const autoGeoOpen = !acceptsGlobal && strictSectorPoolSize < 25;
 
   type Row = {
     id: number; title: string; description: string | null; agency: string;
@@ -1662,6 +1699,23 @@ export async function matchTenders(
   }, {} as Record<string, number>);
   const withoutStructured = finalOut.filter((t) => !t.structured_reasons).length;
   console.log("[tp:match:confidence]", confidenceDist, { total: finalOut.length, withoutStructured });
+
+  // Full pool-size diagnostics. Grep prod logs for [match:result] to answer
+  // "why did this user get N tenders" without re-running the pipeline.
+  // Added after the axiom.co.ke walkthrough hit zero matches and we had to
+  // diagnose via raw DB queries — that loop should never repeat.
+  console.log("[match:result]", {
+    strictPoolSize,           // raw count of open tenders in user's countries
+    strictSectorPoolSize,     // ↑ filtered to user's sector keywords
+    autoGeoOpen,
+    softSectorFloor,
+    strict: strictPool.length,
+    regional: regionalPool.length,
+    global: globalPool.length,
+    out: finalOut.length,
+    countries: countryArr,
+    slugs: [...effectiveUserSlugs],
+  });
 
   return finalOut;
 }
