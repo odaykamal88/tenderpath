@@ -145,6 +145,19 @@ WHERE id NOT IN (
 AND assessment_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS email_queue_assessment_id_unique ON email_queue (assessment_id) WHERE assessment_id IS NOT NULL;
 
+-- Hotfix 2026-05-20: the original email_queue.assessment_id FK had no
+-- ON DELETE clause, defaulting to NO ACTION. That blocks ANY delete on
+-- the assessments table the moment a queue row references it (23503).
+-- Discovered during demo-account state reset on the first incognito
+-- walkthrough. Match the SET NULL pattern used by pipeline_items,
+-- service_orders, work_orders, etc. — keeps the queue row alive for
+-- delivery-history auditing but unblocks the parent delete.
+-- Idempotent: DROP IF EXISTS + re-ADD always lands on the right rule.
+ALTER TABLE email_queue DROP CONSTRAINT IF EXISTS email_queue_assessment_id_fkey;
+ALTER TABLE email_queue
+  ADD CONSTRAINT email_queue_assessment_id_fkey
+  FOREIGN KEY (assessment_id) REFERENCES assessments(id) ON DELETE SET NULL;
+
 CREATE TABLE IF NOT EXISTS crawl_logs (
   id SERIAL PRIMARY KEY,
   platform TEXT NOT NULL,

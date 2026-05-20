@@ -84,12 +84,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // Demo account: reset state and log session. Wrapped — if the assessments
-    // table is in a partially-migrated state (e.g. PR-1 public_id NOT NULL
-    // column added but pgcrypto missing for the default on insert paths the
-    // delete cascades into), a thrown DELETE here used to 500 the entire
-    // sign-in. The session refresh is best-effort; sign-in itself should
-    // succeed regardless. Discovered on the first incognito walkthrough.
+    // Demo account: reset state and log session. Wrapped + ordered —
+    // email_queue.assessment_id has a NO-ACTION FK to assessments(id), so a
+    // bare DELETE FROM assessments throws 23503 once the demo has triggered
+    // an email send. Delete the queue rows first, then the assessments.
+    // The session refresh is best-effort; sign-in itself proceeds regardless.
+    // Discovered on the first incognito walkthrough (queue row referenced
+    // assessment id=95). FK is also upgraded to ON DELETE SET NULL in
+    // scripts/migrate.mjs so other delete paths stop hitting this wall.
     if (email === DEMO_EMAIL) {
       try {
         const ip =
@@ -99,6 +101,15 @@ export async function POST(request: Request) {
         const country = request.headers.get("cf-ipcountry") ?? null;
         const ua = request.headers.get("user-agent") ?? null;
 
+        // Delete queue rows pointing at the demo's assessments first.
+        // SET NULL would be enough once migrate.mjs runs, but the explicit
+        // delete keeps the queue tidy and works even pre-migration.
+        await sql`
+          DELETE FROM email_queue
+          WHERE assessment_id IN (
+            SELECT id FROM assessments WHERE lower(email) = ${DEMO_EMAIL}
+          )
+        `;
         await Promise.all([
           sql`DELETE FROM assessments WHERE lower(email) = ${DEMO_EMAIL}`,
           sql`
