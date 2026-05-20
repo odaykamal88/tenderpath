@@ -2825,3 +2825,96 @@ Copy this block and fill it in at the end of each session.
 - What remains:
 - What the next agent must read first:
 ```
+
+---
+
+### Session Update — Sprint 24 — Launch-audit UX fixes & demo hardening
+- Agent: Claude Code (Opus 4.7, 1M context)
+- Date: 19–20 May 2026
+- Task Completed: Cleared the queue of UX rough edges and silent-failure traps surfaced by the 2026-05-19 launch audit + the user's incognito walkthroughs. Eleven branches; seven merged.
+- Files Changed:
+  - `scripts/migrate.mjs` — added `public_id`, `assessment_step_completions` table, `demo_session_id` column, `email_queue.assessment_id` FK upgrade
+  - `src/lib/assessment/run.ts` — `ensureAssessmentRuntimeColumns()` extended for all three schema changes; `createQueuedAssessment` + `runAssessmentPipeline` accept `demoSessionId`
+  - `src/lib/assessment/match.ts` — `[match:result]` log tag; sector-aware `autoGeoOpen`; `broadConsultingOnly` relaxation when `domainAligned`
+  - `src/lib/assessment/data.ts` — `loadStepCompletionsForAssessment`; reworked `deriveNextStepsGroups` / `mapGapForUI` to thread `gapDeltas` + `completions`
+  - `src/lib/assessment/demo-session.ts` — **new** module; cookie helpers + `wipeOtherDemoAssessments` + canonical `DEMO_EMAIL`
+  - `src/lib/crawlers/sector-map.ts` — new `monitoring_evaluation` slug + widened consulting keyword list
+  - `src/components/assessment/GapsTab.tsx` — dropped CTA column, added `+N pts` projected uplift badge + steps-done subtitle
+  - `src/components/assessment/NextStepsTab.tsx` — client component; checkbox per row with optimistic update + revert-on-error
+  - `src/components/assessment/AssessmentChrome.tsx` — `basePath` prop threaded through tabs
+  - `src/components/assessment/TendersTab.tsx` + `GrantsTab.tsx` — clickable titles via `TenderOpenLink`; dropped Action column; new `sourceUrl` on Grant
+  - `src/components/assessment/AssessmentTabs.module.css` — todo checkbox + step-points badge + title-link styles
+  - `src/app/api/assessment/[id]/step-toggle/route.ts` — **new** route; auth via `authorizeAssessmentRead`; cap + step-key regex validation
+  - `src/app/api/auth/password/route.ts` — outer try/catch with `[auth:password:route_error]`; session-aware demo wipe via `wipeOtherDemoAssessments`
+  - `src/app/api/auth/signup/route.ts` — Fraunces+stone palette rebrand of magic-link email; outer try/catch + `[auth:signup:*]` log tags; `defaultEmailMeta` for Reply-To
+  - `src/app/api/assessment/public/route.ts` + `src/app/api/assessment/route.ts` — mint/carry `tp_demo_session` cookie for demo-email submissions
+  - `src/app/api/assessment/[id]/resend-email/route.ts` — outer try/catch + tightened `email_queue` fallback (PR `claude/fix-report-actions-auth`, unmerged)
+  - `src/proxy.ts` — `/api/report` added to public whitelist (PR `claude/fix-report-actions-auth`, unmerged)
+  - `src/lib/auth.ts` — `getUserFromRequest` cookie fallback (PR `claude/fix-report-actions-auth`, unmerged)
+  - `src/app/dashboard/page.tsx` + `src/app/assessment/[id]/page.tsx` — pass `basePath` to `AssessmentChrome`; ThisWeekStrip scoped to score tab; `assessmentRef` passed to NextStepsTab
+- Tests Run:
+  - `npx tsc --noEmit` — clean on every PR
+  - `npm run lint` — clean on every touched file (pre-existing errors in unrelated files only)
+  - `npm run build` — clean on every PR; verified `/api/assessment/[id]/step-toggle` registered
+  - **Incognito walkthrough** by user on prod: revealed demo-account FK crash → drove the three-hotfix chain; revealed `axiom.co.ke` 0-tender bug → drove the diagnostic-first matcher arc; revealed PDF + email + sidebar + magic-link bugs in the final pass
+  - **Validation re-run** for `axiom.co.ke` post-deploy of `4497513`: went from 0 tenders to a small set of legitimate M&E matches plus the WHO contract the user spot-checked
+- Result:
+  - **11 PRs shipped** (7 merged, 4 awaiting review): see `docs/learning/sprint-24-launch-audit-ux-fixes-2026-05-20.md` §1 for the full table
+  - **5 new stable log-tag namespaces** opened: `[match:result]`, `[auth:signup:*]`, `[assessment:step-toggle:*]`, `[email:resend:*]`, `[demo:wipe:*]` — catalogued in the learning doc §6
+  - **3 schema changes** all landed via the dual-write pattern (migrate.mjs + ensure helper); no manual `npm run migrate` ops needed
+  - **1 new helper module** (`src/lib/assessment/demo-session.ts`) — single source of truth for `DEMO_EMAIL` (was duplicated in the password route)
+  - **launch-discipline.md gained rule 5** (schema changes live in two places) — kept surfacing all session
+- Blockers: None at session close. `claude/fix-report-actions-auth` was pushed but reverted in the working tree without explanation; needs user confirmation before re-attempt. PDF + email-resend may still be broken on prod until that PR or an equivalent lands.
+- Important Decisions:
+  - **Session-isolation cookie mints fresh per anonymous submission**, not per browser. Counterintuitive but the only way to isolate two sequential demo users sharing a browser within the cookie TTL. Documented in the learning doc §2.3.
+  - **Step-completion is projected-gain only**, never recomputes live readiness_score. Per user pick on 2026-05-20: vault evidence remains the only path to `resolvedBonus`.
+  - **Score delta even-split** across action items (`distributeDelta` helper) — sums always equal the gap's potential. 2-step delta-8 gap reads `+4 / +4`; delta-7 reads `+4 / +3`.
+  - **`basePath` prop on AssessmentChrome** rather than client-side `usePathname` detection — keeps the tab links server-rendered and means no remount when the user navigates between tabs.
+  - **Did NOT extract `src/lib/email/styles.ts`** during the magic-link rebrand. Listed as a deferred follow-up; rebrand was tactical, refactor would have widened the PR.
+  - **Did NOT extend demo isolation to `pipeline_items` / `user_tender_feedback`** — assessment-only for this PR. Listed as a deferred follow-up; Person A's pipeline-add is still visible to Person B today.
+- Contracts or Interfaces Changed:
+  - `GapsTab.Gap` — dropped `cta`, added `potentialDelta`, `stepsCount`, `stepsDone` (required)
+  - `NextStepsTab.Move` — dropped `cta`, added `scoreDelta`, `stepKey`, `done` (required)
+  - `AssessmentChrome` + `AssessmentTabs` — added required `basePath: string` prop
+  - `NextStepsTab` — added required `assessmentRef: string` prop
+  - `createQueuedAssessment` — accepts `options: { demoSessionId?: string | null }`
+  - `runAssessmentPipeline` — accepts `options.demoSessionId?: string | null`
+  - `getUserFromRequest` — Bearer-only → Bearer + `tp_session` cookie fallback (PR unmerged)
+  - `mapGapForUI` / `mapGapsForUI` / `deriveNextStepsGroups` — signatures now thread `gapDeltas: Map<number, number>` and `completions: Set<string>`
+  - `Grant` UI type — added `sourceUrl?: string | null`
+  - `rowToReport` — sync → async (auto-flattens at the two call sites)
+  - `RawTender` / `CrawlResult` / `MatchedTender` / `AIAnalysis`: **unchanged** ✓
+- Docs Updated:
+  - `docs/learning/sprint-24-launch-audit-ux-fixes-2026-05-20.md` — new; full case learnings + 4.1–4.8 skill recipes + §6 log-tag namespace catalogue + §7 follow-up list
+  - `docs/agents/launch-discipline.md` — added rule 5 (schema changes live in two places); rule 4 augmented with the outer-try-catch template requirement
+  - `SESSION.md` — this entry
+- Next Recommended Task: **Triage the four unmerged PRs and clear the verification queue.** In order:
+  1. Decide whether to re-attempt `claude/fix-report-actions-auth` — the PDF + email-resend fixes were reverted with no explanation. Confirm with user whether to land a fresh PR or whether they intentionally dropped it.
+  2. Review + merge `claude/persistent-dashboard-sidebar` — small, low-risk, immediately user-visible
+  3. Review + merge `claude/magic-link-email-rebrand` — small, transactional email
+  4. Review + merge `claude/demo-session-isolation` — schema change; verify the FK cascade is happy by running the demo-flow walkthrough once on Vercel preview before merge
+  5. Then: stripe webhook verification ($1 live test charge), magic-link smoke test, authenticated dashboard walkthrough — see §7 of the learning doc
+- Recommended Agent: Claude Code (Opus 4.6 or 4.7) for the triage; switch to Sonnet for the small follow-up PRs (extract `src/lib/email/styles.ts`, extend demo isolation to pipeline tables).
+- Paste-Ready Next Prompt:
+
+```text
+Read SESSION.md (the Sprint 24 entry at the bottom), AGENTS.md, CLAUDE.md, docs/learning/sprint-24-launch-audit-ux-fixes-2026-05-20.md, docs/agents/launch-discipline.md (the new rule 5).
+
+Sprint 24 closed eleven PRs around launch-audit UX cleanup and demo hardening — seven merged, four still open:
+  - claude/fix-report-actions-auth (PDF whitelist + resend-email try/catch + cookie fallback) — pushed but REVERTED in working tree without explanation. Confirm with user whether to re-attempt before doing anything else.
+  - claude/persistent-dashboard-sidebar — basePath prop threading; small, low-risk, immediately user-visible
+  - claude/magic-link-email-rebrand — Fraunces + stone palette; transactional email
+  - claude/demo-session-isolation — schema change (new demo_session_id column + tp_demo_session cookie); verify FK cascade on Vercel preview before merge
+
+Pick ONE of these:
+  (A) Re-confirm + land claude/fix-report-actions-auth — PDF download and resend-email are likely still broken on prod
+  (B) Review + merge the three small queued PRs (persistent-dashboard-sidebar, magic-link-email-rebrand, demo-session-isolation) in order, walking the demo flow once on preview between each
+  (C) Tackle one of the deferred code follow-ups from learning doc §7: extract src/lib/email/styles.ts as shared brand tokens (next email touch will already benefit), OR extend demo isolation to pipeline_items / user_tender_feedback (closes the cross-visitor leak this Sprint 24 PR didn't cover), OR add admin-gated /api/admin/<service>-health for Resend + Neon (mirrors telegram-health pattern; would have made the 2026-05-20 email 500 diagnosable without code change)
+
+Whichever you pick: tsc + lint + build before push; commit message via /tmp file (NOT HEREDOC); branch from origin/main with `git checkout -b NAME origin/main`; outer try/catch + stable log tag for any new route; update SESSION.md at end. Don't re-derive prior session state from git history — use the SESSION.md entry above.
+```
+
+### Short Resume State
+- What is now true: Sprint 24 shipped 11 branches: 7 merged (hotfixes for demo-login crash chain, matcher diagnosis + recall fixes, ThisWeek scoping, clickable rows, Gaps↔Next-Steps to-dos with `+N pts` projected uplift), 4 pushed and awaiting review (fix-report-actions-auth which was reverted without explanation, persistent-dashboard-sidebar, magic-link-email-rebrand, demo-session-isolation). Schema gained `assessments.public_id` UUID, `assessment_step_completions` table, `assessments.demo_session_id` TEXT, and `email_queue.assessment_id` FK upgraded NO ACTION → SET NULL. New helper module `src/lib/assessment/demo-session.ts` is the canonical source for `DEMO_EMAIL`. Five new `[domain:context:reason]` log-tag namespaces opened — catalogued in the learning doc §6.
+- What remains: clear the four unmerged PRs; verify Stripe webhook ($1 charge); smoke-test the magic-link email; authenticated dashboard walkthrough; deferred code follow-ups (shared email-styles helper, demo-isolation extension to pipeline tables, admin health endpoints for Resend/Neon, optional matcher audit pass on 5 more companies).
+- What the next agent must read first: `SESSION.md` (this Sprint 24 entry), `AGENTS.md`, `CLAUDE.md`, `docs/agents/launch-discipline.md` (rule 5 is new), `docs/learning/sprint-24-launch-audit-ux-fixes-2026-05-20.md` (skill recipes in §4 + follow-up list in §7), and the relevant subsystem doc for whichever PR they take.
