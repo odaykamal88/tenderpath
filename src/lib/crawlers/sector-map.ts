@@ -13,6 +13,7 @@ export type SectorSlug =
   | "logistics"
   | "construction"
   | "consulting"
+  | "monitoring_evaluation"
   | "food"
   | "security"
   | "language_services"
@@ -24,6 +25,7 @@ export type SectorSlug =
 
 export const SECTOR_SLUGS: SectorSlug[] = [
   "it", "education", "healthcare", "logistics", "construction", "consulting",
+  "monitoring_evaluation",
   "food", "security", "language_services", "engineering", "environment",
   "agriculture", "water_sanitation", "energy",
 ];
@@ -93,13 +95,36 @@ const SLUG_KEYWORDS: Record<SectorSlug, string[]> = {
     "demolition", "architecture", "road construction",
   ],
   consulting: [
-    "consulting", "consultancy", "advisory", "technical assistance",
-    "policy", "research service", "evaluation service", "mid-term evaluation",
-    "final evaluation", "external evaluation", "impact evaluation",
-    "monitoring and evaluation", "m&e ",
+    "consulting", "consultancy", "consultant",
+    "advisory", "technical assistance",
+    "policy", "research service",
     "assessment service", "feasibility stud", "governance",
     "public financial management", "public administration", "institutional support",
     "programme management", "project management",
+  ],
+  // Carved out from the consulting slug — discovered on axiom.co.ke
+  // walkthrough that M&E tenders were getting trapped by consulting-noise
+  // suppression filters. M&E is a real specialization, not generic consulting.
+  monitoring_evaluation: [
+    "monitoring and evaluation", "monitoring & evaluation", "m&e ",
+    "meal expert", "meal officer", "meal manager", "meal specialist",
+    "evaluation service", "mid-term evaluation", "final evaluation",
+    "external evaluation", "impact evaluation", "process evaluation",
+    "real-time evaluation", "real time evaluation", "program evaluation",
+    "programme evaluation", "project evaluation", "performance evaluation",
+    "evaluation of", "evaluation report", "evaluability",
+    "third-party monitoring", "third party monitoring",
+    "baseline assessment", "endline assessment",
+    "baseline study", "endline study", "midline study",
+    "baseline survey", "endline survey", "household survey",
+    "needs assessment", "needs analysis", "situational analysis",
+    "market systems analysis", "market analysis",
+    "research study", "research and analysis",
+    "data collection", "data analysis", "field data",
+    "results framework", "theory of change", "logical framework", "logframe",
+    "outcome harvesting", "most significant change",
+    "after action review", "policy analysis", "policy brief",
+    "monitoring evaluation and learning", "monitoring evaluation accountability and learning",
   ],
   food: [
     "food", "nutrition supply", "catering", "meal", "commodit",
@@ -182,8 +207,21 @@ const LABEL_TO_SLUG: Record<string, SectorSlug> = {
   "advisory": "consulting",
   "advisory services": "consulting",
   "technical assistance": "consulting",
-  "monitoring and evaluation": "consulting",
-  "monitoring & evaluation": "consulting",
+  // Audit 2026-05-20: M&E moved off "consulting" onto its own slug. M&E firms
+  // were having every consulting tender killed by the broadConsultingOnly
+  // noise filter; first-class slug means the matchedSlugs set never reduces
+  // to {consulting} alone for an M&E profile.
+  "monitoring and evaluation": "monitoring_evaluation",
+  "monitoring & evaluation": "monitoring_evaluation",
+  "m&e": "monitoring_evaluation",
+  "meal": "monitoring_evaluation",
+  "research & evaluation": "monitoring_evaluation",
+  "research and evaluation": "monitoring_evaluation",
+  "research & data analysis": "monitoring_evaluation",
+  "research and data analysis": "monitoring_evaluation",
+  "evaluation": "monitoring_evaluation",
+  "evaluation services": "monitoring_evaluation",
+  "impact assessment": "monitoring_evaluation",
   "program/project management": "consulting",
   "program management": "consulting",
   "project management": "consulting",

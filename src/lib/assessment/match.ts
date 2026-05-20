@@ -333,14 +333,24 @@ function isLikelyIndividualConsultancy(args: {
 
   const text = `${args.title} ${args.opportunityType ?? ""} ${args.description.slice(0, 700)} ${args.requirements.join(" ")}`;
   const source = `${args.sourceName ?? ""} ${args.sourceUrl ?? ""}`;
-  if (RELIEFWEB_JOB_SOURCE_RE.test(source)) {
-    return true;
-  }
+  const isReliefWebJobUrl = RELIEFWEB_JOB_SOURCE_RE.test(source);
+
+  // Audit 2026-05-20 (axiom.co.ke walkthrough): the old early-return on
+  // reliefweb.int/job/ blanket-suppressed every ReliefWeb tender for firm
+  // profiles. But ReliefWeb hosts BOTH individual job posts AND firm-scope
+  // RFPs at the same /job/ URL pattern. ~10 firm-eligible M&E tenders were
+  // silently filtered. Now: institutional markers in body override URL,
+  // and we require role-like title alongside the URL signal before
+  // suppressing on URL alone.
   if (INSTITUTIONAL_TENDER_RE.test(text)) return false;
 
   if (INDIVIDUAL_ROLE_RE.test(args.title)) return true;
   if (/\bindividual contractor|individual consultant|consultant roster|request for cv|call for experts?\b/i.test(args.opportunityType ?? "")) return true;
-  if (RELIEFWEB_JOB_SOURCE_RE.test(source)) return true;
+  // ReliefWeb URL + role-like title is still a strong individual-job signal
+  // (e.g. "Evaluation Specialist" at /job/ → almost certainly an individual
+  // post). Without role-like title (e.g. "Evaluation of X Programme") we
+  // let the tender through.
+  if (isReliefWebJobUrl && ROLE_LIKE_CONSULTANCY_RE.test(args.title)) return true;
   return /\bconsult/i.test(args.opportunityType ?? "") && ROLE_LIKE_CONSULTANCY_RE.test(args.title);
 }
 
@@ -624,6 +634,7 @@ const SECTOR_LABELS: Record<SectorSlug, string> = {
   logistics: "Logistics & Supply Chain",
   construction: "Construction & Infrastructure",
   consulting: "Consulting Services",
+  monitoring_evaluation: "Monitoring & Evaluation",
   food: "Food & Nutrition",
   security: "Security & Safety",
   language_services: "Language Services",
@@ -959,7 +970,32 @@ export async function matchTenders(
       "fulfillment center",
     ],
     construction: ["construction", "civil works", "infrastructure", "building", "rehabilitation", "refurbishment"],
-    consulting: ["consulting", "consultancy", "advisory", "technical assistance", "feasibility", "evaluation service", "mid-term evaluation", "final evaluation", "external evaluation", "impact evaluation"],
+    consulting: [
+      "consulting", "consultancy", "consultant",
+      "advisory", "technical assistance", "feasibility",
+      "evaluation service", "mid-term evaluation", "final evaluation",
+      "external evaluation", "impact evaluation",
+      // axiom.co.ke walkthrough: M&E firm RFPs commonly titled "X Consultant"
+      // (singular) or describe scope as "Evaluation of Y" without the word
+      // "consultancy" anywhere. Pre-fix the per-slug fetch missed them
+      // entirely and they never entered the candidate pool.
+      "needs assessment", "needs analysis", "market analysis",
+      "research study", "feasibility study", "capacity assessment",
+      "policy analysis", "baseline assessment", "endline assessment",
+    ],
+    monitoring_evaluation: [
+      "monitoring and evaluation", "monitoring & evaluation", "m&e ",
+      "evaluation", "evaluation of", "evaluation service",
+      "mid-term evaluation", "final evaluation", "external evaluation",
+      "impact evaluation", "process evaluation", "real-time evaluation",
+      "program evaluation", "programme evaluation", "project evaluation",
+      "baseline", "endline", "midline", "baseline study", "endline study",
+      "baseline survey", "endline survey", "household survey", "field data",
+      "data collection", "data analysis", "third-party monitoring",
+      "meal expert", "meal officer", "meal manager", "meal specialist",
+      "results framework", "logical framework", "logframe", "theory of change",
+      "market systems analysis", "outcome harvesting", "policy brief",
+    ],
     food: [
       "food", "nutrition", "catering", "meal", "agricultural produce",
       "ration", "foodstuff", "kitchen", "cafeteria", "bakery", "bakeries",
@@ -1782,7 +1818,8 @@ const SECTOR_TO_GRANT_THEME: Record<SectorSlug, string[]> = {
   healthcare: ["health", "nutrition", "medical", "public health"],
   logistics: ["humanitarian response", "supply chain", "resilience", "emergency response"],
   construction: ["infrastructure", "housing", "resilience", "urban development"],
-  consulting: ["governance", "technical assistance", "capacity building", "evaluation"],
+  consulting: ["governance", "technical assistance", "capacity building"],
+  monitoring_evaluation: ["evaluation", "monitoring", "research", "policy", "evidence", "learning"],
   food: ["food security", "nutrition", "agriculture", "livelihoods"],
   security: ["protection", "safety", "peacebuilding", "risk"],
   language_services: ["inclusion", "communications", "education", "civil society"],
