@@ -60,6 +60,10 @@ export default async function AssessmentPage({ params, searchParams }: Props) {
       displayNumber={data.displayNumber}
       companyName={data.companyName}
       counts={counts}
+      // Standalone (anonymous / emailed-link / share-link) view — tab nav
+      // stays inside the report URL. The signed-in dashboard variant uses
+      // basePath="/dashboard" to preserve its workbench sidebar.
+      basePath={`/assessment/${data.reportId}`}
     >
       {activeTab === "score" && (
         <>

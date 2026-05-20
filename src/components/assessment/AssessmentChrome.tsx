@@ -38,11 +38,17 @@ export function AssessmentHeader({
 
 export function AssessmentTabs({
   active,
-  reportId,
+  basePath,
   counts,
 }: {
   active: TabKey;
-  reportId: string;
+  // Audit 2026-05-20 UX: route the tabs back to whichever shell rendered
+  // them. /dashboard preserves its sidebar layout when the tab links stay
+  // on /dashboard?tab=X. The standalone /assessment/[id] view (used for
+  // anonymous + emailed-link traffic) passes its own UUID path. Without
+  // this prop both shells would hard-jump to /assessment/[id] and the
+  // signed-in user would lose the dashboard sidebar on every tab click.
+  basePath: string;
   counts?: Partial<Record<TabKey, number>>;
 }) {
   return (
@@ -53,7 +59,7 @@ export function AssessmentTabs({
         return (
           <Link
             key={t.key}
-            href={`/assessment/${reportId}?tab=${t.key}`}
+            href={`${basePath}?tab=${t.key}`}
             className={`${styles.tab} ${isActive ? styles.tabActive : ""}`}
             role="tab"
             aria-selected={isActive}
@@ -74,6 +80,7 @@ export function AssessmentChrome({
   displayNumber,
   companyName,
   counts,
+  basePath,
   children,
 }: {
   activeTab: TabKey;
@@ -81,12 +88,15 @@ export function AssessmentChrome({
   displayNumber: string;
   companyName: string;
   counts?: Partial<Record<TabKey, number>>;
+  // Tab-link base. `/dashboard` keeps the signed-in sidebar layout; the
+  // standalone /assessment/[id] page passes `/assessment/{uuid}`.
+  basePath: string;
   children: React.ReactNode;
 }) {
   return (
     <main className={styles.chrome}>
       <AssessmentHeader companyName={companyName} reportId={reportId} displayNumber={displayNumber} />
-      <AssessmentTabs active={activeTab} reportId={reportId} counts={counts} />
+      <AssessmentTabs active={activeTab} basePath={basePath} counts={counts} />
       <div className={`${styles.tabContent} tp2-tab-panel`}>{children}</div>
     </main>
   );
