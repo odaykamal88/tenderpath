@@ -129,6 +129,10 @@ export default async function DashboardPage({
       displayNumber={data.displayNumber}
       companyName={data.companyName}
       counts={counts}
+      // Tab navigation stays on /dashboard so the signed-in user keeps the
+      // workbench sidebar (src/app/dashboard/layout.tsx) — was hard-jumping
+      // to /assessment/{uuid} pre-audit-2026-05-20 and stripping the layout.
+      basePath="/dashboard"
     >
       <FunnelBeacon
         event="dashboard_landed"
