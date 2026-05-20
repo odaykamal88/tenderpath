@@ -193,8 +193,23 @@
   font-size: 12.5px;
 }
 .gridRow > * { min-width: 0; }
-.tendersGrid { display: grid; grid-template-columns: 130px 1fr 100px 80px 100px 90px; gap: 16px; }
+.tendersGrid { display: grid; grid-template-columns: 130px 1fr 100px 80px 100px; gap: 16px; }
 .grantsGrid  { display: grid; grid-template-columns: 200px 1fr 110px 130px 100px 80px; gap: 16px; }
+
+/* Inline title link (tenders + grants). Inherits the row's typography so the
+   click target reads like body copy, with a subtle underline-on-hover affordance.
+   Audit 2026-05-20 UX: rows are now clickable via the title — the redundant
+   trailing "Open" CTA column was dropped on tenders. */
+.titleLink {
+  color: var(--tp2-ink);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+.titleLink:hover {
+  color: var(--tp2-accent);
+  border-bottom-color: var(--tp2-accent);
+}
 @media (max-width: 768px) {
   .gridHead { display: none; }
   .tendersGrid, .grantsGrid {
