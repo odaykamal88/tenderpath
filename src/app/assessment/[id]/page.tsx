@@ -49,7 +49,9 @@ export default async function AssessmentPage({ params, searchParams }: Props) {
     next: data.totalSteps,
   };
 
-  const week = await getThisWeek(id);
+  // ThisWeekStrip is a score-tab-only ornament — skip the DB round-trip on
+  // gaps/tenders/grants/next where it's not rendered.
+  const week = activeTab === "score" ? await getThisWeek(id) : [];
 
   return (
     <AssessmentChrome
@@ -59,18 +61,19 @@ export default async function AssessmentPage({ params, searchParams }: Props) {
       companyName={data.companyName}
       counts={counts}
     >
-      <ThisWeekStrip rows={week} />
-
       {activeTab === "score" && (
-        <ScoreTab
-          score={data.score}
-          delta={data.scoreDelta}
-          tier={data.tier}
-          summary={data.summary}
-          dimensions={data.dimensions}
-          topTenders={data.topTenders}
-          recommendedTier={data.recommendedTier}
-        />
+        <>
+          <ThisWeekStrip rows={week} />
+          <ScoreTab
+            score={data.score}
+            delta={data.scoreDelta}
+            tier={data.tier}
+            summary={data.summary}
+            dimensions={data.dimensions}
+            topTenders={data.topTenders}
+            recommendedTier={data.recommendedTier}
+          />
+        </>
       )}
       {activeTab === "gaps" && (
         <GapsTab

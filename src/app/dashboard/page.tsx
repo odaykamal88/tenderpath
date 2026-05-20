@@ -111,7 +111,9 @@ export default async function DashboardPage({
     ? (rawTab as Tab)
     : "score";
 
-  const week = await getThisWeek(data.reportId);
+  // ThisWeekStrip is a score-tab-only ornament — skip the DB round-trip on
+  // gaps/tenders/grants/next where it's not rendered.
+  const week = activeTab === "score" ? await getThisWeek(data.reportId) : [];
 
   const counts = {
     gaps: data.gaps.filter((g) => !g.resolved).length,
@@ -137,18 +139,19 @@ export default async function DashboardPage({
           tier: data.tier,
         }}
       />
-      <ThisWeekStrip rows={week} />
-
       {activeTab === "score" && (
-        <ScoreTab
-          score={data.score}
-          delta={data.scoreDelta}
-          tier={data.tier}
-          summary={data.summary}
-          dimensions={data.dimensions}
-          topTenders={data.topTenders}
-          recommendedTier={data.recommendedTier}
-        />
+        <>
+          <ThisWeekStrip rows={week} />
+          <ScoreTab
+            score={data.score}
+            delta={data.scoreDelta}
+            tier={data.tier}
+            summary={data.summary}
+            dimensions={data.dimensions}
+            topTenders={data.topTenders}
+            recommendedTier={data.recommendedTier}
+          />
+        </>
       )}
       {activeTab === "gaps" && (
         <GapsTab
