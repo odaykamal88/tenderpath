@@ -91,6 +91,12 @@ export async function ensureAssessmentRuntimeColumns() {
     UNIQUE (assessment_id, step_key)
   )`;
   await sql`CREATE INDEX IF NOT EXISTS assessment_step_completions_assessment_idx ON assessment_step_completions (assessment_id)`;
+  // Sprint 24 (audit 2026-05-20): demo-account session isolation. Tags
+  // demo-email rows with the visitor's tp_demo_session cookie so the wipe
+  // on sign-in can preserve the current visitor's work without leaking
+  // prior visitors' data. NULL on all non-demo assessments.
+  await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS demo_session_id TEXT`;
+  await sql`CREATE INDEX IF NOT EXISTS assessments_demo_session_idx ON assessments (demo_session_id) WHERE demo_session_id IS NOT NULL`;
   columnsEnsured = true;
 }
 
@@ -131,7 +137,10 @@ export function validateAssessmentInput(
   return null;
 }
 
-export async function createQueuedAssessment(body: Partial<AssessmentInput>) {
+export async function createQueuedAssessment(
+  body: Partial<AssessmentInput>,
+  options: { demoSessionId?: string | null } = {},
+) {
   await ensureAssessmentRuntimeColumns();
   const description = [
     body.description ?? "",
@@ -143,14 +152,21 @@ export async function createQueuedAssessment(body: Partial<AssessmentInput>) {
       : null,
   ].filter(Boolean).join("\n\n");
 
+  // Sprint 24 (audit 2026-05-20): stamp demo-email rows with the visitor's
+  // tp_demo_session cookie. NULL on all non-demo rows. The wipe in
+  // /api/auth/password reads this to preserve the current visitor's work and
+  // delete prior visitors' data. Resolved at the route boundary.
+  const demoSessionId = options.demoSessionId ?? null;
+
   const rows = await sql`
     INSERT INTO assessments (
       company_name, email, website, description, countries, org_type,
-      dev_themes, include_consultancies, assessment_status
+      dev_themes, include_consultancies, assessment_status, demo_session_id
     ) VALUES (
       ${cleanCompanyName(body.companyName)}, ${body.email ?? null}, ${body.website ?? null},
       ${description}, ${JSON.stringify(body.countries ?? [])}, ${body.orgType ?? null},
-      ${JSON.stringify(body.devThemes ?? [])}, ${body.includeConsultancies ?? false}, 'queued'
+      ${JSON.stringify(body.devThemes ?? [])}, ${body.includeConsultancies ?? false}, 'queued',
+      ${demoSessionId}
     ) RETURNING id, public_id, created_at
   `;
   return {
@@ -209,6 +225,10 @@ export async function runAssessmentPipeline(
     mode: AssessmentRunMode;
     assessmentId?: number;
     sendEmailMode?: "inline" | "none";
+    // Sprint 24: tp_demo_session cookie value for demo-email rows. NULL/undef
+    // for non-demo assessments. Threaded through to both the UPDATE path
+    // (queued → completion) and the INSERT path (inline run).
+    demoSessionId?: string | null;
   },
 ): Promise<AssessmentRunResult> {
   await ensureAssessmentRuntimeColumns();
@@ -291,6 +311,11 @@ export async function runAssessmentPipeline(
     mark("matching");
 
     const durationMs = Date.now() - startedAt;
+    // Sprint 24: COALESCE keeps the original demo_session_id when the queued
+    // flow already stamped it via createQueuedAssessment — only overwrites
+    // when a fresh value is supplied (e.g. legacy queued rows). NULL on
+    // non-demo assessments throughout.
+    const demoSessionId = options.demoSessionId ?? null;
     const rows = options.assessmentId
       ? await sql`
           UPDATE assessments
@@ -315,7 +340,8 @@ export async function runAssessmentPipeline(
               assessment_error = NULL,
               assessment_duration_ms = ${durationMs},
               assessment_timings = ${JSON.stringify(timings)}::jsonb,
-              assessment_completed_at = NOW()
+              assessment_completed_at = NOW(),
+              demo_session_id = COALESCE(${demoSessionId}, demo_session_id)
           WHERE id = ${options.assessmentId}
           RETURNING id, public_id
         `
@@ -326,7 +352,8 @@ export async function runAssessmentPipeline(
             matched_tenders, gaps, recommended_tier, org_type,
             dev_themes, matched_grants, grant_readiness_score,
             include_consultancies, assessment_status, assessment_duration_ms,
-            assessment_timings, assessment_started_at, assessment_completed_at
+            assessment_timings, assessment_started_at, assessment_completed_at,
+            demo_session_id
           ) VALUES (
             ${cleanCompanyName(body.companyName)}, ${body.email ?? null}, ${body.website ?? null},
             ${storedDescription}, ${classification.detected_industry},
@@ -336,7 +363,8 @@ export async function runAssessmentPipeline(
             ${recommendedTier}, ${body.orgType ?? null},
             ${JSON.stringify(body.devThemes ?? [])}, ${JSON.stringify(matchedGrants)},
             ${grantScore}, ${body.includeConsultancies ?? false}, 'completed',
-            ${durationMs}, ${JSON.stringify(timings)}, NOW(), NOW()
+            ${durationMs}, ${JSON.stringify(timings)}, NOW(), NOW(),
+            ${demoSessionId}
           ) RETURNING id, public_id
         `;
 

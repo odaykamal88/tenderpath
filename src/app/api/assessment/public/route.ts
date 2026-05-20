@@ -10,6 +10,11 @@ import {
 } from "@/lib/assessment/run";
 import { track } from "@/lib/telemetry/funnel";
 import type { AssessmentInput } from "@/lib/types";
+import {
+  isDemoEmail,
+  resolveOrMintForAnonymousSubmission,
+  setDemoSessionCookie,
+} from "@/lib/assessment/demo-session";
 
 /**
  * Public assessment endpoint — no auth required.
@@ -25,10 +30,20 @@ export async function POST(request: Request) {
   const validationError = validateAssessmentInput(body);
   if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
+  // Sprint 24 (audit 2026-05-20 demo isolation): mint a fresh tp_demo_session
+  // cookie for every anonymous submission with the demo email. The new value
+  // overwrites any prior cookie in the browser — that's intentional, so two
+  // sequential visitors using the same shared browser end up isolated. The
+  // value is stamped on the assessment row and matched against the cookie at
+  // demo sign-in to preserve the just-completed handoff.
+  const demoSessionId = isDemoEmail(body.email)
+    ? resolveOrMintForAnonymousSubmission()
+    : null;
+
   try {
     const wantsQueued = body.async === true || body.queued === true || body.mode === "queued";
     if (wantsQueued) {
-      const queued = await createQueuedAssessment(body);
+      const queued = await createQueuedAssessment(body, { demoSessionId });
       await track("assessment_started", {
         assessment_id: queued.id,
         mode: "public-queued",
@@ -41,12 +56,13 @@ export async function POST(request: Request) {
             mode: "public",
             assessmentId: queued.id,
             sendEmailMode: "inline",
+            demoSessionId,
           });
         } catch (err) {
           console.error("[tp:assessment:queued_failed]", { assessmentId: queued.id, err });
         }
       });
-      return NextResponse.json({
+      const response = NextResponse.json({
         id: queued.id,
         public_id: queued.public_id,
         status: "queued",
@@ -54,6 +70,8 @@ export async function POST(request: Request) {
         poll_url: `/api/assessment/${queued.public_id}`,
         created_at: queued.created_at,
       }, { status: 202 });
+      if (demoSessionId) setDemoSessionCookie(response, demoSessionId);
+      return response;
     }
 
     await track("assessment_started", {
@@ -65,6 +83,7 @@ export async function POST(request: Request) {
     const result = await runAssessmentPipeline(body, {
       mode: "public",
       sendEmailMode: "none",
+      demoSessionId,
     });
     after(async () => {
       try {
@@ -74,7 +93,9 @@ export async function POST(request: Request) {
       }
     });
 
-    return NextResponse.json(result);
+    const response = NextResponse.json(result);
+    if (demoSessionId) setDemoSessionCookie(response, demoSessionId);
+    return response;
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Assessment failed";
