@@ -55,13 +55,39 @@ export async function verifyToken(
   }
 }
 
+// Reads the request's session token from EITHER the `Authorization: Bearer ...`
+// header (set by clients that have a localStorage `tp_token`) OR the httpOnly
+// `tp_session` cookie (set on every successful sign-in by /api/auth/password
+// and /api/auth/verify). Audit 2026-05-20: legacy Bearer-only authentication
+// silently 401'd users whose session lived only in the cookie (e.g. Google
+// OAuth flows, or anyone whose localStorage was cleared but cookie still valid).
+function readSessionToken(request: Request): string | null {
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.slice(7).trim();
+    if (token) return token;
+  }
+  // Cookie fallback. The Cookie header is a single string of `k=v; k=v` pairs;
+  // we parse for tp_session specifically (no general cookie lib needed).
+  const cookieHeader = request.headers.get("cookie");
+  if (!cookieHeader) return null;
+  for (const part of cookieHeader.split(";")) {
+    const [rawName, ...rest] = part.split("=");
+    if (!rawName) continue;
+    if (rawName.trim() === "tp_session") {
+      const value = rest.join("=").trim();
+      return value || null;
+    }
+  }
+  return null;
+}
+
 export async function getUserFromRequest(
   request: Request
 ): Promise<User | null> {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
+  const token = readSessionToken(request);
+  if (!token) return null;
 
-  const token = authHeader.slice(7);
   const payload = await verifyToken(token);
   if (!payload) return null;
 
