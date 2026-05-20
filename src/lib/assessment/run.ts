@@ -62,6 +62,17 @@ let columnsEnsured = false;
 
 export async function ensureAssessmentRuntimeColumns() {
   if (columnsEnsured) return;
+  // pgcrypto provides gen_random_uuid() for the public_id default below.
+  // Idempotent — noop on envs where it's already enabled (e.g. Neon prod).
+  await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
+  // PR-1 (audit 2026-05-19 T1, IDOR fix) introduced public_id as the
+  // capability URL holder. The migration shipped in scripts/migrate.mjs:81
+  // but the runtime INSERT path uses RETURNING id, public_id — so on any
+  // env where migrate.mjs wasn't manually re-run after the PR-1 deploy,
+  // the first assessment submission errored with `column "public_id" does
+  // not exist`. Self-heal here matches the pattern used for the other
+  // late-added columns below.
+  await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS public_id UUID UNIQUE NOT NULL DEFAULT gen_random_uuid()`;
   await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS assessment_status VARCHAR(32) DEFAULT 'completed'`;
   await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS assessment_error TEXT`;
   await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS assessment_duration_ms INTEGER`;
