@@ -80,6 +80,14 @@ ALTER TABLE assessments ADD COLUMN IF NOT EXISTS include_consultancies BOOLEAN D
 -- in src/lib/assessment/authz.ts, but only for the assessment owner.
 ALTER TABLE assessments ADD COLUMN IF NOT EXISTS public_id UUID UNIQUE NOT NULL DEFAULT gen_random_uuid();
 
+-- Sprint 24 (audit 2026-05-20 demo isolation): tag demo-email assessments
+-- with the browser-session cookie value so the anonymous → demo-sign-in
+-- handoff preserves the just-completed run AND so the next demo visitor
+-- doesn't inherit a previous visitor's data. NULL for every non-demo row.
+-- Wipe query in src/app/api/auth/password/route.ts uses this column.
+ALTER TABLE assessments ADD COLUMN IF NOT EXISTS demo_session_id TEXT;
+CREATE INDEX IF NOT EXISTS assessments_demo_session_idx ON assessments (demo_session_id) WHERE demo_session_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS tenders (
   id SERIAL PRIMARY KEY,
   title TEXT NOT NULL,

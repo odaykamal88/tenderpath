@@ -2,8 +2,13 @@ import { NextResponse } from "next/server";
 import { createToken } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { hashPassword, verifyPassword } from "@/lib/password";
+import {
+  DEMO_EMAIL,
+  resolveOrMintForSignin,
+  setDemoSessionCookie,
+  wipeOtherDemoAssessments,
+} from "@/lib/assessment/demo-session";
 
-const DEMO_EMAIL = "demo@tenderpath.me";
 // Must match scripts/create-demo-user.mjs and the hint shown on /login.
 // Credentials are publicly displayed, so it is safe to self-heal on every login.
 const DEMO_PASSWORD = "TenderDemo2026!";
@@ -84,14 +89,18 @@ export async function POST(request: Request) {
       );
     }
 
-    // Demo account: reset state and log session. Wrapped + ordered —
-    // email_queue.assessment_id has a NO-ACTION FK to assessments(id), so a
-    // bare DELETE FROM assessments throws 23503 once the demo has triggered
-    // an email send. Delete the queue rows first, then the assessments.
-    // The session refresh is best-effort; sign-in itself proceeds regardless.
-    // Discovered on the first incognito walkthrough (queue row referenced
-    // assessment id=95). FK is also upgraded to ON DELETE SET NULL in
-    // scripts/migrate.mjs so other delete paths stop hitting this wall.
+    // Sprint 24 (audit 2026-05-20 demo isolation): session-aware wipe.
+    // Carries the visitor's tp_demo_session cookie forward when present so
+    // the just-completed anonymous assessment stays visible after sign-in.
+    // Visitors with no cookie (or a stale cookie that doesn't match any row)
+    // get a clean slate — wipes ALL prior demo assessments so two sequential
+    // people sharing a browser don't see each other's data.
+    //
+    // email_queue's pre-hotfix NO-ACTION FK is now ON DELETE SET NULL after
+    // the 2026-05-20 schema upgrade, so the explicit queue-row deletion lives
+    // inside wipeOtherDemoAssessments for tidiness rather than correctness.
+    // The demo_sessions log row is independent of the wipe and is best-effort.
+    let demoSessionForResponse: string | null = null;
     if (email === DEMO_EMAIL) {
       try {
         const ip =
@@ -101,22 +110,19 @@ export async function POST(request: Request) {
         const country = request.headers.get("cf-ipcountry") ?? null;
         const ua = request.headers.get("user-agent") ?? null;
 
-        // Delete queue rows pointing at the demo's assessments first.
-        // SET NULL would be enough once migrate.mjs runs, but the explicit
-        // delete keeps the queue tidy and works even pre-migration.
+        const { sessionId, carriedFromCookie } = resolveOrMintForSignin(request);
+        demoSessionForResponse = sessionId;
+        const { wiped } = await wipeOtherDemoAssessments(sessionId);
+        console.log("[auth:password:demo_reset]", {
+          sessionId,
+          carriedFromCookie,
+          wiped,
+        });
+
         await sql`
-          DELETE FROM email_queue
-          WHERE assessment_id IN (
-            SELECT id FROM assessments WHERE lower(email) = ${DEMO_EMAIL}
-          )
-        `;
-        await Promise.all([
-          sql`DELETE FROM assessments WHERE lower(email) = ${DEMO_EMAIL}`,
-          sql`
-            INSERT INTO demo_sessions (email, ip_address, country, user_agent)
-            VALUES (${DEMO_EMAIL}, ${ip}, ${country}, ${ua})
-          `.catch(() => null),
-        ]);
+          INSERT INTO demo_sessions (email, ip_address, country, user_agent)
+          VALUES (${DEMO_EMAIL}, ${ip}, ${country}, ${ua})
+        `.catch(() => null);
       } catch (err) {
         console.error("[auth:password:demo_reset_failed]", {
           error: err instanceof Error ? err.message : String(err),
@@ -151,6 +157,12 @@ export async function POST(request: Request) {
       maxAge: 7 * 24 * 60 * 60,
       path: "/",
     });
+
+    // Refresh / set the demo-session cookie so the same value sticks around
+    // for the dashboard (further assessment runs land in the same session).
+    if (demoSessionForResponse) {
+      setDemoSessionCookie(response, demoSessionForResponse);
+    }
 
     return response;
   } catch (err) {
