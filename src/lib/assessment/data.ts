@@ -58,32 +58,83 @@ const NEXT_STEPS_BUCKETS: { when: string; severity: "High" | "Med" | "Low"; eta:
   { when: "Days 46 – 90", severity: "Low",  eta: "≤90 days" },
 ];
 
-function deriveNextStepsGroups(gaps: Gap[], vaultTags: Set<string>): { groups: MoveGroup[]; totalSteps: number } {
-  const grouped = new Map<"High" | "Med" | "Low", { gap: Gap; mapped: D2Gap; covered: boolean }[]>([
+// Score-impact attribution constants.
+// SCORE_DELTAS: the top-N open gaps (in original order) earn these projected
+// uplifts when their steps are completed; later open gaps default to
+// DEFAULT_OPEN_GAP_DELTA. STEPS_PER_GAP caps how many action items per gap
+// the Next Steps tab surfaces (mirroring the historical .slice(0, 2)).
+const SCORE_DELTAS = [8, 6, 4];
+const DEFAULT_OPEN_GAP_DELTA = 3;
+const STEPS_PER_GAP = 2;
+
+// Even split that always sums to `total` exactly. Earlier indexes carry any
+// remainder so a 2-step gap with delta 7 reads "4 pts" then "3 pts" rather
+// than floating fractional values into the UI. Returns [] when count is 0.
+function distributeDelta(total: number, count: number): number[] {
+  if (count <= 0) return [];
+  const base = Math.floor(total / count);
+  const remainder = total - base * count;
+  return Array.from({ length: count }, (_, i) => base + (i < remainder ? 1 : 0));
+}
+
+// Action items shown for a gap. Falls back to gap.fix when the LLM produced
+// no structured steps — guarantees every open gap has at least one to-do
+// row in the Next Steps tab.
+function effectiveStepsForGap(g: Gap): string[] {
+  const steps = (g.action_steps ?? []).slice(0, STEPS_PER_GAP);
+  return steps.length > 0 ? steps : [g.fix];
+}
+
+// Maps the original index of each open gap to its projected score delta.
+// Resolved (vault-covered) gaps are skipped — their points are already
+// folded into the live score by the resolvedBonus calc in rowToReport.
+function gapDeltaByIdx(rawGaps: Gap[], vaultTags: Set<string>): Map<number, number> {
+  const map = new Map<number, number>();
+  let openIdx = 0;
+  for (let i = 0; i < rawGaps.length; i += 1) {
+    if (gapIsCovered(rawGaps[i], vaultTags)) continue;
+    map.set(i, SCORE_DELTAS[openIdx] ?? DEFAULT_OPEN_GAP_DELTA);
+    openIdx += 1;
+  }
+  return map;
+}
+
+function deriveNextStepsGroups(
+  rawGaps: Gap[],
+  vaultTags: Set<string>,
+  gapDeltas: Map<number, number>,
+  completions: Set<string>,
+): { groups: MoveGroup[]; totalSteps: number } {
+  const grouped = new Map<"High" | "Med" | "Low", { idx: number; gap: Gap }[]>([
     ["High", []],
     ["Med", []],
     ["Low", []],
   ]);
-  for (const g of gaps) {
-    if (gapIsCovered(g, vaultTags)) continue; // covered gaps don't need a 90-day step
-    const mappedSev = mapSeverity(g.severity);
-    grouped.get(mappedSev)!.push({ gap: g, mapped: mapGapForUI(g, false), covered: false });
-  }
+  rawGaps.forEach((g, i) => {
+    if (gapIsCovered(g, vaultTags)) return; // covered gaps don't need a 90-day step
+    grouped.get(mapSeverity(g.severity))!.push({ idx: i, gap: g });
+  });
 
   const groups: MoveGroup[] = [];
   let total = 0;
   for (const bucket of NEXT_STEPS_BUCKETS) {
     const rows = grouped.get(bucket.severity) ?? [];
     if (rows.length === 0) continue;
-    const items = rows.flatMap(({ gap, mapped }) => {
-      const steps = (gap.action_steps ?? []).slice(0, 2);
-      const effectiveSteps = steps.length > 0 ? steps : [gap.fix];
-      return effectiveSteps.map((step) => ({
-        title: step,
-        why: mapped.title,
-        eta: bucket.eta,
-        cta: mapped.cta,
-      }));
+    const items = rows.flatMap(({ idx, gap }) => {
+      const steps = effectiveStepsForGap(gap);
+      const gapDelta = gapDeltas.get(idx) ?? DEFAULT_OPEN_GAP_DELTA;
+      const deltas = distributeDelta(gapDelta, steps.length);
+      return steps.map((step, j) => {
+        const stepKey = `g${idx}-s${j}`;
+        return {
+          title: step,
+          why: gap.gap,
+          eta: bucket.eta,
+          scoreDelta: deltas[j] ?? 0,
+          stepKey,
+          done: completions.has(stepKey),
+        };
+      });
     });
     total += items.length;
     groups.push({ when: bucket.when, items });
@@ -111,25 +162,45 @@ function mapSeverity(s: string): "High" | "Med" | "Low" {
   return "Low";
 }
 
-function mapGapForUI(g: Gap, resolved: boolean): D2Gap {
+function mapGapForUI(
+  g: Gap,
+  resolved: boolean,
+  potentialDelta: number,
+  stepsCount: number,
+  stepsDone: number,
+): D2Gap {
   return {
     severity: mapSeverity(g.severity),
     title: g.gap,
     why: g.fix,
     fix: g.action_steps[0] ?? g.fix,
-    cta: resolved
-      ? "Evidence on file ✓"
-      : g.upsell_tier === "submission-package"
-      ? "Get submission package →"
-      : g.upsell_tier === "strategic-partnership"
-      ? "Start partnership plan →"
-      : "View intelligence →",
     resolved,
+    potentialDelta,
+    stepsCount,
+    stepsDone,
   };
 }
 
-function mapGapsForUI(gaps: Gap[], vaultTags: Set<string>): D2Gap[] {
-  return gaps.map((g) => mapGapForUI(g, gapIsCovered(g, vaultTags)));
+function mapGapsForUI(
+  gaps: Gap[],
+  vaultTags: Set<string>,
+  gapDeltas: Map<number, number>,
+  completions: Set<string>,
+): D2Gap[] {
+  return gaps.map((g, i) => {
+    const resolved = gapIsCovered(g, vaultTags);
+    const steps = effectiveStepsForGap(g);
+    const stepsCount = steps.length;
+    // Covered gaps treat all steps as done — the live score already folds in
+    // their delta via resolvedBonus, and the UI hides their potential anyway.
+    const stepsDone = resolved
+      ? stepsCount
+      : steps.reduce((sum, _, j) => sum + (completions.has(`g${i}-s${j}`) ? 1 : 0), 0);
+    // Covered gaps surface potentialDelta=0 to avoid double-counting against
+    // the score-impact card (which is open-only).
+    const potentialDelta = resolved ? 0 : gapDeltas.get(i) ?? DEFAULT_OPEN_GAP_DELTA;
+    return mapGapForUI(g, resolved, potentialDelta, stepsCount, stepsDone);
+  });
 }
 
 function pickReasons(t: MatchedTender): string[] {
@@ -319,7 +390,31 @@ async function loadVaultTagsForEmail(email: string | null | undefined): Promise<
   }
 }
 
-function rowToReport(row: DBRow, vaultTags: Set<string>): AssessmentReport {
+// Sprint 24 (audit 2026-05-20 UX): step-key set for the Next Steps tab to-do
+// checkboxes. Fails open — a DB hiccup just means the user sees their steps
+// unchecked rather than blocking the page from rendering. Step writes happen
+// via POST /api/assessment/[id]/step-toggle.
+async function loadStepCompletionsForAssessment(intId: number): Promise<Set<string>> {
+  try {
+    const rows = await sql`
+      SELECT step_key FROM assessment_step_completions
+      WHERE assessment_id = ${intId}
+    `;
+    return new Set(
+      rows
+        .map((r) => (typeof r.step_key === "string" ? r.step_key : ""))
+        .filter(Boolean),
+    );
+  } catch (err) {
+    console.warn("[assessment/data] loadStepCompletionsForAssessment failed", {
+      intId,
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return new Set();
+  }
+}
+
+async function rowToReport(row: DBRow, vaultTags: Set<string>): Promise<AssessmentReport> {
   // Older assessment rows persisted with a 5th `financial_stability` field;
   // we read whatever is there and ignore it. The UI no longer renders it.
   const rawDims = row.ai_analysis?.readiness_dimensions as Partial<ReadinessDimensions> | undefined;
@@ -336,15 +431,22 @@ function rowToReport(row: DBRow, vaultTags: Set<string>): AssessmentReport {
     : "ready";
 
   const rawGaps = row.gaps ?? [];
-  const gaps = mapGapsForUI(rawGaps, vaultTags);
+  // Sprint 24 (audit 2026-05-20 UX): completions seed the to-do checkboxes
+  // in the Next Steps tab and the "X of Y steps done" subtitle on the Gaps
+  // tab. We read them once per page render — force-dynamic on both routes
+  // keeps the view fresh after each POST /step-toggle.
+  const stepCompletions = await loadStepCompletionsForAssessment(row.id);
+  const gapDeltas = gapDeltaByIdx(rawGaps, vaultTags);
+  const gaps = mapGapsForUI(rawGaps, vaultTags, gapDeltas, stepCompletions);
   const tenders = mapTendersForUI(row.matched_tenders ?? []);
   const grants = mapGrantsForUI(row.matched_grants ?? []);
   const baseScore = row.readiness_score ?? row.ai_analysis?.overall_score ?? 0;
 
   // Score impact deltas are anchored to the first three gaps in their original
   // order. Each resolved gap among that anchor set adds its delta back into the
-  // effective readiness score. We never increase past 100.
-  const SCORE_DELTAS = [8, 6, 4];
+  // effective readiness score. We never increase past 100. Per user choice on
+  // 2026-05-20: step completion is "projected gain only" — we do NOT recompute
+  // baseScore from step-completion state, only from vault evidence.
   const resolvedFlags = rawGaps.map((g) => gapIsCovered(g, vaultTags));
   const resolvedBonus = resolvedFlags
     .slice(0, SCORE_DELTAS.length)
@@ -358,21 +460,20 @@ function rowToReport(row: DBRow, vaultTags: Set<string>): AssessmentReport {
 
   // Score-impact card only surfaces gaps the user has not already covered.
   // Resolved gaps fold their delta into the live score above; showing them in
-  // the projected impact column would double-count.
-  const openTopGaps: { gap: D2Gap; delta: number }[] = [];
-  let openIdx = 0;
-  for (let i = 0; i < gaps.length && openTopGaps.length < SCORE_DELTAS.length; i += 1) {
-    if (gaps[i].resolved) continue;
-    openTopGaps.push({ gap: gaps[i], delta: SCORE_DELTAS[openIdx++] ?? 3 });
-  }
+  // the projected impact column would double-count. We reuse the gapDeltas map
+  // so the card and the Next Steps tab can never disagree on a gap's uplift.
   let cumulative = score;
-  const scoreImpact = openTopGaps.map(({ gap, delta }) => {
+  const scoreImpact: { label: string; delta: number; projected: number }[] = [];
+  for (let i = 0; i < gaps.length && scoreImpact.length < SCORE_DELTAS.length; i += 1) {
+    if (gaps[i].resolved) continue;
+    const delta = gapDeltas.get(i) ?? DEFAULT_OPEN_GAP_DELTA;
     cumulative = Math.min(100, cumulative + delta);
-    return { label: gap.title, delta, projected: cumulative };
-  });
+    scoreImpact.push({ label: gaps[i].title, delta, projected: cumulative });
+  }
 
-  const { groups: nextStepsGroups, totalSteps: nextStepsCount } = deriveNextStepsGroups(rawGaps, vaultTags);
-  const projectedDelta = openTopGaps.reduce((sum, x) => sum + x.delta, 0);
+  const { groups: nextStepsGroups, totalSteps: nextStepsCount } =
+    deriveNextStepsGroups(rawGaps, vaultTags, gapDeltas, stepCompletions);
+  const projectedDelta = scoreImpact.reduce((sum, x) => sum + x.delta, 0);
 
   return {
     reportId: row.public_id,

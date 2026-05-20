@@ -154,6 +154,36 @@
   letter-spacing: 0.08em;
   padding: 0 0 2px;
 }
+
+/* Sprint 24 (audit 2026-05-20 UX): Gap-row "+N pts" badge. Replaces the
+   trailing CTA button — the action items now live as to-dos in the Next
+   Steps tab. data-state="ready" lights up when every step under this gap
+   has been checked off, so the user sees the projected uplift is queued
+   (without us recomputing the live score). */
+.gapPotential {
+  justify-self: end;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.gapPotentialDelta {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--tp2-accent);
+  letter-spacing: 0.02em;
+}
+.gapPotentialDelta[data-state="ready"] {
+  color: var(--tp2-pos, #1f7a4d);
+}
+.gapPotentialProgress {
+  font-size: 10px;
+  color: var(--tp2-mute);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
 .impactCard { background: #fff; border: 1px solid var(--tp2-rule); padding: 18px; }
 .impactRow { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--tp2-rule); font-size: 13px; color: var(--tp2-ink-2); }
 .impactDelta { color: var(--tp2-pos); }
@@ -251,8 +281,72 @@
 @media (max-width: 768px) { .nextGroup { grid-template-columns: 1fr; gap: 8px; padding: 0 18px; } }
 .nextWhen { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--tp2-accent); align-self: start; margin-top: 4px; }
 .nextItems { list-style: none; padding: 0; margin: 0; }
-.nextRow { display: grid; grid-template-columns: 1fr 90px 100px; gap: 16px; padding: 8px 0; border-bottom: 1px dashed var(--tp2-rule); align-items: baseline; }
+.nextRow { display: grid; grid-template-columns: 1fr 90px 80px; gap: 16px; padding: 8px 0; border-bottom: 1px dashed var(--tp2-rule); align-items: start; }
 .nextRow:last-child { border-bottom: none; }
-.nextTitle { font-size: 14px; color: var(--tp2-ink); font-weight: 500; }
-.nextWhy   { font-size: 12px; color: var(--tp2-ink-2); margin-top: 2px; }
-.nextEta   { font-size: 11px; color: var(--tp2-mute); text-align: right; }
+.nextRow[data-done="true"] .nextTitle,
+.nextRow[data-done="true"] .nextWhy { color: var(--tp2-mute); text-decoration: line-through; text-decoration-color: var(--tp2-rule); }
+.nextTitle { font-size: 14px; color: var(--tp2-ink); font-weight: 500; display: block; }
+.nextWhy   { font-size: 12px; color: var(--tp2-ink-2); margin-top: 2px; display: block; }
+.nextEta   { font-size: 11px; color: var(--tp2-mute); text-align: right; padding-top: 2px; }
+
+/* Sprint 24 (audit 2026-05-20 UX): to-do checkbox replaces the row CTA.
+   The whole label is the click target — checkbox + title + why are wrapped
+   in one button so keyboard/screen-reader navigation lands once per row. */
+.todoCheckbox {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 12px;
+  align-items: start;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  color: inherit;
+  font: inherit;
+}
+.todoCheckbox:disabled { cursor: wait; opacity: 0.7; }
+.todoCheckboxBox {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--tp2-rule);
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: transparent;
+  background: #fff;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+  margin-top: 2px;
+}
+.todoCheckbox:hover .todoCheckboxBox { border-color: var(--tp2-ink); }
+.todoCheckboxBox[data-checked="true"] {
+  background: var(--tp2-ink);
+  border-color: var(--tp2-ink);
+  color: var(--tp2-paper);
+}
+.todoCheckboxBody { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.todoError {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--tp2-mono);
+  font-size: 10px;
+  color: var(--tp2-neg, #b03030);
+  letter-spacing: 0.04em;
+}
+
+/* Per-step delta badge. Earned (done) state nudges toward the same positive
+   accent the Gaps tab uses when all steps are queued. */
+.stepPoints {
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--tp2-mute);
+  text-align: right;
+  padding-top: 2px;
+  letter-spacing: 0.02em;
+}
+.stepPoints[data-state="earned"] { color: var(--tp2-pos, #1f7a4d); }

@@ -5,9 +5,17 @@ export type Gap = {
   title: string;
   why: string;
   fix: string;
-  cta: string;
   /** True when the user's vault carries evidence that maps to this gap. */
   resolved?: boolean;
+  // Sprint 24 (audit 2026-05-20 UX): per-gap projected score uplift +
+  // step-completion progress sourced from assessment_step_completions.
+  // potentialDelta is the headline number (`+N pts`); stepsCount/stepsDone
+  // drive the `X of Y steps done` subtitle. The CTA-button column was
+  // dropped — the action items now live in the Next Steps tab as toggleable
+  // to-dos that sync into this view via stepsDone.
+  potentialDelta: number;
+  stepsCount: number;
+  stepsDone: number;
 };
 
 export function GapsTab({
@@ -42,39 +50,56 @@ export function GapsTab({
             : "Compliance is the only thing between you and Tier 1."}
         </h2>
         <ol className={styles.gapList}>
-          {gaps.map((g, i) => (
-            <li key={i} className={styles.gapRow} data-resolved={g.resolved ? "true" : undefined}>
-              <span
-                className={`${styles.sev} ${
-                  g.resolved
-                    ? styles.sevDone
-                    : g.severity === "High"
-                    ? styles.sevHigh
-                    : g.severity === "Med"
-                    ? styles.sevMed
-                    : styles.sevLow
-                }`}
-              >
-                {g.resolved ? "Done" : g.severity}
-              </span>
-              <div>
-                <div className={styles.gapTitle}>{g.title}</div>
-                <p className={styles.gapWhy}>{g.why}</p>
-                <div className={`${styles.gapFix} tp-mono`}>{g.fix}</div>
-              </div>
-              {g.resolved ? (
+          {gaps.map((g, i) => {
+            const allStepsDone = g.stepsCount > 0 && g.stepsDone >= g.stepsCount;
+            return (
+              <li key={i} className={styles.gapRow} data-resolved={g.resolved ? "true" : undefined}>
                 <span
-                  className={styles.gapResolved}
-                  aria-label="Evidence on file"
-                  title="Evidence on file in your vault"
+                  className={`${styles.sev} ${
+                    g.resolved
+                      ? styles.sevDone
+                      : g.severity === "High"
+                      ? styles.sevHigh
+                      : g.severity === "Med"
+                      ? styles.sevMed
+                      : styles.sevLow
+                  }`}
                 >
-                  ✓
+                  {g.resolved ? "Done" : g.severity}
                 </span>
-              ) : (
-                <button className={styles.rowCta}>{g.cta}</button>
-              )}
-            </li>
-          ))}
+                <div>
+                  <div className={styles.gapTitle}>{g.title}</div>
+                  <p className={styles.gapWhy}>{g.why}</p>
+                  <div className={`${styles.gapFix} tp-mono`}>{g.fix}</div>
+                </div>
+                {g.resolved ? (
+                  <span
+                    className={styles.gapResolved}
+                    aria-label="Evidence on file"
+                    title="Evidence on file in your vault"
+                  >
+                    ✓
+                  </span>
+                ) : (
+                  <div className={styles.gapPotential}>
+                    <div
+                      className={`${styles.gapPotentialDelta} tp-mono`}
+                      data-state={allStepsDone ? "ready" : undefined}
+                    >
+                      +{g.potentialDelta} pts
+                    </div>
+                    {g.stepsCount > 0 && (
+                      <div className={`${styles.gapPotentialProgress} tp-mono`}>
+                        {allStepsDone
+                          ? "Steps done ✓"
+                          : `${g.stepsDone} of ${g.stepsCount} ${g.stepsCount === 1 ? "step" : "steps"}`}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ol>
       </section>
 
