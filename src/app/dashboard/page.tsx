@@ -173,6 +173,7 @@ export default async function DashboardPage({
           groups={data.nextStepsGroups}
           totalSteps={data.totalSteps}
           projectedDelta={data.projectedDelta}
+          assessmentRef={data.reportId}
         />
       )}
     </AssessmentChrome>

@@ -79,6 +79,18 @@ export async function ensureAssessmentRuntimeColumns() {
   await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS assessment_timings JSONB DEFAULT '{}'`;
   await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS assessment_started_at TIMESTAMPTZ`;
   await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS assessment_completed_at TIMESTAMPTZ`;
+  // Sprint 24 (audit 2026-05-20 UX): per-assessment to-do completion log for
+  // the Next Steps tab. Self-heal here matches the public_id pattern so prod
+  // doesn't error on the first POST /api/assessment/[id]/step-toggle after
+  // deploy if migrate.mjs hasn't been manually re-run.
+  await sql`CREATE TABLE IF NOT EXISTS assessment_step_completions (
+    id SERIAL PRIMARY KEY,
+    assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+    step_key TEXT NOT NULL,
+    done_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (assessment_id, step_key)
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS assessment_step_completions_assessment_idx ON assessment_step_completions (assessment_id)`;
   columnsEnsured = true;
 }
 

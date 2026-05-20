@@ -97,6 +97,7 @@ export default async function AssessmentPage({ params, searchParams }: Props) {
           groups={data.nextStepsGroups}
           totalSteps={data.totalSteps}
           projectedDelta={data.projectedDelta}
+          assessmentRef={data.reportId}
         />
       )}
     </AssessmentChrome>

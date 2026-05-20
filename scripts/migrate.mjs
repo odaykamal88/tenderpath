@@ -383,6 +383,21 @@ CREATE TABLE IF NOT EXISTS email_suppressions (
   notes TEXT
 );
 CREATE INDEX IF NOT EXISTS email_suppressions_unsubscribed_at ON email_suppressions (unsubscribed_at DESC);
+
+-- Sprint 24 (audit 2026-05-20 UX): per-assessment to-do completion log for the
+-- Next Steps tab. step_key is opaque to the DB but currently shaped as
+-- `g{gapIdx}-s{stepIdx}` against the assessment's gaps[i].action_steps[j].
+-- ON DELETE CASCADE keeps the table tidy when an assessment row is reset
+-- (demo reset, GDPR purge). Score impact stays projected-only — we never
+-- recompute readiness_score from completion state, just surface progress.
+CREATE TABLE IF NOT EXISTS assessment_step_completions (
+  id SERIAL PRIMARY KEY,
+  assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+  step_key TEXT NOT NULL,
+  done_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (assessment_id, step_key)
+);
+CREATE INDEX IF NOT EXISTS assessment_step_completions_assessment_idx ON assessment_step_completions (assessment_id);
 `;
 
 async function migrate() {
