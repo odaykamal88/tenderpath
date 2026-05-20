@@ -7,6 +7,7 @@ export type Grant = {
   eligibility: string;
   effort: string;
   fit: number;
+  sourceUrl?: string | null;
 };
 
 export function GrantsTab({ grants }: { grants: Grant[] }) {
@@ -37,7 +38,20 @@ export function GrantsTab({ grants }: { grants: Grant[] }) {
       {grants.map((g) => (
         <div key={g.funder + g.program} className={`${styles.gridRow} ${styles.grantsGrid}`}>
           <span className={styles.funderCell}>{g.funder}</span>
-          <span className={styles.cellSecondary}>{g.program}</span>
+          <span className={styles.cellSecondary}>
+            {g.sourceUrl ? (
+              <a
+                href={g.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={styles.titleLink}
+              >
+                {g.program}
+              </a>
+            ) : (
+              g.program
+            )}
+          </span>
           <span className={`${styles.ceilingCell} tp-mono`}>{g.ceiling}</span>
           <span className={`${styles.eligCell} tp-mono`}>{g.eligibility}</span>
           <span className={`${styles.effortCell} tp-mono`}>{g.effort}</span>

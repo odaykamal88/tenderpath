@@ -193,6 +193,7 @@ function mapGrantsForUI(grants: MatchedGrant[]): Grant[] {
     eligibility: g.sector,
     effort: "Medium",
     fit: g.score,
+    sourceUrl: g.source_url ?? null,
   }));
 }
 

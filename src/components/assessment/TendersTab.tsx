@@ -128,7 +128,6 @@ export function TendersTab({
         <span>Agency</span>
         <span style={{ textAlign: "right" }}>Fit</span>
         <span style={{ textAlign: "right" }}>Closes</span>
-        <span style={{ textAlign: "right" }}>Action</span>
       </div>
       {tenders.map((t) => {
         const reasons = (t.matchReasons ?? []).filter(Boolean).slice(0, 3);
@@ -161,7 +160,22 @@ export function TendersTab({
               {t.code}
             </span>
             <span>
-              <div>{t.title}</div>
+              <div>
+                {t.sourceUrl ? (
+                  <TenderOpenLink
+                    href={t.sourceUrl}
+                    className={styles.titleLink}
+                    code={t.code}
+                    sourceProvenance={t.sourceProvenance}
+                    confidence={t.confidence}
+                    fit={t.fit}
+                  >
+                    {t.title}
+                  </TenderOpenLink>
+                ) : (
+                  t.title
+                )}
+              </div>
               <div
                 className={`${styles.cellMeta} tp-mono`}
                 style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}
@@ -249,26 +263,6 @@ export function TendersTab({
             >
               {t.deadline}
             </span>
-            {t.sourceUrl ? (
-              <TenderOpenLink
-                href={t.sourceUrl}
-                className={styles.rowCta}
-                code={t.code}
-                sourceProvenance={t.sourceProvenance}
-                confidence={t.confidence}
-                fit={t.fit}
-              >
-                Open ↗
-              </TenderOpenLink>
-            ) : (
-              <span
-                className={styles.rowCta}
-                style={{ opacity: 0.4, cursor: "not-allowed" }}
-                title="Source link unavailable for this match"
-              >
-                Open →
-              </span>
-            )}
           </div>
         );
       })}
