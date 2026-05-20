@@ -1281,7 +1281,16 @@ export async function matchTenders(
     if (sectorScore > 0 && primarySlug && !tSlugs.has(primarySlug) && tokenHits === 0) continue;
     if (onlyConsultingSectorMatch && profileDomains.size > 0 && !domainAligned) continue;
     if (profileHasNicheDomainGate && !domainAligned) continue;
-    if (broadConsultingOnlyMatch && distinctiveTokenHits === 0) continue;
+    // Consulting + zero distinctive tokens used to be an unconditional skip —
+    // designed to suppress generic-consulting noise for non-consulting profiles
+    // accidentally matched via "technical assistance" or "advisory" keywords.
+    // But it over-fires on legitimate niche-consulting profiles (M&E,
+    // policy research, health systems) whose actual target tenders ARE
+    // consulting-only and whose differentiator is the domain, not exotic
+    // tokens. Discovered on axiom.co.ke (a Kenya M&E firm) returning zero
+    // matches despite strictSectorPoolSize=18. When domain alignment exists,
+    // the niche signal IS the distinctive evidence — keep the match.
+    if (broadConsultingOnlyMatch && distinctiveTokenHits === 0 && !domainAligned) continue;
     if (broadConsultingOnlyMatch && distinctiveTokenHits < 2) total = Math.min(total, 49);
     if (onlyConsultingSectorMatch && distinctiveTokenHits < 2) total = Math.min(total, 49);
     if (total < 15) continue;
