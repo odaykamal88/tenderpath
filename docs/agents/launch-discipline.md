@@ -48,6 +48,21 @@ Frontends should not collapse all error states into one user-facing message. Dif
 
 For every external integration (telegram, stripe, resend, neon, OAuth providers), provide an admin-gated `/api/admin/<x>-health` diagnostic endpoint so prod state can be inspected without redeploying. `src/app/api/admin/telegram-health/route.ts` is the established pattern.
 
+Every API route that hits the DB or an external service should be wrapped in an outer `try/catch` with a stable `[domain:route:reason]` tag — without this wrap a single uncaught throw surfaces as a bare Next.js 500 with nothing in Vercel logs to grep. The `/api/auth/password` hotfix template (assign context to `let contextForLog` early, then include it in the catch's log payload) is the canonical shape. See `docs/learning/sprint-24-launch-audit-ux-fixes-2026-05-20.md` §4.2 for the copy-paste.
+
+### 5. Schema changes live in two places
+
+Adding a column or a table to `scripts/migrate.mjs` is not enough. `npm run migrate` does not run automatically on Vercel deploys — the next request after deploy will hit the new code path against the old schema and throw `column "X" does not exist`. The `public_id` UUID column hotfix on 2026-05-20 was exactly this failure pattern.
+
+Every new column, table, or index must land in BOTH:
+
+1. `scripts/migrate.mjs` — the canonical migration source, idempotent via `IF NOT EXISTS`
+2. `ensureAssessmentRuntimeColumns()` in `src/lib/assessment/run.ts` (or the equivalent ensure-helper for non-assessment subsystems) — the runtime self-heal that runs on first hit after deploy
+
+Related discipline for foreign keys: never define an FK without an explicit `ON DELETE` clause. The default `NO ACTION` is rarely what you want — `ON DELETE SET NULL` (for nullable refs like `email_queue.assessment_id`) or `ON DELETE CASCADE` (for child tables like `assessment_step_completions`) is almost always the right choice. The 2026-05-20 demo-reset cascade required three hotfixes to undo a NO ACTION default that should never have shipped.
+
+Schema-touching PRs must include a test or a verification step that exercises the new column on a fresh row — not just compile-clean. The runtime ensure self-heals the schema; only an actual write proves the new path works.
+
 ## Why this exists
 
 This codebase ships through AI sessions with no QA layer. The user is the QA pipeline. Without explicit, enforced discipline, every refactor risks silently breaking a gateway flow because nobody ran the gateway flow. The rules above plus the PR template plus the launch-flows inventory plus the per-rule memory files are the structural compensation for a missing QA layer. Treat them as load-bearing.
