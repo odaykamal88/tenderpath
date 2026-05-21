@@ -146,6 +146,15 @@ export default function ServiceIntakeForm({
     file: File,
     onStage: (stage: UploadStage) => void,
   ): Promise<UploadedFile | { error: string }> {
+    // Browser console trail so user-reported "stuck spinner" bug reports can
+    // be triaged from a screenshot of devtools. Mirrors the server-side
+    // [vault:upload-token:*] / [vault:extract:*] tags.
+    console.info("[upload:client:start]", {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    });
+
     if (file.size > 50 * 1024 * 1024) {
       return {
         error: `File is ${(file.size / 1024 / 1024).toFixed(1)} MB. Limit is 50 MB.`,
@@ -158,22 +167,48 @@ export default function ServiceIntakeForm({
 
     try {
       onStage("uploading");
-      const blob = await upload(file.name, file, {
-        access: "public",
-        handleUploadUrl: "/api/dashboard/vault/upload-token",
-        clientPayload: JSON.stringify({ token }),
-      });
+      console.info("[upload:client:blob_start]", { name: file.name });
+      // Cap the blob upload at 120 s — direct-to-Blob normally takes a few
+      // seconds even for 50 MB, but a stuck spinner with no completion is
+      // worse than a clean error message. If the upload exceeds the cap we
+      // throw and surface a real error instead of an indefinite spinner.
+      const blob = (await Promise.race([
+        upload(file.name, file, {
+          access: "public",
+          handleUploadUrl: "/api/dashboard/vault/upload-token",
+          clientPayload: JSON.stringify({ token }),
+        }),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Upload timed out after 120 s. Try a smaller file or check your connection.")),
+            120_000,
+          ),
+        ),
+      ])) as Awaited<ReturnType<typeof upload>>;
+      console.info("[upload:client:blob_done]", { url: blob.url });
 
       onStage("extracting");
+      console.info("[upload:client:extract_start]");
       const extractRes = await fetch("/api/dashboard/vault/extract", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
         body: JSON.stringify({ url: blob.url, name: file.name, mimeType: file.type }),
+        // Server side maxDuration is 30 s; give the network a small headroom
+        // on top of that so a genuinely slow function still surfaces a real
+        // response rather than a client-side abort masquerading as a hang.
+        signal: AbortSignal.timeout(45_000),
       });
-      const extractData = (await extractRes.json().catch(() => ({}))) as {
-        extraction?: UploadedFile["extraction"];
-        error?: string;
-      };
+      const rawExtract = await extractRes.text();
+      let extractData: { extraction?: UploadedFile["extraction"]; error?: string } = {};
+      try {
+        extractData = rawExtract ? JSON.parse(rawExtract) : {};
+      } catch {
+        extractData = {};
+      }
+      console.info("[upload:client:extract_done]", {
+        status: extractRes.status,
+        extractionStatus: extractData.extraction?.status,
+      });
       // Extraction failure is non-fatal — the file is uploaded and usable.
       // We surface the issue but still hand back the URL so the rest of the
       // form keeps working.
@@ -185,6 +220,11 @@ export default function ServiceIntakeForm({
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Upload failed for an unknown reason.";
+      console.error("[upload:client:failed]", {
+        name: file.name,
+        errorName: err instanceof Error ? err.name : "unknown",
+        errorMessage: message,
+      });
       return { error: `Upload failed: ${message}` };
     }
   }

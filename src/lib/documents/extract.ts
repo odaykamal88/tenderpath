@@ -1,7 +1,20 @@
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
-import { PDFParse } from "pdf-parse";
 import { sql } from "@/lib/db";
+
+// pdf-parse@2.x ships a NAPI-backed native binding (@napi-rs/canvas) that
+// fails to load in the Vercel serverless runtime — the symptom is a
+//   Warning: Cannot load "@napi-..."
+// in the function log and a generic Next.js 500 HTML response, served
+// *before* any route handler can run. That blew up /api/dashboard/services/
+// fetch-criteria and /api/dashboard/vault/extract at module-init time and
+// the user saw "Could not fetch criteria (500)." (the client fallback).
+//
+// We lazy-import pdf-parse inside extractPdf() so the native module is only
+// loaded when the request actually involves a PDF. HTML / DOCX / XLSX paths
+// never touch it. If the dynamic import itself throws, extractDocumentText's
+// outer try/catch turns it into a clean "failed" extraction result instead
+// of a route crash.
 
 export type ExtractionStatus = "extracted" | "empty" | "unsupported" | "failed";
 
@@ -98,6 +111,11 @@ async function extractXlsx(buffer: Buffer): Promise<string> {
 }
 
 async function extractPdf(buffer: Buffer): Promise<string> {
+  // Dynamic import — see top-of-file note. If the NAPI binding fails to
+  // load on this runtime, the rejection propagates to extractDocumentText's
+  // outer catch and the caller gets a "failed" status with a readable
+  // error string instead of a function-level crash.
+  const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: new Uint8Array(buffer) });
   try {
     const result = await parser.getText({
