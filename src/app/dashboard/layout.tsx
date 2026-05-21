@@ -125,10 +125,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!state) return null;
 
   const isPaid = state.user.is_super_admin || state.user.subscription_status === "active";
-  const servicesActive =
-    (pathname ?? "").startsWith("/dashboard/services") ||
-    (pathname ?? "").startsWith("/dashboard/bid-analysis") ||
-    (pathname ?? "").startsWith("/dashboard/applications");
+  // /dashboard/bid-analysis and /dashboard/applications still exist as routes
+  // (linked from work-orders / email flows) but are no longer surfaced in the
+  // sidebar — the Services dropdown points directly at the service intake
+  // pages now.
+  const servicesActive = (pathname ?? "").startsWith("/dashboard/services");
   // Default-open when on a services route OR when the user is non-paid (keeps the
   // upsell menu in peripheral vision). Once the user toggles, their choice wins.
   const servicesDefaultOpen = servicesActive || !isPaid;
@@ -136,17 +137,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const workbench = [
     { href: "/dashboard", label: "Overview" },
-    { href: "/dashboard/pipeline", label: "Pipeline" },
   ];
   const tools = [
     { href: "/dashboard/vault", label: "Document vault", requiresPaid: true },
     { href: "/dashboard/settings", label: "Settings" },
   ];
 
-  // Active page label for the mobile top bar
+  // Active page label for the mobile top bar. Services dropdown still matches
+  // any /dashboard/services/* path so the breadcrumb stays accurate when the
+  // user is on an intake page.
   const allItems = [
     ...workbench,
-    { href: "/dashboard/services", label: "Services", matchPaths: ["/dashboard/services", "/dashboard/bid-analysis", "/dashboard/applications"] },
+    { href: "/dashboard/services", label: "Services", matchPaths: ["/dashboard/services"] },
     ...tools,
     { href: "/dashboard/work-orders", label: "Billing & orders" },
   ];
@@ -315,60 +317,64 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </span>
         </div>
         <nav className="flex flex-col gap-0.5">
-          {/* Services — parent label navigates, chevron toggles independently */}
+          {/* Services — disclosure-only parent (no navigation); the dropdown
+              is the entry point. Three service intake pages live under
+              /dashboard/services/{slug}. */}
           <div>
-            <div
-              className={`group relative flex w-full items-stretch rounded-sm transition-colors ${
+            <button
+              type="button"
+              onClick={() => setServicesOpen(!servicesExpanded)}
+              aria-expanded={servicesExpanded}
+              aria-controls="services-submenu"
+              className={`group relative flex w-full items-center gap-2.5 rounded-sm pl-3 pr-2.5 py-2 lg:py-1.5 text-[14px] lg:text-[13px] text-left transition-colors ${
                 servicesActive
                   ? "bg-stone-900 text-white"
                   : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
               }`}
             >
-              <Link
-                href="/dashboard/services"
-                className="flex flex-1 items-center gap-2.5 min-w-0 pl-3 pr-1 py-2 lg:py-1.5 text-[14px] lg:text-[13px]"
+              <NavIcon path={NAV_ICONS["/dashboard/services"]} />
+              <span className="flex-1 truncate">Services</span>
+              <svg
+                className={`h-3 w-3 shrink-0 transition-transform ${servicesExpanded ? "rotate-90" : ""}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
               >
-                <NavIcon path={NAV_ICONS["/dashboard/services"]} />
-                <span className="truncate">Services</span>
-              </Link>
-              <button
-                type="button"
-                onClick={() => setServicesOpen(!servicesExpanded)}
-                aria-expanded={servicesExpanded}
-                aria-label={servicesExpanded ? "Collapse services menu" : "Expand services menu"}
-                className={`shrink-0 px-2.5 py-2 lg:py-1.5 flex items-center justify-center rounded-r-sm transition-colors ${
-                  servicesActive ? "hover:bg-stone-800" : "hover:bg-stone-200/60"
-                }`}
-              >
-                <svg
-                  className={`h-3 w-3 transition-transform ${servicesExpanded ? "rotate-90" : ""}`}
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            </div>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
             {servicesExpanded && (
-              <div className="mt-0.5 ml-8 flex flex-col border-l border-stone-200/70 pl-2.5">
+              <div
+                id="services-submenu"
+                className="mt-0.5 ml-8 flex flex-col border-l border-stone-200/70 pl-2.5"
+              >
                 <Link
-                  href="/dashboard/bid-analysis"
+                  href="/dashboard/services/bid-no-bid"
                   className={`block rounded-sm px-2 py-2.5 lg:py-2 text-[13px] lg:text-[12.5px] transition-colors ${
-                    pathname?.startsWith("/dashboard/bid-analysis")
+                    pathname?.startsWith("/dashboard/services/bid-no-bid")
                       ? "text-stone-900 font-medium"
                       : "text-stone-500 hover:text-stone-900"
                   }`}
                 >
-                  Bid analysis
+                  Bid / No Bid
                 </Link>
                 <Link
-                  href="/dashboard/applications"
+                  href="/dashboard/services/proposal"
                   className={`block rounded-sm px-2 py-2.5 lg:py-2 text-[13px] lg:text-[12.5px] transition-colors ${
-                    pathname?.startsWith("/dashboard/applications")
+                    pathname?.startsWith("/dashboard/services/proposal")
                       ? "text-stone-900 font-medium"
                       : "text-stone-500 hover:text-stone-900"
                   }`}
                 >
-                  Applications
+                  Proposal submission
+                </Link>
+                <Link
+                  href="/dashboard/services/lta-roster"
+                  className={`block rounded-sm px-2 py-2.5 lg:py-2 text-[13px] lg:text-[12.5px] transition-colors ${
+                    pathname?.startsWith("/dashboard/services/lta-roster")
+                      ? "text-stone-900 font-medium"
+                      : "text-stone-500 hover:text-stone-900"
+                  }`}
+                >
+                  Fast Track LTA Roster
                 </Link>
               </div>
             )}
