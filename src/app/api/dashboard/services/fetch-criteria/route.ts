@@ -28,35 +28,40 @@ export const maxDuration = 45;
 // Errors are reported with stable [criteria:fetch:*] tags + a stage in the
 // body so the client can render something specific.
 export async function POST(req: NextRequest) {
-  const guard = await requireDashboardAccess(req);
-  if (!guard.authorized) return guard.response!;
-
-  let rawUrl: string;
+  // Outer try/catch so anything thrown above the inner try (the auth guard,
+  // module-level side effects, etc.) still surfaces as JSON instead of an
+  // opaque Vercel 500 — that was the symptom of the "Could not fetch
+  // criteria (500)." error the user saw with no diagnostic text body.
   try {
-    const body = await req.json();
-    rawUrl = String(body.url ?? "").trim();
-    if (!rawUrl) throw new Error("missing url");
-  } catch {
-    console.warn("[criteria:fetch:bad_request]", { userId: guard.user!.id });
-    return NextResponse.json({ error: "url required" }, { status: 400 });
-  }
+    const guard = await requireDashboardAccess(req);
+    if (!guard.authorized) return guard.response!;
 
-  let parsed: URL;
-  try {
-    parsed = new URL(rawUrl);
-    if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("bad protocol");
-  } catch {
-    console.warn("[criteria:fetch:invalid_url]", {
-      userId: guard.user!.id,
-      urlPrefix: rawUrl.slice(0, 60),
-    });
-    return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
-  }
+    let rawUrl: string;
+    try {
+      const body = await req.json();
+      rawUrl = String(body.url ?? "").trim();
+      if (!rawUrl) throw new Error("missing url");
+    } catch {
+      console.warn("[criteria:fetch:bad_request]", { userId: guard.user!.id });
+      return NextResponse.json({ error: "url required" }, { status: 400 });
+    }
 
-  let stage = "fetch";
-  try {
-    stage = "fetch";
-    const fetchRes = await fetch(parsed.toString(), {
+    let parsed: URL;
+    try {
+      parsed = new URL(rawUrl);
+      if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("bad protocol");
+    } catch {
+      console.warn("[criteria:fetch:invalid_url]", {
+        userId: guard.user!.id,
+        urlPrefix: rawUrl.slice(0, 60),
+      });
+      return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
+    }
+
+    let stage = "fetch";
+    try {
+      stage = "fetch";
+      const fetchRes = await fetch(parsed.toString(), {
       headers: {
         "user-agent": "TenderPathBot/1.0 (+https://www.tenderpath.me)",
         accept: "text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.5",
@@ -163,18 +168,35 @@ ${pageText}
     }
 
     return NextResponse.json({ criteria, source: { host: parsed.host, contentType } });
+    } catch (err) {
+      console.error("[criteria:fetch:failed]", {
+        userId: guard.user?.id,
+        stage,
+        host: parsed.host,
+        errorName: err instanceof Error ? err.name : "unknown",
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
+      return NextResponse.json(
+        {
+          error: `Could not fetch criteria at ${stage}. ${err instanceof Error ? err.message : "Unknown error"}`,
+          stage,
+        },
+        { status: 500 },
+      );
+    }
   } catch (err) {
-    console.error("[criteria:fetch:failed]", {
-      userId: guard.user?.id,
-      stage,
-      host: parsed.host,
+    // Anything that escapes the inner pipeline — auth guard failure, DB
+    // hiccup, missing env, unhandled SDK error — lands here and still
+    // produces a JSON body so the client can render a useful message
+    // instead of "Could not fetch criteria (500)." with no signal.
+    console.error("[criteria:fetch:handler_error]", {
       errorName: err instanceof Error ? err.name : "unknown",
       errorMessage: err instanceof Error ? err.message : String(err),
     });
     return NextResponse.json(
       {
-        error: `Could not fetch criteria at ${stage}. ${err instanceof Error ? err.message : "Unknown error"}`,
-        stage,
+        error: `Server error processing fetch request: ${err instanceof Error ? err.message : "unknown"}`,
+        stage: "handler",
       },
       { status: 500 },
     );

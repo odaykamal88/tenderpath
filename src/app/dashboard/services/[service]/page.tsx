@@ -332,29 +332,30 @@ export default async function ServiceDetailPage({
 
         {/* RIGHT — order */}
         <aside className="rounded-md border border-stone-200/70 bg-white p-6 self-start lg:sticky lg:top-6">
-          {/* SLA badge */}
-          <div className="rounded-sm border-l-2 border-emerald-600 bg-emerald-50/40 px-3.5 py-2.5">
-            <div
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700"
-              style={{ fontFamily: MONO_FONT }}
-            >
-              Delivery SLA
-            </div>
-            <p className="mt-0.5 text-[12.5px] leading-snug text-emerald-900">{service.deliverySla}</p>
-          </div>
-
-          {/* Work context */}
+          {/* Work context (Delivery SLA badge removed 2026-05-21 — surfacing
+              a fixed SLA next to checkout overpromised; the per-service
+              workflow step covers timing instead). */}
           <h2
-            className="mt-6 text-[18px] font-medium text-stone-900"
+            className="text-[18px] font-medium text-stone-900 flex items-center gap-2"
             style={{ fontFamily: SERIF_FONT }}
           >
             <span
-              className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle"
+              className="text-[10px] font-semibold tabular-nums text-stone-400 align-middle"
               style={{ fontFamily: MONO_FONT }}
             >
               02 ·
             </span>
-            Work context
+            <span>Work context</span>
+            {service.intakePrompt && (
+              <span
+                className="ml-0.5 inline-flex h-[15px] w-[15px] cursor-help items-center justify-center rounded-full border border-stone-300 text-[9px] font-bold text-stone-500 align-middle"
+                style={{ fontFamily: MONO_FONT }}
+                title={service.intakePrompt}
+                aria-label={service.intakePrompt}
+              >
+                i
+              </span>
+            )}
           </h2>
           {hasContext ? (
             <dl className="mt-3.5 space-y-3">
@@ -403,10 +404,9 @@ export default async function ServiceDetailPage({
             </p>
           )}
 
-          {/* Intake prompt */}
-          <div className="mt-5 rounded-sm border-l-2 border-stone-700 bg-stone-50/60 px-3.5 py-2.5 text-[12px] leading-relaxed text-stone-700">
-            {service.intakePrompt}
-          </div>
+          {/* Intake prompt blockquote moved to a hover-tooltip on the (i)
+              icon next to the "Work context" heading (2026-05-21) so the
+              order panel reads cleaner. */}
 
           {/* Intake form */}
           <ServiceIntakeForm

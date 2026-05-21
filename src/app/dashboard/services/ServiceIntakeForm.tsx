@@ -40,6 +40,12 @@ interface UploadedFile {
   };
 }
 
+// Multi-stage upload progress. The previous single-boolean "uploading" left
+// the UI stuck on a generic "Uploading…" label for the whole pipeline (blob
+// upload + server-side text extraction), which read as "frozen" for large
+// PDFs. Splitting the state makes it obvious that work is still happening.
+type UploadStage = "uploading" | "extracting";
+
 const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
 
 const SERVICE_FIELDS: Record<ServiceSlug, Array<{ key: string; label: string; placeholder: string; required?: boolean; rows?: number }>> = {
@@ -101,14 +107,14 @@ export default function ServiceIntakeForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [uploading, setUploading] = useState<UploadStage | null>(null);
   const [financialFile, setFinancialFile] = useState<UploadedFile | null>(null);
-  const [uploadingFinancial, setUploadingFinancial] = useState(false);
+  const [uploadingFinancial, setUploadingFinancial] = useState<UploadStage | null>(null);
   // Bid-no-bid only: lets the user attach the tender document directly in the
   // "Tender or document" section instead of through a separate "Upload your
   // documents" field (which was removed for bid-no-bid).
   const [tenderFile, setTenderFile] = useState<UploadedFile | null>(null);
-  const [uploadingTender, setUploadingTender] = useState(false);
+  const [uploadingTender, setUploadingTender] = useState<UploadStage | null>(null);
   // Bid-no-bid only: lets the user paste a URL alongside (or instead of) an
   // uploaded file in the Supporting Documents section.
   const [supportingUrl, setSupportingUrl] = useState("");
@@ -132,7 +138,14 @@ export default function ServiceIntakeForm({
   // again or skip." for any tender doc larger than that. The companion
   // /api/dashboard/vault/extract endpoint runs extraction + persistence
   // once the upload returns.
-  async function uploadOne(file: File): Promise<UploadedFile | { error: string }> {
+  //
+  // onStage is called as the pipeline crosses milestones so the caller can
+  // surface a stage-specific label ("Uploading file…" / "Reading document…")
+  // instead of a single opaque "Uploading…" state.
+  async function uploadOne(
+    file: File,
+    onStage: (stage: UploadStage) => void,
+  ): Promise<UploadedFile | { error: string }> {
     if (file.size > 50 * 1024 * 1024) {
       return {
         error: `File is ${(file.size / 1024 / 1024).toFixed(1)} MB. Limit is 50 MB.`,
@@ -144,12 +157,14 @@ export default function ServiceIntakeForm({
     }
 
     try {
+      onStage("uploading");
       const blob = await upload(file.name, file, {
         access: "public",
         handleUploadUrl: "/api/dashboard/vault/upload-token",
         clientPayload: JSON.stringify({ token }),
       });
 
+      onStage("extracting");
       const extractRes = await fetch("/api/dashboard/vault/extract", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
@@ -177,34 +192,31 @@ export default function ServiceIntakeForm({
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploading(true);
     setError(null);
-    const result = await uploadOne(file);
+    const result = await uploadOne(file, setUploading);
     if ("error" in result) setError(result.error);
     else setUploadedFile(result);
-    setUploading(false);
+    setUploading(null);
   }
 
   async function handleFinancialFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploadingFinancial(true);
     setError(null);
-    const result = await uploadOne(file);
+    const result = await uploadOne(file, setUploadingFinancial);
     if ("error" in result) setError(result.error);
     else setFinancialFile(result);
-    setUploadingFinancial(false);
+    setUploadingFinancial(null);
   }
 
   async function handleTenderFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploadingTender(true);
     setError(null);
-    const result = await uploadOne(file);
+    const result = await uploadOne(file, setUploadingTender);
     if ("error" in result) setError(result.error);
     else setTenderFile(result);
-    setUploadingTender(false);
+    setUploadingTender(null);
   }
 
   async function handleFetchCriteria() {
@@ -225,9 +237,26 @@ export default function ServiceIntakeForm({
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
         body: JSON.stringify({ url: tenderUrl.trim() }),
       });
-      const data = (await res.json().catch(() => ({}))) as { criteria?: string; error?: string };
+      // Read once as text so we can fall back gracefully when the response
+      // isn't JSON (e.g. an upstream 502/504 from the Vercel function layer
+      // before our handler runs). Without this fallback the user always saw
+      // a generic "Could not fetch criteria (500)." with no signal as to why.
+      const rawText = await res.text();
+      let data: { criteria?: string; error?: string; stage?: string } = {};
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        data = {};
+      }
       if (!res.ok || !data.criteria) {
-        setCriteriaError(data.error ?? `Could not fetch criteria (${res.status}).`);
+        const snippet = rawText && !data.error
+          ? ` — ${rawText.replace(/<[^>]+>/g, " ").trim().slice(0, 160)}`
+          : "";
+        setCriteriaError(
+          data.error
+            ? data.error
+            : `Could not fetch criteria (${res.status}).${snippet}`,
+        );
         return;
       }
       // Append to whatever the user has already typed so we don't blow away
@@ -326,7 +355,10 @@ export default function ServiceIntakeForm({
     }
   }
 
-  const requiresPipeline = service === "bid-no-bid" && !pipelineItemId;
+  // The "needs a selected pipeline tender" gate was dropped 2026-05-21 —
+  // bid-no-bid now accepts pasted URLs, uploaded tender docs, and pasted
+  // criteria as sufficient context. Forcing a pipeline selection blocked
+  // first-touch users who hadn't built one yet.
 
   const uploadLabel: Record<ServiceSlug, string> = {
     "bid-no-bid": "Upload your documents",
@@ -357,12 +389,6 @@ export default function ServiceIntakeForm({
           scopeKey={confidenceScopeKey}
           onChosen={setConfirmedPrimarySector}
         />
-      )}
-
-      {requiresPipeline && (
-        <div className="rounded-sm border-l-2 border-amber-600 bg-amber-50/40 px-3.5 py-2.5 text-[12px] leading-relaxed text-amber-900">
-          Bid/no-bid analysis needs a selected pipeline tender so the recommendation can use your saved match evidence.
-        </div>
       )}
 
       {/* Tender or document — URL input. On bid-no-bid this section also
@@ -406,17 +432,28 @@ export default function ServiceIntakeForm({
               </div>
             ) : (
               <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-stone-300 px-3.5 py-3 text-[12px] text-stone-500 hover:border-stone-700 hover:text-stone-700 transition-colors">
-                <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+                {uploadingTender ? (
+                  <svg className="h-4 w-4 shrink-0 mt-0.5 animate-spin text-stone-500" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
+                    <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                  </svg>
+                ) : (
+                  <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
                 <span className="leading-snug flex-1">
-                  {uploadingTender ? "Uploading…" : <>…or <span className="font-semibold text-stone-700">upload the tender document</span> (PDF / Word / Excel, up to 50 MB)</>}
+                  {uploadingTender === "uploading"
+                    ? "Uploading file…"
+                    : uploadingTender === "extracting"
+                    ? "Reading document…"
+                    : <>…or <span className="font-semibold text-stone-700">upload the tender document</span> (PDF / Word / Excel, up to 50 MB)</>}
                 </span>
                 <input
                   type="file"
                   accept=".pdf,.doc,.docx,.xls,.xlsx"
                   className="sr-only"
-                  disabled={uploadingTender}
+                  disabled={!!uploadingTender}
                   onChange={handleTenderFileChange}
                 />
               </label>
@@ -459,17 +496,28 @@ export default function ServiceIntakeForm({
               </div>
             ) : (
               <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-stone-300 px-3.5 py-3 text-[12px] text-stone-500 hover:border-stone-700 hover:text-stone-700 transition-colors">
-                <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+                {uploading ? (
+                  <svg className="h-4 w-4 shrink-0 mt-0.5 animate-spin text-stone-500" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
+                    <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                  </svg>
+                ) : (
+                  <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
                 <span className="leading-snug flex-1">
-                  {uploading ? "Uploading…" : <><span className="font-semibold text-stone-700">Choose file</span> — {uploadHint[service]}</>}
+                  {uploading === "uploading"
+                    ? "Uploading file…"
+                    : uploading === "extracting"
+                    ? "Reading document…"
+                    : <><span className="font-semibold text-stone-700">Choose file</span> — {uploadHint[service]}</>}
                 </span>
                 <input
                   type="file"
                   accept=".pdf,.doc,.docx,.xls,.xlsx"
                   className="sr-only"
-                  disabled={uploading}
+                  disabled={!!uploading}
                   onChange={handleFileChange}
                 />
               </label>
@@ -514,37 +562,65 @@ export default function ServiceIntakeForm({
               </div>
             ) : (
               <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-stone-300 px-3.5 py-3 text-[12px] text-stone-500 hover:border-stone-700 hover:text-stone-700 transition-colors">
-                <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+                {uploadingFinancial ? (
+                  <svg className="h-4 w-4 shrink-0 mt-0.5 animate-spin text-stone-500" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
+                    <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                  </svg>
+                ) : (
+                  <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
                 <span className="leading-snug flex-1">
-                  {uploadingFinancial ? "Uploading…" : (
-                    <>
-                      <span className="font-semibold text-stone-700">Choose file</span> —{" "}
-                      {service === "bid-no-bid"
-                        ? "Capability statements, certifications, partner letters, financials, or anything else the analysis should weigh"
-                        : "Audited financials, bank reference, or balance sheet (optional, sharpens the financial section)"}
-                    </>
-                  )}
+                  {uploadingFinancial === "uploading"
+                    ? "Uploading file…"
+                    : uploadingFinancial === "extracting"
+                    ? "Reading document…"
+                    : (
+                      <>
+                        <span className="font-semibold text-stone-700">Choose file</span> —{" "}
+                        {service === "bid-no-bid"
+                          ? "Capability statements, certifications, partner letters, financials, or anything else the analysis should weigh"
+                          : "Audited financials, bank reference, or balance sheet (optional, sharpens the financial section)"}
+                      </>
+                    )}
                 </span>
                 <input
                   type="file"
                   accept=".pdf,.doc,.docx,.xls,.xlsx"
                   className="sr-only"
-                  disabled={uploadingFinancial}
+                  disabled={!!uploadingFinancial}
                   onChange={handleFinancialFileChange}
                 />
               </label>
             )}
           </div>
           {service === "bid-no-bid" && (
-            <input
-              value={supportingUrl}
-              onChange={(e) => setSupportingUrl(e.target.value)}
-              placeholder="…or paste a supporting document URL (capability statement, certifications, partner letter)"
-              className={`${inputCls} mt-2`}
-              style={{ fontFamily: MONO }}
-            />
+            <>
+              <input
+                value={supportingUrl}
+                onChange={(e) => setSupportingUrl(e.target.value)}
+                placeholder="…or paste a supporting document URL (capability statement, certifications, partner letter)"
+                className={`${inputCls} mt-2`}
+                style={{ fontFamily: MONO }}
+              />
+              {/* Confirmation row — without this, pasting a URL "did nothing"
+                  visible to the user (the value was kept in state but only
+                  surfaced on submit). The check makes it obvious the URL is
+                  registered. */}
+              {supportingUrl.trim() && (
+                <p
+                  className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-700 px-0.5"
+                  style={{ fontFamily: MONO }}
+                >
+                  <svg className="h-3 w-3 shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+                  </svg>
+                  <span className="truncate">URL added · sent with intake</span>
+                </p>
+              )}
+            </>
           )}
         </div>
       )}
@@ -603,7 +679,7 @@ export default function ServiceIntakeForm({
       {/* Submit */}
       <button
         type="submit"
-        disabled={busy || requiresPipeline}
+        disabled={busy}
         className="w-full rounded-sm bg-stone-900 px-4 py-3 text-[13px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? "Saving intake…" : `${label} →`}
