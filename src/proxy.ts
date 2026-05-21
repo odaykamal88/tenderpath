@@ -36,9 +36,18 @@ const PUBLIC_PATHS = new Set([
 const PUBLIC_ASSESSMENT_POLL_RE =
   /^\/api\/assessment\/(\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
+// Sibling pattern for the HTML+print PDF fallback. Anchor navigation from the
+// dashboard PDF button (target="_blank") can't carry a Bearer header, so the
+// proxy default-deny would 401 every click. The route itself authorizes via
+// authorizeAssessmentRead — UUID is capability, int requires session ownership
+// — so the proxy gate is redundant. Mirrors how /api/report is already public.
+const PUBLIC_ASSESSMENT_PDF_RE =
+  /^\/api\/assessment\/(\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/pdf$/i;
+
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true;
   if (PUBLIC_ASSESSMENT_POLL_RE.test(pathname)) return true;
+  if (PUBLIC_ASSESSMENT_PDF_RE.test(pathname)) return true;
   if (!pathname.startsWith("/api/") && !pathname.startsWith("/dashboard")) return true;
   return false;
 }
