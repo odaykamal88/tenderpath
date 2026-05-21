@@ -395,4 +395,49 @@ export async function initializeDatabase() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+
+  // Internal Matching Workbench (Phase 1) — sidecar to an assessment row.
+  await sql`
+    CREATE TABLE IF NOT EXISTS vendor_profiles (
+      id SERIAL PRIMARY KEY,
+      assessment_id INTEGER NOT NULL UNIQUE REFERENCES assessments(id) ON DELETE CASCADE,
+      tier TEXT,
+      ungm_status TEXT,
+      contact_name TEXT,
+      contact_email TEXT,
+      contact_phone TEXT,
+      relationship_notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      CONSTRAINT vendor_profiles_tier_chk CHECK (tier IS NULL OR tier IN ('T1','T2','REF')),
+      CONSTRAINT vendor_profiles_ungm_chk CHECK (ungm_status IS NULL OR ungm_status IN ('registered','pending','unregistered','unknown'))
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS vendor_profiles_tier_idx
+    ON vendor_profiles (tier)
+    WHERE tier IS NOT NULL
+  `;
+
+  // Internal hand-match decisions — the training signal for the upcoming Matching product.
+  await sql`
+    CREATE TABLE IF NOT EXISTS tender_vendor_matches (
+      id SERIAL PRIMARY KEY,
+      tender_id INTEGER NOT NULL REFERENCES tenders(id) ON DELETE CASCADE,
+      assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+      routed_service TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'suggested',
+      fit_reasoning TEXT NOT NULL,
+      outcome TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      CONSTRAINT tender_vendor_matches_service_chk CHECK (routed_service IN ('bid-no-bid','proposal-draft','roster-fast-track','matching')),
+      CONSTRAINT tender_vendor_matches_status_chk CHECK (status IN ('suggested','contacted','applied','shortlisted','won','lost')),
+      CONSTRAINT tender_vendor_matches_unique UNIQUE (tender_id, assessment_id)
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS tender_vendor_matches_tender_idx ON tender_vendor_matches (tender_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS tender_vendor_matches_assessment_idx ON tender_vendor_matches (assessment_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS tender_vendor_matches_status_idx ON tender_vendor_matches (status, updated_at DESC)`;
 }

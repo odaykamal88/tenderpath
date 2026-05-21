@@ -228,3 +228,42 @@ export interface AssessmentInput {
   /** User's primary intent — used to override score-based tier recommendation. */
   intent?: string;
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Internal Matching Workbench (Phase 1)
+// Vendor identity = one assessment row. vendor_profiles is a thin sidecar
+// for the four fields assessments doesn't capture. tender_vendor_matches
+// is the decision-capture surface — the training signal for the upcoming
+// Matching product.
+// ─────────────────────────────────────────────────────────────────────
+
+export type VendorTier = "T1" | "T2" | "REF";
+export type UngmStatus = "registered" | "pending" | "unregistered" | "unknown";
+export type RoutedService = "bid-no-bid" | "proposal-draft" | "roster-fast-track" | "matching";
+export type MatchStatus = "suggested" | "contacted" | "applied" | "shortlisted" | "won" | "lost";
+
+export interface VendorProfile {
+  id: number;
+  assessment_id: number;
+  tier: VendorTier | null;
+  ungm_status: UngmStatus | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  relationship_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TenderVendorMatch {
+  id: number;
+  tender_id: number;
+  assessment_id: number;
+  routed_service: RoutedService;
+  status: MatchStatus;
+  fit_reasoning: string;
+  outcome: string | null;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
+}
