@@ -6,6 +6,15 @@ import { extractDocumentText } from "@/lib/documents/extract";
 export const runtime = "nodejs";
 export const maxDuration = 45;
 
+// Single friendly message for the three "we couldn't get useful criteria out
+// of this URL" branches (upstream non-2xx, thin content, empty LLM
+// completion). The previous copy exposed technical detail (HTTP status,
+// "JS-rendered or behind a login") that didn't help the average vendor —
+// they just want to know what to do next. The user explicitly asked
+// (2026-05-21) to replace those with this softer line.
+const FRIENDLY_NO_CRITERIA =
+  "It seems this tender hasn't listed any criteria or ToRs, perhaps check the supplier portal. This will contribute to a more accurate diagnostic";
+
 // Pull eligibility + evaluation criteria out of a tender URL on demand.
 //
 // Flow:
@@ -76,7 +85,7 @@ export async function POST(req: NextRequest) {
         status: fetchRes.status,
       });
       return NextResponse.json(
-        { error: `The tender source returned ${fetchRes.status}. Paste the criteria below instead.` },
+        { error: FRIENDLY_NO_CRITERIA },
         { status: 502 },
       );
     }
@@ -106,10 +115,7 @@ export async function POST(req: NextRequest) {
         length: pageText.length,
       });
       return NextResponse.json(
-        {
-          error:
-            "Could not pull meaningful content from this URL. The page may be JS-rendered or behind a login. Paste the criteria below.",
-        },
+        { error: FRIENDLY_NO_CRITERIA },
         { status: 422 },
       );
     }
@@ -162,7 +168,7 @@ ${pageText}
     if (!criteria) {
       console.warn("[criteria:fetch:empty_completion]", { userId: guard.user!.id });
       return NextResponse.json(
-        { error: "Could not extract criteria from this source. Paste them below." },
+        { error: FRIENDLY_NO_CRITERIA },
         { status: 422 },
       );
     }

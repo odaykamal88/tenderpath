@@ -115,9 +115,13 @@ export default function ServiceIntakeForm({
   // documents" field (which was removed for bid-no-bid).
   const [tenderFile, setTenderFile] = useState<UploadedFile | null>(null);
   const [uploadingTender, setUploadingTender] = useState<UploadStage | null>(null);
-  // Bid-no-bid only: lets the user paste a URL alongside (or instead of) an
-  // uploaded file in the Supporting Documents section.
-  const [supportingUrl, setSupportingUrl] = useState("");
+  // Bid-no-bid only: list of supporting-document URLs the user has pasted in.
+  // Previously a single string field that just flagged "URL added" — the
+  // user (2026-05-21) asked for a chip-list pattern so multiple supporting
+  // links can ride along with the bid/no-bid submission. The input clears
+  // after each add so the next paste fits cleanly.
+  const [supportingUrls, setSupportingUrls] = useState<string[]>([]);
+  const [supportingUrlInput, setSupportingUrlInput] = useState("");
   // Fetch-criteria flow (bid-no-bid): loading state + last error message.
   const [fetchingCriteria, setFetchingCriteria] = useState(false);
   const [criteriaError, setCriteriaError] = useState<string | null>(null);
@@ -165,26 +169,65 @@ export default function ServiceIntakeForm({
       return { error: "You are signed out. Refresh the page and try again." };
     }
 
+    // Cap the blob upload at 5 min and stream transfer-progress events so
+    // a stuck spinner has a diagnosable trail.
+    //
+    // A user reported a 2.1 MB file timing out at the previous 120 s cap
+    // — that's a network / SDK problem, not a legitimate slow upload, so
+    // we now (a) wire @vercel/blob/client's onUploadProgress callback so
+    // browser devtools show per-chunk progress, (b) emit a [stalled]
+    // warning every 15 s of inactivity, and (c) bump the hard cap to 300 s
+    // so genuinely slow connections (e.g. spotty mobile on a 50 MB tender
+    // doc) can still complete.
+    //
+    // stallTimer is declared outside the try so the catch / finally branch
+    // can clean it up regardless of how the upload exits.
+    let stallTimer: ReturnType<typeof setInterval> | null = null;
     try {
       onStage("uploading");
       console.info("[upload:client:blob_start]", { name: file.name });
-      // Cap the blob upload at 120 s — direct-to-Blob normally takes a few
-      // seconds even for 50 MB, but a stuck spinner with no completion is
-      // worse than a clean error message. If the upload exceeds the cap we
-      // throw and surface a real error instead of an indefinite spinner.
+      let lastProgressAt = Date.now();
+      let lastPercentage = 0;
+      stallTimer = setInterval(() => {
+        const idleMs = Date.now() - lastProgressAt;
+        if (idleMs > 15_000) {
+          console.warn("[upload:client:blob_stalled]", {
+            idleMs,
+            lastPercentage,
+          });
+        }
+      }, 5_000);
       const blob = (await Promise.race([
         upload(file.name, file, {
           access: "public",
           handleUploadUrl: "/api/dashboard/vault/upload-token",
           clientPayload: JSON.stringify({ token }),
+          onUploadProgress: ({ loaded, total, percentage }) => {
+            lastProgressAt = Date.now();
+            lastPercentage = percentage;
+            console.info("[upload:client:blob_progress]", {
+              loaded,
+              total,
+              percentage,
+            });
+          },
         }),
         new Promise((_, reject) =>
           setTimeout(
-            () => reject(new Error("Upload timed out after 120 s. Try a smaller file or check your connection.")),
-            120_000,
+            () =>
+              reject(
+                new Error(
+                  "Upload timed out after 5 minutes. The file did not finish transferring — check your connection or try a smaller file.",
+                ),
+              ),
+            300_000,
           ),
         ),
       ])) as Awaited<ReturnType<typeof upload>>;
+      if (stallTimer) {
+        clearInterval(stallTimer);
+        stallTimer = null;
+      }
       console.info("[upload:client:blob_done]", { url: blob.url });
 
       onStage("extracting");
@@ -226,6 +269,10 @@ export default function ServiceIntakeForm({
         errorMessage: message,
       });
       return { error: `Upload failed: ${message}` };
+    } finally {
+      // Always cancel the stall watcher — leaking it would keep firing
+      // console.warns indefinitely after a failed/aborted upload.
+      if (stallTimer) clearInterval(stallTimer);
     }
   }
 
@@ -257,6 +304,20 @@ export default function ServiceIntakeForm({
     if ("error" in result) setError(result.error);
     else setTenderFile(result);
     setUploadingTender(null);
+  }
+
+  // Supporting-URL chip list (bid-no-bid). addSupportingUrl normalizes and
+  // dedupes; removeSupportingUrl drops an index. Pressing Enter in the input
+  // adds without submitting the parent form (we e.preventDefault() inline).
+  function addSupportingUrl() {
+    const next = supportingUrlInput.trim();
+    if (!next) return;
+    setSupportingUrls((prev) => (prev.includes(next) ? prev : [...prev, next]));
+    setSupportingUrlInput("");
+  }
+
+  function removeSupportingUrl(idx: number) {
+    setSupportingUrls((prev) => prev.filter((_, i) => i !== idx));
   }
 
   async function handleFetchCriteria() {
@@ -325,17 +386,28 @@ export default function ServiceIntakeForm({
     setError(null);
 
     try {
+      // If the user typed a URL but never pressed Enter / clicked Add, fold
+      // it into the list so they don't lose it on submit.
+      const trailing = supportingUrlInput.trim();
+      const finalSupportingUrls = trailing && !supportingUrls.includes(trailing)
+        ? [...supportingUrls, trailing]
+        : supportingUrls;
+
       const intakeWithFile = {
         ...fields,
         ...(uploadedFile ? { vault_url: uploadedFile.url, vault_filename: uploadedFile.name } : {}),
         ...(financialFile ? { financial_documents_url: financialFile.url, financial_documents_filename: financialFile.name } : {}),
         // Bid-no-bid-only: tender file attached in the "Tender or document"
-        // section, and a supporting-documents URL pasted alongside the file
-        // upload. Both are additive keys so downstream LLM context builders
-        // (src/lib/bid-no-bid/generate.ts) can pick them up without breaking
-        // the existing intake shape for proposal / lta-roster.
+        // section, and the supporting-documents URL list pasted alongside the
+        // file upload. Both are additive keys so downstream LLM context
+        // builders (src/lib/bid-no-bid/generate.ts) can pick them up without
+        // breaking the existing intake shape for proposal / lta-roster.
+        //
+        // supporting_link_urls (plural, list) replaces the older
+        // supporting_link_url singular — downstream code should treat the
+        // singular as a 1-length list for backward compat.
         ...(tenderFile ? { tender_file_url: tenderFile.url, tender_file_name: tenderFile.name } : {}),
-        ...(supportingUrl.trim() ? { supporting_link_url: supportingUrl.trim() } : {}),
+        ...(finalSupportingUrls.length ? { supporting_link_urls: finalSupportingUrls } : {}),
         ...(docId ? { vault_doc_id: docId } : {}),
         ...(confirmedPrimarySector ? { confirmed_primary_sector: confirmedPrimarySector } : {}),
       };
@@ -638,27 +710,55 @@ export default function ServiceIntakeForm({
           </div>
           {service === "bid-no-bid" && (
             <>
-              <input
-                value={supportingUrl}
-                onChange={(e) => setSupportingUrl(e.target.value)}
-                placeholder="…or paste a supporting document URL (capability statement, certifications, partner letter)"
-                className={`${inputCls} mt-2`}
-                style={{ fontFamily: MONO }}
-              />
-              {/* Confirmation row — without this, pasting a URL "did nothing"
-                  visible to the user (the value was kept in state but only
-                  surfaced on submit). The check makes it obvious the URL is
-                  registered. */}
-              {supportingUrl.trim() && (
-                <p
-                  className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-700 px-0.5"
+              {/* Chip-list URL input. The user can paste a link and either
+                  press Enter or click Add — the URL moves into the list
+                  below and the input clears so they can paste another. */}
+              <div className="mt-2 flex items-stretch gap-2">
+                <input
+                  value={supportingUrlInput}
+                  onChange={(e) => setSupportingUrlInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addSupportingUrl();
+                    }
+                  }}
+                  placeholder="…or paste a supporting document URL (capability statement, certifications, partner letter)"
+                  className={`${inputCls} flex-1 mt-0`}
+                  style={{ fontFamily: MONO }}
+                />
+                <button
+                  type="button"
+                  onClick={addSupportingUrl}
+                  disabled={!supportingUrlInput.trim()}
+                  className="shrink-0 rounded-sm border border-stone-300 bg-white px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-700 hover:border-stone-700 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
                   style={{ fontFamily: MONO }}
                 >
-                  <svg className="h-3 w-3 shrink-0" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
-                  </svg>
-                  <span className="truncate">URL added · sent with intake</span>
-                </p>
+                  Add
+                </button>
+              </div>
+              {supportingUrls.length > 0 && (
+                <ul className="mt-2 space-y-1.5">
+                  {supportingUrls.map((url, idx) => (
+                    <li
+                      key={`${url}-${idx}`}
+                      className="flex items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50/60 px-3 py-1.5 text-[12px] text-emerald-800"
+                      style={{ fontFamily: MONO }}
+                    >
+                      <svg className="h-3 w-3 shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+                      </svg>
+                      <span className="flex-1 truncate" title={url}>{url}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeSupportingUrl(idx)}
+                        className="shrink-0 text-emerald-700 hover:text-emerald-900 underline underline-offset-2"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </>
           )}
