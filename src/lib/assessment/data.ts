@@ -610,7 +610,7 @@ export async function getViewerHero(): Promise<{ companyName: string; reportId: 
   }
 }
 
-export async function getThisWeek(idOrUuid: string): Promise<{ kind: string; title: string; due: string; url?: string | null }[]> {
+export async function getThisWeek(idOrUuid: string): Promise<{ kind: string; title: string; due: string; url?: string | null; fit: number }[]> {
   const authorized = await authorizeAssessmentRead(idOrUuid);
   if (!authorized) return [];
   const rows = await sql`
@@ -625,29 +625,88 @@ export async function getThisWeek(idOrUuid: string): Promise<{ kind: string; tit
   const grants: MatchedGrant[] = rows[0].matched_grants ?? [];
   const cutoff = Date.now() + 14 * 86_400_000;
 
-  const items: { kind: string; title: string; due: string; ts: number; url: string | null }[] = [];
+  const items: { kind: string; title: string; due: string; ts: number; url: string | null; fit: number }[] = [];
 
   // Unparseable / missing deadlines still surface IF they have a clickable URL —
   // sorted last so they don't push out near-term items.
-  const consider = (kind: "Tender" | "Grant", title: string, deadline: string | null, source: string | null | undefined) => {
+  const consider = (kind: "Tender" | "Grant", title: string, deadline: string | null, source: string | null | undefined, fit: number) => {
     const url = safeUrl(source);
     if (!deadline) {
-      if (url) items.push({ kind, title, due: "TBA", ts: Number.POSITIVE_INFINITY, url });
+      if (url) items.push({ kind, title, due: "TBA", ts: Number.POSITIVE_INFINITY, url, fit });
       return;
     }
     const ts = new Date(deadline).getTime();
     if (Number.isNaN(ts)) {
-      if (url) items.push({ kind, title, due: "TBA", ts: Number.POSITIVE_INFINITY, url });
+      if (url) items.push({ kind, title, due: "TBA", ts: Number.POSITIVE_INFINITY, url, fit });
       return;
     }
-    if (ts <= cutoff) items.push({ kind, title, due: deadline, ts, url });
+    if (ts <= cutoff) items.push({ kind, title, due: deadline, ts, url, fit });
   };
 
-  for (const t of tenders) consider("Tender", t.title, t.deadline, t.source_url);
-  for (const g of grants) consider("Grant", g.title, g.deadline, g.source_url);
+  for (const t of tenders) consider("Tender", t.title, t.deadline, t.source_url, t.score ?? 0);
+  for (const g of grants) consider("Grant", g.title, g.deadline, g.source_url, g.score ?? 0);
 
   return items
     .sort((a, b) => a.ts - b.ts)
     .slice(0, 6)
-    .map(({ kind, title, due, url }) => ({ kind, title, due, url }));
+    .map(({ kind, title, due, url, fit }) => ({ kind, title, due, url, fit }));
+}
+
+// Score-tab Activity card data. Pipeline counts + active services for the
+// signed-in viewer. Returns null when there's no session (so the Activity
+// card collapses gracefully for anonymous UUID-capability viewers on
+// /assessment/[id]). Fails open: a DB hiccup just hides the card.
+export type ViewerActivity = {
+  pipeline: { total: number; applied: number; inProgress: number; saved: number };
+  services: { active: { id: number; service: string; status: string }[]; activeCount: number };
+};
+
+export async function getViewerActivity(): Promise<ViewerActivity | null> {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("tp_session")?.value;
+    if (!token) return null;
+    const claims = await verifyToken(token);
+    if (!claims) return null;
+    const userId = claims.userId;
+
+    const [pipelineRows, serviceRows, activeCountRow] = await Promise.all([
+      sql`SELECT stage, COUNT(*)::int AS n FROM pipeline_items WHERE user_id = ${userId} GROUP BY stage`,
+      sql`SELECT id, service_slug, plan, status FROM work_orders
+           WHERE user_id = ${userId} AND payment_status = 'paid' AND status NOT IN ('delivered','canceled')
+           ORDER BY created_at DESC LIMIT 2`,
+      sql`SELECT COUNT(*)::int AS n FROM work_orders
+           WHERE user_id = ${userId} AND payment_status = 'paid' AND status NOT IN ('delivered','canceled')`,
+    ]);
+
+    const byStage = new Map<string, number>();
+    for (const r of pipelineRows) byStage.set(String(r.stage), Number(r.n));
+    const pipeline = {
+      total: [...byStage.values()].reduce((a, b) => a + b, 0),
+      applied:
+        (byStage.get("submitted") ?? 0) +
+        (byStage.get("won") ?? 0) +
+        (byStage.get("lost") ?? 0),
+      inProgress:
+        (byStage.get("evaluating") ?? 0) +
+        (byStage.get("preparing") ?? 0),
+      saved: byStage.get("matched") ?? 0,
+    };
+
+    const active = serviceRows.map((r) => ({
+      id: r.id as number,
+      service: String(r.service_slug ?? r.plan ?? "service"),
+      status: String(r.status),
+    }));
+
+    return {
+      pipeline,
+      services: { active, activeCount: (activeCountRow[0]?.n as number) ?? active.length },
+    };
+  } catch (err) {
+    console.warn("[assessment:activity:fetch_failed]", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
 }

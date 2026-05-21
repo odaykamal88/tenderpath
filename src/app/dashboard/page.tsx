@@ -18,7 +18,7 @@ import { GrantsTab } from "@/components/assessment/GrantsTab";
 import { NextStepsTab } from "@/components/assessment/NextStepsTab";
 import { ThisWeekStrip } from "@/components/assessment/ThisWeekStrip";
 import { FunnelBeacon } from "@/components/telemetry/FunnelBeacon";
-import { getCurrentUserAssessment, getThisWeek } from "@/lib/assessment";
+import { getCurrentUserAssessment, getThisWeek, getViewerActivity } from "@/lib/assessment";
 
 export const dynamic = "force-dynamic";
 
@@ -111,9 +111,14 @@ export default async function DashboardPage({
     ? (rawTab as Tab)
     : "score";
 
-  // ThisWeekStrip is a score-tab-only ornament — skip the DB round-trip on
-  // gaps/tenders/grants/next where it's not rendered.
-  const week = activeTab === "score" ? await getThisWeek(data.reportId) : [];
+  // ThisWeekStrip + Activity card are score-tab-only ornaments — skip both
+  // DB round-trips on gaps/tenders/grants/next where they're not rendered.
+  // Activity reads pipeline_items + work_orders for the signed-in user;
+  // returns null on DB failure so a hiccup hides the card instead of 500ing
+  // the page.
+  const [week, activity] = activeTab === "score"
+    ? await Promise.all([getThisWeek(data.reportId), getViewerActivity()])
+    : [[], null];
 
   const counts = {
     gaps: data.gaps.filter((g) => !g.resolved).length,
@@ -152,8 +157,8 @@ export default async function DashboardPage({
             tier={data.tier}
             summary={data.summary}
             dimensions={data.dimensions}
-            topTenders={data.topTenders}
             recommendedTier={data.recommendedTier}
+            activity={activity}
           />
         </>
       )}

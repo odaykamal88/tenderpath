@@ -8,7 +8,7 @@ import { NextStepsTab } from "@/components/assessment/NextStepsTab";
 import { ThisWeekStrip } from "@/components/assessment/ThisWeekStrip";
 import { LoadingState } from "@/components/assessment/states/LoadingState";
 import { ErrorState } from "@/components/assessment/states/ErrorState";
-import { getAssessment, getThisWeek } from "@/lib/assessment";
+import { getAssessment, getThisWeek, getViewerActivity } from "@/lib/assessment";
 
 export const dynamic = "force-dynamic";
 
@@ -49,9 +49,13 @@ export default async function AssessmentPage({ params, searchParams }: Props) {
     next: data.totalSteps,
   };
 
-  // ThisWeekStrip is a score-tab-only ornament — skip the DB round-trip on
-  // gaps/tenders/grants/next where it's not rendered.
-  const week = activeTab === "score" ? await getThisWeek(id) : [];
+  // ThisWeekStrip + Activity card are score-tab-only ornaments — skip both
+  // DB round-trips on gaps/tenders/grants/next. getViewerActivity returns
+  // null for anonymous UUID-capability viewers (no tp_session cookie) so
+  // the right column collapses to the tier CTA only.
+  const [week, activity] = activeTab === "score"
+    ? await Promise.all([getThisWeek(id), getViewerActivity()])
+    : [[], null];
 
   return (
     <AssessmentChrome
@@ -74,8 +78,8 @@ export default async function AssessmentPage({ params, searchParams }: Props) {
             tier={data.tier}
             summary={data.summary}
             dimensions={data.dimensions}
-            topTenders={data.topTenders}
             recommendedTier={data.recommendedTier}
+            activity={activity}
           />
         </>
       )}

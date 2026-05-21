@@ -2,6 +2,9 @@ import Link from "next/link";
 import styles from "./AssessmentTabs.module.css";
 
 export type Dimension = { label: string; value: number };
+// Kept exported for the email-completion template — see src/lib/email/sendAssessment.ts.
+// ScoreTab itself no longer renders a top-tenders peek (audit 2026-05-21 UX);
+// the Tenders tab and dashboard pipeline cover that intent better.
 export type TenderPeek = {
   code: string;
   title: string;
@@ -15,29 +18,42 @@ export type TenderPeek = {
   sourceUrl?: string | null;
 };
 
-function peekDotColor(confidence: TenderPeek["confidence"]): string {
-  if (confidence === "high") return "var(--tp2-pos, #1f7a4d)";
-  if (confidence === "medium") return "var(--tp2-warn, #c08400)";
-  if (confidence === "low") return "var(--tp2-neg, #b03030)";
-  return "var(--tp2-line, #c8c0b3)";
+export type ViewerActivity = {
+  pipeline: { total: number; applied: number; inProgress: number; saved: number };
+  services: { active: { id: number; service: string; status: string }[]; activeCount: number };
+};
+
+function prettyService(slug: string): string {
+  if (slug === "bid-no-bid") return "Bid-no-bid";
+  if (slug === "proposal-draft" || slug === "proposal") return "Proposal draft";
+  if (slug === "roster-fast-track" || slug === "lta-roster") return "Roster fast-track";
+  if (slug === "grants-tenders-matching" || slug === "digest") return "Tender intelligence";
+  return slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function prettyStatus(status: string): string {
+  if (status === "new") return "queued";
+  if (status === "in_progress") return "in progress";
+  if (status === "waiting_on_client") return "waiting on you";
+  if (status === "delivered") return "ready";
+  return status.replace(/_/g, " ");
 }
 
 export function ScoreTab({
   score,
   delta,
-  tier,
   summary,
   dimensions,
-  topTenders,
   recommendedTier,
+  activity,
 }: {
   score: number;
   delta: number;
   tier: string;
   summary: string;
   dimensions: Dimension[];
-  topTenders: TenderPeek[];
   recommendedTier: { name: string; price: string; pitch: string };
+  activity?: ViewerActivity | null;
 }) {
   return (
     <div className={styles.scoreGrid}>
@@ -77,72 +93,103 @@ export function ScoreTab({
       </section>
 
       <aside>
-        <div className={styles.eyebrow}>Peek · top tenders</div>
-        <div className={styles.peekTable}>
-          {topTenders.map((t) => (
-            <div key={t.code} className={styles.peekRow}>
-              <div>
-                <div className={`${styles.peekMeta} tp-mono`}>
-                  <span
-                    aria-hidden
-                    style={{
-                      display: "inline-block",
-                      width: 7,
-                      height: 7,
-                      borderRadius: "50%",
-                      background: peekDotColor(t.confidence),
-                      marginRight: 6,
-                      verticalAlign: "middle",
-                    }}
-                  />
-                  {t.code} · {t.agency}
-                  {t.sector && <> · {t.sector}</>}
-                </div>
-                <div className={styles.peekTitle}>
-                  {t.sourceUrl ? (
-                    <a
-                      href={t.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ color: "inherit", textDecoration: "none" }}
-                    >
-                      {t.title} ↗
-                    </a>
-                  ) : (
-                    t.title
-                  )}
-                </div>
-                {t.matchReason && (
-                  <div
-                    style={{
-                      marginTop: 3,
-                      fontFamily: "var(--tp2-serif, ui-serif), serif",
-                      fontSize: 12,
-                      color: "var(--tp2-ink-3, #8a826f)",
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    {t.matchReason}
-                  </div>
-                )}
+        {activity && (
+          <>
+            <div className={styles.activityCard}>
+              <div className={styles.activityHead}>
+                <span className={styles.eyebrow}>Your pipeline</span>
+                <Link href="/dashboard/pipeline" className={styles.activityLink}>
+                  View all ↗
+                </Link>
               </div>
-              <span className={`${styles.peekFit} tp-mono`}>{t.fit}</span>
-              <span
-                className={`${styles.peekDl} tp-mono`}
-                data-urgent={t.urgent ? "true" : undefined}
-              >
-                {t.deadline}
-              </span>
+              <div className={styles.activityCount}>
+                <span className={`${styles.activityNumber} tp-tabular`}>{activity.pipeline.total}</span>
+                <span className={styles.activityNumberSub}>
+                  {activity.pipeline.total === 1 ? "tender tracked" : "tenders tracked"}
+                </span>
+              </div>
+              {activity.pipeline.total > 0 ? (
+                <ul className={styles.activityList}>
+                  {activity.pipeline.applied > 0 && (
+                    <li>
+                      <span className={`${styles.activityListNum} tp-tabular`}>{activity.pipeline.applied}</span>{" "}
+                      applied
+                    </li>
+                  )}
+                  {activity.pipeline.inProgress > 0 && (
+                    <li>
+                      <span className={`${styles.activityListNum} tp-tabular`}>{activity.pipeline.inProgress}</span>{" "}
+                      in progress
+                    </li>
+                  )}
+                  {activity.pipeline.saved > 0 && (
+                    <li>
+                      <span className={`${styles.activityListNum} tp-tabular`}>{activity.pipeline.saved}</span>{" "}
+                      saved
+                    </li>
+                  )}
+                </ul>
+              ) : (
+                <p className={styles.activityEmpty}>
+                  Save your first tender from the{" "}
+                  <Link href="/dashboard?tab=tenders" className={styles.activityLink}>
+                    Tenders tab
+                  </Link>
+                  .
+                </p>
+              )}
             </div>
-          ))}
-        </div>
+
+            <div className={styles.activityCard}>
+              <div className={styles.activityHead}>
+                <span className={styles.eyebrow}>Services in flight</span>
+                <Link href="/dashboard/work-orders" className={styles.activityLink}>
+                  View all ↗
+                </Link>
+              </div>
+              <div className={styles.activityCount}>
+                <span className={`${styles.activityNumber} tp-tabular`}>{activity.services.activeCount}</span>
+                <span className={styles.activityNumberSub}>
+                  {activity.services.activeCount === 1 ? "active" : "active"}
+                </span>
+              </div>
+              {activity.services.active.length > 0 ? (
+                <ul className={styles.activityList}>
+                  {activity.services.active.map((s) => (
+                    <li key={s.id}>
+                      <Link
+                        href={`/dashboard/work-orders/${s.id}`}
+                        className={styles.activityLink}
+                      >
+                        {prettyService(s.service)} · {prettyStatus(s.status)}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className={styles.activityEmpty}>
+                  <Link href="/dashboard/services" className={styles.activityLink}>
+                    Buy your first service →
+                  </Link>
+                </p>
+              )}
+            </div>
+          </>
+        )}
+
         <div className={styles.cta}>
           <div className={styles.eyebrowOnDark}>Recommended</div>
           <div className={styles.ctaTitle}>
             {recommendedTier.name} — {recommendedTier.price}
           </div>
           <p className={styles.ctaPitch}>{recommendedTier.pitch}</p>
-          <Link href="/pay?plan=grants-tenders-matching" className={styles.ctaButton} style={{ display: "inline-block", textDecoration: "none" }}>Subscribe →</Link>
+          <Link
+            href="/pay?plan=grants-tenders-matching"
+            className={styles.ctaButton}
+            style={{ display: "inline-block", textDecoration: "none" }}
+          >
+            Subscribe →
+          </Link>
         </div>
       </aside>
     </div>
