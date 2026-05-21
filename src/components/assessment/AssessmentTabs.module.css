@@ -92,6 +92,75 @@
 .peekDl { font-size: 11px; color: var(--tp2-mute); text-align: right; }
 .peekDl[data-urgent="true"] { color: var(--tp2-neg); font-weight: 600; }
 
+/* Activity at a glance — Score-tab right column. Two stacked cards (pipeline
+ * counts + active services) sit above the .cta tier card. Falls back to no-op
+ * when ScoreTab.activity is null (anonymous UUID-capability viewers on
+ * /assessment/[id]). */
+.activityCard {
+  border: 1px solid var(--tp2-rule);
+  background: #fff;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+.activityHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.activityLink {
+  font-family: var(--tp2-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--tp2-accent);
+  text-decoration: none;
+}
+.activityLink:hover { text-decoration: underline; }
+.activityCount {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.activityNumber {
+  font-family: var(--tp2-display);
+  font-size: 32px;
+  line-height: 1;
+  color: var(--tp2-ink);
+}
+.activityNumberSub {
+  font-family: var(--tp2-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--tp2-mute);
+  text-transform: uppercase;
+}
+.activityList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-top: 1px solid var(--tp2-rule);
+  padding-top: 8px;
+}
+.activityList li {
+  font-size: 12.5px;
+  color: var(--tp2-ink);
+  padding: 4px 0;
+  line-height: 1.4;
+}
+.activityListNum {
+  font-family: var(--tp2-mono);
+  font-weight: 500;
+  color: var(--tp2-ink);
+}
+.activityEmpty {
+  font-size: 12px;
+  color: var(--tp2-mute);
+  margin: 0;
+  padding: 6px 0 0;
+  line-height: 1.5;
+}
+
 .cta { margin-top: 22px; padding: 18px; background: var(--tp2-ink); color: var(--tp2-paper); }
 .ctaTitle { font-size: 15px; font-weight: 500; }
 .ctaPitch { font-size: 11.5px; color: #cdc6b3; margin: 4px 0 0; line-height: 1.5; }
