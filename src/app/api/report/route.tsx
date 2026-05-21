@@ -6,11 +6,25 @@ export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  if (!id) {
+    console.warn("[report:pdf:no_id]");
+    return NextResponse.json({ error: "id required" }, { status: 400 });
+  }
 
   const data = await getAssessment(id);
-  if (!data) return NextResponse.json({ error: "not found" }, { status: 404 });
-  if (data.status !== "ready") return NextResponse.json({ error: "not ready" }, { status: 409 });
+  if (!data) {
+    console.warn("[report:pdf:not_found]", { idPrefix: id.slice(0, 8) });
+    return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+  if (data.status !== "ready") {
+    console.warn("[report:pdf:not_ready]", { reportId: data.reportId, status: data.status });
+    return NextResponse.json({ error: "not ready" }, { status: 409 });
+  }
+
+  // HTML+print fallback. When chromium/puppeteer can't render — module missing,
+  // launch fail, render timeout — we redirect here so the user always lands on
+  // a printable report instead of a dead JSON error tab.
+  const fallbackUrl = new URL(`/api/assessment/${data.reportId}/pdf`, req.url);
 
   // Dynamically import so the build doesn't fail when packages aren't installed
   let chromiumMod: { default: { args: string[]; defaultViewport: unknown; executablePath: () => Promise<string> } };
@@ -20,8 +34,13 @@ export async function GET(req: NextRequest) {
     chromiumMod = require("@sparticuz/chromium");
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     puppeteerMod = require("puppeteer-core");
-  } catch {
-    return NextResponse.json({ error: "pdf renderer not available" }, { status: 503 });
+  } catch (err) {
+    console.warn("[report:pdf:module_unavailable]", {
+      reportId: data.reportId,
+      errorName: err instanceof Error ? err.name : "unknown",
+      errorMessage: err instanceof Error ? err.message : String(err),
+    });
+    return NextResponse.redirect(fallbackUrl, 307);
   }
 
   const { renderToStaticMarkup } = await import("react-dom/server");
@@ -70,7 +89,13 @@ export async function GET(req: NextRequest) {
 <body>${bodyHtml}</body>
 </html>`;
 
+  // Track which phase failed so the log line names the failing stage. A flat
+  // `try { ... } catch (err) { log(err) }` only tells us "something inside the
+  // try block threw", which makes the difference between a launch fail, a
+  // setContent fail, and a pdf() timeout invisible in prod logs.
+  let stage = "init";
   try {
+    stage = "launch";
     const chromium = chromiumMod.default;
     const browser = await puppeteerMod.launch({
       args: chromium.args,
@@ -78,9 +103,13 @@ export async function GET(req: NextRequest) {
       executablePath: await chromium.executablePath(),
       headless: true,
     });
+    stage = "new_page";
     const page = await browser.newPage();
+    stage = "set_content";
     await page.setContent(html, { waitUntil: "networkidle0" });
+    stage = "render_pdf";
     const pdfBytes = await page.pdf({ format: "A4", printBackground: true });
+    stage = "close";
     await browser.close();
 
     const slug = data.companyName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
@@ -91,7 +120,17 @@ export async function GET(req: NextRequest) {
         "Cache-Control": "private, max-age=3600",
       },
     });
-  } catch {
-    return NextResponse.json({ error: "pdf generation failed" }, { status: 500 });
+  } catch (err) {
+    console.error("[report:pdf:render_failed]", {
+      reportId: data.reportId,
+      stage,
+      errorName: err instanceof Error ? err.name : "unknown",
+      errorMessage: err instanceof Error ? err.message : String(err),
+      errorCode: (err as { code?: string | number })?.code,
+    });
+    // Graceful degrade: send the user to the HTML+print fallback instead of a
+    // dead JSON error tab. Their dashboard PDF button always lands on
+    // something printable.
+    return NextResponse.redirect(fallbackUrl, 307);
   }
 }
