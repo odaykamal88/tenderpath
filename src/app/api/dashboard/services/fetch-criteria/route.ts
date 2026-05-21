@@ -1,0 +1,198 @@
+import { NextRequest, NextResponse } from "next/server";
+import Anthropic from "@anthropic-ai/sdk";
+import { requireDashboardAccess } from "@/lib/access";
+import { extractDocumentText } from "@/lib/documents/extract";
+
+export const runtime = "nodejs";
+export const maxDuration = 45;
+
+// Pull eligibility + evaluation criteria out of a tender URL on demand.
+//
+// Flow:
+//   1. Browser sends the tender URL the user pasted.
+//   2. We fetch the URL server-side (a quick HTTPS GET, no headless browser
+//      yet — JS-rendered portals will return thin shells and we explicitly
+//      tell the user to paste the criteria manually).
+//   3. PDFs go through the existing extractDocumentText. HTML pages get
+//      stripped to text inline.
+//   4. Claude Haiku reads the cleaned text and returns the two criteria
+//      sections in plain prose. We never invent criteria — the prompt
+//      makes that explicit and the model is instructed to say so when
+//      criteria are absent.
+//
+// Caps in place:
+//   - 15 s URL fetch timeout (signal: AbortSignal.timeout)
+//   - 20 KB cleaned-text payload sent to the LLM (cheap + sufficient)
+//   - 2 000 max output tokens (criteria are short)
+//
+// Errors are reported with stable [criteria:fetch:*] tags + a stage in the
+// body so the client can render something specific.
+export async function POST(req: NextRequest) {
+  const guard = await requireDashboardAccess(req);
+  if (!guard.authorized) return guard.response!;
+
+  let rawUrl: string;
+  try {
+    const body = await req.json();
+    rawUrl = String(body.url ?? "").trim();
+    if (!rawUrl) throw new Error("missing url");
+  } catch {
+    console.warn("[criteria:fetch:bad_request]", { userId: guard.user!.id });
+    return NextResponse.json({ error: "url required" }, { status: 400 });
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+    if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("bad protocol");
+  } catch {
+    console.warn("[criteria:fetch:invalid_url]", {
+      userId: guard.user!.id,
+      urlPrefix: rawUrl.slice(0, 60),
+    });
+    return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
+  }
+
+  let stage = "fetch";
+  try {
+    stage = "fetch";
+    const fetchRes = await fetch(parsed.toString(), {
+      headers: {
+        "user-agent": "TenderPathBot/1.0 (+https://www.tenderpath.me)",
+        accept: "text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.5",
+      },
+      signal: AbortSignal.timeout(15_000),
+      redirect: "follow",
+    });
+    if (!fetchRes.ok) {
+      console.warn("[criteria:fetch:non_2xx]", {
+        userId: guard.user!.id,
+        host: parsed.host,
+        status: fetchRes.status,
+      });
+      return NextResponse.json(
+        { error: `The tender source returned ${fetchRes.status}. Paste the criteria below instead.` },
+        { status: 502 },
+      );
+    }
+
+    const contentType = (fetchRes.headers.get("content-type") || "").toLowerCase();
+
+    stage = "extract";
+    let pageText: string;
+    if (contentType.includes("application/pdf") || parsed.pathname.toLowerCase().endsWith(".pdf")) {
+      const buffer = Buffer.from(await fetchRes.arrayBuffer());
+      const extraction = await extractDocumentText({
+        buffer,
+        mimeType: "application/pdf",
+        fileName: parsed.pathname.split("/").pop() || "tender.pdf",
+      });
+      pageText = extraction.text;
+    } else {
+      const html = await fetchRes.text();
+      pageText = stripHtml(html);
+    }
+
+    pageText = pageText.slice(0, 20_000);
+    if (pageText.trim().length < 200) {
+      console.warn("[criteria:fetch:thin_content]", {
+        userId: guard.user!.id,
+        host: parsed.host,
+        length: pageText.length,
+      });
+      return NextResponse.json(
+        {
+          error:
+            "Could not pull meaningful content from this URL. The page may be JS-rendered or behind a login. Paste the criteria below.",
+        },
+        { status: 422 },
+      );
+    }
+
+    stage = "llm";
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      console.warn("[criteria:fetch:no_api_key]");
+      return NextResponse.json(
+        { error: "Criteria extraction service is not configured." },
+        { status: 503 },
+      );
+    }
+
+    const client = new Anthropic({ apiKey });
+    const completion = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 2000,
+      messages: [
+        {
+          role: "user",
+          content: `You are reading the body of a procurement / tender document. Extract two sections from the text, exactly as written when present:
+
+ELIGIBILITY CRITERIA
+- bullet list of the eligibility / qualification requirements bidders must meet (legal status, experience, certifications, country, sector, financial thresholds, etc.)
+
+EVALUATION CRITERIA
+- bullet list of how proposals will be scored (criteria + weights or pass/fail, technical vs financial split, scoring bands)
+
+Rules:
+- Quote or closely paraphrase only what the document says. Do not invent criteria that aren't there.
+- If a section is absent, write the section header and one line: "Not stated in this document."
+- Skip preamble, agency boilerplate, contact information.
+- Keep the output under 1500 words.
+
+Tender document text:
+"""
+${pageText}
+"""`,
+        },
+      ],
+    });
+
+    const criteria = completion.content
+      .filter((block): block is Anthropic.TextBlock => block.type === "text")
+      .map((block) => block.text)
+      .join("\n")
+      .trim();
+
+    if (!criteria) {
+      console.warn("[criteria:fetch:empty_completion]", { userId: guard.user!.id });
+      return NextResponse.json(
+        { error: "Could not extract criteria from this source. Paste them below." },
+        { status: 422 },
+      );
+    }
+
+    return NextResponse.json({ criteria, source: { host: parsed.host, contentType } });
+  } catch (err) {
+    console.error("[criteria:fetch:failed]", {
+      userId: guard.user?.id,
+      stage,
+      host: parsed.host,
+      errorName: err instanceof Error ? err.name : "unknown",
+      errorMessage: err instanceof Error ? err.message : String(err),
+    });
+    return NextResponse.json(
+      {
+        error: `Could not fetch criteria at ${stage}. ${err instanceof Error ? err.message : "Unknown error"}`,
+        stage,
+      },
+      { status: 500 },
+    );
+  }
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+    .replace(/<noscript\b[^<]*(?:(?!<\/noscript>)<[^<]*)*<\/noscript>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
