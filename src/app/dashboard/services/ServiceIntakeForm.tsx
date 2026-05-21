@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import ConfidenceGate from "./ConfidenceGate";
 
 type ServiceSlug = "bid-no-bid" | "digest" | "proposal" | "lta-roster";
@@ -29,16 +29,6 @@ interface ServiceIntakeFormProps {
   assessmentSnapshot?: AssessmentSnapshot | null;
 }
 
-interface PipelineEvidenceContext {
-  id: number;
-  source_url: string | null;
-  manual_source_url?: string | null;
-  tender_deadline: string | null;
-  fit_score: number | null;
-  match_reasons: Record<string, unknown> | null;
-  has_broken_link: boolean | null;
-}
-
 interface UploadedFile {
   name: string;
   url: string;
@@ -53,7 +43,6 @@ const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
 
 const SERVICE_FIELDS: Record<ServiceSlug, Array<{ key: string; label: string; placeholder: string; required?: boolean; rows?: number }>> = {
   "bid-no-bid": [
-    { key: "decision_deadline", label: "When do you need the decision?", placeholder: "e.g. Tomorrow, before the Friday bid meeting" },
     { key: "tender_context", label: "Paste eligibility or evaluation criteria", placeholder: "Copy the key requirements from the TOR, RFP, or tender notice — the more specific, the sharper the analysis", rows: 6 },
     { key: "additional_details", label: "Additional details we should know", placeholder: "Anything else that would help sharpen the analysis — competitive concerns, partner constraints, timeline pressure", rows: 3 },
   ],
@@ -76,110 +65,6 @@ function authHeaders(): HeadersInit {
   return token
     ? { "content-type": "application/json", authorization: `Bearer ${token}` }
     : { "content-type": "application/json" };
-}
-
-function hasText(value: unknown): boolean {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function hasList(value: unknown): boolean {
-  return Array.isArray(value) && value.some((item) => hasText(item));
-}
-
-function hasMatchEvidence(item: PipelineEvidenceContext | null): boolean {
-  if (!item?.match_reasons) return false;
-  return hasList(item.match_reasons.summary)
-    || hasList(item.match_reasons.matchedSectors)
-    || hasList(item.match_reasons.matchedCapabilities)
-    || (typeof item.fit_score === "number" && item.fit_score > 0);
-}
-
-function buildEvidenceReview(args: {
-  service: ServiceSlug;
-  pipelineItemId?: string | null;
-  pipelineContext: PipelineEvidenceContext | null;
-  contextLoadError: string | null;
-  tenderUrl: string;
-  fields: Record<string, string>;
-  uploadedFile: UploadedFile | null;
-  docId?: string | null;
-}) {
-  if (args.service === "digest") return null;
-  const sourceAvailable = hasText(args.tenderUrl) || hasText(args.pipelineContext?.source_url) || hasText(args.pipelineContext?.manual_source_url);
-  const uploadedRequirements = Boolean(args.uploadedFile || args.docId);
-  const extractedRequirements = Boolean(
-    args.uploadedFile?.extraction?.status === "extracted"
-      && args.uploadedFile.extraction.charCount > 0,
-  );
-  const pastedRequirements = hasText(args.fields.tender_context) || hasText(args.fields.additional_details);
-  const hasRequirements = extractedRequirements || pastedRequirements;
-  const hasTargetAgency = hasText(args.fields.target_agency);
-  const matchEvidence = hasMatchEvidence(args.pipelineContext);
-  const hasDeadline = hasText(args.pipelineContext?.tender_deadline) || hasText(args.fields.submission_deadline);
-  const checks: Array<{ label: string; ok: boolean; help: string }> = [];
-
-  if (args.service === "bid-no-bid" || args.service === "proposal") {
-    checks.push({
-      label: "Pipeline tender",
-      ok: Boolean(args.pipelineItemId),
-      help: "Select a matched pipeline item so the service can use saved fit evidence.",
-    });
-  }
-  checks.push({
-    label: "Source URL",
-    ok: sourceAvailable,
-    help: "Add the tender, TOR, portal, or source page URL.",
-  });
-  checks.push({
-    label: "Dashboard match evidence",
-    ok: matchEvidence,
-    help: "Match reasons are missing, so fulfillment will need manual review.",
-  });
-  if (args.service === "bid-no-bid" || args.service === "proposal") {
-    checks.push({
-      label: args.service === "proposal" ? "TOR/RFP detail" : "Eligibility/evaluation criteria",
-      ok: hasRequirements,
-      help: uploadedRequirements && !extractedRequirements
-        ? "The uploaded document was not extractable yet; paste key criteria here so the automated output is grounded."
-        : args.service === "proposal"
-          ? "Upload an extractable PDF/DOCX/XLSX TOR or paste the TOR/RFP before checkout for a submission-ready draft."
-          : "Paste criteria or upload an extractable PDF/DOCX/XLSX before checkout for a decisive memo.",
-    });
-    checks.push({
-      label: "Deadline",
-      ok: hasDeadline,
-      help: "Add the deadline so effort and urgency are grounded.",
-    });
-  }
-  if (args.service === "lta-roster") {
-    checks.push({
-      label: "Target agency",
-      ok: hasTargetAgency,
-      help: "Confirm the roster, LTA, or agency before checkout.",
-    });
-    checks.push({
-      label: "Agency guide or call document",
-      ok: sourceAvailable || uploadedRequirements,
-      help: "Add a vendor guide, roster notice, or call document to avoid generic instructions.",
-    });
-  }
-  checks.push({
-    label: "Working source link",
-    ok: args.pipelineContext?.has_broken_link !== true,
-    help: "The saved source link is marked broken; paste a working URL if you have one.",
-  });
-
-  const missing = checks.filter((check) => !check.ok);
-  const status = args.contextLoadError
-    ? "needs review"
-    : missing.length === 0
-      ? "ready"
-      : missing.length <= 2
-        ? "needs context"
-        : "high risk";
-  const tone = status === "ready" ? "green" : status === "needs context" ? "amber" : "red";
-
-  return { status, tone, checks, missing };
 }
 
 function payHref(plan: string, context: {
@@ -218,8 +103,6 @@ export default function ServiceIntakeForm({
   const [uploading, setUploading] = useState(false);
   const [financialFile, setFinancialFile] = useState<UploadedFile | null>(null);
   const [uploadingFinancial, setUploadingFinancial] = useState(false);
-  const [pipelineContext, setPipelineContext] = useState<PipelineEvidenceContext | null>(null);
-  const [contextLoadError, setContextLoadError] = useState<string | null>(null);
   /** Confirmed primary line of business for this order (from ConfidenceGate). */
   const [confirmedPrimarySector, setConfirmedPrimarySector] = useState<string | null>(null);
 
@@ -230,49 +113,6 @@ export default function ServiceIntakeForm({
     if (tenderTitle) return `t-${tenderTitle.slice(0, 64)}`;
     return `s-${plan}`;
   }, [pipelineItemId, tenderTitle, plan]);
-
-  useEffect(() => {
-    if (!pipelineItemId) {
-      setPipelineContext(null);
-      setContextLoadError(null);
-      return;
-    }
-    let cancelled = false;
-    setContextLoadError(null);
-    fetch(`/api/dashboard/pipeline/${encodeURIComponent(pipelineItemId)}`, { headers: authHeaders() })
-      .then(async (res) => {
-        const data = (await res.json().catch(() => ({}))) as { item?: PipelineEvidenceContext; error?: string };
-        if (!res.ok || !data.item) throw new Error(data.error ?? "Could not load pipeline evidence");
-        if (!cancelled) setPipelineContext(data.item);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setPipelineContext(null);
-          setContextLoadError(err instanceof Error ? err.message : "Could not load pipeline evidence");
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [pipelineItemId]);
-
-  const evidenceReview = useMemo(() => buildEvidenceReview({
-    service,
-    pipelineItemId,
-    pipelineContext,
-    contextLoadError,
-    tenderUrl,
-    fields,
-    uploadedFile,
-    docId,
-  }), [contextLoadError, docId, fields, pipelineContext, pipelineItemId, service, tenderUrl, uploadedFile]);
-  const checkoutBlocked = Boolean(
-    evidenceReview
-      && (
-        (service === "proposal" && evidenceReview.status === "high risk")
-        || (service === "lta-roster" && evidenceReview.missing.some((item) => item.label === "Target agency"))
-      ),
-  );
 
   async function uploadOne(file: File): Promise<UploadedFile | { error: string }> {
     const formData = new FormData();
@@ -491,13 +331,15 @@ export default function ServiceIntakeForm({
         </div>
       )}
 
-      {/* Financial documents — captured here instead of being scored on the
-          dashboard. The deliverable templates use audited financials, bank
-          references, and balance sheets to populate the financial section. */}
+      {/* Supporting documents — for bid-no-bid this captures any relevant
+          docs the user wants the analysis to consider (financials, capability
+          statements, partner letters, certifications). On proposal/lta-roster
+          it still captures financial-specific docs that the deliverable LLM
+          uses to populate the financial section. Label flips per service. */}
       {(service === "bid-no-bid" || service === "proposal" || service === "lta-roster") && (
         <div>
           <label className={labelCls} style={{ fontFamily: MONO }}>
-            Upload financial documents
+            {service === "bid-no-bid" ? "Upload Supporting Documents" : "Upload financial documents"}
           </label>
           <div className="mt-1.5">
             {financialFile ? (
@@ -529,7 +371,14 @@ export default function ServiceIntakeForm({
                   <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 <span className="leading-snug flex-1">
-                  {uploadingFinancial ? "Uploading…" : <><span className="font-semibold text-stone-700">Choose file</span> — Audited financials, bank reference, or balance sheet (optional, sharpens the financial section)</>}
+                  {uploadingFinancial ? "Uploading…" : (
+                    <>
+                      <span className="font-semibold text-stone-700">Choose file</span> —{" "}
+                      {service === "bid-no-bid"
+                        ? "Capability statements, certifications, partner letters, financials, or anything else the analysis should weigh"
+                        : "Audited financials, bank reference, or balance sheet (optional, sharpens the financial section)"}
+                    </>
+                  )}
                 </span>
                 <input
                   type="file"
@@ -562,51 +411,6 @@ export default function ServiceIntakeForm({
         </div>
       ))}
 
-      {evidenceReview && (
-        <div
-          className={[
-            "rounded-sm border-l-2 px-3.5 py-3 text-[12px] leading-relaxed",
-            evidenceReview.tone === "green" && "border-emerald-600 bg-emerald-50/50 text-emerald-950",
-            evidenceReview.tone === "amber" && "border-amber-600 bg-amber-50/50 text-amber-950",
-            evidenceReview.tone === "red" && "border-red-600 bg-red-50/50 text-red-900",
-          ].filter(Boolean).join(" ")}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <span className="font-semibold uppercase tracking-[0.16em]" style={{ fontFamily: MONO }}>
-              Fulfillment context · {evidenceReview.status}
-            </span>
-            {pipelineContext?.fit_score != null && (
-              <span className="font-semibold tabular-nums" style={{ fontFamily: MONO }}>
-                {pipelineContext.fit_score}% fit
-              </span>
-            )}
-          </div>
-          <div className="mt-2 grid grid-cols-1 gap-1.5">
-            {evidenceReview.checks.map((check) => (
-              <div key={check.label} className="flex gap-2">
-                <span className="shrink-0 font-semibold tabular-nums" style={{ fontFamily: MONO }}>
-                  {check.ok ? "OK" : "MISS"}
-                </span>
-                <span>
-                  <span className="font-medium">{check.label}</span>
-                  {!check.ok && <span className="text-current/80"> — {check.help}</span>}
-                </span>
-              </div>
-            ))}
-          </div>
-          {contextLoadError && (
-            <div className="mt-2 text-[11px]" style={{ fontFamily: MONO }}>
-              Pipeline evidence could not be loaded: {contextLoadError}
-            </div>
-          )}
-          {checkoutBlocked && (
-            <div className="mt-2 rounded-sm bg-white/50 px-2.5 py-2 text-[11.5px] font-medium">
-              Automated checkout is paused until the missing source context is added. This keeps the paid output out of false-confidence territory.
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Error */}
       {error && (
         <p className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3.5 py-2.5 text-[12px] text-red-700">
@@ -617,10 +421,10 @@ export default function ServiceIntakeForm({
       {/* Submit */}
       <button
         type="submit"
-        disabled={busy || requiresPipeline || checkoutBlocked}
+        disabled={busy || requiresPipeline}
         className="w-full rounded-sm bg-stone-900 px-4 py-3 text-[13px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {busy ? "Saving intake…" : checkoutBlocked ? "Add missing context to continue" : `${label} →`}
+        {busy ? "Saving intake…" : `${label} →`}
       </button>
     </form>
   );
