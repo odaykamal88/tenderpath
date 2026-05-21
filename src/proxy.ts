@@ -27,6 +27,13 @@ const PUBLIC_PATHS = new Set([
   "/api/pay/verify-usdt",
   "/api/pay/wire-proof",
   "/api/telegram/webhook",
+  // Vault upload token endpoint — called by @vercel/blob/client's `upload()`
+  // on the browser, which cannot attach a Bearer header. The route itself
+  // verifies the tp_session JWT via clientPayload inside
+  // onBeforeGenerateToken, so the proxy gate is intentionally bypassed.
+  // Also receives the post-upload webhook from Vercel Blob (signature
+  // verified by handleUpload()).
+  "/api/dashboard/vault/upload-token",
 ]);
 
 // Matches /api/assessment/{numeric-id-or-uuid} only — not subpaths like /pdf.

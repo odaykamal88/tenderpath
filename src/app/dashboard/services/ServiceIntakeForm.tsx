@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { upload } from "@vercel/blob/client";
 import ConfidenceGate from "./ConfidenceGate";
 
 type ServiceSlug = "bid-no-bid" | "digest" | "proposal" | "lta-roster";
@@ -103,6 +104,17 @@ export default function ServiceIntakeForm({
   const [uploading, setUploading] = useState(false);
   const [financialFile, setFinancialFile] = useState<UploadedFile | null>(null);
   const [uploadingFinancial, setUploadingFinancial] = useState(false);
+  // Bid-no-bid only: lets the user attach the tender document directly in the
+  // "Tender or document" section instead of through a separate "Upload your
+  // documents" field (which was removed for bid-no-bid).
+  const [tenderFile, setTenderFile] = useState<UploadedFile | null>(null);
+  const [uploadingTender, setUploadingTender] = useState(false);
+  // Bid-no-bid only: lets the user paste a URL alongside (or instead of) an
+  // uploaded file in the Supporting Documents section.
+  const [supportingUrl, setSupportingUrl] = useState("");
+  // Fetch-criteria flow (bid-no-bid): loading state + last error message.
+  const [fetchingCriteria, setFetchingCriteria] = useState(false);
+  const [criteriaError, setCriteriaError] = useState<string | null>(null);
   /** Confirmed primary line of business for this order (from ConfidenceGate). */
   const [confirmedPrimarySector, setConfirmedPrimarySector] = useState<string | null>(null);
 
@@ -114,25 +126,51 @@ export default function ServiceIntakeForm({
     return `s-${plan}`;
   }, [pipelineItemId, tenderTitle, plan]);
 
+  // Direct-to-Blob upload. The browser uploads straight to Vercel Blob via
+  // the @vercel/blob/client SDK, bypassing the Vercel function body limit
+  // (4.5 MB on Pro plan) that was masquerading as "File upload failed. Try
+  // again or skip." for any tender doc larger than that. The companion
+  // /api/dashboard/vault/extract endpoint runs extraction + persistence
+  // once the upload returns.
   async function uploadOne(file: File): Promise<UploadedFile | { error: string }> {
-    const formData = new FormData();
-    formData.append("file", file);
-    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-    const headers: HeadersInit = token ? { authorization: `Bearer ${token}` } : {};
-    try {
-      const res = await fetch("/api/dashboard/vault/upload", { method: "POST", headers, body: formData });
-      const data = (await res.json().catch(() => ({}))) as {
-        url?: string;
-        name?: string;
-        error?: string;
-        extraction?: UploadedFile["extraction"];
+    if (file.size > 50 * 1024 * 1024) {
+      return {
+        error: `File is ${(file.size / 1024 / 1024).toFixed(1)} MB. Limit is 50 MB.`,
       };
-      if (!res.ok || !data.url) {
-        return { error: data.error ?? "File upload failed. Try again or skip." };
-      }
-      return { url: data.url, name: data.name ?? file.name, extraction: data.extraction };
-    } catch {
-      return { error: "File upload failed. Try again or skip." };
+    }
+    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+    if (!token) {
+      return { error: "You are signed out. Refresh the page and try again." };
+    }
+
+    try {
+      const blob = await upload(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/dashboard/vault/upload-token",
+        clientPayload: JSON.stringify({ token }),
+      });
+
+      const extractRes = await fetch("/api/dashboard/vault/extract", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ url: blob.url, name: file.name, mimeType: file.type }),
+      });
+      const extractData = (await extractRes.json().catch(() => ({}))) as {
+        extraction?: UploadedFile["extraction"];
+        error?: string;
+      };
+      // Extraction failure is non-fatal — the file is uploaded and usable.
+      // We surface the issue but still hand back the URL so the rest of the
+      // form keeps working.
+      return {
+        url: blob.url,
+        name: file.name,
+        extraction: extractData.extraction,
+      };
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Upload failed for an unknown reason.";
+      return { error: `Upload failed: ${message}` };
     }
   }
 
@@ -158,6 +196,60 @@ export default function ServiceIntakeForm({
     setUploadingFinancial(false);
   }
 
+  async function handleTenderFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingTender(true);
+    setError(null);
+    const result = await uploadOne(file);
+    if ("error" in result) setError(result.error);
+    else setTenderFile(result);
+    setUploadingTender(false);
+  }
+
+  async function handleFetchCriteria() {
+    if (!tenderUrl.trim()) {
+      setCriteriaError("Paste a tender URL first.");
+      return;
+    }
+    setFetchingCriteria(true);
+    setCriteriaError(null);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+      if (!token) {
+        setCriteriaError("You are signed out. Refresh the page and try again.");
+        return;
+      }
+      const res = await fetch("/api/dashboard/services/fetch-criteria", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ url: tenderUrl.trim() }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { criteria?: string; error?: string };
+      if (!res.ok || !data.criteria) {
+        setCriteriaError(data.error ?? `Could not fetch criteria (${res.status}).`);
+        return;
+      }
+      // Append to whatever the user has already typed so we don't blow away
+      // their notes; a clear separator makes it obvious where the fetched
+      // content starts.
+      setFields((prev) => {
+        const existing = prev.tender_context?.trim();
+        const fetched = data.criteria!.trim();
+        const next = existing
+          ? `${existing}\n\n— FETCHED FROM ${tenderUrl.trim()} —\n${fetched}`
+          : fetched;
+        return { ...prev, tender_context: next };
+      });
+    } catch (err) {
+      setCriteriaError(
+        err instanceof Error ? `Network error: ${err.message}` : "Network error fetching criteria.",
+      );
+    } finally {
+      setFetchingCriteria(false);
+    }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -168,6 +260,13 @@ export default function ServiceIntakeForm({
         ...fields,
         ...(uploadedFile ? { vault_url: uploadedFile.url, vault_filename: uploadedFile.name } : {}),
         ...(financialFile ? { financial_documents_url: financialFile.url, financial_documents_filename: financialFile.name } : {}),
+        // Bid-no-bid-only: tender file attached in the "Tender or document"
+        // section, and a supporting-documents URL pasted alongside the file
+        // upload. Both are additive keys so downstream LLM context builders
+        // (src/lib/bid-no-bid/generate.ts) can pick them up without breaking
+        // the existing intake shape for proposal / lta-roster.
+        ...(tenderFile ? { tender_file_url: tenderFile.url, tender_file_name: tenderFile.name } : {}),
+        ...(supportingUrl.trim() ? { supporting_link_url: supportingUrl.trim() } : {}),
         ...(docId ? { vault_doc_id: docId } : {}),
         ...(confirmedPrimarySector ? { confirmed_primary_sector: confirmedPrimarySector } : {}),
       };
@@ -266,22 +365,70 @@ export default function ServiceIntakeForm({
         </div>
       )}
 
-      {/* Tender URL */}
+      {/* Tender or document — URL input. On bid-no-bid this section also
+          carries the tender file upload (the standalone "Upload your
+          documents" field is removed for bid-no-bid). */}
       <div>
         <label className={labelCls} style={{ fontFamily: MONO }}>
-          Tender or document URL
+          Tender or document
         </label>
         <input
           value={tenderUrl}
           onChange={(e) => setTenderUrl(e.target.value)}
-          placeholder="Paste source page, TOR, or portal link if available"
+          placeholder="Paste source page, TOR, or portal link"
           className={inputCls}
           style={{ fontFamily: MONO }}
         />
+        {service === "bid-no-bid" && (
+          <div className="mt-2">
+            {tenderFile ? (
+              <div
+                className="flex items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 text-[12px] text-emerald-800"
+                style={{ fontFamily: MONO }}
+              >
+                <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+                </svg>
+                <span className="flex-1 truncate">
+                  {tenderFile.name} · {tenderFile.extraction?.status === "extracted"
+                    ? `extracted ${tenderFile.extraction.charCount.toLocaleString()} chars`
+                    : tenderFile.extraction?.status
+                      ? `uploaded, extraction ${tenderFile.extraction.status}`
+                      : "uploaded"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setTenderFile(null)}
+                  className="shrink-0 text-emerald-700 hover:text-emerald-900 underline underline-offset-2"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-stone-300 px-3.5 py-3 text-[12px] text-stone-500 hover:border-stone-700 hover:text-stone-700 transition-colors">
+                <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="leading-snug flex-1">
+                  {uploadingTender ? "Uploading…" : <>…or <span className="font-semibold text-stone-700">upload the tender document</span> (PDF / Word / Excel, up to 50 MB)</>}
+                </span>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx"
+                  className="sr-only"
+                  disabled={uploadingTender}
+                  onChange={handleTenderFileChange}
+                />
+              </label>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* File upload */}
-      {(service === "bid-no-bid" || service === "proposal" || service === "lta-roster") && (
+      {/* "Upload your documents" — kept for proposal + lta-roster only. The
+          equivalent slot for bid-no-bid is now embedded in the Tender section
+          above, so we drop the standalone field there per user request. */}
+      {(service === "proposal" || service === "lta-roster") && (
         <div>
           <label className={labelCls} style={{ fontFamily: MONO }}>
             {uploadLabel[service]}
@@ -390,26 +537,61 @@ export default function ServiceIntakeForm({
               </label>
             )}
           </div>
+          {service === "bid-no-bid" && (
+            <input
+              value={supportingUrl}
+              onChange={(e) => setSupportingUrl(e.target.value)}
+              placeholder="…or paste a supporting document URL (capability statement, certifications, partner letter)"
+              className={`${inputCls} mt-2`}
+              style={{ fontFamily: MONO }}
+            />
+          )}
         </div>
       )}
 
-      {/* Custom fields */}
-      {SERVICE_FIELDS[service].map((field) => (
-        <div key={field.key}>
-          <label className={labelCls} style={{ fontFamily: MONO }}>
-            {field.label}
-            {field.required && <span className="text-red-600 ml-1">*</span>}
-          </label>
-          <textarea
-            required={field.required}
-            value={fields[field.key] ?? ""}
-            onChange={(e) => setFields((prev) => ({ ...prev, [field.key]: e.target.value }))}
-            placeholder={field.placeholder}
-            rows={field.rows ?? 3}
-            className={inputCls + " resize-none"}
-          />
-        </div>
-      ))}
+      {/* Custom fields. tender_context on bid-no-bid gets a "Fetch from URL"
+          button rendered in the label row — clicking it hits the Haiku-backed
+          /api/dashboard/services/fetch-criteria endpoint which downloads the
+          tender URL, extracts the text, and appends the eligibility +
+          evaluation criteria into this textarea. */}
+      {SERVICE_FIELDS[service].map((field) => {
+        const showFetchCriteria = service === "bid-no-bid" && field.key === "tender_context";
+        return (
+          <div key={field.key}>
+            <div className="flex items-baseline justify-between gap-3">
+              <label className={labelCls} style={{ fontFamily: MONO }}>
+                {field.label}
+                {field.required && <span className="text-red-600 ml-1">*</span>}
+              </label>
+              {showFetchCriteria && (
+                <button
+                  type="button"
+                  onClick={handleFetchCriteria}
+                  disabled={fetchingCriteria || !tenderUrl.trim()}
+                  className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-700 hover:text-stone-900 disabled:text-stone-300 disabled:cursor-not-allowed border-b border-stone-300 hover:border-stone-700 disabled:border-stone-200 transition-colors"
+                  style={{ fontFamily: MONO }}
+                  title={!tenderUrl.trim() ? "Paste a tender URL above first" : "Fetch eligibility + evaluation criteria from the URL"}
+                >
+                  {fetchingCriteria ? "Fetching…" : "Fetch from URL ↗"}
+                </button>
+              )}
+            </div>
+            <textarea
+              required={field.required}
+              value={fields[field.key] ?? ""}
+              onChange={(e) => setFields((prev) => ({ ...prev, [field.key]: e.target.value }))}
+              placeholder={field.placeholder}
+              rows={field.rows ?? 3}
+              className={inputCls + " resize-none"}
+            />
+            {showFetchCriteria && criteriaError && (
+              <p className="mt-1.5 text-[11.5px] text-red-700" style={{ fontFamily: MONO }}>
+                {criteriaError}
+              </p>
+            )}
+          </div>
+        );
+      })}
 
       {/* Error */}
       {error && (
