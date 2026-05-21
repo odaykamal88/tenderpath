@@ -12,9 +12,17 @@
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  gap: 24px;
   padding-bottom: 14px;
   border-bottom: 1px solid var(--tp2-ink);
   margin-bottom: 18px;
+}
+/* Title block — flex:1 + min-width:0 lets the company title truncate via
+ * ellipsis when space is tight, instead of pushing into the actions area
+ * (the bug the user spotted where "tions in" was overlapping PDF/EMAIL). */
+.headerLead {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .eyebrow {
   font-family: var(--tp2-mono);
@@ -31,12 +39,26 @@
   letter-spacing: -0.015em;
   color: var(--tp2-ink);
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+/* .actions is the outer container; the 3 buttons live inside .actionButtons
+ * so they stay locked on one row, while the toast (.actionToast) can wrap
+ * below them when present via flex-wrap on the outer. */
 .actions {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   align-items: baseline;
   flex-wrap: wrap;
+  flex-shrink: 0;
+  justify-content: flex-end;
+}
+.actionButtons {
+  display: inline-flex;
+  gap: 16px;
+  align-items: baseline;
+  flex-wrap: nowrap;
 }
 .actions button,
 .actions a {
@@ -51,6 +73,7 @@
   cursor: pointer;
   padding: 0 0 2px;
   text-decoration: none;
+  white-space: nowrap;
 }
 .actions button:hover,
 .actions a:hover {
@@ -122,7 +145,18 @@
 
 @media (max-width: 768px) {
   .chrome { padding: 18px 0; }
-  .header { flex-direction: column; gap: 12px; padding: 0 18px 14px; }
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 0 18px 14px;
+  }
+  /* Actions land below the title on mobile but still need to stay in one
+   * row themselves — left-align them under the title. Tighter gap so the
+   * 3 buttons fit on a 320px viewport (PDF / EMAIL / RUN AGAIN ≈ 220px
+   * with 12px gaps). */
+  .actions { justify-content: flex-start; width: 100%; }
+  .actionButtons { gap: 14px; }
   .tabbar {
     display: grid;
     grid-template-columns: repeat(5, 1fr);

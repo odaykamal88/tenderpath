@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import styles from "./AssessmentChrome.module.css";
 
 type Status = "idle" | "sending" | "sent" | "error";
@@ -48,23 +49,25 @@ export function AssessmentActions({ reportId }: { reportId: string }) {
 
   return (
     <>
-      <a
-        href={`/api/report?id=${reportId}`}
-        target="_blank"
-        rel="noopener"
-      >
-        PDF ↓
-      </a>
-      <button
-        type="button"
-        onClick={sendEmail}
-        disabled={status === "sending"}
-        aria-live="polite"
-        title={message ?? "Email this report to your registered address"}
-      >
-        {emailLabel}
-      </button>
-      <a href="/assessment">Run again →</a>
+      <span className={styles.actionButtons}>
+        <a
+          href={`/api/report?id=${reportId}`}
+          target="_blank"
+          rel="noopener"
+        >
+          PDF ↓
+        </a>
+        <button
+          type="button"
+          onClick={sendEmail}
+          disabled={status === "sending"}
+          aria-live="polite"
+          title={message ?? "Email this report to your registered address"}
+        >
+          {emailLabel}
+        </button>
+        <Link href="/assessment">Run again →</Link>
+      </span>
       {message && status !== "idle" && (
         <span
           className={styles.actionToast}

@@ -25,7 +25,7 @@ export function AssessmentHeader({
 }) {
   return (
     <header className={styles.header}>
-      <div>
+      <div className={styles.headerLead}>
         <div className={styles.eyebrow}>Vendor readiness · No. {displayNumber}</div>
         <h1 className={styles.title}>{companyName}</h1>
       </div>
