@@ -263,9 +263,11 @@ export default async function ServiceDetailPage({
 
       {/* Two-column layout */}
       <div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.9fr)]">
-        {/* LEFT — what you get + how it works */}
+        {/* LEFT — how it works + caveat + sample */}
         <section className="space-y-7">
-          {/* What you get */}
+          {/* How it works (was "02 ·"; "01 · Deliverables" block removed per
+              2026-05-21 UX cleanup — the deliverable list duplicates what the
+              sample-output drawer already shows). */}
           <div className="rounded-md border border-stone-200/70 bg-white p-6">
             <h2
               className="text-[22px] font-medium text-stone-900 mb-4"
@@ -276,38 +278,6 @@ export default async function ServiceDetailPage({
                 style={{ fontFamily: MONO_FONT }}
               >
                 01 ·
-              </span>
-              Deliverables
-            </h2>
-            <ul className="grid grid-cols-1 gap-px bg-stone-200/70 rounded-sm overflow-hidden sm:grid-cols-2">
-              {service.output.map((item, idx) => (
-                <li
-                  key={item}
-                  className="bg-stone-50/60 px-4 py-3.5 text-[13.5px] leading-relaxed text-stone-800 flex gap-3"
-                >
-                  <span
-                    className="shrink-0 text-[10px] font-semibold tabular-nums text-stone-400 mt-0.5"
-                    style={{ fontFamily: MONO_FONT }}
-                  >
-                    {(idx + 1).toString().padStart(2, "0")}
-                  </span>
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* How it works */}
-          <div className="rounded-md border border-stone-200/70 bg-white p-6">
-            <h2
-              className="text-[22px] font-medium text-stone-900 mb-4"
-              style={{ fontFamily: SERIF_FONT }}
-            >
-              <span
-                className="text-[11px] font-semibold tabular-nums text-stone-400 mr-2 align-middle"
-                style={{ fontFamily: MONO_FONT }}
-              >
-                02 ·
               </span>
               How it works
             </h2>
@@ -382,7 +352,7 @@ export default async function ServiceDetailPage({
               className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle"
               style={{ fontFamily: MONO_FONT }}
             >
-              03 ·
+              02 ·
             </span>
             Work context
           </h2>
