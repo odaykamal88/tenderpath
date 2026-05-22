@@ -105,8 +105,18 @@ export async function POST(request: Request) {
 
   try {
     const requirements = await extractTenderRequirements(tenderText);
+    // Admin path runs in a sandbox — no user_id, no intake row, no
+    // pasted/uploaded docs to gather. The structured-docs section is
+    // intentionally empty; the LLM falls back to the company profile +
+    // tender text alone. PR-F.
     const output = await generateBidNoBidAnalysis(
-      { tenderText, companyContext, intakeSummary },
+      {
+        tenderText,
+        companyContext,
+        intakeSummary,
+        applicantDocumentsContext: "",
+        documentFileNames: [],
+      },
       requirements
     );
 

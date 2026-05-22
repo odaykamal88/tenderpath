@@ -76,6 +76,18 @@ export interface BidGenerationInputs {
   tenderText: string;
   companyContext: string;
   intakeSummary: string;
+  /**
+   * Structured per-document section — fully formatted block from
+   * `formatDocumentsForPrompt(loadBidNoBidDocuments(...))`. Empty string
+   * when nothing was uploaded or pasted. PR-F (2026-05-21).
+   */
+  applicantDocumentsContext: string;
+  /**
+   * Filenames passed in so the LLM can be reminded of the exact strings
+   * to use in `applicant_documents_cited`. Same names as the [doc] file:
+   * labels in `applicantDocumentsContext`.
+   */
+  documentFileNames: string[];
 }
 
 export async function extractTenderRequirements(
@@ -143,6 +155,10 @@ ${JSON.stringify(requirements, null, 2)}
 USER INTAKE NOTES:
 ${inputs.intakeSummary || "None provided."}
 
+APPLICANT-PROVIDED DOCUMENTS (uploaded or pasted at intake — these are the
+primary source of truth; cite them by filename when reasoning):
+${inputs.applicantDocumentsContext || "No applicant documents were uploaded or pasted for this analysis."}
+
 Return a Bid/No-Bid analysis as a JSON object with this exact shape:
 {
   "recommendation": "bid" | "no-bid" | "conditional",
@@ -203,8 +219,26 @@ Return a Bid/No-Bid analysis as a JSON object with this exact shape:
     "tender_excerpt": string — up to 240 chars of the most decisive tender text,
     "company_capabilities_matched": string[] — capabilities directly evidenced by the profile,
     "company_capabilities_missing": string[] — capabilities the tender requires but the profile lacks
-  }
+  },
+  "applicant_documents_cited": string[] — list filenames from the
+                                          APPLICANT-PROVIDED DOCUMENTS section above
+                                          that you directly drew evidence from. Use the EXACT
+                                          filename string as shown in the [doc] file: labels.
+                                          Empty array if no documents were provided.
+                                          Available filenames: ${JSON.stringify(inputs.documentFileNames)}
 }
+
+Document grounding rules (PR-F):
+- When the tender requirements come from a [doc] in APPLICANT-PROVIDED DOCUMENTS labeled
+  class:tor / eligibility_criteria / evaluation_criteria, quote or closely paraphrase them
+  rather than inventing requirements.
+- When fit_reasoning or eligibility_findings claims are backed by a [doc] labeled
+  class:capability_statement / cv / compliance / financial / reference_letter, mention the
+  source ("Per CV.pdf, ..." or "The capability statement evidences ...") AND list that
+  filename in applicant_documents_cited.
+- evidence_label="evidence" requires a tender or applicant-document source — do not use it
+  for inferences. When the only support is the company profile (not a document), use
+  evidence_label="inference".
 
 Rules:
 - Be specific. Reference the company's actual capabilities, geography, and certifications.
@@ -307,6 +341,14 @@ function normalize(raw: Partial<BidNoBidOutput>): BidNoBidOutput {
   out.evidence.tender_excerpt = String(out.evidence.tender_excerpt ?? "").slice(0, 320);
   out.evidence.company_capabilities_matched = (out.evidence.company_capabilities_matched ?? []).slice(0, 10);
   out.evidence.company_capabilities_missing = (out.evidence.company_capabilities_missing ?? []).slice(0, 10);
+  // PR-F: clamp applicant_documents_cited so a hallucinating model can't
+  // pad the list. Defer the "documents_ingested" populate to generate.ts
+  // (server-known, not from the LLM).
+  out.applicant_documents_cited = Array.isArray(raw.applicant_documents_cited)
+    ? raw.applicant_documents_cited
+        .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+        .slice(0, 12)
+    : [];
   out.headline = String(out.headline ?? "").slice(0, 200);
   out.effort_estimate_hours = Math.max(0, Math.round(Number(out.effort_estimate_hours ?? 0)));
   if (!(["bid", "no-bid", "conditional"] as const).includes(out.recommendation)) {

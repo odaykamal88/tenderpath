@@ -79,7 +79,7 @@ function flag(ok: boolean, label: string, extra = "") {
   console.log("Calling generateBidNoBidAnalysis (Sonnet)...");
   const t1 = Date.now();
   const output = await generateBidNoBidAnalysis(
-    { tenderText, companyContext, intakeSummary },
+    { tenderText, companyContext, intakeSummary, applicantDocumentsContext: "", documentFileNames: [] },
     requirements,
   );
   console.log(`  done in ${((Date.now() - t1) / 1000).toFixed(1)}s`);
