@@ -56,7 +56,7 @@ JV/subcontract appetite: yes, EU-eligible partner only.`;
   console.log("generate (Sonnet, max_tokens=6000)...");
   const t1 = Date.now();
   const output = await generateBidNoBidAnalysis(
-    { tenderText, companyContext, intakeSummary },
+    { tenderText, companyContext, intakeSummary, applicantDocumentsContext: "", documentFileNames: [] },
     requirements,
   );
   console.log(`  done in ${((Date.now() - t1) / 1000).toFixed(1)}s`);

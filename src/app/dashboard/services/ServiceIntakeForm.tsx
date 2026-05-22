@@ -146,9 +146,16 @@ export default function ServiceIntakeForm({
   // onStage is called as the pipeline crosses milestones so the caller can
   // surface a stage-specific label ("Uploading file…" / "Reading document…")
   // instead of a single opaque "Uploading…" state.
+  /**
+   * `purpose` controls the vault row tag the server stamps on this file.
+   * `tender_main` flags the primary tender PDF/TOR; `supporting` flags
+   * capability docs / CVs / certs / financials. Both are bundled into the
+   * bid-no-bid analysis prompt with their Haiku classification.
+   */
   async function uploadOne(
     file: File,
     onStage: (stage: UploadStage) => void,
+    purpose: "tender_main" | "supporting" = "supporting",
   ): Promise<UploadedFile | { error: string }> {
     // Browser console trail so user-reported "stuck spinner" bug reports can
     // be triaged from a screenshot of devtools. Mirrors the server-side
@@ -235,11 +242,20 @@ export default function ServiceIntakeForm({
       const extractRes = await fetch("/api/dashboard/vault/extract", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify({ url: blob.url, name: file.name, mimeType: file.type }),
-        // Server side maxDuration is 30 s; give the network a small headroom
+        body: JSON.stringify({
+          url: blob.url,
+          name: file.name,
+          mimeType: file.type,
+          // tenderTitle + purpose tell the server how to tag the vault row
+          // so future bid-no-bid runs on the same tender can pre-load every
+          // doc the user has attached to it.
+          tenderTitle: tenderTitle ?? null,
+          purpose,
+        }),
+        // Server side maxDuration is 45 s; give the network a small headroom
         // on top of that so a genuinely slow function still surfaces a real
         // response rather than a client-side abort masquerading as a hang.
-        signal: AbortSignal.timeout(45_000),
+        signal: AbortSignal.timeout(60_000),
       });
       const rawExtract = await extractRes.text();
       let extractData: { extraction?: UploadedFile["extraction"]; error?: string } = {};
@@ -280,7 +296,10 @@ export default function ServiceIntakeForm({
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
-    const result = await uploadOne(file, setUploading);
+    // The general "Upload your documents" slot — used on proposal /
+    // lta-roster pages. We treat these as the primary tender doc since
+    // that's what those flows are uploading (TOR / vendor guide).
+    const result = await uploadOne(file, setUploading, "tender_main");
     if ("error" in result) setError(result.error);
     else setUploadedFile(result);
     setUploading(null);
@@ -290,7 +309,9 @@ export default function ServiceIntakeForm({
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
-    const result = await uploadOne(file, setUploadingFinancial);
+    // Supporting docs — capability statements, certifications, financials,
+    // partner letters. Bid-no-bid analysis weighs these against the tender.
+    const result = await uploadOne(file, setUploadingFinancial, "supporting");
     if ("error" in result) setError(result.error);
     else setFinancialFile(result);
     setUploadingFinancial(null);
@@ -300,7 +321,9 @@ export default function ServiceIntakeForm({
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
-    const result = await uploadOne(file, setUploadingTender);
+    // Bid-no-bid-only "Tender or document" upload — this is the primary
+    // tender doc (TOR / RFP / EOI). Gets the "bid-no-bid-tender" vault tag.
+    const result = await uploadOne(file, setUploadingTender, "tender_main");
     if ("error" in result) setError(result.error);
     else setTenderFile(result);
     setUploadingTender(null);

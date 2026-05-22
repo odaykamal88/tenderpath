@@ -1,7 +1,7 @@
 import { put } from "@vercel/blob";
 import { sql } from "@/lib/db";
 import { sendBidNoBidReadyEmail } from "@/lib/email/sendBidNoBidNotification";
-import { formatServiceContextForPrompt, formatServiceDocumentsForTenderText } from "@/lib/service-context";
+import { formatServiceContextForPrompt } from "@/lib/service-context";
 import { track } from "@/lib/telemetry/funnel";
 import { renderBidNoBidPdf } from "./pdfDoc";
 import {
@@ -10,6 +10,11 @@ import {
   type BidGenerationInputs,
 } from "./llm";
 import type { BidNoBidOutput } from "./types";
+import {
+  loadBidNoBidDocuments,
+  formatDocumentsForPrompt,
+  summarizeDocs,
+} from "./documents";
 
 export const BID_PLAN = "bid-no-bid";
 export const MAX_ATTEMPTS = 3; // 1 automatic + 2 user regenerations
@@ -128,10 +133,15 @@ async function loadPipelineItem(pipelineItemId: number | null): Promise<Pipeline
   return rows[0] ?? null;
 }
 
+/**
+ * Builds the high-level tender summary fed to the LLM. PR-F: document
+ * text is no longer mixed into this blob — it goes into a dedicated
+ * `applicantDocumentsContext` parameter the prompt can label per-doc.
+ * The summary here stays focused on the call's metadata.
+ */
 function buildTenderText(order: WorkOrderRow, pipelineItem: PipelineRow | null): string {
   const intakeContext = order.intake?.tender_context;
   const torText = typeof intakeContext === "string" ? intakeContext : "";
-  const uploadedDocumentText = formatServiceDocumentsForTenderText(order.intake);
 
   if (pipelineItem) {
     const sourceUrl = pipelineItem.t_source_url ?? pipelineItem.manual_source_url ?? order.tender_url;
@@ -147,7 +157,6 @@ function buildTenderText(order: WorkOrderRow, pipelineItem: PipelineRow | null):
       pipelineItem.t_description && `\nDescription:\n${pipelineItem.t_description}`,
       pipelineItem.eligibility_summary && `\nEligibility:\n${pipelineItem.eligibility_summary}`,
       torText && `\nPasted requirements:\n${torText}`,
-      uploadedDocumentText,
     ].filter(Boolean).join("\n");
   }
 
@@ -156,7 +165,6 @@ function buildTenderText(order: WorkOrderRow, pipelineItem: PipelineRow | null):
     order.agency && `Agency: ${order.agency}`,
     order.tender_url && `Source URL: ${order.tender_url}`,
     torText && `\nPasted requirements:\n${torText}`,
-    uploadedDocumentText,
   ].filter(Boolean).join("\n") || "No tender details provided. The user supplied no tender URL, agency, title, or pasted terms of reference.";
 }
 
@@ -298,10 +306,38 @@ export async function generateBidNoBid({
   const companyContext = buildCompanyContext(assessment);
   const intakeSummary = buildIntakeSummary(order.intake);
 
+  // PR-F: pull every applicant document — uploaded files (joined via the
+  // vault tags we wrote on the extract route) + pasted URLs (fetched +
+  // extracted server-side on demand, cached for 30 days). The structured
+  // list gets formatted into a labeled per-doc section in the LLM prompt
+  // so Sonnet can cite by filename in `applicant_documents_cited`.
+  const userIdForDocs = order.user_id ?? 0;
+  const docs = userIdForDocs
+    ? await loadBidNoBidDocuments({
+        userId: userIdForDocs,
+        tenderTitle: pipelineItem?.tender_title ?? order.tender_title ?? null,
+        tenderUrl: order.tender_url ?? pipelineItem?.t_source_url ?? null,
+        intake: order.intake ?? null,
+      })
+    : [];
+  const applicantDocumentsContext = formatDocumentsForPrompt(docs);
+  const documentFileNames = docs.map((d) => d.fileName);
+  const documentsLedger = summarizeDocs(docs);
+
   try {
     const requirements = await extractTenderRequirements(tenderText);
-    const inputs: BidGenerationInputs = { tenderText, companyContext, intakeSummary };
-    const output = await generateBidNoBidAnalysis(inputs, requirements);
+    const inputs: BidGenerationInputs = {
+      tenderText,
+      companyContext,
+      intakeSummary,
+      applicantDocumentsContext,
+      documentFileNames,
+    };
+    const llmOutput = await generateBidNoBidAnalysis(inputs, requirements);
+    // Attach the server-known ledger so the work-order UI can render
+    // "We read these documents" without the LLM having to enumerate them
+    // (which it won't do reliably across reruns).
+    const output = { ...llmOutput, documents_ingested: documentsLedger };
 
     let pdfUrl: string | null = null;
     let pdfPathname: string | null = null;

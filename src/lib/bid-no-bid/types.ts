@@ -133,6 +133,29 @@ export interface BidNoBidOutput {
   commercial_terms?: CommercialTerms;
   /** Eligibility findings with structural recommendations (JV / subcontract / etc.). */
   eligibility_findings?: BidEligibilityFinding[];
+
+  /* PR-F (grounded analysis) additions — all optional. */
+
+  /**
+   * Filenames the LLM directly cited as evidence in its reasoning.
+   * Asked of the model in the prompt; the work-order UI surfaces these
+   * as a "We read these documents" panel so the user sees the analysis
+   * is grounded in the files they uploaded / pasted.
+   */
+  applicant_documents_cited?: string[];
+  /**
+   * Compact ledger of documents fed into the analysis. Server-populated
+   * (not from the LLM) — comes from `summarizeDocs(loadBidNoBidDocuments(...))`.
+   * Lives next to the analysis so the work-order UI can render
+   * provenance without re-querying the vault.
+   */
+  documents_ingested?: Array<{
+    file_name: string;
+    doc_class: string;
+    purpose: "tender_main" | "supporting" | "fetched_url";
+    char_count: number;
+    source: "vault" | "extraction_by_url" | "fetched_url";
+  }>;
 }
 
 export interface TenderRequirements {
@@ -176,6 +199,8 @@ export const DEFAULT_BID_OUTPUT: BidNoBidOutput = {
   tender_type_note: null,
   commercial_terms: DEFAULT_COMMERCIAL_TERMS,
   eligibility_findings: [],
+  applicant_documents_cited: [],
+  documents_ingested: [],
 };
 
 export const DEFAULT_TENDER_REQUIREMENTS: TenderRequirements = {

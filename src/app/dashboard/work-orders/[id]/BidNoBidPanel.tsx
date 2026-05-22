@@ -47,6 +47,14 @@ interface BidEligibilityFinding {
   evidence_label: EvidenceLabel;
 }
 
+interface IngestedDocument {
+  file_name: string;
+  doc_class: string;
+  purpose: "tender_main" | "supporting" | "fetched_url";
+  char_count: number;
+  source: "vault" | "extraction_by_url" | "fetched_url";
+}
+
 interface BidOutput {
   recommendation: "bid" | "no-bid" | "conditional";
   win_probability_band: string;
@@ -68,7 +76,22 @@ interface BidOutput {
   tender_type_note?: string | null;
   commercial_terms?: CommercialTerms;
   eligibility_findings?: BidEligibilityFinding[];
+  /* PR-F additions — both optional for backwards-compatible JSONB reads. */
+  applicant_documents_cited?: string[];
+  documents_ingested?: IngestedDocument[];
 }
+
+const DOC_CLASS_LABEL: Record<string, string> = {
+  tor: "Terms of Reference",
+  eligibility_criteria: "Eligibility criteria",
+  evaluation_criteria: "Evaluation criteria",
+  capability_statement: "Capability statement",
+  cv: "CV",
+  compliance: "Compliance / cert",
+  financial: "Financial",
+  reference_letter: "Reference letter",
+  other: "Document",
+};
 
 const TENDER_TYPE_LABEL: Record<TenderType, string> = {
   RFQ: "RFQ",
@@ -380,6 +403,61 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
           {out.headline}
         </p>
       </div>
+
+      {/* PR-F: documents the analysis was grounded in. Surfacing this is
+          the wow moment — the user sees that their uploaded CV, capability
+          statement, and TOR were actually read and cited. */}
+      {(out.documents_ingested?.length ?? 0) > 0 && (
+        <div className="border-b border-stone-200/70 px-5 py-4 bg-stone-50/40">
+          <div className="flex items-baseline justify-between gap-3 mb-2">
+            <div
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+              style={{ fontFamily: MONO }}
+            >
+              Grounded in · {out.documents_ingested!.length} document{out.documents_ingested!.length === 1 ? "" : "s"}
+            </div>
+            {(out.applicant_documents_cited?.length ?? 0) > 0 && (
+              <div
+                className="text-[10px] uppercase tracking-[0.14em] text-emerald-700"
+                style={{ fontFamily: MONO }}
+              >
+                {out.applicant_documents_cited!.length} cited in analysis
+              </div>
+            )}
+          </div>
+          <ul className="flex flex-wrap gap-1.5">
+            {out.documents_ingested!.map((doc, i) => {
+              const cited = out.applicant_documents_cited?.includes(doc.file_name) ?? false;
+              const label = DOC_CLASS_LABEL[doc.doc_class] ?? "Document";
+              return (
+                <li
+                  key={`${doc.file_name}-${i}`}
+                  className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-1 text-[11px] ${
+                    cited
+                      ? "border-emerald-300 bg-emerald-50/60 text-emerald-800"
+                      : "border-stone-300 bg-white text-stone-600"
+                  }`}
+                  style={{ fontFamily: MONO }}
+                  title={`${doc.purpose} · ${doc.char_count.toLocaleString()} chars · source: ${doc.source}`}
+                >
+                  {cited && (
+                    <svg className="h-3 w-3 shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+                    </svg>
+                  )}
+                  <span className="font-semibold">{label}</span>
+                  <span className="opacity-70 truncate max-w-[200px]">· {doc.file_name}</span>
+                </li>
+              );
+            })}
+          </ul>
+          {(out.applicant_documents_cited?.length ?? 0) === 0 && (
+            <p className="mt-2 text-[11px] text-stone-500 leading-snug">
+              These files were read but the analysis didn&apos;t explicitly cite any of them. Re-running with sharper documents (TOR + capability statement + CV) tends to produce stronger grounded reasoning.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-5 p-5 lg:grid-cols-2">
         {out.fit_reasoning.length > 0 && (
