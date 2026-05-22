@@ -31,10 +31,12 @@ export const maxDuration = 45;
 //
 // Auth: Bearer via requireDashboardAccess.
 export async function POST(req: NextRequest) {
-  // Outer try/catch — extractDocumentText pulls in pdf-parse which has a
-  // NAPI binding that can fail to load on Vercel serverless. Without this
-  // wrap, the failure crashes the function before our handler runs and
-  // the client sees a generic Next.js 500 HTML body rather than JSON.
+  // Outer try/catch — defensive belt-and-braces so any unhandled
+  // exception (auth guard, DB hiccup, missing env, future module-init
+  // side effect) still surfaces as JSON instead of a generic Next.js
+  // 500 HTML body. PR-D was specifically about the pdf-parse@2.x NAPI
+  // crash — PR-H swapped to pdfjs-dist which doesn't have that issue,
+  // but the wrap stays as defense-in-depth.
   try {
     const guard = await requireDashboardAccess(req);
     if (!guard.authorized) return guard.response!;

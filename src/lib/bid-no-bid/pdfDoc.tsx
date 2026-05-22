@@ -8,6 +8,7 @@ import {
   type EvidenceLabel,
   type Severity,
   type ProjectedScore,
+  type BidNoBidSelfGrade,
   ELIGIBILITY_ACTION_LABEL,
   EVIDENCE_LABEL_TEXT,
   TENDER_TYPE_LABEL,
@@ -81,6 +82,87 @@ const bandColor = (band: ProjectedScore["band"]): string => {
   if (band === "C") return GOLD;
   if (band === "D") return RED;
   return INK3;
+};
+
+/* PR-H: self-grade block. Pure-deterministic meta-score rendered as a
+   compact card with score + per-dimension bars + callouts. Hidden when
+   missing (backwards-compat). */
+const gradeBandColor = (band: BidNoBidSelfGrade["band"]): string => {
+  if (band === "excellent") return GREEN;
+  if (band === "strong") return INK;
+  if (band === "competent") return GOLD;
+  if (band === "thin") return "#cc6633";
+  return RED;
+};
+
+const DIMENSION_LABEL_PDF: Record<keyof BidNoBidSelfGrade["dimensions"], string> = {
+  grounding: "Grounding",
+  evidence_quality: "Evidence",
+  rubric_match: "Rubric match",
+  actionability: "Actionability",
+  completeness: "Completeness",
+};
+
+const SelfGradeBlock = ({ grade }: { grade?: BidNoBidSelfGrade }) => {
+  if (!grade) return null;
+  const fill = gradeBandColor(grade.band);
+  const dims = Object.entries(grade.dimensions) as Array<
+    [keyof BidNoBidSelfGrade["dimensions"], { score_0_20: number; rationale: string }]
+  >;
+  return (
+    <View style={styles.section}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.label}>Analysis quality · self-graded</Text>
+          <Text style={{ fontSize: 11, color: fill, fontFamily: "Helvetica-Bold", marginTop: 2 }}>
+            {grade.band_label}
+          </Text>
+        </View>
+        <View
+          style={{
+            borderWidth: 1.5,
+            borderColor: fill,
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+            flexDirection: "row",
+            alignItems: "baseline",
+          }}
+        >
+          <Text style={{ fontSize: 22, color: INK, fontFamily: "Helvetica-Bold" }}>
+            {grade.score_0_100}
+          </Text>
+          <Text style={[styles.mono, { fontSize: 9, color: INK3, marginLeft: 4 }]}>/ 100</Text>
+        </View>
+      </View>
+      <View style={{ flexDirection: "row", gap: 6, marginBottom: 6 }}>
+        {dims.map(([key, dim]) => {
+          const pct = Math.max(0, Math.min(100, Math.round((dim.score_0_20 / 20) * 100)));
+          return (
+            <View key={key} style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 1 }}>
+                <Text style={[styles.mono, { fontSize: 6.5, color: INK3, letterSpacing: 0.5, textTransform: "uppercase" }]}>
+                  {DIMENSION_LABEL_PDF[key]}
+                </Text>
+                <Text style={[styles.mono, { fontSize: 7, color: INK2 }]}>{dim.score_0_20}/20</Text>
+              </View>
+              <View style={{ height: 3, backgroundColor: "#e8e0c8", marginBottom: 2 }}>
+                <View style={{ height: 3, width: `${pct}%`, backgroundColor: fill }} />
+              </View>
+              <Text style={{ fontSize: 7.5, color: INK2, lineHeight: 1.35 }}>{dim.rationale}</Text>
+            </View>
+          );
+        })}
+      </View>
+      {grade.callouts.length > 0 && (
+        <View style={{ paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: INK, marginTop: 4 }}>
+          <Text style={[styles.label, { marginBottom: 3 }]}>How to lift the score</Text>
+          {grade.callouts.map((c, i) => (
+            <Text key={i} style={{ fontSize: 9, color: INK2, marginBottom: 2, lineHeight: 1.4 }}>· {c}</Text>
+          ))}
+        </View>
+      )}
+    </View>
+  );
 };
 
 const ProjectedScoreBlock = ({ score }: { score?: ProjectedScore }) => {
@@ -415,6 +497,9 @@ const BidPdf = ({
           </View>
         </View>
       </View>
+
+      {/* PR-H: deterministic self-grade — quality signal first. */}
+      <SelfGradeBlock grade={output.analysis_grade} />
 
       {/* PR-G: projected score table — anchored at the top of the
           analysis section so the reader sees the per-criterion projection

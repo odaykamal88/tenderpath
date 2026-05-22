@@ -17,6 +17,7 @@ import {
   summarizeDocs,
   type BidNoBidDocument,
 } from "./documents";
+import { gradeAnalysis } from "./self-grade";
 
 export const BID_PLAN = "bid-no-bid";
 export const MAX_ATTEMPTS = 3; // 1 automatic + 2 user regenerations
@@ -361,7 +362,30 @@ export async function generateBidNoBid({
     // Attach the server-known ledger so the work-order UI can render
     // "We read these documents" without the LLM having to enumerate them
     // (which it won't do reliably across reruns).
-    const output = { ...llmOutput, documents_ingested: documentsLedger };
+    const outputWithLedger = { ...llmOutput, documents_ingested: documentsLedger };
+    // PR-H: deterministic user-facing self-grade. Inspects the LLM output
+    // + the documents we fed in + the tender text to score the analysis
+    // on five dimensions (grounding / evidence quality / rubric match /
+    // actionability / completeness). Shown in the UI + PDF so the user
+    // sees "this analysis scored 88/100" with re-run callouts.
+    const analysis_grade = gradeAnalysis({
+      output: outputWithLedger,
+      docs,
+      tenderText,
+    });
+    console.info("[bid-no-bid:self_grade]", {
+      workOrderId: order.id,
+      score: analysis_grade.score_0_100,
+      band: analysis_grade.band,
+      dimensions: {
+        grounding: analysis_grade.dimensions.grounding.score_0_20,
+        evidence: analysis_grade.dimensions.evidence_quality.score_0_20,
+        rubric: analysis_grade.dimensions.rubric_match.score_0_20,
+        actionability: analysis_grade.dimensions.actionability.score_0_20,
+        completeness: analysis_grade.dimensions.completeness.score_0_20,
+      },
+    });
+    const output = { ...outputWithLedger, analysis_grade };
 
     let pdfUrl: string | null = null;
     let pdfPathname: string | null = null;
