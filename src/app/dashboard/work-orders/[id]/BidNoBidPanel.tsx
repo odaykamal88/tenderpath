@@ -55,6 +55,26 @@ interface IngestedDocument {
   source: "vault" | "extraction_by_url" | "fetched_url";
 }
 
+type ProjectedBand = "A" | "B" | "C" | "D";
+
+interface ProjectedScoreCriterion {
+  name: string;
+  max_points: number;
+  projected_points: number;
+  rationale: string;
+  confidence: "high" | "medium" | "low";
+}
+
+interface ProjectedScore {
+  rubric_source: "stated_in_tender" | "inferred_from_text" | "absent";
+  total_points_possible: number | null;
+  total_points_projected: number | null;
+  band: ProjectedBand | null;
+  band_label: string | null;
+  criteria: ProjectedScoreCriterion[];
+  caveat: string | null;
+}
+
 interface BidOutput {
   recommendation: "bid" | "no-bid" | "conditional";
   win_probability_band: string;
@@ -79,7 +99,23 @@ interface BidOutput {
   /* PR-F additions — both optional for backwards-compatible JSONB reads. */
   applicant_documents_cited?: string[];
   documents_ingested?: IngestedDocument[];
+
+  /* PR-G additions — projected score table. */
+  projected_score?: ProjectedScore;
 }
+
+const BAND_STYLES: Record<ProjectedBand, { bar: string; chip: string; ring: string }> = {
+  A: { bar: "bg-emerald-600", chip: "bg-emerald-700 text-white", ring: "ring-emerald-200" },
+  B: { bar: "bg-stone-700", chip: "bg-stone-800 text-white", ring: "ring-stone-200" },
+  C: { bar: "bg-amber-500", chip: "bg-amber-600 text-white", ring: "ring-amber-200" },
+  D: { bar: "bg-red-600", chip: "bg-red-700 text-white", ring: "ring-red-200" },
+};
+
+const CONFIDENCE_LABEL: Record<ProjectedScoreCriterion["confidence"], string> = {
+  high: "High confidence",
+  medium: "Medium",
+  low: "Low — verify",
+};
 
 const DOC_CLASS_LABEL: Record<string, string> = {
   tor: "Terms of Reference",
@@ -403,6 +439,87 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
           {out.headline}
         </p>
       </div>
+
+      {/* PR-G: projected score table. Renders only when the tender publishes
+          a rubric (rubric_source !== "absent"). Per-criterion projection
+          anchored in the uploaded documents + company profile. */}
+      {out.projected_score && out.projected_score.rubric_source !== "absent" && out.projected_score.criteria.length > 0 && (() => {
+        const ps = out.projected_score!;
+        const band = ps.band ?? "C";
+        const styles = BAND_STYLES[band];
+        const pct = ps.total_points_possible && ps.total_points_projected != null
+          ? Math.round((ps.total_points_projected / ps.total_points_possible) * 100)
+          : null;
+        return (
+          <div className="border-b border-stone-200/70 px-5 py-5 bg-white">
+            <div className="flex flex-wrap items-baseline justify-between gap-3 mb-4">
+              <div className="flex items-baseline gap-3">
+                <span
+                  className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+                  style={{ fontFamily: MONO }}
+                >
+                  Projected score
+                </span>
+                <span
+                  className={`${styles.chip} inline-flex items-center gap-1.5 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.16em] rounded-sm`}
+                  style={{ fontFamily: MONO }}
+                >
+                  Band {band} · {ps.band_label}
+                </span>
+              </div>
+              {ps.total_points_possible != null && ps.total_points_projected != null && (
+                <div
+                  className="text-[12px] tabular-nums text-stone-700"
+                  style={{ fontFamily: MONO }}
+                >
+                  <span className="text-[20px] font-medium text-stone-900">{ps.total_points_projected}</span>
+                  <span className="text-stone-400"> / {ps.total_points_possible}</span>
+                  {pct != null && <span className="ml-2 text-stone-500">({pct}%)</span>}
+                </div>
+              )}
+            </div>
+            <ul className="space-y-3">
+              {ps.criteria.map((c, i) => {
+                const cPct = c.max_points > 0 ? Math.round((c.projected_points / c.max_points) * 100) : 0;
+                return (
+                  <li key={`${c.name}-${i}`} className="grid grid-cols-1 gap-1.5 lg:grid-cols-[1fr_auto]">
+                    <div>
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-[13px] font-medium text-stone-900">{c.name}</span>
+                        <span
+                          className="text-[11px] tabular-nums text-stone-600 whitespace-nowrap"
+                          style={{ fontFamily: MONO }}
+                        >
+                          {c.projected_points} / {c.max_points}
+                        </span>
+                      </div>
+                      <div className="mt-1 h-1.5 w-full rounded-full bg-stone-100 overflow-hidden">
+                        <div
+                          className={`h-full ${styles.bar} transition-all`}
+                          style={{ width: `${cPct}%` }}
+                        />
+                      </div>
+                      <p className="mt-1.5 text-[12px] leading-snug text-stone-600">{c.rationale}</p>
+                    </div>
+                    <span
+                      className="self-start text-[10px] uppercase tracking-[0.14em] text-stone-400 lg:pt-0.5"
+                      style={{ fontFamily: MONO }}
+                      title={CONFIDENCE_LABEL[c.confidence]}
+                    >
+                      {c.confidence}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+            {ps.caveat && (
+              <p className="mt-4 rounded-sm border-l-2 border-amber-500 bg-amber-50/40 px-3 py-2 text-[11.5px] leading-snug text-amber-900">
+                {ps.caveat}
+              </p>
+            )}
+          </div>
+        );
+      })()}
 
       {/* PR-F: documents the analysis was grounded in. Surfacing this is
           the wow moment — the user sees that their uploaded CV, capability

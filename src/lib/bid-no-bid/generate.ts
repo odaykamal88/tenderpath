@@ -13,7 +13,9 @@ import type { BidNoBidOutput } from "./types";
 import {
   loadBidNoBidDocuments,
   formatDocumentsForPrompt,
+  formatDocumentsAsApplicantEvidence,
   summarizeDocs,
+  type BidNoBidDocument,
 } from "./documents";
 
 export const BID_PLAN = "bid-no-bid";
@@ -168,22 +170,39 @@ function buildTenderText(order: WorkOrderRow, pipelineItem: PipelineRow | null):
   ].filter(Boolean).join("\n") || "No tender details provided. The user supplied no tender URL, agency, title, or pasted terms of reference.";
 }
 
-function buildCompanyContext(assessment: AssessmentRow | null): string {
-  if (!assessment) {
-    return "No company profile found. Treat the vendor as a small SME with limited verifiable evidence; degrade confidence accordingly.";
-  }
-  const ai = assessment.ai_analysis ?? {};
-  return [
-    `Company: ${assessment.company_name ?? "(no name)"}`,
-    `Description: ${assessment.description ?? "(no description)"}`,
-    `Primary sector: ${assessment.sector ?? "(not specified)"}`,
-    `Countries served: ${Array.isArray(assessment.countries) ? assessment.countries.join(", ") : "(none)"}`,
-    `Readiness score: ${assessment.readiness_score ?? "(no score)"} / 100`,
-    ai.capabilities ? `Capabilities: ${JSON.stringify(ai.capabilities)}` : "",
-    ai.strengths ? `Strengths: ${JSON.stringify(ai.strengths)}` : "",
-    ai.certifications_detected ? `Certifications: ${JSON.stringify(ai.certifications_detected)}` : "",
-    assessment.gaps ? `Known gaps: ${JSON.stringify(assessment.gaps)}` : "",
-  ].filter(Boolean).join("\n");
+/**
+ * PR-G: company profile now MERGES the website-derived assessment (older,
+ * potentially stale) with the applicant-evidence excerpts from uploaded
+ * documents (current, authoritative). The Sonnet prompt is told that the
+ * applicant evidence wins when the two disagree — exactly the case where
+ * a user has uploaded a more recent capability statement than their
+ * website displays.
+ */
+function buildCompanyContext(
+  assessment: AssessmentRow | null,
+  docs: BidNoBidDocument[],
+): string {
+  const websiteSection = !assessment
+    ? "No website-derived company profile found. Treat the vendor as a small SME with limited verifiable evidence; degrade confidence accordingly."
+    : (() => {
+        const ai = assessment.ai_analysis ?? {};
+        return [
+          "WEBSITE-DERIVED PROFILE (from prior assessment crawl; may be stale):",
+          `Company: ${assessment.company_name ?? "(no name)"}`,
+          `Description: ${assessment.description ?? "(no description)"}`,
+          `Primary sector: ${assessment.sector ?? "(not specified)"}`,
+          `Countries served: ${Array.isArray(assessment.countries) ? assessment.countries.join(", ") : "(none)"}`,
+          `Readiness score: ${assessment.readiness_score ?? "(no score)"} / 100`,
+          ai.capabilities ? `Capabilities: ${JSON.stringify(ai.capabilities)}` : "",
+          ai.strengths ? `Strengths: ${JSON.stringify(ai.strengths)}` : "",
+          ai.certifications_detected ? `Certifications: ${JSON.stringify(ai.certifications_detected)}` : "",
+          assessment.gaps ? `Known gaps: ${JSON.stringify(assessment.gaps)}` : "",
+        ].filter(Boolean).join("\n");
+      })();
+
+  const applicantEvidence = formatDocumentsAsApplicantEvidence(docs);
+  if (!applicantEvidence) return websiteSection;
+  return `${websiteSection}\n\n${applicantEvidence}`;
 }
 
 const INTAKE_HIDDEN_KEYS = new Set([
@@ -303,7 +322,6 @@ export async function generateBidNoBid({
   const assessment = await loadAssessmentForOrder(order);
   const pipelineItem = await loadPipelineItem(order.pipeline_item_id);
   const tenderText = buildTenderText(order, pipelineItem);
-  const companyContext = buildCompanyContext(assessment);
   const intakeSummary = buildIntakeSummary(order.intake);
 
   // PR-F: pull every applicant document — uploaded files (joined via the
@@ -320,6 +338,12 @@ export async function generateBidNoBid({
         intake: order.intake ?? null,
       })
     : [];
+  // PR-G: companyContext is built AFTER docs load so the applicant's
+  // uploaded capability statement / CV / financials / compliance docs
+  // get merged into the profile alongside the (older) website-derived
+  // assessment. The Sonnet prompt is told to prefer the uploaded
+  // evidence when the two disagree.
+  const companyContext = buildCompanyContext(assessment, docs);
   const applicantDocumentsContext = formatDocumentsForPrompt(docs);
   const documentFileNames = docs.map((d) => d.fileName);
   const documentsLedger = summarizeDocs(docs);

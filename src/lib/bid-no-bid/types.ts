@@ -156,6 +156,54 @@ export interface BidNoBidOutput {
     char_count: number;
     source: "vault" | "extraction_by_url" | "fetched_url";
   }>;
+
+  /* PR-G additions — per-criterion projected score. */
+
+  /**
+   * Projected score table when the tender publishes (or strongly implies)
+   * a scoring rubric. Consultant-grade output — the user gets a
+   * per-criterion projection anchored in the uploaded evidence and can
+   * sanity-check it against the published rubric in the TOR.
+   *
+   * The model is strictly instructed NOT to invent a rubric when none
+   * exists. rubric_source="absent" + empty criteria is the honest answer
+   * and the work-order UI hides the card in that case.
+   */
+  projected_score?: ProjectedScore;
+}
+
+export type ProjectedScoreBand = "A" | "B" | "C" | "D";
+
+export interface ProjectedScoreCriterion {
+  /** Criterion name as written in the tender ("Technical capacity", "Past experience"). */
+  name: string;
+  /** Maximum points available for this criterion per the rubric. */
+  max_points: number;
+  /** Projected points the applicant would earn, given the evidence we have. */
+  projected_points: number;
+  /** One-line evidence-anchored explanation (cite document or profile fact). */
+  rationale: string;
+  /** How confident the projection is. low = thin evidence, model is guessing. */
+  confidence: "high" | "medium" | "low";
+}
+
+export interface ProjectedScore {
+  /**
+   * Where the rubric came from:
+   *   - stated_in_tender: explicit max-points table found in the tender text or TOR
+   *   - inferred_from_text: model derived a rubric from prose (use cautiously)
+   *   - absent: tender doesn't publish a rubric; UI hides the card
+   */
+  rubric_source: "stated_in_tender" | "inferred_from_text" | "absent";
+  total_points_possible: number | null;
+  total_points_projected: number | null;
+  /** Letter band: A strong / B competitive / C borderline / D likely no-bid. */
+  band: ProjectedScoreBand | null;
+  /** Short label for the band, e.g. "Strong bid candidate". */
+  band_label: string | null;
+  criteria: ProjectedScoreCriterion[];
+  /** Caveat one-liner for the UI: "Rubric inferred from prose — verify in TOR." */
+  caveat: string | null;
 }
 
 export interface TenderRequirements {
@@ -201,6 +249,15 @@ export const DEFAULT_BID_OUTPUT: BidNoBidOutput = {
   eligibility_findings: [],
   applicant_documents_cited: [],
   documents_ingested: [],
+  projected_score: {
+    rubric_source: "absent",
+    total_points_possible: null,
+    total_points_projected: null,
+    band: null,
+    band_label: null,
+    criteria: [],
+    caveat: null,
+  },
 };
 
 export const DEFAULT_TENDER_REQUIREMENTS: TenderRequirements = {
