@@ -2,19 +2,23 @@ import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import { sql } from "@/lib/db";
 
-// pdf-parse@2.x ships a NAPI-backed native binding (@napi-rs/canvas) that
-// fails to load in the Vercel serverless runtime — the symptom is a
-//   Warning: Cannot load "@napi-..."
-// in the function log and a generic Next.js 500 HTML response, served
-// *before* any route handler can run. That blew up /api/dashboard/services/
-// fetch-criteria and /api/dashboard/vault/extract at module-init time and
-// the user saw "Could not fetch criteria (500)." (the client fallback).
+// PDF extraction history:
+//   1) pdf-parse@1.x — pure JS, worked but unmaintained and threw at
+//      module-init on Vercel because it tried to open a test fixture.
+//   2) pdf-parse@2.x (PR-B-era) — ships a NAPI binding (@napi-rs/canvas)
+//      that fails to load in the Vercel serverless runtime. Symptom: a
+//      "Warning: Cannot load @napi-..." in the function log and a
+//      generic Next.js 500 HTML body, served BEFORE any handler ran.
+//      Lazy-importing helped HTML/DOCX/XLSX paths but PDFs still
+//      degraded silently.
+//   3) pdfjs-dist (PR-H, current) — Mozilla's PDF.js engine. Pure WASM
+//      + JS, no NAPI bindings, works reliably on Node serverless. Same
+//      lazy-import pattern so the WASM blob is only fetched when an
+//      actual PDF arrives.
 //
-// We lazy-import pdf-parse inside extractPdf() so the native module is only
-// loaded when the request actually involves a PDF. HTML / DOCX / XLSX paths
-// never touch it. If the dynamic import itself throws, extractDocumentText's
-// outer try/catch turns it into a clean "failed" extraction result instead
-// of a route crash.
+// HTML / DOCX / XLSX paths never touch the PDF engine. If the dynamic
+// import itself throws, extractDocumentText's outer try/catch turns it
+// into a clean "failed" extraction result instead of a route crash.
 
 export type ExtractionStatus = "extracted" | "empty" | "unsupported" | "failed";
 
@@ -111,20 +115,60 @@ async function extractXlsx(buffer: Buffer): Promise<string> {
 }
 
 async function extractPdf(buffer: Buffer): Promise<string> {
-  // Dynamic import — see top-of-file note. If the NAPI binding fails to
-  // load on this runtime, the rejection propagates to extractDocumentText's
-  // outer catch and the caller gets a "failed" status with a readable
-  // error string instead of a function-level crash.
-  const { PDFParse } = await import("pdf-parse");
-  const parser = new PDFParse({ data: new Uint8Array(buffer) });
+  // Dynamic import — see top-of-file note. pdfjs-dist is pure JS/WASM
+  // with no NAPI bindings, so this loads reliably on Vercel serverless.
+  // The legacy build is used because the default "modern" entry point
+  // expects browser globals (Worker, etc.) that don't exist in Node.
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs") as typeof import("pdfjs-dist");
+  // pdfjs requires a worker entry, even in Node — pointing the global at
+  // the bundled worker .mjs lets pdfjs spin up a Node-side fake worker
+  // internally. Smoke-tested locally on a 7-page tender PDF (2.4 KB of
+  // text from page 1, all 7 pages parsed cleanly).
+  if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+    const { createRequire } = await import("node:module");
+    const requireFromHere = createRequire(import.meta.url);
+    pdfjs.GlobalWorkerOptions.workerSrc = requireFromHere.resolve(
+      "pdfjs-dist/legacy/build/pdf.worker.mjs",
+    );
+  }
+
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(buffer),
+    // Suppress non-fatal warnings (font glyph misses, etc.) — they're
+    // noisy in the function log and don't affect text extraction.
+    verbosity: 0,
+    // Disable XFA / embedded font loading. Tender PDFs almost never use
+    // those features and they trigger network requests we don't want.
+    isEvalSupported: false,
+    useSystemFonts: false,
+    disableFontFace: true,
+  });
+
+  const doc = await loadingTask.promise;
   try {
-    const result = await parser.getText({
-      first: 40,
-      pageJoiner: "\n\n--- page page_number of total_number ---\n\n",
-    });
-    return cleanText(result.text);
+    const totalPages = doc.numPages;
+    const maxPages = Math.min(totalPages, 40);
+    const pageTexts: string[] = [];
+    for (let pageNum = 1; pageNum <= maxPages; pageNum += 1) {
+      const page = await doc.getPage(pageNum);
+      try {
+        const content = await page.getTextContent();
+        const text = content.items
+          .map((item) =>
+            "str" in item && typeof item.str === "string" ? item.str : "",
+          )
+          .join(" ");
+        pageTexts.push(text);
+      } finally {
+        page.cleanup();
+      }
+      if (pageNum < maxPages) {
+        pageTexts.push(`\n\n--- page ${pageNum} of ${totalPages} ---\n\n`);
+      }
+    }
+    return cleanText(pageTexts.join(""));
   } finally {
-    await parser.destroy().catch(() => {});
+    await doc.destroy().catch(() => {});
   }
 }
 

@@ -102,7 +102,42 @@ interface BidOutput {
 
   /* PR-G additions — projected score table. */
   projected_score?: ProjectedScore;
+
+  /* PR-H additions — deterministic user-facing meta-score. */
+  analysis_grade?: AnalysisGrade;
 }
+
+type SelfGradeBand = "excellent" | "strong" | "competent" | "thin" | "weak";
+
+interface AnalysisGrade {
+  score_0_100: number;
+  band: SelfGradeBand;
+  band_label: string;
+  dimensions: {
+    grounding: { score_0_20: number; rationale: string };
+    evidence_quality: { score_0_20: number; rationale: string };
+    rubric_match: { score_0_20: number; rationale: string };
+    actionability: { score_0_20: number; rationale: string };
+    completeness: { score_0_20: number; rationale: string };
+  };
+  callouts: string[];
+}
+
+const GRADE_BAND_STYLES: Record<SelfGradeBand, { ring: string; text: string; chip: string; bar: string }> = {
+  excellent: { ring: "ring-emerald-500", text: "text-emerald-700", chip: "bg-emerald-700", bar: "bg-emerald-600" },
+  strong:    { ring: "ring-stone-700",   text: "text-stone-800",   chip: "bg-stone-800",   bar: "bg-stone-700" },
+  competent: { ring: "ring-amber-500",   text: "text-amber-700",   chip: "bg-amber-600",   bar: "bg-amber-500" },
+  thin:      { ring: "ring-orange-500",  text: "text-orange-700",  chip: "bg-orange-600",  bar: "bg-orange-500" },
+  weak:      { ring: "ring-red-500",     text: "text-red-700",     chip: "bg-red-700",     bar: "bg-red-600" },
+};
+
+const DIMENSION_LABEL: Record<keyof AnalysisGrade["dimensions"], string> = {
+  grounding: "Grounding",
+  evidence_quality: "Evidence quality",
+  rubric_match: "Rubric match",
+  actionability: "Actionability",
+  completeness: "Completeness",
+};
 
 const BAND_STYLES: Record<ProjectedBand, { bar: string; chip: string; ring: string }> = {
   A: { bar: "bg-emerald-600", chip: "bg-emerald-700 text-white", ring: "ring-emerald-200" },
@@ -439,6 +474,93 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
           {out.headline}
         </p>
       </div>
+
+      {/* PR-H: self-grade meta-score. Anchors the top of the analysis so
+          the user sees the quality signal before reading anything else.
+          Deterministic — computed server-side from the output structure,
+          no LLM judge. Hidden when missing for backwards-compat with
+          analyses produced before this PR. */}
+      {out.analysis_grade && (() => {
+        const g = out.analysis_grade;
+        const styles = GRADE_BAND_STYLES[g.band];
+        const dimensionEntries = Object.entries(g.dimensions) as Array<
+          [keyof AnalysisGrade["dimensions"], { score_0_20: number; rationale: string }]
+        >;
+        return (
+          <div className="border-b border-stone-200/70 px-5 py-5 bg-white">
+            <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+              <div>
+                <div
+                  className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500 mb-1"
+                  style={{ fontFamily: MONO }}
+                >
+                  Analysis quality · self-graded
+                </div>
+                <p className={`text-[13px] ${styles.text} font-medium`}>{g.band_label}</p>
+              </div>
+              <div className={`flex items-baseline gap-2 px-4 py-2 rounded-sm ring-2 ${styles.ring} ring-inset bg-white`}>
+                <span
+                  className="text-[32px] font-medium tabular-nums leading-none text-stone-900"
+                  style={{ fontFamily: SERIF }}
+                >
+                  {g.score_0_100}
+                </span>
+                <span
+                  className="text-[12px] tabular-nums text-stone-500"
+                  style={{ fontFamily: MONO }}
+                >
+                  / 100
+                </span>
+              </div>
+            </div>
+            <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
+              {dimensionEntries.map(([key, dim]) => {
+                const widthPct = Math.round((dim.score_0_20 / 20) * 100);
+                return (
+                  <li key={key}>
+                    <div className="flex items-baseline justify-between gap-2 mb-1">
+                      <span
+                        className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500"
+                        style={{ fontFamily: MONO }}
+                      >
+                        {DIMENSION_LABEL[key]}
+                      </span>
+                      <span
+                        className="text-[11px] tabular-nums text-stone-700 whitespace-nowrap"
+                        style={{ fontFamily: MONO }}
+                      >
+                        {dim.score_0_20}/20
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-stone-100 overflow-hidden">
+                      <div
+                        className={`h-full ${styles.bar} transition-all`}
+                        style={{ width: `${widthPct}%` }}
+                      />
+                    </div>
+                    <p className="mt-1 text-[11.5px] leading-snug text-stone-600">{dim.rationale}</p>
+                  </li>
+                );
+              })}
+            </ul>
+            {g.callouts.length > 0 && (
+              <div className="rounded-sm border-l-2 border-stone-700 bg-stone-50/60 px-3 py-2">
+                <div
+                  className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-stone-500 mb-1"
+                  style={{ fontFamily: MONO }}
+                >
+                  How to lift the score
+                </div>
+                <ul className="text-[12px] leading-snug text-stone-700 space-y-1">
+                  {g.callouts.map((c, i) => (
+                    <li key={i}>· {c}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* PR-G: projected score table. Renders only when the tender publishes
           a rubric (rubric_source !== "absent"). Per-criterion projection

@@ -170,6 +170,31 @@ export interface BidNoBidOutput {
    * and the work-order UI hides the card in that case.
    */
   projected_score?: ProjectedScore;
+
+  /* PR-H additions — deterministic user-facing self-grade. */
+
+  /**
+   * Server-computed quality grade of this analysis. Read by the UI to
+   * render a "Analysis quality · 88/100" chip with per-dimension
+   * breakdown and re-run callouts. Distinct from the Sonnet-judge
+   * BidGrade in grade.ts (which is internal QA only).
+   */
+  analysis_grade?: BidNoBidSelfGrade;
+}
+
+export interface BidNoBidSelfGrade {
+  score_0_100: number;
+  band: "excellent" | "strong" | "competent" | "thin" | "weak";
+  band_label: string;
+  dimensions: {
+    grounding: { score_0_20: number; rationale: string };
+    evidence_quality: { score_0_20: number; rationale: string };
+    rubric_match: { score_0_20: number; rationale: string };
+    actionability: { score_0_20: number; rationale: string };
+    completeness: { score_0_20: number; rationale: string };
+  };
+  callouts: string[];
+  rubric_version: "v1";
 }
 
 export type ProjectedScoreBand = "A" | "B" | "C" | "D";
@@ -258,6 +283,7 @@ export const DEFAULT_BID_OUTPUT: BidNoBidOutput = {
     criteria: [],
     caveat: null,
   },
+  analysis_grade: undefined,
 };
 
 export const DEFAULT_TENDER_REQUIREMENTS: TenderRequirements = {
