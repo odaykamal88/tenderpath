@@ -7,6 +7,7 @@ import {
   type CommercialTerms,
   type EvidenceLabel,
   type Severity,
+  type ProjectedScore,
   ELIGIBILITY_ACTION_LABEL,
   EVIDENCE_LABEL_TEXT,
   TENDER_TYPE_LABEL,
@@ -69,6 +70,101 @@ const eligibilityStatusColor = (status: BidEligibilityFinding["status"]): string
 
 const orderRef = (id: number): string =>
   `BNB-${id.toString(16).toUpperCase().padStart(4, "0")}`;
+
+/* PR-G: projected score block. Renders nothing when the tender doesn't
+   publish a rubric (rubric_source="absent" / no criteria). Uses solid
+   colored bars (no Tailwind in the PDF renderer) per band — A green,
+   B ink, C gold, D red. */
+const bandColor = (band: ProjectedScore["band"]): string => {
+  if (band === "A") return GREEN;
+  if (band === "B") return INK;
+  if (band === "C") return GOLD;
+  if (band === "D") return RED;
+  return INK3;
+};
+
+const ProjectedScoreBlock = ({ score }: { score?: ProjectedScore }) => {
+  if (!score || score.rubric_source === "absent" || score.criteria.length === 0) return null;
+  const fill = bandColor(score.band);
+  const pct =
+    score.total_points_possible && score.total_points_projected != null
+      ? Math.round((score.total_points_projected / score.total_points_possible) * 100)
+      : null;
+  return (
+    <View style={styles.section}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+        <Text style={styles.h2}>Projected score</Text>
+        {score.total_points_projected != null && score.total_points_possible != null && (
+          <Text style={{ fontSize: 11, color: INK2 }}>
+            <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 14, color: INK }}>
+              {score.total_points_projected}
+            </Text>
+            <Text style={{ color: INK3 }}> / {score.total_points_possible}</Text>
+            {pct != null && <Text style={{ color: INK3 }}>  ({pct}%)</Text>}
+          </Text>
+        )}
+      </View>
+      {score.band && (
+        <Text
+          style={{
+            alignSelf: "flex-start",
+            fontSize: 7,
+            letterSpacing: 1.2,
+            fontFamily: "Helvetica-Bold",
+            color: "#ffffff",
+            backgroundColor: fill,
+            paddingHorizontal: 6,
+            paddingVertical: 2,
+            marginBottom: 10,
+          }}
+        >
+          BAND {score.band} · {(score.band_label ?? "").toUpperCase()}
+        </Text>
+      )}
+      {score.criteria.map((c, i) => {
+        const cPct = c.max_points > 0 ? c.projected_points / c.max_points : 0;
+        const widthPct = Math.max(0, Math.min(100, Math.round(cPct * 100)));
+        return (
+          <View key={`${c.name}-${i}`} style={{ marginBottom: 8 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
+              <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", color: INK }}>{c.name}</Text>
+              <Text style={[styles.mono, { fontSize: 8, color: INK2 }]}>
+                {c.projected_points} / {c.max_points}
+              </Text>
+            </View>
+            <View
+              style={{
+                height: 4,
+                backgroundColor: "#e8e0c8",
+                borderRadius: 2,
+                marginBottom: 3,
+                overflow: "hidden",
+              }}
+            >
+              <View style={{ height: 4, width: `${widthPct}%`, backgroundColor: fill }} />
+            </View>
+            <Text style={{ fontSize: 9, color: INK2, lineHeight: 1.45 }}>{c.rationale}</Text>
+          </View>
+        );
+      })}
+      {score.caveat && (
+        <Text
+          style={{
+            marginTop: 4,
+            paddingLeft: 8,
+            borderLeftWidth: 2,
+            borderLeftColor: GOLD,
+            fontSize: 9,
+            color: INK2,
+            lineHeight: 1.4,
+          }}
+        >
+          {score.caveat}
+        </Text>
+      )}
+    </View>
+  );
+};
 
 /* Small uppercase pill — reused for evidence labels, eligibility actions, tender type. */
 const Pill = ({
@@ -319,6 +415,12 @@ const BidPdf = ({
           </View>
         </View>
       </View>
+
+      {/* PR-G: projected score table — anchored at the top of the
+          analysis section so the reader sees the per-criterion projection
+          before the prose. Hidden when the tender doesn't publish a
+          rubric (rubric_source="absent"). */}
+      <ProjectedScoreBlock score={output.projected_score} />
 
       {/* Fit reasoning */}
       {output.fit_reasoning.length > 0 && (

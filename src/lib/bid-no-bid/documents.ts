@@ -343,3 +343,52 @@ export function summarizeDocs(docs: BidNoBidDocument[]): DocumentSummary[] {
     source: d.source,
   }));
 }
+
+/**
+ * Build an "applicant evidence" block for the company-profile section of
+ * the LLM prompt. PR-G addition.
+ *
+ * Why this exists separately from `formatDocumentsForPrompt`:
+ *   - `formatDocumentsForPrompt` emits the docs section, which Sonnet
+ *     treats as "tender + uploaded source documents" — heavyweight context.
+ *   - This helper emits a quick-skim summary that lives inside the
+ *     COMPANY PROFILE block so when Sonnet thinks "what is this vendor
+ *     capable of?" the answer is anchored in their uploaded CV / capability
+ *     statement / compliance certs, not just the (possibly stale) website
+ *     crawl that powered the assessment row.
+ *
+ * Behavior:
+ *   - Skips class:tor / class:eligibility_criteria / class:evaluation_criteria
+ *     (those describe the tender, not the applicant).
+ *   - Includes class:capability_statement / cv / compliance / financial /
+ *     reference_letter / other with a 1.2 KB excerpt — long enough to
+ *     pull a specific claim, short enough to leave token budget for the
+ *     main analysis.
+ *   - When no applicant evidence is uploaded, returns "" so the caller
+ *     can decide whether to render the section at all.
+ */
+export function formatDocumentsAsApplicantEvidence(docs: BidNoBidDocument[]): string {
+  const APPLICANT_CLASSES = new Set<DocClass>([
+    "capability_statement",
+    "cv",
+    "compliance",
+    "financial",
+    "reference_letter",
+    "other",
+  ]);
+  const applicantDocs = docs.filter(
+    (d) => d.purpose !== "tender_main" && APPLICANT_CLASSES.has(d.docClass),
+  );
+  if (applicantDocs.length === 0) return "";
+
+  const lines: string[] = [];
+  lines.push(
+    "APPLICANT-PROVIDED EVIDENCE (higher trust than the website-derived assessment when the two disagree — these are documents the user uploaded for THIS analysis):",
+  );
+  for (const d of applicantDocs) {
+    lines.push(
+      `· [${d.docClass}] ${d.fileName} — ${d.text.slice(0, 1200).replace(/\s+/g, " ").trim()}`,
+    );
+  }
+  return lines.join("\n");
+}

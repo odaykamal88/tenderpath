@@ -7,6 +7,9 @@ import {
   type DocumentPriority,
   type EligibilityAction,
   type CommercialTerms,
+  type ProjectedScore,
+  type ProjectedScoreBand,
+  type ProjectedScoreCriterion,
   DEFAULT_BID_OUTPUT,
   DEFAULT_COMMERCIAL_TERMS,
   DEFAULT_TENDER_REQUIREMENTS,
@@ -225,7 +228,24 @@ Return a Bid/No-Bid analysis as a JSON object with this exact shape:
                                           that you directly drew evidence from. Use the EXACT
                                           filename string as shown in the [doc] file: labels.
                                           Empty array if no documents were provided.
-                                          Available filenames: ${JSON.stringify(inputs.documentFileNames)}
+                                          Available filenames: ${JSON.stringify(inputs.documentFileNames)},
+  "projected_score": {
+    "rubric_source": "stated_in_tender" | "inferred_from_text" | "absent",
+    "total_points_possible": number | null,
+    "total_points_projected": number | null,
+    "band": "A" | "B" | "C" | "D" | null,
+    "band_label": string | null,
+    "caveat": string | null,
+    "criteria": [
+      {
+        "name": string,
+        "max_points": number,
+        "projected_points": number,
+        "rationale": string — one sentence anchored in document or profile evidence,
+        "confidence": "high" | "medium" | "low"
+      }
+    ]
+  }
 }
 
 Document grounding rules (PR-F):
@@ -239,6 +259,24 @@ Document grounding rules (PR-F):
 - evidence_label="evidence" requires a tender or applicant-document source — do not use it
   for inferences. When the only support is the company profile (not a document), use
   evidence_label="inference".
+
+Projected score rules (PR-G):
+- ONLY produce a non-empty rubric when the tender text or a class:tor / class:evaluation_criteria
+  [doc] above explicitly states one (point allocations, weights, or scoring bands).
+  If the rubric is fully stated, set rubric_source="stated_in_tender".
+  If the rubric is implied by prose but not in a clean table (e.g. "the strongest bidder on
+  technical excellence will win"), set rubric_source="inferred_from_text" and add a one-line
+  caveat starting with "Rubric inferred from prose — verify in tender".
+  If neither, set rubric_source="absent", criteria=[], totals=null, band=null. DO NOT invent.
+- Each criterion's projected_points must be evidence-anchored — the rationale must cite a
+  document filename, a profile fact, or a specific gap. No "8/10 looks good".
+- Bands when totals are present:
+    A → projected ≥ 80% of total → "Strong bid candidate"
+    B → 60-79% → "Competitive — close the listed gaps"
+    C → 40-59% → "Borderline — only bid with a structural fix"
+    D → < 40% → "Likely no-bid unless eligibility cleared"
+- confidence="high" only when the criterion is backed by uploaded applicant docs or
+  explicit tender text. confidence="low" when the rationale is mostly inference.
 
 Rules:
 - Be specific. Reference the company's actual capabilities, geography, and certifications.
@@ -349,6 +387,11 @@ function normalize(raw: Partial<BidNoBidOutput>): BidNoBidOutput {
         .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
         .slice(0, 12)
     : [];
+
+  // PR-G: projected score normalization. Strict — anything off-shape from
+  // the LLM degrades to an "absent" rubric so the UI hides the card
+  // rather than rendering hallucinated point totals.
+  out.projected_score = normalizeProjectedScore(raw.projected_score);
   out.headline = String(out.headline ?? "").slice(0, 200);
   out.effort_estimate_hours = Math.max(0, Math.round(Number(out.effort_estimate_hours ?? 0)));
   if (!(["bid", "no-bid", "conditional"] as const).includes(out.recommendation)) {
@@ -392,4 +435,107 @@ function normalize(raw: Partial<BidNoBidOutput>): BidNoBidOutput {
   }).filter((f) => f.requirement.length > 0);
 
   return out;
+}
+
+const PROJECTED_BANDS = ["A", "B", "C", "D"] as const;
+const RUBRIC_SOURCES = ["stated_in_tender", "inferred_from_text", "absent"] as const;
+const CONFIDENCE = ["high", "medium", "low"] as const;
+
+const ABSENT_SCORE: ProjectedScore = {
+  rubric_source: "absent",
+  total_points_possible: null,
+  total_points_projected: null,
+  band: null,
+  band_label: null,
+  criteria: [],
+  caveat: null,
+};
+
+/**
+ * PR-G normalizer for the projected_score field. Strict — anything that
+ * doesn't fit the published schema collapses to ABSENT so the UI hides
+ * the card rather than rendering hallucinated point totals.
+ */
+function normalizeProjectedScore(raw: unknown): ProjectedScore {
+  if (!raw || typeof raw !== "object") return { ...ABSENT_SCORE };
+  const r = raw as Record<string, unknown>;
+  const source = RUBRIC_SOURCES.includes(r.rubric_source as typeof RUBRIC_SOURCES[number])
+    ? (r.rubric_source as ProjectedScore["rubric_source"])
+    : "absent";
+
+  if (source === "absent") return { ...ABSENT_SCORE };
+
+  const rawCriteria = Array.isArray(r.criteria) ? r.criteria : [];
+  const criteria: ProjectedScoreCriterion[] = [];
+  for (const item of rawCriteria.slice(0, 12)) {
+    if (!item || typeof item !== "object") continue;
+    const c = item as Record<string, unknown>;
+    const name = String(c.name ?? "").trim();
+    if (!name) continue;
+    const max = Number(c.max_points);
+    const projected = Number(c.projected_points);
+    if (!Number.isFinite(max) || max <= 0) continue;
+    const safeProjected = Number.isFinite(projected)
+      ? Math.max(0, Math.min(projected, max))
+      : 0;
+    criteria.push({
+      name: name.slice(0, 120),
+      max_points: max,
+      projected_points: safeProjected,
+      rationale: String(c.rationale ?? "").trim().slice(0, 280),
+      confidence: CONFIDENCE.includes(c.confidence as typeof CONFIDENCE[number])
+        ? (c.confidence as ProjectedScoreCriterion["confidence"])
+        : "low",
+    });
+  }
+  // If the model claimed a rubric exists but couldn't enumerate any
+  // valid criteria, collapse to absent.
+  if (criteria.length === 0) return { ...ABSENT_SCORE };
+
+  // Authoritative totals: prefer model's numbers when they roughly match
+  // the per-criterion math; otherwise recompute from the criteria list to
+  // protect against arithmetic slip in the model output.
+  const computedMax = criteria.reduce((acc, c) => acc + c.max_points, 0);
+  const computedProjected = criteria.reduce((acc, c) => acc + c.projected_points, 0);
+  const modelMax = Number(r.total_points_possible);
+  const modelProjected = Number(r.total_points_projected);
+  const totalMax = Number.isFinite(modelMax) && Math.abs(modelMax - computedMax) <= 1
+    ? modelMax
+    : computedMax;
+  const totalProjected = Number.isFinite(modelProjected) && Math.abs(modelProjected - computedProjected) <= 1
+    ? modelProjected
+    : computedProjected;
+
+  // Band: prefer model's if valid AND consistent with the percentage.
+  const pct = totalMax > 0 ? totalProjected / totalMax : 0;
+  let band: ProjectedScoreBand;
+  if (pct >= 0.8) band = "A";
+  else if (pct >= 0.6) band = "B";
+  else if (pct >= 0.4) band = "C";
+  else band = "D";
+  const modelBand = PROJECTED_BANDS.includes(r.band as ProjectedScoreBand)
+    ? (r.band as ProjectedScoreBand)
+    : null;
+  const finalBand: ProjectedScoreBand = modelBand && modelBand === band ? modelBand : band;
+
+  const bandLabels: Record<ProjectedScoreBand, string> = {
+    A: "Strong bid candidate",
+    B: "Competitive — close the listed gaps",
+    C: "Borderline — only bid with a structural fix",
+    D: "Likely no-bid unless eligibility cleared",
+  };
+  const modelLabel = asNullableString(r.band_label);
+  const finalLabel = modelLabel ?? bandLabels[finalBand];
+
+  return {
+    rubric_source: source,
+    total_points_possible: totalMax,
+    total_points_projected: totalProjected,
+    band: finalBand,
+    band_label: finalLabel,
+    criteria,
+    caveat: source === "inferred_from_text"
+      ? (asNullableString(r.caveat) ?? "Rubric inferred from prose — verify in the tender document.")
+      : asNullableString(r.caveat),
+  };
 }
