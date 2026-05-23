@@ -4,32 +4,19 @@ import Link from "next/link";
  * Annual access pricing card — rendered on the dashboard overview to set
  * pricing expectations for trial users.
  *
- * Headline: $99/year. Special: $49/year locked forever for the first 100
- * users — surfaced with a scarcity counter ("21 of 100 claimed") so a
- * trial visitor sees the offer is finite. The counter is a deliberately
- * conservative seed number; bump it from the config below as real
- * conversions land. We're NOT polling a live counter because (a) over-
- * promising live stats reads as fake to most visitors, (b) the marketing
- * truth is "first 100" not "first N as of right now".
+ * PR-M (2026-05-23): trimmed to a single $99/year CTA. The Founding-100
+ * $49 offer was moved out of this card per product direction — it will
+ * surface elsewhere (a top-of-dashboard banner or post-onboarding modal,
+ * TBD). Keep the dashboard's overview pricing one-CTA-clean for now.
  *
- * The CTA links to /pay?plan=annual-access — that plan slug is not yet
- * wired to a Stripe price ID, so the checkout endpoint will fall through
- * to the "Card payments for this plan are not yet configured" message.
- * That's intentional for the staged rollout: the card communicates the
- * pricing intent now while the Stripe product is being created.
+ * The 30-day free trial line + cancel-anytime affordance is the only
+ * tension we need here.
  */
 
 const SERIF = "'Fraunces', 'Times New Roman', serif";
 const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
 
-// Bump this as real subscribers land. Keep < 100 to preserve scarcity.
-// Hardcoded rather than DB-backed: a flaky DB read shouldn't break the
-// dashboard, and "first 100" is a campaign frame, not a live count.
-const FOUNDING_CLAIMED = 21;
-const FOUNDING_TOTAL = 100;
-
 export function AnnualAccessCard() {
-  const remaining = FOUNDING_TOTAL - FOUNDING_CLAIMED;
   return (
     <section
       className="mt-6 rounded-md border border-stone-900 bg-stone-900 text-white p-5 sm:p-6"
@@ -41,7 +28,7 @@ export function AnnualAccessCard() {
             className="text-[10px] font-semibold uppercase tracking-[0.22em] text-orange-300"
             style={{ fontFamily: MONO }}
           >
-            Full access · 14-day free trial active
+            Full access · 30-day free trial active
           </p>
           <h2
             id="annual-access-heading"
@@ -53,56 +40,18 @@ export function AnnualAccessCard() {
           <p className="mt-1.5 text-[13px] leading-relaxed text-stone-300 max-w-2xl">
             Bid/no-bid analyst, proposal drafts, roster fast-track, document vault, weekly matched
             tenders + grants, and full pipeline tooling — one subscription, every feature, no
-            per-tender add-ons. Trial unlocks everything for 14 days.
+            per-tender add-ons. Trial unlocks everything for 30 days; cancel any time before day 30
+            and you won&apos;t be charged.
           </p>
-
-          {/* Founding-members offer + scarcity counter */}
-          <div className="mt-4 rounded-sm border border-orange-400/40 bg-orange-500/10 px-3.5 py-2.5 max-w-xl">
-            <p
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-300"
-              style={{ fontFamily: MONO }}
-            >
-              Founding-100 offer
-            </p>
-            <p className="mt-1 text-[14px] leading-snug text-white">
-              <span
-                className="text-[20px] font-medium tabular-nums tracking-tight"
-                style={{ fontFamily: SERIF }}
-              >
-                $49/year
-              </span>
-              <span className="ml-2 text-[12px] text-stone-300">
-                — locked at this rate for life
-              </span>
-            </p>
-            <p
-              className="mt-1 text-[10.5px] uppercase tracking-[0.16em] text-orange-200/90 tabular-nums"
-              style={{ fontFamily: MONO }}
-            >
-              {FOUNDING_CLAIMED} of {FOUNDING_TOTAL} claimed · {remaining} left
-            </p>
-          </div>
         </div>
 
         <div className="flex flex-col gap-2 lg:items-end">
-          {/* PR-L (2026-05-23): primary CTA points at the founding-100
-              slug ($49); secondary points at the regular slug ($99).
-              Both flow through /pay?plan=… → /api/pay/checkout which
-              attaches subscription_data.trial_period_days = 14 so the
-              user isn't charged until day 15. */}
           <Link
-            href="/pay?plan=annual-access-founding"
+            href="/pay?plan=annual-access"
             className="inline-flex items-center justify-center rounded-sm bg-orange-500 px-5 py-3 text-[12.5px] font-semibold uppercase tracking-[0.15em] text-stone-900 hover:bg-orange-400 transition-colors"
             style={{ fontFamily: MONO }}
           >
-            Lock in $49/year →
-          </Link>
-          <Link
-            href="/pay?plan=annual-access"
-            className="text-[10.5px] uppercase tracking-[0.15em] text-stone-300 hover:text-white border-b border-stone-600 hover:border-stone-300 transition-colors"
-            style={{ fontFamily: MONO }}
-          >
-            Or $99/year regular →
+            Subscribe · $99/year →
           </Link>
         </div>
       </div>

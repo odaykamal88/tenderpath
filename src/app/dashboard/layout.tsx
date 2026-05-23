@@ -202,16 +202,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   };
 
+  // PR-M (2026-05-23): trial visualization scaled for the 30-day window.
+  // Color bands map to remaining-days buckets so a 30-day signup sees an
+  // amber pill all month long, an orange pill on days 23-27, and a red
+  // pill on the final 3 days. After expiry the locked-red banner takes
+  // over. Links point at /pay?plan=annual-access (regular $99/year) —
+  // founder $49 offer surfaces elsewhere per product direction.
+  const trialColorBand =
+    state.locked ? "red" :
+    state.trialDaysLeft <= 3 ? "red" :
+    state.trialDaysLeft <= 7 ? "orange" :
+    "amber";
+
   // Compact trial pill
   const trialPill = (state.isTrialing || state.locked) && (
     <Link
-      href="/pay?plan=annual-access-founding"
+      href="/pay?plan=annual-access"
       target="_blank"
       rel="noreferrer"
       className={`block rounded-sm border p-3 transition-colors ${
-        state.locked
+        trialColorBand === "red"
           ? "border-red-300 bg-red-50/60 hover:bg-red-50"
-          : state.trialDaysLeft <= 3
+          : trialColorBand === "orange"
           ? "border-orange-300 bg-orange-50/60 hover:bg-orange-50"
           : "border-amber-300 bg-amber-50/60 hover:bg-amber-50"
       }`}
@@ -225,12 +237,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             Subscribe to continue
           </div>
           <div className="mt-1 text-[10.5px] tracking-wider uppercase text-red-700/80" style={{ fontFamily: MONO }}>
-            $49 / mo →
+            $99 / yr →
           </div>
         </>
       ) : (
         <>
-          <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-amber-800" style={{ fontFamily: MONO }}>
+          <div
+            className={`text-[9px] font-semibold uppercase tracking-[0.18em] ${
+              trialColorBand === "red" ? "text-red-700"
+              : trialColorBand === "orange" ? "text-orange-700"
+              : "text-amber-800"
+            }`}
+            style={{ fontFamily: MONO }}
+          >
             Trial
           </div>
           <div className="mt-1 flex items-baseline gap-1.5">
@@ -241,8 +260,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               day{state.trialDaysLeft === 1 ? "" : "s"} left
             </span>
           </div>
-          <div className="mt-1.5 text-[10.5px] tracking-wider uppercase text-amber-800 group-hover:text-amber-900" style={{ fontFamily: MONO }}>
-            Subscribe · $49/mo →
+          <div
+            className={`mt-1.5 text-[10.5px] tracking-wider uppercase ${
+              trialColorBand === "red" ? "text-red-700 group-hover:text-red-900"
+              : trialColorBand === "orange" ? "text-orange-700 group-hover:text-orange-900"
+              : "text-amber-800 group-hover:text-amber-900"
+            }`}
+            style={{ fontFamily: MONO }}
+          >
+            Subscribe · $99/yr →
           </div>
         </>
       )}
@@ -252,14 +278,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Compact trial badge for mobile top bar — single line
   const trialBadge = (state.isTrialing || state.locked) ? (
     <Link
-      href="/pay?plan=annual-access-founding"
+      href="/pay?plan=annual-access"
       target="_blank"
       rel="noreferrer"
       className={`hidden xs:flex items-center gap-1.5 rounded-sm border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${
-        state.locked
-          ? "border-red-300 bg-red-50/60 text-red-700"
-          : state.trialDaysLeft <= 3
-          ? "border-orange-300 bg-orange-50/60 text-orange-700"
+        trialColorBand === "red" ? "border-red-300 bg-red-50/60 text-red-700"
+          : trialColorBand === "orange" ? "border-orange-300 bg-orange-50/60 text-orange-700"
           : "border-amber-300 bg-amber-50/60 text-amber-700"
       }`}
       style={{ fontFamily: MONO }}
