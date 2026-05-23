@@ -85,8 +85,13 @@ export function AnnualAccessCard() {
         </div>
 
         <div className="flex flex-col gap-2 lg:items-end">
+          {/* PR-L (2026-05-23): primary CTA points at the founding-100
+              slug ($49); secondary points at the regular slug ($99).
+              Both flow through /pay?plan=… → /api/pay/checkout which
+              attaches subscription_data.trial_period_days = 14 so the
+              user isn't charged until day 15. */}
           <Link
-            href="/pay?plan=annual-access"
+            href="/pay?plan=annual-access-founding"
             className="inline-flex items-center justify-center rounded-sm bg-orange-500 px-5 py-3 text-[12.5px] font-semibold uppercase tracking-[0.15em] text-stone-900 hover:bg-orange-400 transition-colors"
             style={{ fontFamily: MONO }}
           >

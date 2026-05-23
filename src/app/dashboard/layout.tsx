@@ -205,7 +205,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Compact trial pill
   const trialPill = (state.isTrialing || state.locked) && (
     <Link
-      href="/pay?plan=grants-tenders-matching"
+      href="/pay?plan=annual-access-founding"
       target="_blank"
       rel="noreferrer"
       className={`block rounded-sm border p-3 transition-colors ${
@@ -252,7 +252,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Compact trial badge for mobile top bar — single line
   const trialBadge = (state.isTrialing || state.locked) ? (
     <Link
-      href="/pay?plan=grants-tenders-matching"
+      href="/pay?plan=annual-access-founding"
       target="_blank"
       rel="noreferrer"
       className={`hidden xs:flex items-center gap-1.5 rounded-sm border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${

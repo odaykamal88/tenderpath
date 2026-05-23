@@ -11,9 +11,24 @@ const SLUG_TO_PRICE_ENV: Record<string, string> = {
   "grants-tenders-matching": "STRIPE_PRICE_TENDER_INTELLIGENCE",
   "proposal-draft":          "STRIPE_PRICE_SUBMISSION_PACKAGE",
   "roster-fast-track":       "STRIPE_PRICE_STRATEGIC_PARTNERSHIP",
+  // PR-L (2026-05-23): annual dashboard access — same Stripe product,
+  // two prices. The slug picks the price; both unlock the same tier.
+  "annual-access":           "STRIPE_PRICE_ANNUAL_ACCESS_99",
+  "annual-access-founding":  "STRIPE_PRICE_ANNUAL_ACCESS_49",
 };
 
-const SUBSCRIPTION_PLANS = new Set(["grants-tenders-matching"]);
+const SUBSCRIPTION_PLANS = new Set([
+  "grants-tenders-matching",
+  "annual-access",
+  "annual-access-founding",
+]);
+
+// PR-L (2026-05-23): plans that get a Stripe-managed 14-day trial. The
+// platform also has its own from-signup trial via evaluateAccess(), but the
+// Stripe trial is the one that defers the first charge. Both can run in
+// parallel safely — whichever expires last keeps the user in trial state.
+const TRIAL_PLANS = new Set(["annual-access", "annual-access-founding"]);
+const TRIAL_DAYS = 14;
 
 function metadataValue(value: unknown): string {
   if (typeof value !== "string") return "";
@@ -129,14 +144,33 @@ export async function POST(request: Request) {
         ? `${origin}/dashboard/work-orders/${parsedWorkOrderId}?paid=1`
         : `${origin}/pay/success?${returnParams.toString()}`;
 
+    const isSubscription = SUBSCRIPTION_PLANS.has(plan);
+    const wantsTrial = TRIAL_PLANS.has(plan);
+
     const session = await stripe.checkout.sessions.create({
       ui_mode: "embedded_page",
-      mode: SUBSCRIPTION_PLANS.has(plan) ? "subscription" : "payment",
+      mode: isSubscription ? "subscription" : "payment",
       line_items: [{ price: priceId, quantity: 1 }],
       // Surfaces the "Add promotion code" field in the embedded checkout so
       // Stripe-managed coupons (e.g. FREETEST) can be applied at the UI level.
       allow_promotion_codes: true,
       return_url: returnUrl,
+      // PR-L (2026-05-23): for annual-access plans, defer the first charge
+      // by TRIAL_DAYS. The customer card is captured at checkout but not
+      // billed until day 14. They get the cancel-anytime affordance inside
+      // Stripe and don't lose the founding-100 lock-in price even after
+      // the trial converts.
+      ...(isSubscription && wantsTrial
+        ? {
+            subscription_data: {
+              trial_period_days: TRIAL_DAYS,
+              metadata: {
+                plan,
+                tier: "annual-access",
+              },
+            },
+          }
+        : {}),
       metadata: {
         plan,
         tender,
