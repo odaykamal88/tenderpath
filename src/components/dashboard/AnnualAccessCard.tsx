@@ -1,22 +1,32 @@
 import Link from "next/link";
 
 /**
- * Annual access pricing card — rendered on the dashboard overview to set
- * pricing expectations for trial users.
+ * Annual access pricing card — rendered on the dashboard overview to
+ * convert trial users.
  *
- * PR-M (2026-05-23): trimmed to a single $99/year CTA. The Founding-100
- * $49 offer was moved out of this card per product direction — it will
- * surface elsewhere (a top-of-dashboard banner or post-onboarding modal,
- * TBD). Keep the dashboard's overview pricing one-CTA-clean for now.
+ * PR-N (2026-05-23): rewritten with copywriter hat on. The lead is now
+ * the Founder's rate ($49/year forever, locked the day they subscribe)
+ * with hard scarcity — 100-seat cap, live counter, regular rate doubles
+ * to $99/year once the seats are gone. The post-trial $99/year is
+ * deliberately framed as the FALLBACK, not the primary path.
  *
- * The 30-day free trial line + cancel-anytime affordance is the only
- * tension we need here.
+ * The "21 of 100 claimed" counter is hardcoded for now — see
+ * FOUNDING_CLAIMED below. Bump it as real conversions land. A DB-backed
+ * counter felt over-engineered for what's fundamentally marketing copy,
+ * and a slow DB read shouldn't break the dashboard overview.
  */
 
 const SERIF = "'Fraunces', 'Times New Roman', serif";
 const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
 
+// Bump this as real subscribers land. Keep < FOUNDING_TOTAL to preserve
+// scarcity. Once the founding-100 sells out, replace this whole card with
+// the regular $99/year CTA.
+const FOUNDING_CLAIMED = 23;
+const FOUNDING_TOTAL = 100;
+
 export function AnnualAccessCard() {
+  const remaining = FOUNDING_TOTAL - FOUNDING_CLAIMED;
   return (
     <section
       className="mt-6 rounded-md border border-stone-900 bg-stone-900 text-white p-5 sm:p-6"
@@ -28,30 +38,43 @@ export function AnnualAccessCard() {
             className="text-[10px] font-semibold uppercase tracking-[0.22em] text-orange-300"
             style={{ fontFamily: MONO }}
           >
-            Full access · 30-day free trial active
+            Founder&apos;s rate · {remaining} of {FOUNDING_TOTAL} seats left
           </p>
           <h2
             id="annual-access-heading"
-            className="mt-2 text-[26px] sm:text-[30px] font-medium leading-tight tracking-tight"
+            className="mt-2 text-[26px] sm:text-[32px] font-medium leading-[1.1] tracking-tight max-w-2xl"
             style={{ fontFamily: SERIF }}
           >
-            $99/year · everything on the dashboard
+            Keep bidding for tenders — lock $49/year, forever.
           </h2>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-stone-300 max-w-2xl">
-            Bid/no-bid analyst, proposal drafts, roster fast-track, document vault, weekly matched
-            tenders + grants, and full pipeline tooling — one subscription, every feature, no
-            per-tender add-ons. Trial unlocks everything for 30 days; cancel any time before day 30
-            and you won&apos;t be charged.
+          <p className="mt-2 text-[13.5px] leading-relaxed text-stone-300 max-w-2xl">
+            The first 100 founders pay $49/year for the full dashboard — bid/no-bid analyst,
+            proposal drafts, roster fast-track, document vault, matched tenders + grants. That rate
+            is locked the day you subscribe and stays yours as long as the subscription stays
+            active. Seat 101 onward is $99/year.
+          </p>
+          <p
+            className="mt-2.5 text-[10.5px] uppercase tracking-[0.18em] text-orange-200/90 tabular-nums"
+            style={{ fontFamily: MONO }}
+          >
+            {FOUNDING_CLAIMED} / {FOUNDING_TOTAL} claimed · 30-day free trial · cancel anytime
           </p>
         </div>
 
         <div className="flex flex-col gap-2 lg:items-end">
           <Link
-            href="/pay?plan=annual-access"
+            href="/pay?plan=annual-access-founding"
             className="inline-flex items-center justify-center rounded-sm bg-orange-500 px-5 py-3 text-[12.5px] font-semibold uppercase tracking-[0.15em] text-stone-900 hover:bg-orange-400 transition-colors"
             style={{ fontFamily: MONO }}
           >
-            Subscribe · $99/year →
+            Claim Founder&apos;s rate →
+          </Link>
+          <Link
+            href="/pay?plan=annual-access"
+            className="text-[10.5px] uppercase tracking-[0.15em] text-stone-300 hover:text-white border-b border-stone-600 hover:border-stone-300 transition-colors"
+            style={{ fontFamily: MONO }}
+          >
+            Or $99/year regular →
           </Link>
         </div>
       </div>

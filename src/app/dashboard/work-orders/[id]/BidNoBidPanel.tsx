@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type EvidenceLabel = "evidence" | "inference" | "gap" | "unverified";
 type DocumentPriority = "mandatory" | "recommended";
@@ -472,17 +473,25 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
               </span>
             )}
           </div>
-          {pkg.pdf_url && (
-            <a
-              href={pkg.pdf_url}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-sm border border-stone-300 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
-              style={{ fontFamily: MONO }}
-            >
-              Download PDF ↓
-            </a>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {pkg.pdf_url && (
+              <a
+                href={pkg.pdf_url}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-sm border border-stone-300 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
+                style={{ fontFamily: MONO }}
+              >
+                Download PDF ↓
+              </a>
+            )}
+            {/* PR-N (2026-05-23): export-to-proposal upsell. POSTs to
+                /api/dashboard/work-orders/{id}/export-to-proposal which
+                spawns a fresh proposal-draft work order pre-populated
+                with this bid/no-bid's intake + a snapshot of the memo,
+                then redirects the client to Stripe checkout. */}
+            <ExportToProposalButton workOrderId={workOrderId} />
+          </div>
         </div>
         {out.tender_type_note && (
           <p className="mb-3 text-[12px] text-stone-600 leading-snug">{out.tender_type_note}</p>
@@ -782,30 +791,62 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
             Eligibility findings
           </div>
           <ul className="space-y-3 text-[13px] text-stone-800">
-            {eligibilityFindings.map((f, i) => (
-              <li key={i} className="leading-snug">
-                <div className="flex items-baseline gap-2 flex-wrap mb-1">
-                  <span
-                    className={`inline-block rounded-sm px-1.5 py-[1px] text-[8.5px] font-semibold uppercase tracking-[0.14em] ${eligibilityStatusClasses(f.status)}`}
-                    style={{ fontFamily: MONO }}
-                  >
-                    {f.status}
-                  </span>
-                  <span className="font-semibold">{f.requirement}</span>
-                </div>
-                <div className="ml-0 flex items-center gap-2 flex-wrap text-[11px] mb-1">
-                  <span className="inline-block rounded-sm border border-amber-600/60 px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-800" style={{ fontFamily: MONO }}>
-                    {ELIGIBILITY_ACTION_LABEL[f.recommended_action]}
-                  </span>
-                  <span className={`inline-block rounded-sm border px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-[0.14em] ${evidenceClasses(f.evidence_label)}`} style={{ fontFamily: MONO }}>
-                    {EVIDENCE_LABEL_TEXT[f.evidence_label]}
-                  </span>
-                </div>
-                {f.rationale && (
-                  <p className="text-[12px] text-stone-600 leading-relaxed">{f.rationale}</p>
-                )}
-              </li>
-            ))}
+            {eligibilityFindings.map((f, i) => {
+              // PR-N (2026-05-23): chip dedup. User reported confusion on
+              // findings rendering BOTH a status header (GAP / UNVERIFIED /
+              // MET) AND a secondary evidence-label chip with the same
+              // word (GAP / UNVERIFIED). Cause: status and evidence_label
+              // are different model fields that often agree.
+              //
+              // Rules:
+              //  - Hide the evidence chip when it duplicates the status
+              //    word (case-insensitive equality on the status string).
+              //  - Hide the action chip when action is "ok" AND status
+              //    is "met" — both saying "everything's fine" reads as
+              //    redundant noise.
+              const statusWord = String(f.status).toLowerCase();
+              const evidenceWord = String(f.evidence_label).toLowerCase();
+              const showEvidenceChip = evidenceWord !== statusWord;
+              const showActionChip = !(
+                f.recommended_action === "ok" && f.status === "met"
+              );
+              return (
+                <li key={i} className="leading-snug">
+                  <div className="flex items-baseline gap-2 flex-wrap mb-1">
+                    <span
+                      className={`inline-block rounded-sm px-1.5 py-[1px] text-[8.5px] font-semibold uppercase tracking-[0.14em] ${eligibilityStatusClasses(f.status)}`}
+                      style={{ fontFamily: MONO }}
+                    >
+                      {f.status}
+                    </span>
+                    <span className="font-semibold">{f.requirement}</span>
+                  </div>
+                  {(showActionChip || showEvidenceChip) && (
+                    <div className="ml-0 flex items-center gap-2 flex-wrap text-[11px] mb-1">
+                      {showActionChip && (
+                        <span
+                          className="inline-block rounded-sm border border-amber-600/60 px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-800"
+                          style={{ fontFamily: MONO }}
+                        >
+                          {ELIGIBILITY_ACTION_LABEL[f.recommended_action]}
+                        </span>
+                      )}
+                      {showEvidenceChip && (
+                        <span
+                          className={`inline-block rounded-sm border px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-[0.14em] ${evidenceClasses(f.evidence_label)}`}
+                          style={{ fontFamily: MONO }}
+                        >
+                          {EVIDENCE_LABEL_TEXT[f.evidence_label]}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {f.rationale && (
+                    <p className="text-[12px] text-stone-600 leading-relaxed">{f.rationale}</p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
@@ -911,5 +952,68 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
         </button>
       </div>
     </section>
+  );
+}
+
+// PR-N (2026-05-23): one-click upsell from a delivered bid/no-bid memo
+// into a paid proposal-draft work order. POSTs to the server, which
+// spawns a fresh work_orders row pre-populated with this bid/no-bid's
+// intake + a memo snapshot, then we redirect to Stripe checkout via
+// the returned payHref. Server-side endpoint at
+// /api/dashboard/work-orders/[id]/export-to-proposal.
+function ExportToProposalButton({ workOrderId }: { workOrderId: number }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleClick() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/dashboard/work-orders/${workOrderId}/export-to-proposal`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", ...authHeaders() },
+        },
+      );
+      const body = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        payHref?: string;
+        error?: string;
+      };
+      if (!res.ok || !body.ok || !body.payHref) {
+        setError(body.error ?? `${res.status} ${res.statusText}`);
+        return;
+      }
+      router.push(body.payHref);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not export to proposal.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={busy}
+        className="rounded-sm bg-stone-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-orange-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{ fontFamily: MONO }}
+        title="Spin this into a proposal draft — fresh checkout, pre-loaded with this analysis"
+      >
+        {busy ? "Spinning up…" : "Use for proposal →"}
+      </button>
+      {error && (
+        <p
+          className="text-[10px] text-red-700 text-right max-w-[200px]"
+          style={{ fontFamily: MONO }}
+        >
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

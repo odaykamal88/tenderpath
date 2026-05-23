@@ -1,6 +1,20 @@
 import styles from "./AssessmentTabs.module.css";
 import { TenderOpenLink } from "@/components/telemetry/TenderOpenLink";
 
+// PR-N (2026-05-23): YY/MM/DD deadline format. Sorts cleanly + unambiguous
+// across locales (vs US MM/DD/YY or EU DD/MM/YY). Falls back to "TBA" /
+// raw string when the source deadline is missing or unparseable so a
+// crawler oddity doesn't render as "NaN/NaN/NaN".
+function formatYYMMDD(deadline: string): string {
+  if (!deadline || deadline === "TBA") return "TBA";
+  const d = new Date(deadline);
+  if (Number.isNaN(d.getTime())) return deadline;
+  const yy = String(d.getFullYear()).slice(-2);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yy}/${mm}/${dd}`;
+}
+
 export type Tender = {
   code: string;
   title: string;
@@ -261,7 +275,9 @@ export function TendersTab({
               className={`${styles.dlCell} tp-mono`}
               data-urgent={t.urgent ? "true" : undefined}
             >
-              {t.deadline}
+              {/* PR-N (2026-05-23): YY/MM/DD format per user spec — sorts
+                  lexicographically and is unambiguous across locales. */}
+              {formatYYMMDD(t.deadline)}
             </span>
           </div>
         );
