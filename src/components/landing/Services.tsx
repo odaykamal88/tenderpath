@@ -1,15 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { TIERS } from "@/lib/pricing";
 
 /* Services — 5-stage journey + flat rate sheet · mobile-tuned at 375px */
 
+// PR-K (2026-05-23): Stage 02 "Match · $49/mo" (weekly digest subscription)
+// removed — the digest CTA is going away across the product. The dashboard
+// covers tender matching directly once a user signs in. Journey reads as
+// Assess → Decide → Submit → Roster now.
 const journey = [
   { n: "01", label: "Assess", price: "Free", body: "Score readiness, identify gaps, preview matched tenders." },
-  { n: "02", label: "Match", price: "$49/mo", body: "Weekly digest of 5–10 best-fit tenders + grants. AR + EN." },
-  { n: "03", label: "Decide", price: "$39", body: "Bid/no-bid memo per tender. Fit reasoning + checklist." },
-  { n: "04", label: "Submit", price: "$299", body: "80% complete proposal package, delivered in 48–72 hrs." },
-  { n: "05", label: "Roster", price: "$749", body: "Per-agency readiness leaderboard across 8 UN portals + full registration package for the highest-fit agency." },
+  { n: "02", label: "Decide", price: "$39", body: "Bid/no-bid memo per tender. Fit reasoning + checklist." },
+  { n: "03", label: "Submit", price: "$299", body: "80% complete proposal package, delivered in 48–72 hrs." },
+  { n: "04", label: "Roster", price: "$749", body: "Per-agency readiness leaderboard across 8 UN portals + full registration package for the highest-fit agency." },
 ];
 
 export default function Services() {
@@ -28,7 +32,7 @@ export default function Services() {
 
         {/* 5-stage journey diagram */}
         <div className="border-y border-ink py-7 sm:py-10 mb-14 sm:mb-20">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-px bg-rule">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-px bg-rule">
             {journey.map((j, i) => (
               <div key={j.n} className="bg-paper p-5 sm:p-6 relative">
                 <div className="flex items-baseline justify-between mb-3 sm:mb-4">
@@ -66,7 +70,7 @@ export default function Services() {
             </p>
           </div>
           <div className="border-t border-ink">
-            {TIERS.map((tier) => (
+            {TIERS.filter((tier) => tier.slug !== "grants-tenders-matching").map((tier) => (
               <article
                 key={tier.slug}
                 className="grid grid-cols-[1fr_auto] lg:grid-cols-[1.2fr_2fr_auto] gap-x-4 gap-y-4 lg:gap-10 py-6 sm:py-7 border-b border-rule items-baseline"
@@ -115,9 +119,11 @@ export default function Services() {
           </div>
         </div>
 
-        {/* Free tier promo strip */}
-        <a
-          href="/assessment?goal=track-tenders"
+        {/* Free tier promo strip — kept (CTA still points at the
+            assessment intake, just without the implied digest-subscription
+            destination). The body copy never named the digest explicitly. */}
+        <Link
+          href="/assessment"
           className="block bg-ink text-paper p-6 sm:p-8 lg:p-10 group hover:bg-accent transition-colors"
         >
           <div className="grid lg:grid-cols-[1fr_auto] gap-5 sm:gap-6 items-center">
@@ -136,7 +142,7 @@ export default function Services() {
               Run it now →
             </span>
           </div>
-        </a>
+        </Link>
       </div>
     </section>
   );

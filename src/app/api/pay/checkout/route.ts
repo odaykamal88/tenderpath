@@ -118,6 +118,17 @@ export async function POST(request: Request) {
     if (pipelineItemId) returnParams.set("pipeline_item_id", pipelineItemId);
     if (workOrderId) returnParams.set("work_order_id", workOrderId);
 
+    // PR-K (2026-05-23): when a paid service has a work order attached
+    // (bid-no-bid / proposal-draft / roster-fast-track), Stripe sends the
+    // user straight to /dashboard/work-orders/{id} after checkout so they
+    // see generation progress immediately — no intermediate /pay/success
+    // page. Subscription tiers + standalone purchases keep the existing
+    // /pay/success landing for receipt + activation messaging.
+    const returnUrl =
+      parsedWorkOrderId && !SUBSCRIPTION_PLANS.has(plan)
+        ? `${origin}/dashboard/work-orders/${parsedWorkOrderId}?paid=1`
+        : `${origin}/pay/success?${returnParams.toString()}`;
+
     const session = await stripe.checkout.sessions.create({
       ui_mode: "embedded_page",
       mode: SUBSCRIPTION_PLANS.has(plan) ? "subscription" : "payment",
@@ -125,7 +136,7 @@ export async function POST(request: Request) {
       // Surfaces the "Add promotion code" field in the embedded checkout so
       // Stripe-managed coupons (e.g. FREETEST) can be applied at the UI level.
       allow_promotion_codes: true,
-      return_url: `${origin}/pay/success?${returnParams.toString()}`,
+      return_url: returnUrl,
       metadata: {
         plan,
         tender,

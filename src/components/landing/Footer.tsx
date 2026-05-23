@@ -4,9 +4,10 @@ import Link from "next/link";
 export default function Footer() {
   // Audit 2026-05-19 P2 #14: deep-link each service link to the matching
   // wizard intent so Step 1 pre-selects the corresponding chip.
+  // PR-K (2026-05-23): "Weekly digest · $49/mo" link removed from the
+  // product cluster — the digest subscription is going away.
   const product = [
-    { label: "Free assessment", href: "/assessment?goal=track-tenders" },
-    { label: "Weekly digest · $49/mo", href: "/assessment?goal=track-tenders" },
+    { label: "Free assessment", href: "/assessment" },
     { label: "Bid/no-bid analysis · $39", href: "/assessment?goal=evaluate-tender" },
     { label: "Proposal draft · $299", href: "/assessment?goal=prepare-proposal" },
     { label: "Roster fast-track · $749", href: "/assessment?goal=register-roster" },

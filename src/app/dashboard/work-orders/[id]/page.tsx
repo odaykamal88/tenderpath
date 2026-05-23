@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import BidNoBidPanel from "./BidNoBidPanel";
 import ProposalPackagePanel from "./ProposalPackagePanel";
 import RosterWorkspacePanel from "./RosterWorkspacePanel";
@@ -39,6 +39,9 @@ function label(value: string): string {
   return value.replace(/-/g, " ").replace(/_/g, " ");
 }
 
+// PR-K (2026-05-23): formatDate kept in case future blocks render dates.
+// Currently unused since Intake/Tender-context cards were removed.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function formatDate(value: string | null): string {
   if (!value) return "—";
   const date = new Date(value);
@@ -100,21 +103,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
     })();
   }, [id]);
 
-  const intakeRows = useMemo(() => {
-    if (!order?.intake) return [];
-    return Object.entries(order.intake)
-      .map(([key, value]) => {
-        const rendered = Array.isArray(value)
-          ? value.join(", ")
-          : typeof value === "boolean"
-            ? value ? "Yes" : "No"
-            : value == null
-              ? ""
-              : String(value);
-        return [label(key), rendered] as const;
-      })
-      .filter(([, value]) => value.trim().length > 0);
-  }, [order]);
+  // PR-K (2026-05-23): intakeRows useMemo removed alongside the Intake card.
 
   if (loading) {
     return (
@@ -210,119 +199,26 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
-      {/* Two-column: Intake + Tender context */}
-      <div className="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]">
-        <section className="rounded-md border border-stone-200/70 bg-white p-5">
-          <h2
-            className="text-[20px] font-medium text-stone-900 mb-4"
-            style={{ fontFamily: SERIF }}
+      {/* PR-K (2026-05-23): Intake + Tender Context cards removed. They
+          showed [object Object] for service_context and a "No pipeline item
+          attached" placeholder that didn't help users do anything. The
+          actual useful info (tender title, agency, deadline, fit score) is
+          already in the header strip + bid/no-bid panel. If we need a
+          source-link affordance again, surface it inline on the panel
+          instead of as a standalone card. */}
+      {order.tender_url && (
+        <div className="mt-6">
+          <a
+            href={order.tender_url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex rounded-sm border border-stone-300 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
+            style={{ fontFamily: MONO }}
           >
-            <span
-              className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle"
-              style={{ fontFamily: MONO }}
-            >
-              01 ·
-            </span>
-            Intake
-          </h2>
-          {intakeRows.length === 0 ? (
-            <p className="text-[13px] text-stone-500">No intake fields were captured for this work order.</p>
-          ) : (
-            <dl className="space-y-4">
-              {intakeRows.map(([key, value]) => (
-                <div key={key} className="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-x-4 gap-y-1">
-                  <dt
-                    className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
-                    style={{ fontFamily: MONO }}
-                  >
-                    {key}
-                  </dt>
-                  <dd className="whitespace-pre-wrap text-[13px] leading-relaxed text-stone-800">{value}</dd>
-                </div>
-              ))}
-            </dl>
-          )}
-        </section>
-
-        <aside className="rounded-md border border-stone-200/70 bg-white p-5">
-          <h2
-            className="text-[20px] font-medium text-stone-900 mb-4"
-            style={{ fontFamily: SERIF }}
-          >
-            <span
-              className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle"
-              style={{ fontFamily: MONO }}
-            >
-              02 ·
-            </span>
-            Tender context
-          </h2>
-          <dl className="space-y-3.5">
-            {order.agency && (
-              <div>
-                <dt
-                  className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
-                  style={{ fontFamily: MONO }}
-                >
-                  Agency
-                </dt>
-                <dd className="mt-0.5 text-[13.5px] text-stone-900">{order.agency}</dd>
-              </div>
-            )}
-            <div>
-              <dt
-                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
-                style={{ fontFamily: MONO }}
-              >
-                Pipeline
-              </dt>
-              <dd className="mt-0.5 text-[13.5px] text-stone-900">
-                {order.pipeline_item_id
-                  ? <span style={{ fontFamily: MONO }}>#{order.pipeline_item_id} · {label(order.pipeline_stage ?? "no stage")}</span>
-                  : "No pipeline item attached"}
-              </dd>
-            </div>
-            <div>
-              <dt
-                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
-                style={{ fontFamily: MONO }}
-              >
-                Deadline
-              </dt>
-              <dd className="mt-0.5 text-[13.5px] text-stone-900" style={{ fontFamily: MONO }}>
-                {formatDate(order.tender_deadline)}
-              </dd>
-            </div>
-            {order.fit_score != null && (
-              <div>
-                <dt
-                  className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
-                  style={{ fontFamily: MONO }}
-                >
-                  Fit score
-                </dt>
-                <dd
-                  className="mt-0.5 text-[24px] tabular-nums font-medium text-stone-900"
-                  style={{ fontFamily: SERIF }}
-                >
-                  {order.fit_score}
-                  <span className="text-[14px] text-stone-500 ml-0.5">%</span>
-                </dd>
-              </div>
-            )}
-          </dl>
-          {order.tender_url && (
-            <a
-              href={order.tender_url}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-5 inline-flex rounded-sm border border-stone-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
-            >
-              Open tender ↗
-            </a>
-          )}
-        </aside>
-      </div>
+            Open tender source ↗
+          </a>
+        </div>
+      )}
     </div>
   );
 }
