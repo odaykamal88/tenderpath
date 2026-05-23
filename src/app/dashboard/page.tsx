@@ -17,6 +17,7 @@ import { TendersTab } from "@/components/assessment/TendersTab";
 import { GrantsTab } from "@/components/assessment/GrantsTab";
 import { NextStepsTab } from "@/components/assessment/NextStepsTab";
 import { ThisWeekStrip } from "@/components/assessment/ThisWeekStrip";
+import { AnnualAccessCard } from "@/components/dashboard/AnnualAccessCard";
 import { FunnelBeacon } from "@/components/telemetry/FunnelBeacon";
 import { getCurrentUserAssessment, getThisWeek, getViewerActivity } from "@/lib/assessment";
 
@@ -89,6 +90,13 @@ function EmptyDashboard() {
           </div>
         ))}
       </div>
+
+      {/* PR-K (2026-05-23): show pricing on the empty dashboard too so a
+          fresh signup sees what comes after the trial — keeps the trial
+          period from feeling like an open question. */}
+      <div className="max-w-3xl">
+        <AnnualAccessCard />
+      </div>
     </div>
   );
 }
@@ -159,7 +167,12 @@ export default async function DashboardPage({
             dimensions={data.dimensions}
             recommendedTier={data.recommendedTier}
             activity={activity}
+            viewerSignedIn={true}
           />
+          {/* PR-K (2026-05-23): annual access pricing card with founding-100
+              scarcity. Trial users land here and need to see what comes
+              after the 14-day window. */}
+          <AnnualAccessCard />
         </>
       )}
       {activeTab === "gaps" && (

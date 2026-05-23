@@ -44,16 +44,23 @@ export function ScoreTab({
   delta,
   summary,
   dimensions,
-  recommendedTier,
   activity,
+  viewerSignedIn = false,
 }: {
   score: number;
   delta: number;
   tier: string;
   summary: string;
   dimensions: Dimension[];
-  recommendedTier: { name: string; price: string; pitch: string };
+  // PR-K (2026-05-23): `recommendedTier` is still accepted by callers but
+  // ignored — the digest "Subscribe →" CTA was removed in favor of a
+  // seamless "Sign in" / "Open dashboard" affordance based on the viewer's
+  // auth state. Keep the prop accepted so /assessment/[id] + /dashboard
+  // can pass it without a type break while we decide what (if any)
+  // tier-recommendation surface replaces it.
+  recommendedTier?: { name: string; price: string; pitch: string };
   activity?: ViewerActivity | null;
+  viewerSignedIn?: boolean;
 }) {
   return (
     <div className={styles.scoreGrid}>
@@ -177,18 +184,28 @@ export function ScoreTab({
           </>
         )}
 
+        {/* PR-K (2026-05-23): the prior digest "Subscribe →" CTA was the
+            primary friction the user reported in the assessment→dashboard
+            transition. Replaced with a seamless next-step affordance:
+            signed-in viewers jump to the dashboard, anonymous viewers go
+            to sign-in (which leads to the dashboard). Either way the
+            assessment results stay the focal point. */}
         <div className={styles.cta}>
-          <div className={styles.eyebrowOnDark}>Recommended</div>
+          <div className={styles.eyebrowOnDark}>Next</div>
           <div className={styles.ctaTitle}>
-            {recommendedTier.name} — {recommendedTier.price}
+            {viewerSignedIn ? "Open your dashboard" : "Unlock the full dashboard"}
           </div>
-          <p className={styles.ctaPitch}>{recommendedTier.pitch}</p>
+          <p className={styles.ctaPitch}>
+            {viewerSignedIn
+              ? "Same view, plus your pipeline, work orders, and document vault."
+              : "Sign in to access pipeline, work orders, services, and document vault. Free 14-day trial."}
+          </p>
           <Link
-            href="/pay?plan=grants-tenders-matching"
+            href={viewerSignedIn ? "/dashboard" : "/login?next=/dashboard"}
             className={styles.ctaButton}
             style={{ display: "inline-block", textDecoration: "none" }}
           >
-            Subscribe →
+            {viewerSignedIn ? "Open dashboard →" : "Sign in →"}
           </Link>
         </div>
       </aside>

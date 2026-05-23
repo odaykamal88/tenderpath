@@ -80,6 +80,10 @@ export default async function AssessmentPage({ params, searchParams }: Props) {
             dimensions={data.dimensions}
             recommendedTier={data.recommendedTier}
             activity={activity}
+            // PR-K (2026-05-23): non-null activity means tp_session cookie
+            // verified — viewer is signed in. Used by ScoreTab to render
+            // "Open dashboard →" vs "Sign in →" on the next-step CTA.
+            viewerSignedIn={activity !== null}
           />
         </>
       )}

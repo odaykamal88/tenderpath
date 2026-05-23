@@ -27,7 +27,7 @@ const COVERAGE_BANDS = [
   {
     n: "03",
     label: "Languages",
-    body: "Arabic-issued tenders are indexed and matched alongside English-language calls. Your weekly digest is delivered in Arabic and English so your team reads it in the language they work in.",
+    body: "Arabic-issued tenders are indexed and matched alongside English-language calls. Your dashboard surfaces matches in Arabic and English so your team reads them in the language they work in.",
   },
 ];
 
