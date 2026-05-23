@@ -6,6 +6,7 @@ import {
   DEMO_EMAIL,
   resolveOrMintForSignin,
   setDemoSessionCookie,
+  wipeDemoWorkOrders,
   wipeOtherDemoAssessments,
 } from "@/lib/assessment/demo-session";
 
@@ -113,10 +114,19 @@ export async function POST(request: Request) {
         const { sessionId, carriedFromCookie } = resolveOrMintForSignin(request);
         demoSessionForResponse = sessionId;
         const { wiped } = await wipeOtherDemoAssessments(sessionId);
+        // PR-J (2026-05-23): also wipe the demo user's work_orders and
+        // proposal_packages on every sign-in. The user reported seeing
+        // accumulated bid-no-bid / proposal orders from prior demo
+        // sessions on the Work Orders page — those should clear like
+        // assessments do. Other emails are unaffected (wipe is scoped to
+        // the demo email).
+        const wipedOrders = await wipeDemoWorkOrders();
         console.log("[auth:password:demo_reset]", {
           sessionId,
           carriedFromCookie,
-          wiped,
+          assessments_wiped: wiped,
+          work_orders_wiped: wipedOrders.orders,
+          proposal_packages_wiped: wipedOrders.packages,
         });
 
         await sql`
