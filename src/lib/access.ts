@@ -2,7 +2,15 @@ import { NextResponse } from "next/server";
 import { getUserFromRequest } from "./auth";
 import type { User } from "./types";
 
-export const TRIAL_DAYS = 14;
+// PR-M (2026-05-23): trial extended 14 → 30 days. Day 27 is the warning-
+// email trigger (see src/app/api/cron/trial-reminders/route.ts). Bumping
+// here also bumps the Stripe-managed trial via subscription_data.trial_
+// period_days inside /api/pay/checkout, so the two trial systems stay
+// aligned to a single 30-day window from the user's created_at.
+export const TRIAL_DAYS = 30;
+// Days before trial end when the warning email fires. Cron picks up
+// users whose elapsed day == TRIAL_WARNING_DAY exactly once.
+export const TRIAL_WARNING_DAY = 27;
 
 export interface AccessInfo {
   hasAccess: boolean;
@@ -79,10 +87,10 @@ export async function requireDashboardAccess(
         {
           error: "Trial expired. Subscribe to continue.",
           code: "TRIAL_EXPIRED",
-          // PR-L (2026-05-23): point trial-expired upgrade flow at the
-          // founding-100 lock-in (highest-converting price). Falls back
-          // gracefully if STRIPE_PRICE_ANNUAL_ACCESS_49 isn't set.
-          upgradeUrl: "/pay?plan=annual-access-founding",
+          // PR-M (2026-05-23): point trial-expired upgrade flow at the
+          // regular $99/year. The founding-100 lock-in surfaces in a
+          // separate banner (not on this fallback path).
+          upgradeUrl: "/pay?plan=annual-access",
         },
         { status: 402 }
       ),

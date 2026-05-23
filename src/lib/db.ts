@@ -40,10 +40,15 @@ export async function initializeDatabase() {
       magic_token VARCHAR(255),
       magic_token_expires_at TIMESTAMPTZ,
       trial_start_date TIMESTAMPTZ,
+      trial_warning_sent_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+  // PR-M (2026-05-23): trial_warning_sent_at — day-27 cron stamps this
+  // so the warning email never fires twice for the same user. Safe
+  // no-op on existing DBs.
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_warning_sent_at TIMESTAMPTZ`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS subscriptions (

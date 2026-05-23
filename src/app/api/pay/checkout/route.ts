@@ -5,6 +5,7 @@ import { track } from "@/lib/telemetry/funnel";
 import { evaluateServiceFulfillmentGate } from "@/lib/service-fulfillment-gates";
 import { assertTenderDeadlineIsLive } from "@/lib/tender-deadline-guard";
 import { resolveTierSlug } from "@/lib/pricing";
+import { TRIAL_DAYS } from "@/lib/access";
 
 const SLUG_TO_PRICE_ENV: Record<string, string> = {
   "bid-no-bid":              "STRIPE_BIDNOBID_PRICE_ID",
@@ -23,12 +24,12 @@ const SUBSCRIPTION_PLANS = new Set([
   "annual-access-founding",
 ]);
 
-// PR-L (2026-05-23): plans that get a Stripe-managed 14-day trial. The
-// platform also has its own from-signup trial via evaluateAccess(), but the
-// Stripe trial is the one that defers the first charge. Both can run in
-// parallel safely — whichever expires last keeps the user in trial state.
+// PR-L (2026-05-23): plans that get a Stripe-managed trial. The platform
+// also has its own from-signup trial via evaluateAccess(). PR-M extended
+// both to 30 days (TRIAL_DAYS in /lib/access) and added an anti-double-
+// count rule: the Stripe trial is shortened to whatever's left of the
+// platform trial, so a user can never get more than TRIAL_DAYS total free.
 const TRIAL_PLANS = new Set(["annual-access", "annual-access-founding"]);
-const TRIAL_DAYS = 14;
 
 function metadataValue(value: unknown): string {
   if (typeof value !== "string") return "";
@@ -147,6 +148,23 @@ export async function POST(request: Request) {
     const isSubscription = SUBSCRIPTION_PLANS.has(plan);
     const wantsTrial = TRIAL_PLANS.has(plan);
 
+    // PR-M (2026-05-23): anti-double-count. A user who has been on the
+    // platform trial for N days only gets (TRIAL_DAYS - N) more days from
+    // Stripe — so total free access is capped at TRIAL_DAYS from signup,
+    // regardless of when they subscribed. Without this, signing up day 1
+    // + subscribing day 28 would yield 28 + 30 = 58 free days.
+    //
+    // Reads the user from the auth header / tp_session cookie. If we
+    // can't identify them (anonymous /pay flow), fall back to the full
+    // TRIAL_DAYS — they haven't used any platform trial yet either.
+    const checkoutUser = await getUserFromRequest(request);
+    let trialDaysRemaining = TRIAL_DAYS;
+    if (checkoutUser?.created_at) {
+      const elapsedMs = Date.now() - new Date(checkoutUser.created_at).getTime();
+      const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
+      trialDaysRemaining = Math.max(0, TRIAL_DAYS - elapsedDays);
+    }
+
     const session = await stripe.checkout.sessions.create({
       ui_mode: "embedded_page",
       mode: isSubscription ? "subscription" : "payment",
@@ -155,22 +173,34 @@ export async function POST(request: Request) {
       // Stripe-managed coupons (e.g. FREETEST) can be applied at the UI level.
       allow_promotion_codes: true,
       return_url: returnUrl,
-      // PR-L (2026-05-23): for annual-access plans, defer the first charge
-      // by TRIAL_DAYS. The customer card is captured at checkout but not
-      // billed until day 14. They get the cancel-anytime affordance inside
-      // Stripe and don't lose the founding-100 lock-in price even after
-      // the trial converts.
-      ...(isSubscription && wantsTrial
+      // PR-L/M (2026-05-23): for annual-access plans, defer the first
+      // charge until the user's TOTAL trial window (platform + Stripe)
+      // hits TRIAL_DAYS from signup. trial_period_days = 0 is rejected by
+      // Stripe — omit subscription_data.trial_period_days entirely if
+      // there's no trial left so the user is charged immediately.
+      ...(isSubscription && wantsTrial && trialDaysRemaining > 0
         ? {
             subscription_data: {
-              trial_period_days: TRIAL_DAYS,
+              trial_period_days: trialDaysRemaining,
               metadata: {
                 plan,
                 tier: "annual-access",
+                platform_trial_days_used: String(TRIAL_DAYS - trialDaysRemaining),
               },
             },
           }
-        : {}),
+        : isSubscription && wantsTrial
+          ? {
+              subscription_data: {
+                metadata: {
+                  plan,
+                  tier: "annual-access",
+                  platform_trial_days_used: String(TRIAL_DAYS),
+                  trial_skipped: "platform_trial_exhausted",
+                },
+              },
+            }
+          : {}),
       metadata: {
         plan,
         tender,
@@ -181,7 +211,8 @@ export async function POST(request: Request) {
       },
     });
 
-    const user = await getUserFromRequest(request);
+    // PR-M (2026-05-23): reuse the user fetched above for the anti-double-
+    // count trial calculation. Saves a redundant DB round-trip.
     await track(
       "paid_intent_clicked",
       {
@@ -193,8 +224,9 @@ export async function POST(request: Request) {
         fulfillment_mode: gate.mode,
         readiness_code: gate.code,
         readiness_score: gate.score_0_10,
+        trial_days_remaining: trialDaysRemaining,
       },
-      { userId: user?.id ?? null },
+      { userId: checkoutUser?.id ?? null },
     );
 
     return NextResponse.json({ clientSecret: session.client_secret });
