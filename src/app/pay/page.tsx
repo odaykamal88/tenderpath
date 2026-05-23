@@ -573,6 +573,14 @@ function PayPage() {
   const [readiness, setReadiness] = useState<FulfillmentReadiness | null>(null);
   const [readinessError, setReadinessError] = useState<string | null>(null);
 
+  // PR-I (2026-05-23): when a user arrives from a service intake (e.g.
+  // /dashboard/services/bid-no-bid) they've ALREADY chosen the service —
+  // forcing them to pick it again from a 4-tile grid was needless friction.
+  // If `?plan=…` is present in the URL, hide step 01 entirely and let them
+  // jump straight to payment method.
+  const planPrelocked = Boolean(planSlug);
+  const preselectedTier = planSlug ? TIERS.find((t) => t.slug === planSlug) : null;
+
   useEffect(() => {
     if (!selectedSlug) return;
     let cancelled = false;
@@ -670,63 +678,115 @@ function PayPage() {
           </div>
         )}
 
-        {/* Step 1 — plan */}
-        <div className="rounded-md border border-stone-200/70 bg-white p-4 sm:p-5">
-          <div className="flex items-baseline gap-2.5 mb-4">
-            <span
-              className="text-[10px] font-semibold tabular-nums text-stone-400"
-              style={{ fontFamily: MONO }}
-            >
-              01
-            </span>
-            <h2
-              className="text-[13px] sm:text-[15px] font-semibold uppercase tracking-[0.13em] sm:tracking-[0.15em] text-stone-700"
-              style={{ fontFamily: MONO }}
-            >
-              Select your plan
-            </h2>
-          </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            {TIERS.map((t) => (
-              <button
-                key={t.slug}
-                onClick={() => setSelectedSlug(t.slug)}
-                className={`rounded-sm border p-3.5 text-left transition-colors ${
-                  selectedSlug === t.slug
-                    ? "border-stone-900 bg-stone-50/40"
-                    : "border-stone-200/70 hover:border-stone-400 bg-white"
-                }`}
+        {/* Step 1 — plan. Hidden when arriving from a service intake with
+            ?plan=… already locked in (PR-I 2026-05-23). In that case we
+            render a compact summary card so the user knows what they're
+            paying for without having to re-pick from a grid. */}
+        {planPrelocked && preselectedTier ? (
+          <div className="rounded-md border border-stone-200/70 bg-white p-4 sm:p-5">
+            <div className="flex items-baseline gap-2.5 mb-3">
+              <span
+                className="text-[10px] font-semibold tabular-nums text-stone-400"
+                style={{ fontFamily: MONO }}
               >
-                {t.featured && (
+                01
+              </span>
+              <h2
+                className="text-[13px] sm:text-[15px] font-semibold uppercase tracking-[0.13em] sm:tracking-[0.15em] text-stone-700"
+                style={{ fontFamily: MONO }}
+              >
+                Your selected service
+              </h2>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <div className="min-w-0">
+                <p
+                  className="text-[14px] font-medium text-stone-900 leading-snug truncate"
+                  style={{ fontFamily: SERIF }}
+                >
+                  {preselectedTier.name}
+                </p>
+                {preselectedTier.featured && (
                   <span
-                    className="inline-block text-[9px] font-semibold uppercase tracking-[0.18em] text-orange-700 mb-1.5"
+                    className="inline-block mt-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-orange-700"
                     style={{ fontFamily: MONO }}
                   >
                     · Popular ·
                   </span>
                 )}
-                <p
-                  className="text-[12px] font-medium text-stone-700 leading-snug"
+              </div>
+              <p
+                className="text-[22px] font-medium text-stone-900 tabular-nums tracking-tight shrink-0"
+                style={{ fontFamily: SERIF }}
+              >
+                {preselectedTier.price}
+                <span
+                  className="text-[10px] font-medium text-stone-500 ml-1"
                   style={{ fontFamily: MONO }}
                 >
-                  {t.name}
-                </p>
-                <p
-                  className="mt-1.5 text-[20px] font-medium text-stone-900 tabular-nums tracking-tight"
-                  style={{ fontFamily: SERIF }}
+                  {preselectedTier.billingPeriod}
+                </span>
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-md border border-stone-200/70 bg-white p-4 sm:p-5">
+            <div className="flex items-baseline gap-2.5 mb-4">
+              <span
+                className="text-[10px] font-semibold tabular-nums text-stone-400"
+                style={{ fontFamily: MONO }}
+              >
+                01
+              </span>
+              <h2
+                className="text-[13px] sm:text-[15px] font-semibold uppercase tracking-[0.13em] sm:tracking-[0.15em] text-stone-700"
+                style={{ fontFamily: MONO }}
+              >
+                Select your plan
+              </h2>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              {TIERS.map((t) => (
+                <button
+                  key={t.slug}
+                  onClick={() => setSelectedSlug(t.slug)}
+                  className={`rounded-sm border p-3.5 text-left transition-colors ${
+                    selectedSlug === t.slug
+                      ? "border-stone-900 bg-stone-50/40"
+                      : "border-stone-200/70 hover:border-stone-400 bg-white"
+                  }`}
                 >
-                  {t.price}
-                  <span
-                    className="text-[10px] font-medium text-stone-500 ml-1"
+                  {t.featured && (
+                    <span
+                      className="inline-block text-[9px] font-semibold uppercase tracking-[0.18em] text-orange-700 mb-1.5"
+                      style={{ fontFamily: MONO }}
+                    >
+                      · Popular ·
+                    </span>
+                  )}
+                  <p
+                    className="text-[12px] font-medium text-stone-700 leading-snug"
                     style={{ fontFamily: MONO }}
                   >
-                    {t.billingPeriod}
-                  </span>
-                </p>
-              </button>
-            ))}
+                    {t.name}
+                  </p>
+                  <p
+                    className="mt-1.5 text-[20px] font-medium text-stone-900 tabular-nums tracking-tight"
+                    style={{ fontFamily: SERIF }}
+                  >
+                    {t.price}
+                    <span
+                      className="text-[10px] font-medium text-stone-500 ml-1"
+                      style={{ fontFamily: MONO }}
+                    >
+                      {t.billingPeriod}
+                    </span>
+                  </p>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Step 2 — method */}
         <div className="rounded-md border border-stone-200/70 bg-white p-4 sm:p-5">

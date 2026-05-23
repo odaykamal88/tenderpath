@@ -115,6 +115,15 @@ export default function ServiceIntakeForm({
   // documents" field (which was removed for bid-no-bid).
   const [tenderFile, setTenderFile] = useState<UploadedFile | null>(null);
   const [uploadingTender, setUploadingTender] = useState<UploadStage | null>(null);
+  // PR-I (2026-05-23): visible upload progress per slot. The earlier
+  // build only logged percentage to devtools, leaving the user staring at
+  // a generic "Uploading file…" spinner for tens of seconds with no signal
+  // about whether anything was happening. Tracked per-slot because three
+  // uploads can be in flight on bid-no-bid (tender, supporting, financial)
+  // and we don't want them clobbering one shared progress bar.
+  const [tenderProgress, setTenderProgress] = useState<number | null>(null);
+  const [generalProgress, setGeneralProgress] = useState<number | null>(null);
+  const [financialProgress, setFinancialProgress] = useState<number | null>(null);
   // Bid-no-bid only: list of supporting-document URLs the user has pasted in.
   // Previously a single string field that just flagged "URL added" — the
   // user (2026-05-21) asked for a chip-list pattern so multiple supporting
@@ -125,6 +134,15 @@ export default function ServiceIntakeForm({
   // Fetch-criteria flow (bid-no-bid): loading state + last error message.
   const [fetchingCriteria, setFetchingCriteria] = useState(false);
   const [criteriaError, setCriteriaError] = useState<string | null>(null);
+  // PR-I (2026-05-23): when fetch-criteria scrapes a portal page and finds
+  // PDF/DOC links on it, the server returns them as discoveredAttachments.
+  // We surface them as a chip list with "Attach all →" so the user doesn't
+  // have to manually copy-paste each link into the supporting-URL field.
+  type DiscoveredAttachment = { href: string; label: string; ext: string };
+  const [discoveredAttachments, setDiscoveredAttachments] = useState<
+    DiscoveredAttachment[]
+  >([]);
+  const [criteriaNote, setCriteriaNote] = useState<string | null>(null);
   /** Confirmed primary line of business for this order (from ConfidenceGate). */
   const [confirmedPrimarySector, setConfirmedPrimarySector] = useState<string | null>(null);
 
@@ -156,6 +174,7 @@ export default function ServiceIntakeForm({
     file: File,
     onStage: (stage: UploadStage) => void,
     purpose: "tender_main" | "supporting" = "supporting",
+    onProgress?: (percentage: number | null) => void,
   ): Promise<UploadedFile | { error: string }> {
     // Browser console trail so user-reported "stuck spinner" bug reports can
     // be triaged from a screenshot of devtools. Mirrors the server-side
@@ -212,6 +231,9 @@ export default function ServiceIntakeForm({
           onUploadProgress: ({ loaded, total, percentage }) => {
             lastProgressAt = Date.now();
             lastPercentage = percentage;
+            // PR-I (2026-05-23): also surface this to the UI so the user
+            // sees real movement, not just devtools noise.
+            if (onProgress) onProgress(percentage);
             console.info("[upload:client:blob_progress]", {
               loaded,
               total,
@@ -296,37 +318,43 @@ export default function ServiceIntakeForm({
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
+    setGeneralProgress(0);
     // The general "Upload your documents" slot — used on proposal /
     // lta-roster pages. We treat these as the primary tender doc since
     // that's what those flows are uploading (TOR / vendor guide).
-    const result = await uploadOne(file, setUploading, "tender_main");
+    const result = await uploadOne(file, setUploading, "tender_main", setGeneralProgress);
     if ("error" in result) setError(result.error);
     else setUploadedFile(result);
     setUploading(null);
+    setGeneralProgress(null);
   }
 
   async function handleFinancialFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
+    setFinancialProgress(0);
     // Supporting docs — capability statements, certifications, financials,
     // partner letters. Bid-no-bid analysis weighs these against the tender.
-    const result = await uploadOne(file, setUploadingFinancial, "supporting");
+    const result = await uploadOne(file, setUploadingFinancial, "supporting", setFinancialProgress);
     if ("error" in result) setError(result.error);
     else setFinancialFile(result);
     setUploadingFinancial(null);
+    setFinancialProgress(null);
   }
 
   async function handleTenderFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
+    setTenderProgress(0);
     // Bid-no-bid-only "Tender or document" upload — this is the primary
     // tender doc (TOR / RFP / EOI). Gets the "bid-no-bid-tender" vault tag.
-    const result = await uploadOne(file, setUploadingTender, "tender_main");
+    const result = await uploadOne(file, setUploadingTender, "tender_main", setTenderProgress);
     if ("error" in result) setError(result.error);
     else setTenderFile(result);
     setUploadingTender(null);
+    setTenderProgress(null);
   }
 
   // Supporting-URL chip list (bid-no-bid). addSupportingUrl normalizes and
@@ -350,6 +378,7 @@ export default function ServiceIntakeForm({
     }
     setFetchingCriteria(true);
     setCriteriaError(null);
+    setCriteriaNote(null);
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
       if (!token) {
@@ -366,13 +395,30 @@ export default function ServiceIntakeForm({
       // before our handler runs). Without this fallback the user always saw
       // a generic "Could not fetch criteria (500)." with no signal as to why.
       const rawText = await res.text();
-      let data: { criteria?: string; error?: string; stage?: string } = {};
+      let data: {
+        criteria?: string;
+        error?: string;
+        stage?: string;
+        attachments?: DiscoveredAttachment[];
+        note?: string;
+      } = {};
       try {
         data = rawText ? JSON.parse(rawText) : {};
       } catch {
         data = {};
       }
-      if (!res.ok || !data.criteria) {
+
+      // PR-I (2026-05-23): the server can now return discovered PDF/DOC
+      // attachments even when the page text didn't yield criteria. Show
+      // them up regardless of whether `criteria` is populated.
+      if (Array.isArray(data.attachments) && data.attachments.length > 0) {
+        setDiscoveredAttachments(data.attachments);
+      }
+      if (data.note) {
+        setCriteriaNote(data.note);
+      }
+
+      if (!res.ok || (!data.criteria && !(data.attachments?.length))) {
         const snippet = rawText && !data.error
           ? ` — ${rawText.replace(/<[^>]+>/g, " ").trim().slice(0, 160)}`
           : "";
@@ -383,17 +429,19 @@ export default function ServiceIntakeForm({
         );
         return;
       }
-      // Append to whatever the user has already typed so we don't blow away
-      // their notes; a clear separator makes it obvious where the fetched
-      // content starts.
-      setFields((prev) => {
-        const existing = prev.tender_context?.trim();
-        const fetched = data.criteria!.trim();
-        const next = existing
-          ? `${existing}\n\n— FETCHED FROM ${tenderUrl.trim()} —\n${fetched}`
-          : fetched;
-        return { ...prev, tender_context: next };
-      });
+      if (data.criteria) {
+        // Append to whatever the user has already typed so we don't blow away
+        // their notes; a clear separator makes it obvious where the fetched
+        // content starts.
+        setFields((prev) => {
+          const existing = prev.tender_context?.trim();
+          const fetched = data.criteria!.trim();
+          const next = existing
+            ? `${existing}\n\n— FETCHED FROM ${tenderUrl.trim()} —\n${fetched}`
+            : fetched;
+          return { ...prev, tender_context: next };
+        });
+      }
     } catch (err) {
       setCriteriaError(
         err instanceof Error ? `Network error: ${err.message}` : "Network error fetching criteria.",
@@ -401,6 +449,29 @@ export default function ServiceIntakeForm({
     } finally {
       setFetchingCriteria(false);
     }
+  }
+
+  // PR-I (2026-05-23): attach all discovered PDF/DOC links from a portal
+  // page into the supporting-URL chip list with one click. This is the
+  // direct fix for the user's "the page had documents at the bottom that
+  // could be pulled" complaint — fetch-criteria now finds them, and this
+  // wires them into the intake submission.
+  function attachAllDiscovered() {
+    if (discoveredAttachments.length === 0) return;
+    setSupportingUrls((prev) => {
+      const merged = new Set(prev);
+      for (const a of discoveredAttachments) merged.add(a.href);
+      return Array.from(merged);
+    });
+    setDiscoveredAttachments([]);
+    setCriteriaNote(
+      `Attached ${discoveredAttachments.length} document${discoveredAttachments.length === 1 ? "" : "s"} from the tender page below.`,
+    );
+  }
+
+  function attachOneDiscovered(href: string) {
+    setSupportingUrls((prev) => (prev.includes(href) ? prev : [...prev, href]));
+    setDiscoveredAttachments((prev) => prev.filter((a) => a.href !== href));
   }
 
   async function submit(e: React.FormEvent) {
@@ -579,7 +650,7 @@ export default function ServiceIntakeForm({
                 )}
                 <span className="leading-snug flex-1">
                   {uploadingTender === "uploading"
-                    ? "Uploading file…"
+                    ? `Uploading file… ${tenderProgress != null ? `${tenderProgress}%` : ""}`
                     : uploadingTender === "extracting"
                     ? "Reading document…"
                     : <>…or <span className="font-semibold text-stone-700">upload the tender document</span> (PDF / Word / Excel, up to 50 MB)</>}
@@ -643,7 +714,7 @@ export default function ServiceIntakeForm({
                 )}
                 <span className="leading-snug flex-1">
                   {uploading === "uploading"
-                    ? "Uploading file…"
+                    ? `Uploading file… ${generalProgress != null ? `${generalProgress}%` : ""}`
                     : uploading === "extracting"
                     ? "Reading document…"
                     : <><span className="font-semibold text-stone-700">Choose file</span> — {uploadHint[service]}</>}
@@ -709,7 +780,7 @@ export default function ServiceIntakeForm({
                 )}
                 <span className="leading-snug flex-1">
                   {uploadingFinancial === "uploading"
-                    ? "Uploading file…"
+                    ? `Uploading file… ${financialProgress != null ? `${financialProgress}%` : ""}`
                     : uploadingFinancial === "extracting"
                     ? "Reading document…"
                     : (
@@ -827,6 +898,63 @@ export default function ServiceIntakeForm({
               <p className="mt-1.5 text-[11.5px] text-red-700" style={{ fontFamily: MONO }}>
                 {criteriaError}
               </p>
+            )}
+            {showFetchCriteria && criteriaNote && (
+              <p
+                className="mt-1.5 text-[11.5px] text-emerald-800"
+                style={{ fontFamily: MONO }}
+              >
+                {criteriaNote}
+              </p>
+            )}
+            {/* PR-I (2026-05-23): when fetch-criteria discovers PDF/DOC
+                attachments on the tender page, surface them here as a chip
+                list with a one-click "Attach all" button. Lets the user
+                grab the actual TOR/RFP that portal pages typically link to
+                at the bottom — solves the "the page had documents at the
+                bottom that could be pulled" complaint. */}
+            {showFetchCriteria && discoveredAttachments.length > 0 && (
+              <div className="mt-2 rounded-sm border border-blue-200 bg-blue-50/60 p-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <p
+                    className="text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-800"
+                    style={{ fontFamily: MONO }}
+                  >
+                    Found {discoveredAttachments.length} document{discoveredAttachments.length === 1 ? "" : "s"} on this page
+                  </p>
+                  <button
+                    type="button"
+                    onClick={attachAllDiscovered}
+                    className="text-[10px] font-semibold uppercase tracking-[0.12em] text-blue-900 hover:text-blue-700 border-b border-blue-300 hover:border-blue-700 transition-colors"
+                    style={{ fontFamily: MONO }}
+                  >
+                    Attach all →
+                  </button>
+                </div>
+                <ul className="mt-2 space-y-1.5">
+                  {discoveredAttachments.map((a) => (
+                    <li
+                      key={a.href}
+                      className="flex items-center gap-2 text-[11.5px] text-stone-800"
+                      style={{ fontFamily: MONO }}
+                    >
+                      <span className="shrink-0 rounded-sm border border-blue-200 bg-white px-1.5 py-0.5 text-[9px] font-semibold uppercase text-blue-700">
+                        {a.ext}
+                      </span>
+                      <span className="flex-1 truncate" title={a.href}>
+                        {a.label}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => attachOneDiscovered(a.href)}
+                        className="shrink-0 text-blue-700 hover:text-blue-900 underline underline-offset-2 text-[10.5px]"
+                      >
+                        Attach
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
         );

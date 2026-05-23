@@ -380,6 +380,37 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
     pkg.generation_status === "pending" ||
     (pkg.generation_status === "ready" && !pkg.output);
 
+  // PR-I (2026-05-23): if payment landed but no package row exists yet AND
+  // we've been polling for ≥4 cycles (~32 s) the auto-generation never
+  // scheduled — usually because the fulfillment gate flipped to human_review
+  // and the webhook short-circuited. Offer the user a manual "Start analysis"
+  // button so they're not stuck staring at a forever-spinner.
+  const generationLikelyStalled = !pkg && pollCount >= 4;
+  if (generationLikelyStalled) {
+    return (
+      <section className="rounded-md border-l-2 border-amber-600 bg-amber-50/40 p-5">
+        <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+          Ready to start your analysis
+        </h2>
+        <p className="mt-2 text-[13px] text-stone-700">
+          Payment is confirmed. Auto-fulfillment didn&apos;t kick off — start the analysis manually and we&apos;ll email the PDF when it&apos;s ready (usually 2–5 minutes).
+        </p>
+        {error && (
+          <p className="mt-2 text-[12px] text-red-700">Last error: {error}</p>
+        )}
+        <button
+          type="button"
+          onClick={handleRegenerate}
+          disabled={regenBusy}
+          className="mt-3 rounded-sm bg-stone-900 px-3.5 py-2 text-[11.5px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ fontFamily: MONO }}
+        >
+          {regenBusy ? "Starting…" : "Start analysis →"}
+        </button>
+      </section>
+    );
+  }
+
   if (!pkg || (isGenerating && pkg?.generation_status !== "failed")) {
     return (
       <section className="rounded-md border-l-2 border-amber-600 bg-amber-50/40 p-5">

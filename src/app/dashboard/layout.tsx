@@ -135,8 +135,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const servicesDefaultOpen = servicesActive || !isPaid;
   const servicesExpanded = servicesOpen === null ? servicesDefaultOpen : servicesOpen;
 
+  // PR-I (2026-05-23): "Work orders" is now a top-level Workbench item under
+  // Overview, per user request. The bottom-bar "Billing & orders" link still
+  // points at the same route for the footer cluster (settings / help) but the
+  // Workbench placement is the primary entry point — that's where users
+  // actually look for "did my paid service finish yet".
   const workbench = [
     { href: "/dashboard", label: "Overview" },
+    { href: "/dashboard/work-orders", label: "Work orders" },
   ];
   const tools = [
     { href: "/dashboard/vault", label: "Document vault", requiresPaid: true },
@@ -150,7 +156,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     ...workbench,
     { href: "/dashboard/services", label: "Services", matchPaths: ["/dashboard/services"] },
     ...tools,
-    { href: "/dashboard/work-orders", label: "Billing & orders" },
   ];
   const activeItem =
     allItems.find((it) => {
@@ -388,17 +393,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {trialPill && <div className="mt-6 mb-3">{trialPill}</div>}
 
       <div className="border-t border-stone-200/70 pt-3 flex flex-col gap-0.5">
-        <Link
-          href="/dashboard/work-orders"
-          className={`flex items-center gap-2.5 pl-3 pr-2.5 py-2 lg:py-1.5 rounded-sm text-[13px] lg:text-[12.5px] transition-colors ${
-            pathname?.startsWith("/dashboard/work-orders")
-              ? "bg-stone-900 text-white"
-              : "text-stone-500 hover:bg-stone-100 hover:text-stone-800"
-          }`}
-        >
-          <NavIcon path={NAV_ICONS["/dashboard/work-orders"]} />
-          <span>Billing &amp; orders</span>
-        </Link>
+        {/* PR-I (2026-05-23): "Billing & orders" lived here previously but is
+            now surfaced as a top-level Workbench item ("Work orders") next to
+            Overview, where users actually look for paid-service status. Keep
+            the support + FAQ entries here so the footer cluster stays useful. */}
         <a
           href="mailto:info@tenderpath.me?subject=Support Request"
           className="flex items-center gap-2.5 pl-3 pr-2.5 py-2 lg:py-1.5 rounded-sm text-[13px] lg:text-[12.5px] text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors"

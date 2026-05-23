@@ -265,10 +265,40 @@ function bidNoBidGate(order: WorkOrderRow): ServiceFulfillmentGate {
   const missing = contextMissing(order);
   const quality = contextQuality(order);
   const score = typeof quality?.score_0_10 === "number" ? quality.score_0_10 : null;
-  const hasPipeline = Boolean(order.pipeline_item_id);
-  const hasSource = Boolean(clean(order.tender_url, 1000) || !missing.includes("primary tender or roster source URL"));
+  const intake = order.intake ?? null;
+  const intakeRecord = intake && typeof intake === "object" ? (intake as Record<string, unknown>) : null;
 
-  if (!hasPipeline || !hasSource) {
+  // PR-I (2026-05-23): the prior gate hard-required `pipeline_item_id` AND a
+  // tender_url. That blocked every user coming in through
+  // /dashboard/services/bid-no-bid (intake-first flow) — they had no pipeline
+  // anchor, so the gate flipped to human_review and the webhook short-circuited
+  // before the after(generateBidNoBid) hook could fire. Work order 19 sat in
+  // "in_progress" with no generation logs for 5+ minutes.
+  //
+  // The intake form already collects everything the generator needs:
+  //   - tender_url (paste a portal link),
+  //   - tender_file_url (upload the TOR/RFP directly), and/or
+  //   - tender_context (paste eligibility / evaluation criteria),
+  //   - plus any supporting docs / URLs.
+  //
+  // Any one of those is enough source signal for auto-fulfillment. A separate
+  // pipeline anchor is nice-to-have, not a precondition.
+  const tenderUrl = clean(order.tender_url, 1000);
+  const tenderFileUrl =
+    intakeRecord && typeof intakeRecord.tender_file_url === "string"
+      ? intakeRecord.tender_file_url.trim()
+      : null;
+  const tenderContext =
+    intakeRecord && typeof intakeRecord.tender_context === "string"
+      ? intakeRecord.tender_context.trim()
+      : null;
+  const hasSource = Boolean(
+    tenderUrl
+      || tenderFileUrl
+      || (tenderContext && tenderContext.length >= 80),
+  );
+
+  if (!hasSource) {
     return {
       plan: BID_PLAN,
       work_order_id: order.id,
@@ -277,13 +307,12 @@ function bidNoBidGate(order: WorkOrderRow): ServiceFulfillmentGate {
       auto_fulfill_allowed: false,
       score_0_10: score,
       missing_inputs: unique([
-        ...(!hasPipeline ? ["selected dashboard pipeline item"] : []),
-        ...(!hasSource ? ["primary tender source URL"] : []),
+        "tender URL, uploaded tender document, or pasted criteria",
         ...missing,
       ]),
-      warnings: ["Bid/No-Bid can be paid, but automated fulfillment needs a selected tender and source context."],
+      warnings: ["Bid/No-Bid can be paid, but automated fulfillment needs a tender URL, uploaded TOR, or pasted criteria."],
       code: "BID_REVIEW_REQUIRED",
-      message: "Payment can proceed, but this Bid/No-Bid memo should enter human QA because selected tender/source context is incomplete.",
+      message: "Payment can proceed, but this Bid/No-Bid memo should enter human QA because no tender source (URL, file, or criteria) was captured.",
       metadata: {
         fulfillment_mode: "human_review",
         readiness_code: "BID_REVIEW_REQUIRED",
