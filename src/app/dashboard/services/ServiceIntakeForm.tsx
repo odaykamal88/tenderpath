@@ -597,36 +597,34 @@ export default function ServiceIntakeForm({
         />
       )}
 
-      {/* Tender or document — URL input. On bid-no-bid this section also
-          carries the tender file upload (the standalone "Upload your
-          documents" field is removed for bid-no-bid). */}
+      {/* Tender or document — URL input. On bid-no-bid the file upload
+          slot sits side-by-side with the URL field on desktop (≥sm) and
+          stacks on mobile. PR-N (2026-05-23): switched from
+          URL-on-top-then-upload-below to a two-column intuitive layout
+          that reads "paste a URL OR upload a file" at a glance. */}
       <div>
         <label className={labelCls} style={{ fontFamily: MONO }}>
           Tender or document
         </label>
-        <input
-          value={tenderUrl}
-          onChange={(e) => setTenderUrl(e.target.value)}
-          placeholder="Paste source page, TOR, or portal link"
-          className={inputCls}
-          style={{ fontFamily: MONO }}
-        />
-        {service === "bid-no-bid" && (
-          <div className="mt-2">
+        {service === "bid-no-bid" ? (
+          <div className="mt-1.5 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <input
+              value={tenderUrl}
+              onChange={(e) => setTenderUrl(e.target.value)}
+              placeholder="Paste tender URL"
+              className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] text-stone-900 focus:border-stone-700 focus:outline-none"
+              style={{ fontFamily: MONO }}
+            />
             {tenderFile ? (
               <div
-                className="flex items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 text-[12px] text-emerald-800"
+                className="flex h-full items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 text-[12px] text-emerald-800"
                 style={{ fontFamily: MONO }}
               >
                 <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
                 </svg>
                 <span className="flex-1 truncate">
-                  {tenderFile.name} · {tenderFile.extraction?.status === "extracted"
-                    ? `extracted ${tenderFile.extraction.charCount.toLocaleString()} chars`
-                    : tenderFile.extraction?.status
-                      ? `uploaded, extraction ${tenderFile.extraction.status}`
-                      : "uploaded"}
+                  {tenderFile.name}
                 </span>
                 <button
                   type="button"
@@ -637,23 +635,23 @@ export default function ServiceIntakeForm({
                 </button>
               </div>
             ) : (
-              <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-stone-300 px-3.5 py-3 text-[12px] text-stone-500 hover:border-stone-700 hover:text-stone-700 transition-colors">
+              <label className="flex h-full cursor-pointer items-center gap-2.5 rounded-sm border border-dashed border-stone-300 px-3 py-2.5 text-[12px] text-stone-500 hover:border-stone-700 hover:text-stone-700 transition-colors">
                 {uploadingTender ? (
-                  <svg className="h-4 w-4 shrink-0 mt-0.5 animate-spin text-stone-500" viewBox="0 0 24 24" fill="none">
+                  <svg className="h-4 w-4 shrink-0 animate-spin text-stone-500" viewBox="0 0 24 24" fill="none">
                     <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
                     <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
                   </svg>
                 ) : (
-                  <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <svg className="h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
-                <span className="leading-snug flex-1">
+                <span className="leading-snug flex-1 truncate">
                   {uploadingTender === "uploading"
-                    ? `Uploading file… ${tenderProgress != null ? `${tenderProgress}%` : ""}`
+                    ? `Uploading… ${tenderProgress != null ? `${tenderProgress}%` : ""}`
                     : uploadingTender === "extracting"
                     ? "Reading document…"
-                    : <>…or <span className="font-semibold text-stone-700">upload the tender document</span> (PDF / Word / Excel, up to 50 MB)</>}
+                    : <>or <span className="font-semibold text-stone-700">upload the tender file</span></>}
                 </span>
                 <input
                   type="file"
@@ -665,6 +663,24 @@ export default function ServiceIntakeForm({
               </label>
             )}
           </div>
+        ) : (
+          <input
+            value={tenderUrl}
+            onChange={(e) => setTenderUrl(e.target.value)}
+            placeholder="Paste source page, TOR, or portal link"
+            className={inputCls}
+            style={{ fontFamily: MONO }}
+          />
+        )}
+        {service === "bid-no-bid" && tenderFile && tenderFile.extraction?.status && (
+          <p
+            className="mt-1.5 text-[11px] text-emerald-700"
+            style={{ fontFamily: MONO }}
+          >
+            {tenderFile.extraction.status === "extracted"
+              ? `Extracted ${tenderFile.extraction.charCount.toLocaleString()} chars from upload`
+              : `Upload complete · extraction ${tenderFile.extraction.status}`}
+          </p>
         )}
       </div>
 

@@ -658,7 +658,20 @@ export async function getThisWeek(idOrUuid: string): Promise<{ kind: string; tit
 // /assessment/[id]). Fails open: a DB hiccup just hides the card.
 export type ViewerActivity = {
   pipeline: { total: number; applied: number; inProgress: number; saved: number };
-  services: { active: { id: number; service: string; status: string }[]; activeCount: number };
+  // PR-N (2026-05-23): each in-flight work order now carries its tender
+  // title (when one was captured in intake) so the score-tab card can
+  // render "Service · Tender · Status" per spec. status also reflects
+  // the joined proposal_packages.generation_status so a finished
+  // deliverable doesn't keep showing "queued" forever.
+  services: {
+    active: {
+      id: number;
+      service: string;
+      status: string;
+      tender_title: string | null;
+    }[];
+    activeCount: number;
+  };
 };
 
 export async function getViewerActivity(): Promise<ViewerActivity | null> {
@@ -670,11 +683,30 @@ export async function getViewerActivity(): Promise<ViewerActivity | null> {
     if (!claims) return null;
     const userId = claims.userId;
 
+    // PR-N (2026-05-23): join proposal_packages so generation_status =
+    // 'ready' overrides the stale work_orders.status that stays at
+    // 'in_progress' even after the deliverable is generated. Without
+    // this join the user saw "queued" forever on the score-tab card.
+    // DISTINCT ON keeps us to a single most-recent package per work
+    // order (regenerations otherwise produce duplicate rows).
     const [pipelineRows, serviceRows, activeCountRow] = await Promise.all([
       sql`SELECT stage, COUNT(*)::int AS n FROM pipeline_items WHERE user_id = ${userId} GROUP BY stage`,
-      sql`SELECT id, service_slug, plan, status FROM work_orders
-           WHERE user_id = ${userId} AND payment_status = 'paid' AND status NOT IN ('delivered','canceled')
-           ORDER BY created_at DESC LIMIT 2`,
+      sql`
+        SELECT w.id, w.service_slug, w.plan, w.status, w.tender_title,
+               (
+                 SELECT generation_status
+                 FROM proposal_packages
+                 WHERE work_order_id = w.id
+                 ORDER BY created_at DESC
+                 LIMIT 1
+               ) AS gen_status
+        FROM work_orders w
+        WHERE w.user_id = ${userId}
+          AND w.payment_status = 'paid'
+          AND w.status NOT IN ('delivered','canceled')
+        ORDER BY w.created_at DESC
+        LIMIT 4
+      `,
       sql`SELECT COUNT(*)::int AS n FROM work_orders
            WHERE user_id = ${userId} AND payment_status = 'paid' AND status NOT IN ('delivered','canceled')`,
     ]);
@@ -693,11 +725,23 @@ export async function getViewerActivity(): Promise<ViewerActivity | null> {
       saved: byStage.get("matched") ?? 0,
     };
 
-    const active = serviceRows.map((r) => ({
-      id: r.id as number,
-      service: String(r.service_slug ?? r.plan ?? "service"),
-      status: String(r.status),
-    }));
+    // PR-N (2026-05-23): when proposal_packages.generation_status =
+    // 'ready' we map work_orders.status to 'delivered' so the card
+    // shows "ready" via the prettyStatus mapping in ScoreTab. Falls
+    // back to the raw work_orders.status otherwise.
+    const active = serviceRows.map((r) => {
+      const genStatus = r.gen_status as string | null;
+      const rawStatus = String(r.status);
+      const displayStatus = genStatus === "ready" ? "delivered"
+        : genStatus === "pending" || genStatus === "generating" ? "in_progress"
+        : rawStatus;
+      return {
+        id: r.id as number,
+        service: String(r.service_slug ?? r.plan ?? "service"),
+        status: displayStatus,
+        tender_title: (r.tender_title as string | null) ?? null,
+      };
+    });
 
     return {
       pipeline,

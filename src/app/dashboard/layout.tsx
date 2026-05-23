@@ -63,8 +63,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // so the upsell menu stays visible); true/false = user has explicitly toggled.
   const [servicesOpen, setServicesOpen] = useState<boolean | null>(null);
 
-  // Close drawer on route change
+  // Close drawer on route change. This is the textbook case for syncing
+  // ephemeral UI state with an external system (the router) — the new
+  // `react-hooks/set-state-in-effect` rule fires anyway, so suppress it
+  // here rather than restructure into a route-change subscription.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDrawerOpen(false);
   }, [pathname]);
 
@@ -538,6 +542,62 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Main content */}
       <main className="flex-1 min-w-0 pt-14 lg:pt-0 [--tabbar-sticky-top:56px] lg:[--tabbar-sticky-top:0px]">
+        {/* PR-N (2026-05-23): content-area trial banner. Visible on every
+            dashboard page, both desktop + mobile. Color follows the same
+            3-band scale used by the sidebar pill: amber (default) →
+            orange (≤7 days) → red (≤3 days). When the trial has ended
+            the layout flips into a "Subscribe to continue" red banner
+            that's hard to miss. Hidden entirely for paid / admin users
+            (state.isTrialing is false for them). */}
+        {(state.isTrialing || state.locked) && (
+          <div
+            className={`px-5 sm:px-6 lg:px-8 py-2.5 border-b text-[12px] flex items-center justify-between gap-3 ${
+              state.locked
+                ? "border-red-300 bg-red-50/80 text-red-900"
+                : state.trialDaysLeft <= 3
+                ? "border-red-300 bg-red-50/70 text-red-900"
+                : state.trialDaysLeft <= 7
+                ? "border-orange-300 bg-orange-50/70 text-orange-900"
+                : "border-amber-300 bg-amber-50/70 text-amber-900"
+            }`}
+            role="status"
+          >
+            <div className="flex items-baseline gap-2 min-w-0">
+              <span
+                className={`text-[9.5px] font-semibold uppercase tracking-[0.18em] shrink-0 ${
+                  state.locked
+                    ? "text-red-700"
+                    : state.trialDaysLeft <= 3
+                    ? "text-red-700"
+                    : state.trialDaysLeft <= 7
+                    ? "text-orange-700"
+                    : "text-amber-800"
+                }`}
+                style={{ fontFamily: MONO }}
+              >
+                Trial Account
+              </span>
+              <span className="truncate">
+                {state.locked
+                  ? "Trial ended — subscribe to keep dashboard access."
+                  : `${state.trialDaysLeft} day${state.trialDaysLeft === 1 ? "" : "s"} remaining`}
+              </span>
+            </div>
+            <Link
+              href="/pay?plan=annual-access"
+              className={`shrink-0 text-[10px] font-semibold uppercase tracking-[0.15em] border-b transition-colors ${
+                state.locked || state.trialDaysLeft <= 3
+                  ? "text-red-700 hover:text-red-900 border-red-400 hover:border-red-700"
+                  : state.trialDaysLeft <= 7
+                  ? "text-orange-700 hover:text-orange-900 border-orange-400 hover:border-orange-700"
+                  : "text-amber-800 hover:text-amber-900 border-amber-400 hover:border-amber-700"
+              }`}
+              style={{ fontFamily: MONO }}
+            >
+              {state.locked ? "Subscribe →" : "Subscribe · $99/yr →"}
+            </Link>
+          </div>
+        )}
         {children}
       </main>
     </div>
