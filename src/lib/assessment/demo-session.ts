@@ -82,6 +82,54 @@ export function resolveOrMintForSignin(request: Request): {
   return { sessionId: mintDemoSessionId(), carriedFromCookie: false };
 }
 
+// Wipe every demo-email work order + its proposal_packages. Called from
+// /api/auth/password on demo sign-in so the Work Orders page on the next
+// demo session starts empty — same "clean slate" guarantee the assessment
+// wipe gives the demo experience.
+//
+// Unlike assessments, work_orders never go through an anonymous handoff —
+// every demo work order was created by a previously signed-in demo session.
+// So we wipe ALL of them on each new sign-in (no session-id matching).
+//
+// Foreign-key ordering: proposal_packages.work_order_id is ON DELETE SET
+// NULL, so we delete proposal_packages first by user_id (CASCADE on users
+// already exists) to avoid orphan rows. Then work_orders.
+//
+// Errors are best-effort — sign-in itself proceeds even if the wipe fails.
+export async function wipeDemoWorkOrders(): Promise<{
+  packages: number;
+  orders: number;
+}> {
+  let packages = 0;
+  let orders = 0;
+  try {
+    const pkgRows = await sql`
+      DELETE FROM proposal_packages
+      WHERE user_id IN (SELECT id FROM users WHERE lower(email) = ${DEMO_EMAIL})
+      RETURNING id
+    `;
+    packages = pkgRows.length;
+  } catch (err) {
+    console.warn("[demo:wipe:packages_delete_failed]", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  try {
+    const orderRows = await sql`
+      DELETE FROM work_orders
+      WHERE user_id IN (SELECT id FROM users WHERE lower(email) = ${DEMO_EMAIL})
+         OR lower(email) = ${DEMO_EMAIL}
+      RETURNING id
+    `;
+    orders = orderRows.length;
+  } catch (err) {
+    console.error("[demo:wipe:orders_delete_failed]", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return { packages, orders };
+}
+
 // Wipe every demo-email assessment whose demo_session_id does NOT match the
 // currently active session. Called from /api/auth/password on demo sign-in.
 // Uses IS DISTINCT FROM so a NULL session_id (legacy rows from before this
