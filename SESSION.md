@@ -2918,3 +2918,81 @@ Whichever you pick: tsc + lint + build before push; commit message via /tmp file
 - What is now true: Sprint 24 shipped 11 branches: 7 merged (hotfixes for demo-login crash chain, matcher diagnosis + recall fixes, ThisWeek scoping, clickable rows, Gaps↔Next-Steps to-dos with `+N pts` projected uplift), 4 pushed and awaiting review (fix-report-actions-auth which was reverted without explanation, persistent-dashboard-sidebar, magic-link-email-rebrand, demo-session-isolation). Schema gained `assessments.public_id` UUID, `assessment_step_completions` table, `assessments.demo_session_id` TEXT, and `email_queue.assessment_id` FK upgraded NO ACTION → SET NULL. New helper module `src/lib/assessment/demo-session.ts` is the canonical source for `DEMO_EMAIL`. Five new `[domain:context:reason]` log-tag namespaces opened — catalogued in the learning doc §6.
 - What remains: clear the four unmerged PRs; verify Stripe webhook ($1 charge); smoke-test the magic-link email; authenticated dashboard walkthrough; deferred code follow-ups (shared email-styles helper, demo-isolation extension to pipeline tables, admin health endpoints for Resend/Neon, optional matcher audit pass on 5 more companies).
 - What the next agent must read first: `SESSION.md` (this Sprint 24 entry), `AGENTS.md`, `CLAUDE.md`, `docs/agents/launch-discipline.md` (rule 5 is new), `docs/learning/sprint-24-launch-audit-ux-fixes-2026-05-20.md` (skill recipes in §4 + follow-up list in §7), and the relevant subsystem doc for whichever PR they take.
+
+---
+
+### Session Update — Sprint 25 — Trial flow + work-order chip clarity + bid/no-bid → proposal upsell
+- Agent: Claude Code (Opus 4.7, 1M context)
+- Date: 21–23 May 2026
+- Task Completed: Closed the dashboard's conversion-readiness arc — wired Stripe annual-access with a trial (PR-L), extended the trial to 30 days + day-27 reminder cron (PR-M), and shipped the eight-item batch that ties it all together (PR-N): trial banner on every dashboard page (mobile + desktop, 3-color band), YY/MM/DD tender deadlines, bid/no-bid chip dedup, side-by-side intake URL+upload, ScoreTab pipeline cleanup with LEFT JOIN on `proposal_packages` for live status, AnnualAccessCard rewritten with Founder's-rate scarcity hook, and a one-click export-to-proposal upsell rail.
+- Files Changed (PR-N — the most recent push):
+  - `src/app/dashboard/layout.tsx` — content-area trial banner with 3-color band; explicit eslint-disable + rationale on the pre-existing drawer-close `useEffect` for the new `react-hooks/set-state-in-effect` rule
+  - `src/app/dashboard/services/ServiceIntakeForm.tsx` — side-by-side URL + upload grid for bid-no-bid intake
+  - `src/app/dashboard/work-orders/[id]/BidNoBidPanel.tsx` — chip dedup at render layer + `ExportToProposalButton` next to PDF download; added `useRouter` import from `next/navigation`
+  - `src/app/api/dashboard/work-orders/[id]/export-to-proposal/route.ts` — **new** POST handler; mints a fresh `proposal-draft` work_orders row with whitelisted intake snapshot + `bid_no_bid_snapshot` sub-object; returns `payHref`
+  - `src/components/assessment/ScoreTab.tsx` — removed "Your Pipeline" card + "Open Dashboard" CTA block; `viewerSignedIn` prop kept on type signature but no longer destructured (backward compat with callers)
+  - `src/components/assessment/TendersTab.tsx` — `formatYYMMDD()` helper with TBA passthrough and raw fallback
+  - `src/components/dashboard/AnnualAccessCard.tsx` — copywriter rewrite; Founder's-rate scarcity ("77 of 100 seats left"), regular $99/yr framed as fallback
+  - `src/lib/assessment/data.ts` — `getViewerActivity` rewritten to LEFT JOIN `proposal_packages` and prefer `generation_status` over stale `work_orders.status`; `ViewerActivity` type gained `tender_title`
+- Tests Run:
+  - `npx tsc --noEmit` — clean
+  - `npx eslint` on all 8 touched files — clean (1 pre-existing error in layout.tsx drawer-close effect fixed with line-scoped eslint-disable + rationale comment; 1 warning about unused `viewerSignedIn` fixed by removing from destructure while keeping on the type)
+  - `npm run build` — clean; `/api/dashboard/work-orders/[id]/export-to-proposal` registered as expected
+  - **Not run:** end-to-end walkthrough on Vercel preview. Handed back to user — verify trial banner color bands, export-to-proposal flow through Stripe, chip dedup on real WO data, YY/MM/DD on Tenders tab.
+- Result:
+  - **4 PRs across the sprint** (PR-K, PR-L, PR-M merged; PR-N pushed on branch `claude/post-prl-batch`, commit `ad377d6`, PR open URL: https://github.com/odaykamal88/tenderpath/pull/new/claude/post-prl-batch)
+  - **8 stable patterns documented** in `docs/agents/dashboard-architecture.md` Sprint 25 section: trial state surfacing, work-order status source-of-truth, audit-trail-preserving upsell, chip-dedup-at-render, scarcity-counter hardcoding, plus three smaller (3-color band, YY/MM/DD formatter, side-by-side grid)
+  - **2 new launch-discipline rules** in `docs/agents/launch-discipline.md`: rule 6 (Next.js 16 stricter lint — line-scoped suppressions with rationale, never global off); rule 7 (gh PAT fallback to push URL when `gh pr create` fails on auth scope)
+  - **1 new learning doc**: `docs/learning/sprint-25-trial-flow-and-upsell-arc-2026-05-23.md` with full skill recipes
+  - **8 new stable log-tag namespaces** opened: `[bid_no_bid:export_to_proposal:*]`, `[trial:reminder:*]`, `[stripe:webhook:trial_*]`, `[access:state:trial_calculated]` — catalogued in the Sprint 25 learning doc §5
+- Blockers:
+  - PR-N PR cannot be opened via `gh pr create` from this session — the agent PAT does not include scope for the private `tenderpath` repo (`GraphQL: Could not resolve to a Repository`). Branch is pushed; user must click through https://github.com/odaykamal88/tenderpath/pull/new/claude/post-prl-batch to open it. Workaround documented as launch-discipline rule 7.
+  - No DB access in local dev — verification of trial banner color thresholds at day > 7, day ≤ 7, day ≤ 3, locked all deferred to Vercel preview.
+- Important Decisions:
+  - **Trial banner in content-area, not sidebar**, so mobile users see it. Two surfaces (sidebar pill + content-area banner) both read from `getAccessState()` — single source of truth.
+  - **Trial banner CTA targets `/pay?plan=annual-access` (regular $99/yr), NOT the Founder's rate.** Founder's rate stays a deliberate marketed conversion on the AnnualAccessCard; the trial-end banner is the fallback path.
+  - **`work_orders.status` is the wrong column for UI freshness.** `proposal_packages.generation_status` is the operational truth. `getViewerActivity` is the first surface to LEFT JOIN; the work-orders list page + digest emails should follow.
+  - **Upsell mints new work_orders row, never repurposes.** Audit trail intact, Stripe sees fresh checkout, generator reads grounded whitelisted intake snapshot.
+  - **Chip dedup at render layer, not data layer.** The model still emits parallel `status` + `evidence_label` fields — downstream analytics + PDF rendering need both. UI dedups when they agree.
+  - **Marketing-counter scarcity is hardcoded** (`FOUNDING_CLAIMED = 23`). DB-backed count would risk blocking dashboard overview render; deliberate light upward bias is fine and is the scarcity mechanism.
+- Contracts or Interfaces Changed:
+  - `ViewerActivity` type — added `tender_title: string | null` on each service entry
+  - `getViewerActivity` — SQL rewritten to LEFT JOIN `proposal_packages`; new `gen_status` mapping rules in TS
+  - `ScoreTab` — `viewerSignedIn` prop still accepted on type signature, no longer destructured (callers in `/dashboard` + `/assessment/[id]` unaffected)
+  - `BidNoBidPanel` imports — added `useRouter` from `next/navigation`
+  - New endpoint: `POST /api/dashboard/work-orders/[id]/export-to-proposal` — returns `{ ok, workOrderId, payHref }`
+  - **Unchanged:** `RawTender` / `CrawlResult` / `MatchedTender` / `AIAnalysis` ✓; `proposal_packages` schema ✓; `work_orders` schema ✓ (intake JSON field gained `bid_no_bid_snapshot` + `exported_from_*` keys, but it's a schemaless column)
+- Docs Updated:
+  - `docs/learning/sprint-25-trial-flow-and-upsell-arc-2026-05-23.md` — **new**; full case learnings + 4.1–4.7 skill recipes + §5 log-tag catalogue + §6 follow-up list
+  - `docs/agents/dashboard-architecture.md` — Sprint 25 section appended with 5 new patterns
+  - `docs/agents/launch-discipline.md` — added rule 6 (Next.js 16 eslint discipline) + rule 7 (gh PAT fallback)
+  - `SESSION.md` — this entry
+  - User-memory: new `feedback_work_order_status_truth.md` + MEMORY.md index updated
+- Next Recommended Task: **Walk PR-N on Vercel preview**, then bump the Founder's counter as conversions land. In order:
+  1. Click through https://github.com/odaykamal88/tenderpath/pull/new/claude/post-prl-batch to open PR-N
+  2. Verify on Vercel preview: trial banner at day > 7 (amber), ≤ 7 (orange), ≤ 3 (red) — use Stripe test clock if available; bid/no-bid chip dedup on a previously-duplicated WO; YY/MM/DD on Tenders tab; export-to-proposal end-to-end (paid bid/no-bid → button → Stripe checkout → new WO appears)
+  3. Merge PR-N
+  4. Update `FOUNDING_CLAIMED` constant in `src/components/dashboard/AnnualAccessCard.tsx` as real founders subscribe
+  5. Extend the LEFT JOIN pattern from `getViewerActivity` to the work-orders list page (`/dashboard/work-orders`) + digest email status columns
+  6. Stripe test-clock verification of the day-27 reminder cron + Resend logs check
+- Recommended Agent: Claude Code (Opus 4.7) for the verification + LEFT-JOIN extension; Sonnet for the AnnualAccessCard counter bumps as conversions land.
+- Paste-Ready Next Prompt:
+
+```text
+Read SESSION.md (the Sprint 25 entry at the bottom), AGENTS.md, CLAUDE.md, docs/learning/sprint-25-trial-flow-and-upsell-arc-2026-05-23.md, docs/agents/launch-discipline.md (rules 6 + 7 are new), docs/agents/dashboard-architecture.md (the Sprint 25 section is new).
+
+PR-N is pushed but unmerged. Open it via https://github.com/odaykamal88/tenderpath/pull/new/claude/post-prl-batch (gh pr create can't reach the repo from agent PATs — see launch-discipline rule 7).
+
+Then do ONE of:
+  (A) Verify PR-N on Vercel preview — trial banner color bands at day > 7, ≤ 7, ≤ 3, and locked; export-to-proposal end-to-end paid bid/no-bid → Stripe → new WO; chip dedup on a previously-broken WO; YY/MM/DD on Tenders tab. Hand verification back to user with the click-through steps if you can't run it yourself.
+  (B) Extend the LEFT JOIN(proposal_packages) pattern from getViewerActivity to /dashboard/work-orders list page + any digest email status column — same anti-stale-status fix.
+  (C) Stripe test-clock verification of day-27 reminder cron + Resend logs check.
+  (D) Bump FOUNDING_CLAIMED in src/components/dashboard/AnnualAccessCard.tsx as real founders convert.
+
+Whichever you pick: tsc + lint + build before push; commit message via /tmp file (NOT HEREDOC); branch from origin/main with `git checkout -b NAME origin/main`; outer try/catch + stable log tag for any new route; update SESSION.md at end. The work_orders.status vs proposal_packages.generation_status pattern is a real durable lesson — don't re-introduce stale status reads anywhere new.
+```
+
+### Short Resume State
+- What is now true: Sprint 25 shipped 4 PRs (PR-K, PR-L, PR-M merged; PR-N pushed and ready to merge). The dashboard now has a content-area trial banner on every page (3-color band, mobile + desktop), bid/no-bid eligibility chips no longer duplicate, Tender deadlines render as YY/MM/DD, Services intake for bid-no-bid is side-by-side URL+upload, the ScoreTab no longer shows stale `queued` status (LEFT JOIN on `proposal_packages.generation_status`), the AnnualAccessCard leads with the Founder's $49/yr rate + 77-of-100-seats scarcity, and a one-click export-to-proposal rail mints a fresh `proposal-draft` work_orders row with whitelisted intake snapshot. Five new dashboard patterns documented + 2 new launch-discipline rules + 1 new Sprint 25 learning doc.
+- What remains: open + merge PR-N; verify on Vercel preview (trial banner color bands at day > 7 / ≤ 7 / ≤ 3 / locked; export-to-proposal end-to-end; chip dedup; YY/MM/DD); extend LEFT JOIN pattern to work-orders list + digest emails; bump `FOUNDING_CLAIMED` as conversions land; Stripe test-clock verification of the day-27 reminder cron; audit other `react-hooks/set-state-in-effect` occurrences project-wide.
+- What the next agent must read first: `SESSION.md` (this Sprint 25 entry), `AGENTS.md`, `CLAUDE.md`, `docs/agents/launch-discipline.md` (rules 6 + 7 are new), `docs/agents/dashboard-architecture.md` (Sprint 25 section is new), `docs/learning/sprint-25-trial-flow-and-upsell-arc-2026-05-23.md` (full skill recipes + log-tag catalogue + follow-up list).

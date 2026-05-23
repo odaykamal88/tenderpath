@@ -63,6 +63,30 @@ Related discipline for foreign keys: never define an FK without an explicit `ON 
 
 Schema-touching PRs must include a test or a verification step that exercises the new column on a fresh row — not just compile-clean. The runtime ensure self-heals the schema; only an actual write proves the new path works.
 
+### 6. Next.js 16 stricter lint rules need explained, line-scoped suppressions — never project-wide off
+
+Next.js 16's React-hooks rules (notably `react-hooks/set-state-in-effect`) flag intentional UI-state-sync effects (route-change → close drawer, prop-change → reset local state) the same way they flag cascading-render bugs. The rule cannot tell the two apart.
+
+Do not edit `eslint.config.mjs` to turn the rule off globally — that re-allows the bug pattern the rule actually exists to catch. Instead, when the flagged pattern is genuinely intentional:
+
+1. Confirm the effect is syncing UI to an external system (router, prop, subscription event). If it's syncing setState A → derived setState B, the rule is right and you should restructure.
+2. Add `// eslint-disable-next-line react-hooks/set-state-in-effect` on the exact line.
+3. Leave a one-line comment above the effect explaining why this synchronous setState is intentional. The next editor reading the file should not have to re-derive whether the suppression is load-bearing.
+
+Reference fix: `src/app/dashboard/layout.tsx` drawer-close `useEffect` on `pathname` change (PR-N, 2026-05-23). See `docs/learning/sprint-25-trial-flow-and-upsell-arc-2026-05-23.md` §4.5 for the copy-paste snippet.
+
+### 7. PR opening: `gh pr create` can fail silently — fall back to the push URL
+
+`gh pr create` against this repo currently fails for AI sessions because the agent's PAT does not carry `repo:read` for the private `tenderpath` repository. The failure mode is a `GraphQL: Could not resolve to a Repository` error after the branch has already been pushed — easy to mistake for "the whole flow broke" if not noticed.
+
+When this happens:
+
+1. Confirm the branch reached origin (`git push -u origin <branch>` was already executed before the failed `gh` call).
+2. Surface the GitHub URL from the push response (`https://github.com/odaykamal88/tenderpath/pull/new/<branch>`) — GitHub prints it on every new-branch push.
+3. Tell the user to click through to open the PR. Include the PR title and the markdown body verbatim so they can paste it.
+
+Do not retry `gh pr create` with different flags; the failure is auth scope, not invocation shape. Do not file an issue or revert the branch — the branch is fine, only the PR-opening step is blocked.
+
 ## Why this exists
 
 This codebase ships through AI sessions with no QA layer. The user is the QA pipeline. Without explicit, enforced discipline, every refactor risks silently breaking a gateway flow because nobody ran the gateway flow. The rules above plus the PR template plus the launch-flows inventory plus the per-rule memory files are the structural compensation for a missing QA layer. Treat them as load-bearing.
