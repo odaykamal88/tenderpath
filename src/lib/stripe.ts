@@ -26,6 +26,20 @@ export const PRICE_MAP: Record<string, { tier: string; name: string }> = {
     tier: "strategic-partnership",
     name: "Strategic Partnership",
   },
+  // PR-L (2026-05-23): annual dashboard access — single Stripe product
+  // with two prices ($99/year regular + $49/year founding-100). Both map
+  // to the same tier slug "annual-access" so the webhook flips the
+  // user's subscription_status to active regardless of which price they
+  // purchased. Founding offer is enforced by which price the user picks,
+  // not by tier logic.
+  [process.env.STRIPE_PRICE_ANNUAL_ACCESS_99 || "price_annual_access_99_placeholder"]: {
+    tier: "annual-access",
+    name: "Annual Dashboard Access",
+  },
+  [process.env.STRIPE_PRICE_ANNUAL_ACCESS_49 || "price_annual_access_49_placeholder"]: {
+    tier: "annual-access",
+    name: "Annual Dashboard Access — Founding 100",
+  },
 };
 
 export function tierFromPriceId(priceId: string): string | null {
@@ -37,6 +51,7 @@ export function createCheckoutUrl(tier: string, userEmail: string): string {
     "tender-intelligence": "STRIPE_PRICE_TENDER_INTELLIGENCE",
     "submission-package": "STRIPE_PRICE_SUBMISSION_PACKAGE",
     "strategic-partnership": "STRIPE_PRICE_STRATEGIC_PARTNERSHIP",
+    "annual-access": "STRIPE_PRICE_ANNUAL_ACCESS_99",
   };
 
   const envKey = priceEnvMap[tier];

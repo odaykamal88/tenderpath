@@ -70,7 +70,10 @@ export default function Services() {
             </p>
           </div>
           <div className="border-t border-ink">
-            {TIERS.filter((tier) => tier.slug !== "grants-tenders-matching").map((tier) => (
+            {TIERS.filter((tier) => tier.slug !== "grants-tenders-matching"
+                && tier.slug !== "annual-access"
+                && tier.slug !== "annual-access-founding"
+              ).map((tier) => (
               <article
                 key={tier.slug}
                 className="grid grid-cols-[1fr_auto] lg:grid-cols-[1.2fr_2fr_auto] gap-x-4 gap-y-4 lg:gap-10 py-6 sm:py-7 border-b border-rule items-baseline"
