@@ -94,6 +94,7 @@ export async function POST(req: NextRequest) {
 
     stage = "extract";
     let pageText: string;
+    let discoveredAttachments: Array<{ href: string; label: string; ext: string }> = [];
     if (contentType.includes("application/pdf") || parsed.pathname.toLowerCase().endsWith(".pdf")) {
       const buffer = Buffer.from(await fetchRes.arrayBuffer());
       const extraction = await extractDocumentText({
@@ -104,6 +105,14 @@ export async function POST(req: NextRequest) {
       pageText = extraction.text;
     } else {
       const html = await fetchRes.text();
+      // PR-I (2026-05-23): scan the HTML for downloadable tender attachments
+      // BEFORE stripping markup. The user reported (and the ecobitar.com test
+      // confirmed) that tender portal pages often serve a thin overview HTML
+      // with the actual TOR / RFP as <a href="/files/tender.pdf"> links at
+      // the bottom — fetch-criteria was extracting the overview text and
+      // missing the real document. We surface those links to the client so
+      // the intake form can offer to attach them.
+      discoveredAttachments = discoverAttachments(html, parsed);
       pageText = stripHtml(html);
     }
 
@@ -113,7 +122,22 @@ export async function POST(req: NextRequest) {
         userId: guard.user!.id,
         host: parsed.host,
         length: pageText.length,
+        attachments_found: discoveredAttachments.length,
       });
+      // Even if the page text was thin, if we found PDF/DOC attachments the
+      // user can still pull useful context — return them with a friendlier
+      // message rather than the generic NO_CRITERIA bail.
+      if (discoveredAttachments.length > 0) {
+        return NextResponse.json(
+          {
+            criteria: "",
+            attachments: discoveredAttachments,
+            note: "This page didn't list criteria directly, but we found documents linked from it. Attach the relevant ones and re-run the fetch.",
+            source: { host: parsed.host, contentType },
+          },
+          { status: 200 },
+        );
+      }
       return NextResponse.json(
         { error: FRIENDLY_NO_CRITERIA },
         { status: 422 },
@@ -173,7 +197,14 @@ ${pageText}
       );
     }
 
-    return NextResponse.json({ criteria, source: { host: parsed.host, contentType } });
+    return NextResponse.json({
+      criteria,
+      // Always include attachments if any were discovered — the user may
+      // want to attach them even when the LLM-extracted criteria text was
+      // good, because the actual TOR has more detail than the portal HTML.
+      attachments: discoveredAttachments.length ? discoveredAttachments : undefined,
+      source: { host: parsed.host, contentType },
+    });
     } catch (err) {
       console.error("[criteria:fetch:failed]", {
         userId: guard.user?.id,
@@ -224,3 +255,53 @@ function stripHtml(html: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+// PR-I (2026-05-23): scan tender-portal HTML for downloadable attachments.
+// We look for anchor tags whose href ends in a known tender doc extension
+// (PDF / DOC / DOCX / XLS / XLSX), resolve them against the page URL, and
+// return them with a human-friendly label derived from the anchor's visible
+// text. Caps at 12 attachments so a runaway result set can't blow up the
+// response body.
+const TENDER_DOC_EXTS = ["pdf", "doc", "docx", "xls", "xlsx", "rtf"] as const;
+
+function discoverAttachments(
+  html: string,
+  pageUrl: URL,
+): Array<{ href: string; label: string; ext: string }> {
+  const anchorRe = /<a\s+[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  const out: Array<{ href: string; label: string; ext: string }> = [];
+  const seen = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = anchorRe.exec(html)) !== null) {
+    const rawHref = match[1].trim();
+    const rawLabel = match[2];
+    if (!rawHref || rawHref.startsWith("#") || rawHref.startsWith("javascript:")) continue;
+    let resolved: URL;
+    try {
+      resolved = new URL(rawHref, pageUrl);
+    } catch {
+      continue;
+    }
+    if (!["http:", "https:"].includes(resolved.protocol)) continue;
+    const pathLower = resolved.pathname.toLowerCase();
+    const ext = TENDER_DOC_EXTS.find((e) => pathLower.endsWith(`.${e}`));
+    if (!ext) continue;
+    const dedupKey = resolved.toString();
+    if (seen.has(dedupKey)) continue;
+    seen.add(dedupKey);
+    // Label: prefer the anchor's visible text, fall back to the filename.
+    const labelText = rawLabel
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const fileName = resolved.pathname.split("/").pop() ?? "";
+    const label = labelText && labelText.length >= 3 && labelText.length <= 180
+      ? labelText
+      : (fileName || `${ext.toUpperCase()} attachment`);
+    out.push({ href: resolved.toString(), label, ext });
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+

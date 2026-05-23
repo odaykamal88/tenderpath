@@ -167,6 +167,20 @@ export async function createWorkOrderFromCheckout(
     const autoFulfillAllowed = AUTO_FULFILLED_PLANS.has(orderPlan)
       && (fulfillmentGate?.auto_fulfill_allowed ?? true);
 
+    // PR-I (2026-05-23): stable post-payment log line so a future stuck
+    // work-order can be triaged from logs alone. The diagnostic on order 19
+    // took manual code-walk because we had GET polls but no signal as to
+    // whether the after(generate*) hook even scheduled.
+    console.info("[tp:work_order:post_payment]", {
+      workOrderId: orderId,
+      plan: orderPlan,
+      autoFulfillAllowed,
+      gateMode: fulfillmentGate?.mode ?? null,
+      gateCode: fulfillmentGate?.code ?? null,
+      gateScore: fulfillmentGate?.score_0_10 ?? null,
+      paymentStatus: order.payment_status,
+    });
+
     if (!autoFulfillAllowed) {
       // Sprint 17. Forward the gate state into the ops email so the
       // subject can prefix [HOLD · <mode>] and the body lists the
@@ -210,6 +224,7 @@ export async function createWorkOrderFromCheckout(
     }
 
     if (orderPlan === BID_PLAN) {
+      console.info("[tp:bid_no_bid:auto_generate_scheduled]", { workOrderId: orderId });
       after(async () => {
         try {
           await generateBidNoBid({ workOrderId: orderId });
