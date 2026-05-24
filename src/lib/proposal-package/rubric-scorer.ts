@@ -36,6 +36,8 @@ import {
   routeAllGaps,
   rollupConfidenceFromClaims,
   countClaimsByProvenance,
+  getLeafCriteria,
+  isLeafCriterionId,
 } from "./gap-routing";
 
 const SONNET_MODEL = "claude-sonnet-4-6";
@@ -81,7 +83,18 @@ export async function scoreDraft(
     // Sprint 4 (proposal-output-ux.md A4): attach mechanical confidence +
     // claim counts from the draft's claims. Independent of the LLM-judged
     // confidence; both are surfaced so the UI can flag disagreement.
-    const perCriterion = enrichWithClaimMetrics(llmAssessments, lotDraft);
+    const enriched = enrichWithClaimMetrics(llmAssessments, lotDraft);
+
+    // Sprint 4.5: drop parent-rollup criteria. UN evaluation rubrics carry
+    // BOTH parent ("1 — Profile of institution", max 50) AND leaf criteria
+    // ("1.1", "1.2"…). Points are scored at the leaves; the parent's max
+    // is the structural sum. Without this filter, the LLM's parent-level
+    // assessment double-counts both estimatedScore AND surfaces duplicate
+    // weakness/missingEvidence entries that route as duplicate gaps. The
+    // parent's rollup display (e.g. "Criterion 1: 30/50") is a UI concern
+    // — the UI computes that from leaf assessments by id-prefix.
+    const allCriterionIds = lot.criteria.map((c) => c.id);
+    const perCriterion = enriched.filter((a) => isLeafCriterionId(a.criterionId, allCriterionIds));
 
     const lotDisqualifiersTriggered =
       lot.disqualifiers.length > 0
@@ -89,7 +102,8 @@ export async function scoreDraft(
         : [];
 
     const estimatedTotal = perCriterion.reduce((s, c) => s + c.estimatedScore, 0);
-    const passesLotGating = lotDisqualifiersTriggered.length === 0 && passesPerCriterionGating(perCriterion, lot.criteria);
+    const leafCriteria = getLeafCriteria(lot.criteria);
+    const passesLotGating = lotDisqualifiersTriggered.length === 0 && passesPerCriterionGating(perCriterion, leafCriteria);
 
     lotResults.push({
       lotId: lot.lotId,

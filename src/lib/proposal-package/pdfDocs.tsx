@@ -10,6 +10,7 @@ import type {
   Confidence,
   RoutedGap,
 } from "./scoring-engine";
+import { getLeafCriteria } from "./gap-routing";
 import type { ApplicantContext } from "./applicant-context";
 import type { RevisionAttemptSummary } from "./revision-loop";
 
@@ -283,9 +284,11 @@ export async function renderScoredDraftPdf(
   };
   const tag = refTag("DRAFT", args.workOrderId);
 
-  // Aggregate totals across lots
+  // Aggregate totals across lots — leaf-only (Sprint 4.5: parent rubric
+  // entries like "1 — Profile of institution (max 50)" are structural
+  // rollups of their children (1.1, 1.2…); summing both double-counts).
   const achievableTotal = args.rubric.lots.reduce(
-    (s, lot) => s + lot.criteria.reduce((ss, c) => ss + c.maxScore, 0),
+    (s, lot) => s + getLeafCriteria(lot.criteria).reduce((ss, c) => ss + c.maxScore, 0),
     0,
   );
   const estimatedTotal = args.score.lotResults.reduce((s, lr) => s + lr.estimatedTotal, 0);
@@ -366,7 +369,7 @@ export async function renderScoredDraftPdf(
           <Text style={styles.h2}>Per-lot summary</Text>
           {args.score.lotResults.map((lr) => {
             const lot = args.rubric.lots.find((l) => l.lotId === lr.lotId);
-            const lotMax = lot ? lot.criteria.reduce((s, c) => s + c.maxScore, 0) : 0;
+            const lotMax = lot ? getLeafCriteria(lot.criteria).reduce((s, c) => s + c.maxScore, 0) : 0;
             return (
               <View
                 key={lr.lotId}

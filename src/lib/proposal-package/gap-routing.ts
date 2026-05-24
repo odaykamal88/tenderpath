@@ -117,10 +117,97 @@ export const ROUTING_RULES: RoutingRule[] = [
       /similar project/i,
       /\bp45\b|\bp4\/p5\b/i,
       /demonstrated experience/i,
+      /\bproject (register|log|history)\b/i,
+      /\bproject (engagement|registry)\b/i,
+      /predating.*\d{4}/i, // "predating 2022" — Sprint 4.5: UN evaluators ask for older references
+      /continuity across.*period/i,
     ],
     to: "roster",
     rationale:
       "Roster Fast-Track structures your UN past-performance posture so future bids cite the right contracts the way evaluators want to see them.",
+  },
+  // Sprint 4.5: financial capacity is one of the most-asked-for evidence
+  // categories on UN tenders. Audited statements, bank refs, credit lines,
+  // financial stability — all roster-readiness fixes.
+  {
+    id: "financial_capacity",
+    patterns: [
+      /audited.*financial/i,
+      /financial statement/i,
+      /balance sheet/i,
+      /annual report/i,
+      /financial capacity/i,
+      /financial stability/i,
+      /bank reference/i,
+      /credit (facility|line)/i,
+      /turnover/i,
+      /\baudit\b/i,
+      /fiscal year/i,
+    ],
+    to: "roster",
+    rationale:
+      "Roster Fast-Track builds the financial documentation pack (audited statements, bank references, credit lines) UN evaluators need to clear the financial capacity gate.",
+  },
+  // Sprint 4.5: organizational capacity — facilities, workshops, infrastructure,
+  // staffing depth, org charts. These are systemic readiness gaps, not bid-
+  // specific ones, so they route to Roster.
+  {
+    id: "organizational_capacity",
+    patterns: [
+      /facility (description|inventory|address)/i,
+      /facilities/i,
+      /workshop/i,
+      /office (location|address)/i,
+      /physical (presence|infrastructure)/i,
+      /organis(at)?ional chart/i,
+      /staffing (depth|complement|register)/i,
+      /headcount/i,
+      /personnel complement/i,
+      /staff (depth|register|roster)/i,
+      /\b(field|junior|senior) technicians?\b/i, // Sprint 4.5b
+      /infrastructure/i,
+      /incorporation (certificate|document|date)/i, // Sprint 4.5b: catches "incorporation date"
+      /registration certificate/i, // Sprint 4.5b: company registration
+      /\bestablish(ed|ment) (date|year|in)/i, // Sprint 4.5b
+    ],
+    to: "roster",
+    rationale:
+      "Roster Fast-Track captures the organizational-capacity evidence (facilities, staffing depth, org chart, incorporation) UN evaluators expect alongside past performance.",
+  },
+  // Sprint 4.5b: partnership documentation — named partners, MoUs, sub-contracts.
+  // UN evaluators ask for partnership evidence to back regional coverage claims;
+  // when missing, it's a Roster-readiness gap.
+  {
+    id: "partnership_documentation",
+    patterns: [
+      /partner (agreement|contract)/i,
+      /\bmou\b|memorandum of understanding/i,
+      /sub.?contract/i,
+      /named partner/i,
+      /partnership (agreement|evidence|documentation)/i,
+      /\bteaming agreement\b/i,
+    ],
+    to: "roster",
+    rationale:
+      "Roster Fast-Track structures the partnership evidence (MoUs, sub-contracts, named partner agreements) UN evaluators expect when you claim regional coverage you don't directly own.",
+  },
+  // Sprint 4.5b: geographic / regional coverage gaps — when the gap is "you
+  // can't credibly serve region X", the answer is to bid where you CAN credibly
+  // serve. Matching is the right close.
+  {
+    id: "geographic_coverage",
+    patterns: [
+      /\b(field|regional|geographic) (presence|coverage|reach|capacity)\b/i,
+      /standing field presence/i,
+      /mobilisation timeline/i,
+      /response capacity for/i,
+      /non.?resident region/i,
+      /serve (more|additional) countries/i,
+      /\bcountry coverage\b/i,
+    ],
+    to: "matching",
+    rationale:
+      "Matching surfaces tenders where your existing geographic footprint is the right fit, rather than stretching to claim coverage you can't credibly support.",
   },
   {
     id: "spec_mismatch",
@@ -167,6 +254,62 @@ export const ROUTING_RULES: RoutingRule[] = [
     rationale:
       "Matching surfaces tenders where you are already eligible — solves this by selection rather than by submission.",
   },
+  // Sprint 4.5: personnel / CV / qualifications — drafting concern.
+  // The Proposal Draft service is the right close: stronger personnel
+  // sections with CVs and qualifications mapped to rubric language.
+  {
+    id: "personnel",
+    patterns: [
+      /\bcvs?\b/i, // Sprint 4.5b: catch "CV" + "CVs"
+      /curriculum vitae/i,
+      /key personnel/i,
+      /qualifications? (of|missing|are|with|including)?/i,
+      /academic qualifications/i,
+      /professional registration/i,
+      /personnel (depth|details|profile)/i,
+      /staff cv/i,
+      /resume/i,
+      /\bbio(graph)?\b/i,
+      /individual cvs/i,
+    ],
+    to: "proposal_draft",
+    rationale:
+      "A Proposal Draft service builds the personnel section with rubric-aligned CVs and qualifications evaluators score on.",
+  },
+  // Sprint 4.5b: methodology / scope articulation — when the gap is "the
+  // draft doesn't explain HOW you do it", the answer is a stronger Proposal
+  // Draft. Catches case studies, diagnostic processes, scope conflations.
+  {
+    id: "methodology",
+    patterns: [
+      /methodology/i,
+      /case stud(y|ies)/i,
+      /diagnostic process/i,
+      /assessment (process|methodology)/i,
+      /draft (conflates|fails to|does not (describe|specify|explain))/i,
+      /scope (conflict|conflation|mismatch)/i,
+      /no standalone narrative/i,
+      /\bplant types\b/i, // UNICEF-specific: "plant types not specified"
+    ],
+    to: "proposal_draft",
+    rationale:
+      "A Proposal Draft service rebuilds the methodology / approach sections with rubric-aligned narrative that surfaces evidence evaluators score on.",
+  },
+  // Sprint 4.5b: manufacturer / OEM authorisation — vendors claim authorisation
+  // but rarely attach the letters. The Proposal Draft service writes the
+  // section AND prompts for the attachments.
+  {
+    id: "manufacturer_authorisation",
+    patterns: [
+      /\boem (auth|certif)/i,
+      /manufacturer (auth|certif)/i,
+      /authoris(ed|ation) (letter|certif)/i,
+      /(airsep|novair|atlas copco|caterpillar|cummins)/i, // common UNICEF biomedical OEMs
+    ],
+    to: "proposal_draft",
+    rationale:
+      "A Proposal Draft service builds the manufacturer-authorisation evidence package (letters, certificates, OEM relationship narrative) UN evaluators expect cited inline.",
+  },
   {
     id: "presentation",
     patterns: [
@@ -176,6 +319,10 @@ export const ROUTING_RULES: RoutingRule[] = [
       /structure.*proposal/i,
       /poorly.*organi[sz]ed/i,
       /writing.*quality/i,
+      /quality control process/i,
+      /submission quality/i,
+      /standalone narrative/i,
+      /composite score derived/i, // Sprint 4.5: the LLM's own pet phrase for "I rolled this up"
     ],
     to: "proposal_draft",
     rationale:
@@ -451,6 +598,47 @@ export function countClaimsByProvenance(
     out[k] = (out[k] ?? 0) + 1;
   }
   return out;
+}
+
+// ============================================================================
+// Sprint 4.5: leaf-only filtering for parent/child rubric structures
+// ============================================================================
+//
+// UN evaluation rubrics commonly have a hierarchical structure: a parent
+// criterion (e.g. "1 — Profile of institution", max 50) that rolls up
+// children (1.1, 1.2, 1.3, 1.4 — summing to 50). Points are awarded ONLY
+// at the leaves; the parent's max is the structural total of its children.
+//
+// The rubric extractor faithfully captures both levels (it should — the
+// rubric is the contract). But scoring + totals should run on LEAVES ONLY,
+// otherwise we double-count. Same for gap routing: a parent's "weakness"
+// is structurally the sum of its children's weaknesses; surfacing both
+// produces duplicate gaps.
+//
+// A criterion is a PARENT iff any other criterion's id starts with
+// "<thisId>." — i.e. the dot-numbering convention UN rubrics universally
+// use ("1.1" is a child of "1", "2.2a" is a child of "2"). Single-level
+// rubrics naturally have zero parents; the filter is a no-op.
+
+interface CriterionLike {
+  id: string;
+}
+
+/**
+ * Return only the LEAF criteria from a flat list. A criterion is a leaf
+ * when no other criterion's id is a dot-prefixed continuation of its id.
+ *
+ * Pure function. Stable order (preserves input order). Single-level rubrics
+ * (no dot ids) pass through unchanged.
+ */
+export function getLeafCriteria<T extends CriterionLike>(criteria: T[]): T[] {
+  const ids = criteria.map((c) => c.id);
+  return criteria.filter((c) => !ids.some((other) => other !== c.id && other.startsWith(c.id + ".")));
+}
+
+/** Predicate form for selective filtering of CriterionAssessment lists. */
+export function isLeafCriterionId(id: string, allIds: string[]): boolean {
+  return !allIds.some((other) => other !== id && other.startsWith(id + "."));
 }
 
 // Re-export SourceRef so callers can `import { SourceRef } from "./gap-routing"`
