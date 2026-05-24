@@ -25,11 +25,23 @@ check.
 ## How to use this doc
 
 Each sprint has: **Goal · In scope · Out of scope · Files · Acceptance · Done-when.**
-Ship sprints in order. **Sprints 0–4 are the revenue MVP** — the $299 product can take live
-orders after Sprint 4, before the flywheel or corpus exist. Sprints 5–7 and the Senior track are
-enhancements, not blockers. The primary regression fixture at every sprint is a **real UN tender**
-(RFP/ITB + amendment + Q&A); CSIM is a secondary cross-lane mechanism check only. Respect the lean
-constraint: do not pull later work forward.
+Ship sprints in order. **Sprints 0–4 ship the revenue-MVP engine; Sprint 6 ships the screen** —
+the $299 product can take live orders after Sprint 6. Sprint 5 is the free top-of-funnel that
+seeds the applicant library Sprint 8 depends on, and Sprint 7 is its screen. Sprints 8–10 + the
+Senior track are enhancements, not blockers.
+
+The proposal-output-ux.md and readiness-output-ux.md specs (added 2026-05-24) impose:
+  - PART A of proposal-output-ux.md applies as acceptance criteria DURING Sprints 2–4 (engine emit
+    shape: A1 display-ready criteria, A2 sourced disqualifiers, A3 routed gaps, A4 presentable
+    confidence, A5 already-reviewed).
+  - Sprints 6–7 build screens against the LOCKED Sprint 2–5 emit shape; do not build UI before
+    Sprint 4 is in.
+  - The `gap → action` routing module is shared by both the $299 output and the free Readiness
+    Assessment — built once in Sprint 4, reused by Sprint 5.
+
+The primary regression fixture at every sprint is a **real UN tender** (RFP/ITB + amendment +
+Q&A); CSIM is a secondary cross-lane mechanism check only. Respect the lean constraint: do not
+pull later work forward.
 
 ---
 
@@ -145,60 +157,158 @@ breach fires as a disqualifier; `passesGating` reflects it; a weak section trigg
 on change; implement `recordSnapshot` (immutable, `contextHash` + `promptHash` + `documentManifest`);
 flag any snapshot whose `rubricVersion` is now stale; wire into `generation_status` (the new
 `rubric_stale` value resolved at GATE 0).
-**Out of scope:** provenance labels, carry-forward, corpus.
-**Files:** `scoring-engine.ts`, persistence layer, `generation_status` transitions.
+
+**A5 bolt-on (proposal-output-ux.md PART A · A5 — added 2026-05-24):** every `Disqualifier` in the
+extracted and re-extracted rubric MUST carry a non-empty plain-language `rule` AND a populated
+`SourceRef.docId`. The "already-reviewed" claim is undefendable if disqualifiers can't point at
+their source clause. Asserted in Sprint 3 acceptance against both priorRubric AND nextRubric so
+the property survives the re-extraction.
+
+**Out of scope:** provenance labels (Sprint 4), gap routing (Sprint 4), carry-forward (Sprint 8),
+corpus (Sprint 10).
+**Files:** `rubric-diff.ts` (NEW), `reextract.ts` (NEW), `snapshot.ts` (NEW), `manifest-loader.ts`
+(noticeFilter option), `scoring-engine.ts` (delegate), `scripts/sprint3-acceptance.ts` (NEW).
 **Acceptance:** issuing an amendment + Q&A round mid-draft on the UN-tender fixture re-extracts the
 rubric, records the changed criteria/weights/disqualifiers as deltas, bumps the version, flags the
-prior snapshot stale, and preserves the prior output (not overwritten). (Secondary mechanism check:
-the same flow on CSIM's Corrigendum No. 1 produces the design 25→30 and co-financing deltas — proving
-the diff engine is lane-agnostic.) See `amendment-versioning-flow.md`.
-**Done-when:** re-run produces a new snapshot; old snapshot intact and marked superseded.
+prior snapshot stale, and preserves the prior output (not overwritten). Every disqualifier on both
+sides of the diff carries rule + SourceRef (A5 bolt-on). (Secondary mechanism check: the same flow
+on CSIM's Corrigendum No. 1 produces the design 25→30 and co-financing deltas — proving the diff
+engine is lane-agnostic.) See `amendment-versioning-flow.md`.
+**Done-when:** re-run produces a new snapshot; old snapshot intact and marked superseded; A5
+disqualifier integrity holds on both sides.
 
-## Sprint 4 — Provenance + field-level labels  ← REVENUE MVP COMPLETE
+## Sprint 4 — Provenance + field-level labels + shared gap→action routing  ← REVENUE-MVP ENGINE COMPLETE
 
-**Goal:** Every claim traceable; gaps surfaced, not hidden.
-**In scope:** thread `Claim` / `Provenance` through drafting; roll up to `Confidence`
-(`evidenced / inferred / gap / unverified`) per criterion; surface `gap` claims to the user;
-extend `ProposalOutput` to carry the labels.
-**Out of scope:** carry-forward, loss-reason capture, corpus.
-**Files:** `scoring-engine.ts`, drafting pipeline, `ProposalOutput` type, output rendering.
-**Acceptance:** each material claim in the UN-tender draft is tagged; unmet requirements (missing
-form, unevidenced past-performance, spec gap) appear as explicit `gap`s to the user rather than
-confident prose.
-**Done-when:** $299 output shows per-claim provenance and per-criterion confidence.
-**→ At this point the $299 product is submission-grade and can take live orders.**
+**Goal:** Every claim traceable; gaps surfaced, not hidden; every gap routed to a paid SKU.
+**In scope:**
+  - **Provenance (PART A · A4):** thread `Claim` / `Provenance` through drafting; roll up to
+    `Confidence` (`evidenced / inferred / gap / unverified`) per claim AND per criterion (per
+    `proposal-output-ux.md` A4 — confidence is presentable at both levels). Extend `ProposalOutput`
+    to carry the labels.
+  - **Gap routing (PART A · A3 + readiness R1):** every `gap`-provenance claim states (a) what is
+    missing, (b) which criterion/requirement it maps to, (c) the named TenderPath service that
+    closes it. Build the routing as a SINGLE shared module
+    (`src/lib/proposal-package/gap-routing.ts`) used by both the $299 ProposalOutput and the
+    Sprint 5 free Readiness Assessment — the routing target is `bid_no_bid` ($39) / `matching`
+    ($49/mo) / `proposal_draft` ($299) / `roster` ($749), per `readiness-output-ux.md`.
+**Out of scope:** carry-forward (Sprint 8), loss-reason capture (Sprint 9), corpus (Sprint 10),
+output screens (Sprint 6).
+**Files:** `scoring-engine.ts`, drafting pipeline, `ProposalOutput` type, `gap-routing.ts` (NEW).
+**Acceptance:** every material claim in the UN-tender draft is tagged; unmet requirements appear as
+explicit `gap`s with a non-null `routedTo` service (never naked); each `routedTo` is one of the four
+named SKUs.
+**Done-when:** $299 output shows per-claim provenance + per-criterion confidence; every gap routes
+to a named service; `gap-routing.ts` is the single source of truth — the Sprint 5 readiness
+assessment imports it unchanged.
+**→ At this point the $299 product engine is submission-grade. UI lands in Sprint 6.**
 
 ---
 
-## Sprint 5 — Evidence carry-forward (flywheel / LTV)
+## Sprint 5 — Free Vendor Readiness Assessment engine (top-of-funnel)
+
+**Goal:** Ship the FREE conversion engine: a vendor enters their company; the system scores them
+against generic UN/UNGM readiness criteria and emits a payload where every gap routes to a paid SKU
+via the Sprint 4 `gap-routing.ts`. Per `readiness-output-ux.md`: this is the core conversion engine
+and the seed of the applicant library Sprint 8 depends on.
+**In scope:**
+  - Static UN-generic readiness rubric: UNGM registration completeness, past performance shape +
+    age + value, agency coverage, financial documentation depth, geographic + sector fit. Lives as
+    a typed constant — no tender-specific rubric extraction needed.
+  - Scoring runs through the same `Claim` / `Provenance` / `gap` types as the $299 (per R2 — reuse,
+    don't fork the type system).
+  - Every readiness gap MUST route via `gap-routing.ts` (R1 acceptance).
+  - Founder-credibility line is a STRUCTURED field on the output payload (data, not UI prose), per
+    readiness S4.
+  - Persists to `proposal_packages` with `kind = 'readiness'` discriminator (decision locked
+    2026-05-24: reuse the proposal-packages table; readiness is a flavor of generation, not a new
+    storage shape).
+**Out of scope:** screens (Sprint 7), applicant-library carry-forward (Sprint 8), $299 output UI
+(Sprint 6), website-crawl / company-classification (already lives in `src/lib/assessment/`).
+**Files:** `src/lib/proposal-package/readiness-engine.ts` (NEW), `readiness-rubric.ts` (NEW —
+the static UN-generic rubric), persist.ts wiring for `kind='readiness'`.
+**Acceptance:** a free run for a synthetic vendor produces a readiness payload where every gap has
+a non-null `routedTo` SKU and a one-line action; the founder-credibility line is present in the
+payload (independent of any UI).
+**Done-when:** running the readiness engine end-to-end produces a routed, structured payload that
+the Sprint 7 screen can consume verbatim.
+
+---
+
+## Sprint 6 — $299 output screens (PART B + PART C)
+
+**Goal:** Ship the UI that turns the locked Sprint 2-4 emit shape into a screen the buyer can act
+on. Per `proposal-output-ux.md` PART B field-priority and PART C purchase-moment framing.
+**In scope:**
+  - **PART B:** B1 compliance verdict on top (`passesGating` + `disqualifiersTriggered` with
+    plain-language rules and clickable `SourceRef`s); B2 rubric score with per-criterion breakdown;
+    B3 routed gaps as the upsell/LTV surface (reads `routedTo` from Sprint 4); B4 inline
+    provenance on draft body; B5 export through `pdfDocs.tsx` (Golden Rule) into the tender's
+    `.docx` / `.xlsx` templates from the fixture set.
+  - **PART C:** C1 expectation-setting via showing the score+gaps (NOT a banner); C2 one
+    value-framed line at $299 checkout ("compliant, rubric-scored proposal draft with every gap
+    flagged against this tender's evaluation criteria"); C3 the legal disclaimer in T&C only; C4
+    NO persistent banner/footer disclaimer (the screen design is the framing).
+  - Brand tokens: lift `GOLD / INK / INK2 / INK3 / RULE / RED / GREEN` from `pdfDocs.tsx` into
+    `src/lib/brand/tokens.ts` so screens + PDFs reuse the same source.
+**Out of scope:** corpus, eval harness, evidence carry-forward.
+**Acceptance:** a buyer who completed Sprint 2-4 end-to-end can read the screen and act — leads
+with compliance verdict, shows where the score came from, every gap has a CTA, and the export
+button produces the submission-formatted file.
+**Done-when:** the $299 product can take live orders end-to-end through the new screen.
+
+---
+
+## Sprint 7 — Free Vendor Readiness Assessment screen
+
+**Goal:** Ship the UI for the Sprint 5 readiness engine. Per `readiness-output-ux.md`.
+**In scope:**
+  - **S1** Readiness summary first (honest read, not a vanity score).
+  - **S2** Per-gap routed: each gap states what's missing, why it loses UN work, and the SINGLE
+    service that closes it — reads from the same Sprint 4 `gap-routing.ts` module that drives
+    Sprint 6.
+  - **S3** ONE CTA (no scattered competing buttons; the routed gaps feed one primary CTA).
+  - **S4** Founder-credibility line surfaced where the user decides whether to trust the
+    assessment (six years senior UN procurement, WFP, P4/P5).
+  - Brand tokens from `src/lib/brand/tokens.ts` (lifted in Sprint 6).
+**Out of scope:** post-assessment nurture sequence, country landers, ad copy (all live in GTM, not
+the repo — explicitly out of scope per readiness spec).
+**Acceptance:** a free-tier visitor walks the readiness flow, hits the output screen, sees every
+gap routed to one of the four paid SKUs, sees one CTA, and the founder-credibility line is visible
+at the trust moment.
+**Done-when:** the free funnel is shippable. Free → paid is a measured conversion path.
+
+---
+
+## Sprint 8 — Evidence carry-forward (flywheel / LTV)
 
 **Goal:** Each paid submission improves the next; kill the cold start.
-**In scope:** finish `evidence.ts`; persist a reusable applicant profile populated from the free
-Readiness Assessment and Bid/No-Bid; carry past-performance and reusable evidence into new drafts via
-`applicant_library` provenance.
-**Acceptance:** a second UN-tender run for the same applicant reuses prior evidence (past performance,
-registrations, key personnel) instead of re-eliciting.
-**Done-when:** repeat run demonstrably warm-starts.
+**In scope:** finish `evidence.ts`; persist a reusable applicant profile populated PRIMARILY by
+the Sprint 5 free Readiness Assessment and SECONDARILY by Bid/No-Bid runs; carry past-performance
+and reusable evidence into new drafts via `applicant_library` provenance.
+**Acceptance:** a second UN-tender run for the same applicant reuses prior evidence (past
+performance, registrations, key personnel) instead of re-eliciting.
+**Done-when:** repeat run demonstrably warm-starts off the readiness payload.
 
-## Sprint 6 — Loss-reason instrumentation + eval harness scale-up
+## Sprint 9 — Loss-reason instrumentation + eval harness scale-up
 
 **Goal:** Capture *where* drafts are weak; build the gate for corpus spend.
-**In scope:** wire `recordLossReason` to auto-score flags, reviewer edits, and run failures; build the
-eval set from real UN tenders (with known award outcomes where available); build the
+**In scope:** wire `recordLossReason` to auto-score flags, reviewer edits, and run failures; build
+the eval set from real UN tenders (with known award outcomes where available); build the
 with/without-retrieval comparison framework (amendment/disqualifier detection, estimated-vs-actual
 score alignment, reviewer-edit volume). CSIM stays in the set as the cross-lane mechanism case.
-**Done-when:** loss reasons accrue automatically; eval harness can score a tender with and without retrieval.
+**Done-when:** loss reasons accrue automatically; eval harness can score a tender with and without
+retrieval.
 
-## Sprint 7 — Corpus pilot (experiment to *disprove*)
+## Sprint 10 — Corpus pilot (experiment to *disprove*)
 
 **Goal:** Test whether retrieval beats the rubric-aware pipeline — before investing in it.
 **In scope:** `proposal_exemplars` table; ~20-entry hand-curated seed of obtainable, legal UN
 procurement material (published TORs/solicitations from UNGM and agency portals, award notices with
 winning vendor + contract value, agencies' published procurement manuals and evaluation guidelines,
 and your own expert-authored exemplar sections — **not** confidential winning proposals); embeddings;
-retrieval into drafting; measure lift via the Sprint 6 harness.
-**Done-when:** lift is measured and a go/no-go on pgvector is recorded. **If lift is marginal, the moat
-was Sprints 1–4 all along — stop here and don't build the vector store.**
+retrieval into drafting; measure lift via the Sprint 9 harness.
+**Done-when:** lift is measured and a go/no-go on pgvector is recorded. **If lift is marginal, the
+moat was Sprints 1–4 all along — stop here and don't build the vector store.**
 
 ---
 
