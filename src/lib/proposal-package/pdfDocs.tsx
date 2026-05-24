@@ -2,6 +2,15 @@ import React from "react";
 import { Document, Page, Text, View, StyleSheet, pdf } from "@react-pdf/renderer";
 import type { ProposalOutput, RosterOutput, ComplianceItem } from "./types";
 import type { AgencyPackage } from "./roster-packages";
+import type {
+  TenderRubric,
+  ScoreResult,
+  CriterionAssessment,
+  DraftSection,
+  Confidence,
+} from "./scoring-engine";
+import type { ApplicantContext } from "./applicant-context";
+import type { RevisionAttemptSummary } from "./revision-loop";
 
 const GOLD = "#b08530";
 const INK = "#1a1a1a";
@@ -196,6 +205,347 @@ export async function renderComplianceMatrixPdf(
       </Page>
     </Document>
   );
+  const blob = await pdf(Doc).toBlob();
+  return Buffer.from(await blob.arrayBuffer());
+}
+
+/**
+ * Sprint 2: render a SCORED draft (DraftSection[] + ScoreResult) as a PDF.
+ *
+ * Produces a 1-3 page document:
+ *   - Page 1: scorecard summary (per-lot estimated vs achievable totals,
+ *     gating state, triggered disqualifiers, revision history)
+ *   - Page 2: per-criterion scoring detail (one row per scored criterion)
+ *   - Page 3: weak-section detail (criteria with weaknesses + missing evidence)
+ *
+ * Follows the same masthead + footer + colour-token conventions as the
+ * existing ProposalOutput / RosterOutput renderers, per the AGENTS.md
+ * Golden Rule (rendering exits only through pdfDocs.tsx).
+ */
+function confidenceColor(c: Confidence): string {
+  if (c === "evidenced") return GREEN;
+  if (c === "inferred") return GOLD;
+  if (c === "gap") return RED;
+  return INK3; // unverified
+}
+
+function ScoreBar({
+  score,
+  max,
+  width = 120,
+}: {
+  score: number;
+  max: number;
+  width?: number;
+}) {
+  const fillRatio = max > 0 ? Math.max(0, Math.min(1, score / max)) : 0;
+  const fill = Math.round(width * fillRatio);
+  const colour = fillRatio >= 0.7 ? GREEN : fillRatio >= 0.4 ? GOLD : RED;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center" }}>
+      <View
+        style={{
+          width,
+          height: 6,
+          backgroundColor: "#e6dfca",
+          borderRadius: 2,
+          marginRight: 8,
+        }}
+      >
+        <View style={{ width: fill, height: 6, backgroundColor: colour, borderRadius: 2 }} />
+      </View>
+      <Text style={[styles.mono, { fontSize: 8, color: INK }]}>
+        {score.toFixed(1)} / {max}
+      </Text>
+    </View>
+  );
+}
+
+export async function renderScoredDraftPdf(
+  args: {
+    rubric: TenderRubric;
+    draft: DraftSection[];
+    score: ScoreResult;
+    applicant: ApplicantContext;
+    history: RevisionAttemptSummary[];
+    workOrderId: number;
+    tenderTitle: string | null;
+    agency: string | null;
+    generatedAt: string;
+  },
+): Promise<Buffer> {
+  const ctx: DocContext = {
+    companyName: args.applicant.companyName,
+    tenderTitle: args.tenderTitle,
+    agency: args.agency,
+    generatedAt: args.generatedAt,
+  };
+  const tag = refTag("DRAFT", args.workOrderId);
+
+  // Aggregate totals across lots
+  const achievableTotal = args.rubric.lots.reduce(
+    (s, lot) => s + lot.criteria.reduce((ss, c) => ss + c.maxScore, 0),
+    0,
+  );
+  const estimatedTotal = args.score.lotResults.reduce((s, lr) => s + lr.estimatedTotal, 0);
+  const allPassGating = args.score.lotResults.every((lr) => lr.passesGating);
+  const noticeWideTriggered = args.score.noticeWideDisqualifiersTriggered;
+
+  const weakCriteriaForRender: Array<{
+    lotId: string;
+    assessment: CriterionAssessment;
+    criterionLabel: string;
+  }> = [];
+  for (const lot of args.rubric.lots) {
+    const lr = args.score.lotResults.find((x) => x.lotId === lot.lotId);
+    if (!lr) continue;
+    for (const c of lot.criteria) {
+      const a = lr.perCriterion.find((x) => x.criterionId === c.id);
+      if (!a) continue;
+      const isWeak =
+        a.confidence === "gap" ||
+        a.estimatedScore < a.maxScore * 0.5 ||
+        a.weaknesses.length > 0 ||
+        a.missingEvidence.length > 0;
+      if (isWeak) {
+        weakCriteriaForRender.push({ lotId: lot.lotId, assessment: a, criterionLabel: c.label });
+      }
+    }
+  }
+
+  const Doc = (
+    <Document title={`Scored draft · ${ctx.tenderTitle ?? ctx.companyName}`} author="TenderPath">
+      {/* PAGE 1: SCORECARD */}
+      <Page size="A4" style={styles.page}>
+        {masthead(ctx, "Scored draft", tag)}
+        <View style={styles.ruleInk} />
+
+        {/* Headline totals */}
+        <View style={[styles.section, { borderLeftWidth: 2, borderLeftColor: allPassGating ? GREEN : RED, paddingLeft: 12 }]}>
+          <Text style={[styles.label, { color: allPassGating ? GREEN : RED, marginBottom: 4 }]}>
+            {allPassGating ? "Passes gating" : "Fails gating"}
+            {noticeWideTriggered.length > 0
+              ? ` · ${noticeWideTriggered.length} notice-wide disqualifier${noticeWideTriggered.length === 1 ? "" : "s"} triggered`
+              : ""}
+          </Text>
+          {achievableTotal > 0 && (
+            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4 }}>
+              <Text style={{ fontSize: 22, fontFamily: "Helvetica-Bold", color: INK }}>
+                {estimatedTotal.toFixed(0)}
+              </Text>
+              <Text style={{ fontSize: 14, color: INK3, marginLeft: 4, marginRight: 14 }}>
+                / {achievableTotal}
+              </Text>
+              <ScoreBar score={estimatedTotal} max={achievableTotal} width={180} />
+            </View>
+          )}
+          {achievableTotal === 0 && (
+            <Text style={{ fontSize: 10, color: INK2, marginTop: 6 }}>
+              No scored criteria (lowest-priced technically-compliant methodology). Result is pass/fail on disqualifiers only.
+            </Text>
+          )}
+        </View>
+
+        {/* Notice-wide disqualifiers triggered */}
+        {noticeWideTriggered.length > 0 && (
+          <View style={[styles.section, { borderLeftWidth: 2, borderLeftColor: RED, paddingLeft: 12 }]}>
+            <Text style={[styles.label, { color: RED, marginBottom: 6 }]}>
+              Notice-wide disqualifiers triggered (fail every lot quoted)
+            </Text>
+            {noticeWideTriggered.slice(0, 8).map((d, i) => (
+              <Text key={i} style={[styles.bullet, { color: INK, marginBottom: 4 }]}>
+                · [{d.kind}] {d.rule.slice(0, 220)}
+              </Text>
+            ))}
+          </View>
+        )}
+
+        {/* Per-lot summary */}
+        <View style={styles.section}>
+          <Text style={styles.h2}>Per-lot summary</Text>
+          {args.score.lotResults.map((lr) => {
+            const lot = args.rubric.lots.find((l) => l.lotId === lr.lotId);
+            const lotMax = lot ? lot.criteria.reduce((s, c) => s + c.maxScore, 0) : 0;
+            return (
+              <View
+                key={lr.lotId}
+                style={{
+                  paddingVertical: 8,
+                  borderBottomWidth: 1,
+                  borderBottomColor: RULE,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+                  <Text style={{ fontSize: 12, fontFamily: "Helvetica-Bold", color: INK, flex: 1 }}>
+                    {lot?.label ?? lr.lotId}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.mono,
+                      { fontSize: 9, color: lr.passesGating ? GREEN : RED, marginRight: 12 },
+                    ]}
+                  >
+                    {lr.passesGating ? "PASS" : "FAIL"}
+                  </Text>
+                  {lotMax > 0 && <ScoreBar score={lr.estimatedTotal} max={lotMax} />}
+                </View>
+                {lr.lotDisqualifiersTriggered.length > 0 && (
+                  <Text style={{ fontSize: 9, color: RED, marginTop: 2 }}>
+                    Disqualifiers triggered: {lr.lotDisqualifiersTriggered.length} (e.g. {lr.lotDisqualifiersTriggered[0]?.rule.slice(0, 80)}…)
+                  </Text>
+                )}
+              </View>
+            );
+          })}
+        </View>
+
+        {/* Revision history */}
+        {args.history.length > 1 && (
+          <View style={[styles.section, { marginTop: 14 }]}>
+            <Text style={styles.h2}>Revision history</Text>
+            {args.history.map((h) => (
+              <View key={h.attempt} style={{ flexDirection: "row", marginBottom: 3 }}>
+                <Text style={[styles.mono, { fontSize: 9, color: INK3, width: 70 }]}>
+                  Attempt {h.attempt}
+                </Text>
+                <Text style={{ fontSize: 9, color: INK2 }}>
+                  {h.estimatedTotal.toFixed(0)} / {h.achievableTotal} · {h.passesGating ? "passes gating" : "fails gating"} · {h.weakCriteriaIds.length} weak · {h.triggeredDisqualifierIds.length} triggered
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={{ position: "absolute", bottom: 28, left: 48, right: 48, flexDirection: "row", justifyContent: "space-between" }}>
+          <Text style={[styles.mono, { fontSize: 7, color: INK3 }]}>Generated {ctx.generatedAt}</Text>
+          <Text style={[styles.mono, { fontSize: 7, color: INK3 }]}>tenderpath.me · {tag}</Text>
+        </View>
+      </Page>
+
+      {/* PAGE 2: PER-CRITERION DETAIL (cumulative-style; skipped if no scored criteria) */}
+      {achievableTotal > 0 && (
+        <Page size="A4" style={styles.page}>
+          <View style={{ marginBottom: 14 }}>
+            <Text style={[styles.mono, { fontSize: 7, letterSpacing: 1.5, color: GOLD, textTransform: "uppercase", marginBottom: 4 }]}>
+              Scored draft · per-criterion · {tag}
+            </Text>
+            <Text style={{ fontSize: 18, fontFamily: "Helvetica-Bold", color: INK }}>
+              Per-criterion scoring
+            </Text>
+          </View>
+          <View style={styles.ruleInk} />
+
+          {args.rubric.lots.map((lot) => {
+            const lr = args.score.lotResults.find((x) => x.lotId === lot.lotId);
+            if (!lr || lot.criteria.length === 0) return null;
+            return (
+              <View key={lot.lotId} style={{ marginBottom: 14 }}>
+                <Text style={[styles.label, { marginBottom: 6 }]}>{lot.label}</Text>
+                {lot.criteria.map((c) => {
+                  const a = lr.perCriterion.find((x) => x.criterionId === c.id);
+                  if (!a) return null;
+                  return (
+                    <View
+                      key={c.id}
+                      style={{
+                        flexDirection: "row",
+                        paddingVertical: 5,
+                        borderBottomWidth: 1,
+                        borderBottomColor: RULE,
+                      }}
+                    >
+                      <Text style={[styles.mono, { fontSize: 9, color: INK3, width: 36 }]}>{c.id}</Text>
+                      <Text style={{ fontSize: 9.5, color: INK, flex: 1, paddingRight: 8 }}>
+                        {c.label.slice(0, 80)}
+                        {c.doubleWeighted ? "  [2x]" : ""}
+                      </Text>
+                      <View style={{ width: 150, marginRight: 8 }}>
+                        <ScoreBar score={a.estimatedScore} max={a.maxScore} width={100} />
+                      </View>
+                      <Text
+                        style={[
+                          styles.mono,
+                          { fontSize: 8, color: confidenceColor(a.confidence), width: 60, textAlign: "right" },
+                        ]}
+                      >
+                        {a.confidence}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            );
+          })}
+
+          <View style={{ position: "absolute", bottom: 28, left: 48, right: 48, flexDirection: "row", justifyContent: "space-between" }}>
+            <Text style={[styles.mono, { fontSize: 7, color: INK3 }]}>Generated {ctx.generatedAt}</Text>
+            <Text style={[styles.mono, { fontSize: 7, color: INK3 }]}>tenderpath.me · {tag}</Text>
+          </View>
+        </Page>
+      )}
+
+      {/* PAGE 3: WEAK CRITERIA DETAIL */}
+      {weakCriteriaForRender.length > 0 && (
+        <Page size="A4" style={styles.page}>
+          <View style={{ marginBottom: 14 }}>
+            <Text style={[styles.mono, { fontSize: 7, letterSpacing: 1.5, color: GOLD, textTransform: "uppercase", marginBottom: 4 }]}>
+              Scored draft · weak sections · {tag}
+            </Text>
+            <Text style={{ fontSize: 18, fontFamily: "Helvetica-Bold", color: INK }}>
+              Where the draft needs more
+            </Text>
+          </View>
+          <View style={styles.ruleInk} />
+
+          {weakCriteriaForRender.slice(0, 12).map((w, i) => (
+            <View
+              key={i}
+              style={{
+                marginBottom: 12,
+                borderLeftWidth: 2,
+                borderLeftColor: confidenceColor(w.assessment.confidence),
+                paddingLeft: 10,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "baseline", marginBottom: 4 }}>
+                <Text style={[styles.mono, { fontSize: 9, color: INK3, marginRight: 6 }]}>
+                  {w.lotId} / {w.assessment.criterionId}
+                </Text>
+                <Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold", color: INK, flex: 1 }}>
+                  {w.criterionLabel.slice(0, 100)}
+                </Text>
+                <Text style={[styles.mono, { fontSize: 9, color: INK2 }]}>
+                  {w.assessment.estimatedScore.toFixed(1)} / {w.assessment.maxScore}
+                </Text>
+              </View>
+              {w.assessment.weaknesses.length > 0 && (
+                <View style={{ marginTop: 2 }}>
+                  <Text style={[styles.label, { marginBottom: 2 }]}>Weaknesses</Text>
+                  {w.assessment.weaknesses.slice(0, 4).map((ws, j) => (
+                    <Text key={j} style={[styles.bullet, { color: INK2, fontSize: 9 }]}>· {ws}</Text>
+                  ))}
+                </View>
+              )}
+              {w.assessment.missingEvidence.length > 0 && (
+                <View style={{ marginTop: 4 }}>
+                  <Text style={[styles.label, { marginBottom: 2, color: RED }]}>Missing evidence</Text>
+                  {w.assessment.missingEvidence.slice(0, 4).map((m, j) => (
+                    <Text key={j} style={[styles.bullet, { color: RED, fontSize: 9 }]}>· {m}</Text>
+                  ))}
+                </View>
+              )}
+            </View>
+          ))}
+
+          <View style={{ position: "absolute", bottom: 28, left: 48, right: 48, flexDirection: "row", justifyContent: "space-between" }}>
+            <Text style={[styles.mono, { fontSize: 7, color: INK3 }]}>Generated {ctx.generatedAt}</Text>
+            <Text style={[styles.mono, { fontSize: 7, color: INK3 }]}>tenderpath.me · {tag}</Text>
+          </View>
+        </Page>
+      )}
+    </Document>
+  );
+
   const blob = await pdf(Doc).toBlob();
   return Buffer.from(await blob.arrayBuffer());
 }
