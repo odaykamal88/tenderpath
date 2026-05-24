@@ -17,6 +17,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import type {
+  Claim,
   DraftSection,
   TenderRubric,
   ScoreResult,
@@ -26,12 +27,28 @@ import type {
   Disqualifier,
   Confidence,
   EvaluationCriterion,
+  RoutingContext,
 } from "./scoring-engine";
 import type { ApplicantContext } from "./applicant-context";
 import { formatApplicantForPrompt } from "./applicant-context";
 import { safeParseJSON } from "./llm";
+import {
+  routeAllGaps,
+  rollupConfidenceFromClaims,
+  countClaimsByProvenance,
+} from "./gap-routing";
 
 const SONNET_MODEL = "claude-sonnet-4-6";
+
+export interface ScoreOptions {
+  /**
+   * Sprint 4: routing context for gap → action mapping. Defaults to the
+   * $299 Proposal Draft origin so the existing pipeline keeps working
+   * without explicit opt-in. Sprint 5 (free Readiness Assessment) passes
+   * `{ originSku: 'readiness' }` so all four paid SKUs are open routes.
+   */
+  routingContext?: RoutingContext;
+}
 
 let _client: Anthropic | null = null;
 function getClient(): Anthropic {
@@ -47,6 +64,7 @@ export async function scoreDraft(
   draft: DraftSection[],
   rubric: TenderRubric,
   applicant?: ApplicantContext,
+  options: ScoreOptions = {},
 ): Promise<ScoreResult> {
   // 1. Score per-criterion + detect disqualifiers per lot (in parallel across lots
   // when there's more than one — but each lot is sequential internally because
@@ -55,10 +73,15 @@ export async function scoreDraft(
   for (const lot of rubric.lots) {
     const lotDraft = draft.filter((d) => (d.lotId ?? "main") === lot.lotId);
 
-    const perCriterion =
+    const llmAssessments =
       lot.criteria.length > 0
         ? await scoreCriteriaForLot(lotDraft, lot, applicant)
         : [];
+
+    // Sprint 4 (proposal-output-ux.md A4): attach mechanical confidence +
+    // claim counts from the draft's claims. Independent of the LLM-judged
+    // confidence; both are surfaced so the UI can flag disagreement.
+    const perCriterion = enrichWithClaimMetrics(llmAssessments, lotDraft);
 
     const lotDisqualifiersTriggered =
       lot.disqualifiers.length > 0
@@ -88,11 +111,55 @@ export async function scoreDraft(
     for (const lr of lotResults) lr.passesGating = false;
   }
 
-  return {
+  // 4. Sprint 4 (proposal-output-ux.md A3 + readiness R1): route every
+  // surfaced gap to a paid SKU via the shared gap-routing module. Default
+  // origin is the $299 Proposal Draft flow; Sprint 5 readiness flow
+  // overrides via options.routingContext.
+  const routingContext: RoutingContext =
+    options.routingContext ?? { originSku: "proposal_draft" };
+
+  const partialScore: ScoreResult = {
     rubricVersion: rubric.rubricVersion,
     lotResults,
     noticeWideDisqualifiersTriggered,
+    routedGaps: [],
   };
+  const routedGaps = routeAllGaps(partialScore, routingContext, draft);
+
+  return { ...partialScore, routedGaps };
+}
+
+// ============================================================================
+// Sprint 4: enrich CriterionAssessment with claim-level metrics
+// ============================================================================
+
+function enrichWithClaimMetrics(
+  llmAssessments: CriterionAssessment[],
+  lotDraft: DraftSection[],
+): CriterionAssessment[] {
+  return llmAssessments.map((a) => {
+    // Gather every claim across draft sections that answer THIS criterion.
+    // A criterion may have 0, 1, or many backing sections; concat them.
+    const claims: Claim[] = lotDraft
+      .filter((s) => s.criterionId === a.criterionId)
+      .flatMap((s) => s.claims);
+
+    if (claims.length === 0) {
+      return {
+        ...a,
+        mechanicalConfidence: "unverified" as const,
+        claimCount: 0,
+        claimsByProvenance: {},
+      };
+    }
+
+    return {
+      ...a,
+      mechanicalConfidence: rollupConfidenceFromClaims(claims),
+      claimCount: claims.length,
+      claimsByProvenance: countClaimsByProvenance(claims),
+    };
+  });
 }
 
 // ============================================================================

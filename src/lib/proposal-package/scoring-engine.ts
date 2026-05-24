@@ -179,7 +179,22 @@ export interface CriterionAssessment {
   criterionId: string;
   estimatedScore: number;
   maxScore: number;
-  confidence: Confidence; // rolls up from the claims backing this section
+  /** LLM-judged confidence — the panel-simulating model's read of the draft. */
+  confidence: Confidence;
+  /**
+   * Sprint 4 (proposal-output-ux.md A4): mechanical confidence rolled up from
+   * the draft's Claim.provenance counts for this criterion. Independent of
+   * the LLM's `confidence` field; the two can agree (high trust) or disagree
+   * (signal worth surfacing). Optional because rubric-scorer needs draft
+   * claims to compute it — callers that score against an empty/synthetic
+   * draft leave this undefined.
+   */
+  mechanicalConfidence?: Confidence;
+  /** Sprint 4: how many backing claims existed for this criterion in the draft. */
+  claimCount?: number;
+  /** Sprint 4: breakdown of those claims by provenance kind. UI uses this to
+   *  show "5 evidenced + 2 inferred + 1 gap" alongside the criterion score. */
+  claimsByProvenance?: Partial<Record<ProvenanceKind, number>>;
   weaknesses: string[];
   missingEvidence: string[];
 }
@@ -195,6 +210,57 @@ export interface LotScoreResult {
   passesGating: boolean;
 }
 
+// ============================================================================
+// Sprint 4: Gap → Action routing (proposal-output-ux.md A3 + readiness R1)
+// ============================================================================
+
+/**
+ * The four paid SKUs every gap can route to. Shared by the $299 ProposalOutput
+ * AND the Sprint 5 free Readiness Assessment — built once in gap-routing.ts,
+ * never forked.
+ */
+export type ServiceSku =
+  | 'bid_no_bid'      // $39 — analyze a SPECIFIC tender before committing
+  | 'matching'        // $49/mo — ongoing tender discovery
+  | 'proposal_draft'  // $299 — write a strong response (THIS sprint's product)
+  | 'roster';         // $749 — UN supplier registration + LTA prep (long arc)
+
+/** Where a gap was surfaced. `readiness` is the free funnel entry. */
+export type OriginSku = ServiceSku | 'readiness';
+
+export interface RoutingContext {
+  /** The SKU the gap was surfaced inside. Routing never recommends the same
+   *  SKU back to the user (you don't sell Proposal Draft to someone reading a
+   *  Proposal Draft output). The fallback chain in gap-routing.ts handles this. */
+  originSku: OriginSku;
+}
+
+/** A gap with its routed paid action. The whole point of A3/R1. */
+export interface RoutedGap {
+  /** Plain-language gap text the UI shows. */
+  text: string;
+  /**
+   * What kind of gap this was derived from. Useful for the UI to group
+   * (disqualifiers up top, weaknesses inline, missingEvidence as advisory).
+   */
+  kind: 'weakness' | 'missing_evidence' | 'disqualifier' | 'claim_gap';
+  /** Which lot this gap belongs to. Omit when notice-wide. */
+  lotId?: string;
+  /** Which criterion this gap maps to. Omit for disqualifiers + notice-wide. */
+  criterionId?: string;
+  /** The SKU that closes this gap. Never the origin SKU. */
+  routedTo: ServiceSku;
+  /** One short sentence explaining why this SKU closes this gap. */
+  rationale: string;
+  /** Button copy the UI renders. */
+  ctaCopy: string;
+  /** When the gap came from a disqualifier, carry its SourceRef so the UI can
+   *  link "you would be disqualified: form X missing" to the source clause. */
+  sourceRef?: SourceRef;
+  /** Which routing rule matched. Useful for telemetry + debugging routing drift. */
+  ruleId: string;
+}
+
 export interface ScoreResult {
   rubricVersion: number;                       // which rubric version this draft was scored against
   /** One entry per lot the bidder is quoting. */
@@ -204,6 +270,13 @@ export interface ScoreResult {
    * if any notice-wide disqualifier fires, every lotResults[i].passesGating is false.
    */
   noticeWideDisqualifiersTriggered: Disqualifier[];
+  /**
+   * Sprint 4 (proposal-output-ux.md A3): every gap surfaced by this run, each
+   * routed to a paid SKU via gap-routing.ts. Computed once by scoreDraft,
+   * read by the UI (Sprint 6) and the free Readiness Assessment (Sprint 5).
+   * A ScoreResult with no gaps returns an empty array, not omitted.
+   */
+  routedGaps: RoutedGap[];
 }
 
 // ============================================================================
