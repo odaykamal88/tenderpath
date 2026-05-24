@@ -19,6 +19,7 @@ import type {
 import type { ApplicantContext } from "./applicant-context";
 import { generateDraftSections, type RevisionGuidance } from "./draft-generator";
 import { scoreDraft } from "./rubric-scorer";
+import { detectAndApplyCascades, type Cascade } from "./cross-section-cascade";
 
 const MAX_ATTEMPTS = 2;
 
@@ -36,6 +37,15 @@ export interface RevisionLoopResult {
   finalScore: ScoreResult;
   attempts: number;
   history: RevisionAttemptSummary[];
+  /**
+   * Sprint 4.6: cross-section evidence-dependency cascades surfaced by the
+   * cascade-detection pass (cross-section-cascade.ts). Each cascade's gap
+   * is appended to the affected downstream sections' claims, so the score
+   * + routing already reflect them; this top-level array carries the
+   * structured cascade metadata for the UI to render upstream→downstream
+   * links explicitly.
+   */
+  cascades: Cascade[];
 }
 
 export async function runRevisionLoop(
@@ -44,6 +54,15 @@ export async function runRevisionLoop(
   applicant: ApplicantContext,
 ): Promise<RevisionLoopResult> {
   let draft = await generateDraftSections(tenderInput, rubric, applicant);
+
+  // Sprint 4.6 (A5 finding #6): cross-section cascade detection runs AFTER
+  // generation, BEFORE scoring, so cascaded gaps flow through the score +
+  // routing path naturally. The draft-generator prompt already includes the
+  // DEPENDENCY RULE — this is the backstop for cases the LLM missed inline.
+  const initial = await detectAndApplyCascades(draft, applicant);
+  draft = initial.draft;
+  const allCascades: Cascade[] = [...initial.cascades];
+
   let score = await scoreDraft(draft, rubric, applicant);
 
   const history: RevisionAttemptSummary[] = [summarize(1, draft, score, rubric)];
@@ -57,12 +76,26 @@ export async function runRevisionLoop(
       revisionGuidance: guidance,
       priorSections: draft,
     });
+
+    // Re-run cascade detection on the revised draft — revisions can
+    // introduce new inconsistencies the original pass didn't see.
+    const revised = await detectAndApplyCascades(draft, applicant);
+    draft = revised.draft;
+    // Dedupe by (sourceCriterionId + missingArtifact) so re-runs that catch
+    // the same cascade twice don't bloat the surface.
+    for (const c of revised.cascades) {
+      const key = `${c.sourceCriterionId}|${c.missingArtifact.toLowerCase()}`;
+      if (!allCascades.some((x) => `${x.sourceCriterionId}|${x.missingArtifact.toLowerCase()}` === key)) {
+        allCascades.push(c);
+      }
+    }
+
     score = await scoreDraft(draft, rubric, applicant);
     attempts += 1;
     history.push(summarize(attempts, draft, score, rubric));
   }
 
-  return { finalDraft: draft, finalScore: score, attempts, history };
+  return { finalDraft: draft, finalScore: score, attempts, history, cascades: allCascades };
 }
 
 function needsRevision(score: ScoreResult): boolean {
