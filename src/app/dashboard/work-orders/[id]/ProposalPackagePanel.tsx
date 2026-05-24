@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { MONO as MONO_BRAND, SERIF as SERIF_BRAND, skuTone } from "@/lib/brand/tokens";
+import { MONO as MONO_BRAND, SERIF as SERIF_BRAND } from "@/lib/brand/tokens";
+import { gapSeverity, SEVERITY_META, type GapSeverity } from "@/app/dashboard/proposals/[workOrderId]/scored-view";
 
 interface ComplianceItem {
   requirement: string;
@@ -31,7 +32,9 @@ interface ScoredRoute {
   routedTo: ServiceSku;
   rationale: string;
   ctaCopy: string;
-  kind: string;
+  // Narrowed to match the engine's RoutedGap.kind union so gapSeverity()
+  // accepts ScoredRoute via structural typing.
+  kind: "weakness" | "missing_evidence" | "disqualifier" | "claim_gap";
 }
 interface ScoredView {
   lotResults: ScoredLot[];
@@ -52,13 +55,6 @@ interface ProposalOutput {
   // counts when absent).
   score?: unknown;
 }
-
-const SKU_LABEL: Record<ServiceSku, string> = {
-  bid_no_bid: "Bid/No-Bid",
-  matching: "Matching",
-  proposal_draft: "Proposal Draft",
-  roster: "Roster",
-};
 
 interface PackageRow {
   id: number;
@@ -255,14 +251,19 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
       scored.noticeWideDisqualifiersTriggered.length +
       scored.lotResults.reduce((s, lr) => s + lr.lotDisqualifiersTriggered.length, 0);
 
-    // Group routed gaps by SKU; show top 3 SKUs with one CTA each.
-    const byRoute = new Map<ServiceSku, ScoredRoute[]>();
+    // Sprint 6: the WO tile summarises gaps by APPLICANT ACTION TYPE
+    // (severity), not by paid SKU. The user already owns the $299
+    // package — the tile orients them to "what's left to ship" and
+    // links through to the full proposal page for the actual work.
+    const bySeverity = new Map<GapSeverity, number>();
     for (const g of scored.routedGaps) {
-      if (!byRoute.has(g.routedTo)) byRoute.set(g.routedTo, []);
-      byRoute.get(g.routedTo)!.push(g);
+      const sev = gapSeverity(g);
+      bySeverity.set(sev, (bySeverity.get(sev) ?? 0) + 1);
     }
-    const skuOrder: ServiceSku[] = ["bid_no_bid", "matching", "roster", "proposal_draft"];
-    const topRoutes = skuOrder.filter((s) => byRoute.has(s)).slice(0, 3);
+    const severityOrder: GapSeverity[] = ["block", "evidence", "narrative"];
+    const severityCounts = severityOrder
+      .filter((s) => (bySeverity.get(s) ?? 0) > 0)
+      .map((s) => ({ severity: s, count: bySeverity.get(s)! }));
 
     return (
       <section className={`rounded-md border-l-2 ${passes ? "border-emerald-700" : "border-red-700"} bg-white shadow-sm`}>
@@ -306,45 +307,45 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
             </span>
           </div>
           <p className="text-[13px] leading-relaxed text-stone-600">
-            Compliance verdict, per-criterion rubric scoring, and routed action gaps for every weakness. Full breakdown and draft body on the proposal page.
+            Compliance verdict, per-criterion rubric scoring, and applicant-action findings for every weakness. Full breakdown and draft body on the proposal page.
           </p>
         </div>
 
-        {topRoutes.length > 0 && (
+        {severityCounts.length > 0 && (
           <div className="border-t border-stone-100 p-5">
             <div
               className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-3"
               style={{ fontFamily: MONO }}
             >
-              Top action gaps · {scored.routedGaps.length} routed
+              {scored.routedGaps.length} finding{scored.routedGaps.length === 1 ? "" : "s"} to address
             </div>
-            <div className="space-y-2.5">
-              {topRoutes.map((sku) => {
-                const tone = skuTone(sku);
-                const gaps = byRoute.get(sku)!;
+            <div className="flex flex-wrap gap-2">
+              {severityCounts.map(({ severity, count }) => {
+                const meta = SEVERITY_META[severity];
                 return (
                   <div
-                    key={sku}
-                    className={`rounded-sm border ${tone.border} ${tone.bg} px-3.5 py-2.5`}
+                    key={severity}
+                    className={`rounded-sm border ${meta.border} ${meta.bg} px-2.5 py-1.5 flex items-baseline gap-1.5`}
                   >
-                    <div className="flex items-baseline justify-between gap-2 flex-wrap mb-1">
-                      <div className="flex items-baseline gap-2">
-                        <span
-                          className={`rounded-sm px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-white ${tone.badge}`}
-                          style={{ fontFamily: MONO }}
-                        >
-                          {SKU_LABEL[sku]}
-                        </span>
-                        <span className={`text-[10.5px] ${tone.tw}`} style={{ fontFamily: MONO }}>
-                          {gaps.length} gap{gaps.length === 1 ? "" : "s"}
-                        </span>
-                      </div>
-                    </div>
-                    <p className={`text-[12px] italic ${tone.tw} leading-relaxed`}>{gaps[0]?.rationale}</p>
+                    <span
+                      className={`text-[9.5px] font-semibold uppercase tracking-[0.12em] text-white rounded-sm px-1.5 py-0.5 ${meta.badge}`}
+                      style={{ fontFamily: MONO }}
+                    >
+                      {meta.label}
+                    </span>
+                    <span
+                      className={`text-[13px] font-medium tabular-nums ${meta.tw}`}
+                      style={{ fontFamily: MONO }}
+                    >
+                      {count}
+                    </span>
                   </div>
                 );
               })}
             </div>
+            <p className="mt-3 text-[11.5px] text-stone-500 leading-relaxed" style={{ fontFamily: MONO }}>
+              Address gaps in the draft + upload evidence on the proposal page, then re-run. Unlimited re-runs against this tender are included.
+            </p>
           </div>
         )}
 

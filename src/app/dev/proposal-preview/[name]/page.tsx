@@ -41,6 +41,48 @@ const FIXTURE_DIR = "tests/fixtures/sprint6-page";
 
 export const dynamic = "force-dynamic"; // never cache; this is a dev tool
 
+/**
+ * Drop the engine's SKU sales fields from output.score.routedGaps. The page
+ * derives severity from `kind` alone (see scored-view.tsx gapSeverity) and
+ * never reads rationale or ctaCopy. Keeping them would put sales copy into
+ * the hydration JSON (invisible to the eye but present in view-source).
+ *
+ * Also drops the top-level `routed_gaps` and `cascades` mirrors, which the
+ * acceptance script writes for storage-shape compatibility but the page
+ * never reads (adaptScored() works off score.routedGaps + score.* only).
+ *
+ * `routedTo` is retained as opaque analytics data — the page doesn't render
+ * it but Sprint 6b's internal-review tooling will. Sprint 6+1 may decide to
+ * strip it too if the analytics consumer moves elsewhere.
+ */
+function stripSkuSalesFields(output: ProposalOutputJSON): ProposalOutputJSON {
+  // Drop the duplicate top-level mirrors first — the client adapter never
+  // reads these, so the simplest cleanup is to omit them entirely.
+  const { routed_gaps: _routed_gaps, cascades: _cascades, ...rest } = output;
+  void _routed_gaps;
+  void _cascades;
+
+  // Then strip rationale + ctaCopy from score.routedGaps (the live source the
+  // adapter actually reads).
+  if (!rest.score || typeof rest.score !== "object") return rest;
+  const score = rest.score as { routedGaps?: unknown };
+  if (!Array.isArray(score.routedGaps)) return rest;
+
+  const cleanedGaps = score.routedGaps.map((g) => {
+    if (!g || typeof g !== "object") return g;
+    const gap = g as Record<string, unknown>;
+    const { rationale: _rationale, ctaCopy: _ctaCopy, ...gapRest } = gap;
+    void _rationale;
+    void _ctaCopy;
+    return gapRest;
+  });
+
+  return {
+    ...rest,
+    score: { ...(rest.score as object), routedGaps: cleanedGaps },
+  } as ProposalOutputJSON;
+}
+
 export default async function DevProposalPreview({
   params,
 }: {
@@ -56,6 +98,15 @@ export default async function DevProposalPreview({
   try {
     const raw = await readFile(fixturePath, "utf8");
     output = JSON.parse(raw) as ProposalOutputJSON;
+    // Strip the engine's SKU sales fields BEFORE handing the payload to the
+    // client. The $299 page does not pitch other services; the user already
+    // paid for the verified proposal. Leaving rationale + ctaCopy in the
+    // hydration JSON would bake "Start Roster Fast-Track ($749)" into every
+    // page payload — invisible to the eye but present in view-source and
+    // any future client-side consumer that decides to render them. Sprint 6b
+    // will repeat this strip at the production API boundary
+    // (/api/dashboard/work-orders/[id]/proposal-package).
+    output = stripSkuSalesFields(output);
   } catch (err) {
     return (
       <div className="min-h-screen bg-stone-50 px-8 py-10 max-w-4xl mx-auto">

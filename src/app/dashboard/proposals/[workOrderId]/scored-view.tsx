@@ -36,7 +36,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { MONO, SERIF, confidenceTone, skuTone } from "@/lib/brand/tokens";
+import { MONO, SERIF, confidenceTone } from "@/lib/brand/tokens";
 
 // ============================================================================
 // Adapted shapes — the page reads from output.score / output.draft etc.
@@ -202,6 +202,7 @@ export interface ProposalOutputJSON {
   score?: unknown;
   draft?: unknown;
   routed_gaps?: unknown;
+  cascades?: unknown;
   revision_history?: unknown;
   tender_rubric?: unknown;
 }
@@ -236,15 +237,61 @@ export function adaptScored(output: ProposalOutputJSON): ScoredView | null {
 }
 
 // ============================================================================
-// SKU display catalog — mirrors gap-routing.SERVICE_CATALOG (frozen at the
-// page boundary so we don't import server-side modules into a client page)
+// Severity catalog — Sprint 6 product direction: the $299 page does NOT
+// pitch other SKUs. The user already paid for the verified proposal; the
+// page's job is to help them ship it. Gaps are grouped by what the
+// APPLICANT needs to do (resolve the gate / upload evidence / strengthen
+// narrative), not by which paid service could close them.
+//
+// The engine's gap-routing.ts still emits routedTo + rationale + ctaCopy
+// (kept for analytics + future internal review tooling), but the page
+// ignores them — severity is derived from `kind` alone.
 // ============================================================================
 
-const SKU_META: Record<ServiceSku, { label: string; price: string }> = {
-  bid_no_bid: { label: "Bid/No-Bid Analyst", price: "$39" },
-  matching: { label: "Matching Subscription", price: "$49/mo" },
-  proposal_draft: { label: "Proposal Draft", price: "$299" },
-  roster: { label: "Roster Fast-Track", price: "$749" },
+export type GapSeverity = "block" | "evidence" | "narrative";
+
+export function gapSeverity(g: Pick<RoutedGap, "kind">): GapSeverity {
+  if (g.kind === "disqualifier") return "block";
+  if (g.kind === "missing_evidence" || g.kind === "claim_gap") return "evidence";
+  return "narrative";
+}
+
+export const SEVERITY_META: Record<GapSeverity, {
+  label: string;
+  subtitle: string;
+  border: string;
+  bg: string;
+  badge: string;
+  tw: string;
+  icon: string;
+}> = {
+  block: {
+    label: "Compliance gates",
+    subtitle: "Resolve before submission — these can disqualify the bid.",
+    border: "border-red-300",
+    bg: "bg-red-50/70",
+    badge: "bg-red-700",
+    tw: "text-red-900",
+    icon: "✗",
+  },
+  evidence: {
+    label: "Evidence to add",
+    subtitle: "Upload supporting documents that back the claims in the draft.",
+    border: "border-amber-300",
+    bg: "bg-amber-50/70",
+    badge: "bg-amber-700",
+    tw: "text-amber-900",
+    icon: "↑",
+  },
+  narrative: {
+    label: "Narrative to strengthen",
+    subtitle: "Expand or rewrite — the rubric rewards depth and specificity.",
+    border: "border-stone-300",
+    bg: "bg-stone-50",
+    badge: "bg-stone-700",
+    tw: "text-stone-900",
+    icon: "✎",
+  },
 };
 
 const DISQ_KIND_LABEL: Record<DisqualifierKind, string> = {
@@ -538,26 +585,34 @@ function CriterionRow({ c, label }: { c: CriterionAssessment; label: string }) {
 }
 
 // ============================================================================
-// B3 — ROUTED GAPS (grouped by SKU with CTAs)
+// B3 — FINDINGS TO ADDRESS (no upsell — pure applicant remediation)
 // ============================================================================
+//
+// The $299 page is a deliverable, not a cross-sell surface. Gaps are
+// grouped by APPLICANT ACTION TYPE (resolve gate / upload evidence /
+// strengthen narrative), and the only CTAs are operational: upload more
+// documents and re-run the review. The user already paid for verification;
+// the unlimited-re-runs-against-this-tender policy is part of what the
+// $299 buys.
 
 export function RoutedGaps({ score }: { score: ScoreResult }) {
   const grouped = useMemo(() => {
-    const m = new Map<ServiceSku, RoutedGap[]>();
+    const m = new Map<GapSeverity, RoutedGap[]>();
     for (const g of score.routedGaps) {
-      if (!m.has(g.routedTo)) m.set(g.routedTo, []);
-      m.get(g.routedTo)!.push(g);
+      const sev = gapSeverity(g);
+      if (!m.has(sev)) m.set(sev, []);
+      m.get(sev)!.push(g);
     }
-    // Stable ordering for the SKU panels:
-    // bid_no_bid (catch admin gates) → matching → roster → proposal_draft
-    const order: ServiceSku[] = ["bid_no_bid", "matching", "roster", "proposal_draft"];
+    const order: GapSeverity[] = ["block", "evidence", "narrative"];
     return order.filter((s) => m.has(s)).map((s) => [s, m.get(s)!] as const);
   }, [score.routedGaps]);
 
   if (score.routedGaps.length === 0) {
     return (
-      <Section index="02" title="Next actions">
-        <p className="text-[13px] text-stone-500 italic">No gaps surfaced — clean draft.</p>
+      <Section index="02" title="Findings to address">
+        <p className="text-[13px] text-stone-500 italic">
+          No gaps surfaced — the draft is ready to submit.
+        </p>
       </Section>
     );
   }
@@ -565,66 +620,76 @@ export function RoutedGaps({ score }: { score: ScoreResult }) {
   return (
     <Section
       index="02"
-      title="Next actions, by gap"
-      subtitle={`Every gap routed to the TenderPath service that closes it · ${score.routedGaps.length} total`}
+      title="Findings to address"
+      subtitle={`${score.routedGaps.length} finding${score.routedGaps.length === 1 ? "" : "s"} flagged · address in the draft, upload supporting evidence, re-run`}
     >
       <div className="space-y-4">
-        {grouped.map(([sku, gaps]) => (
-          <RoutedSkuPanel key={sku} sku={sku} gaps={gaps} />
+        {grouped.map(([sev, gaps]) => (
+          <SeverityPanel key={sev} severity={sev} gaps={gaps} />
         ))}
+      </div>
+
+      {/* Applicant action footer — the only two operational levers the
+          user has within the $299 envelope. Sprint 6b wires both. */}
+      <div className="mt-5 pt-4 border-t border-stone-200 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          className="rounded-sm bg-stone-900 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors"
+          style={{ fontFamily: MONO }}
+          onClick={() => alert("Sprint 6b stub — wires vault upload to feed the next re-run.")}
+        >
+          Upload supporting documents
+        </button>
+        <button
+          type="button"
+          className="rounded-sm border border-stone-300 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
+          style={{ fontFamily: MONO }}
+          onClick={() => alert("Sprint 6b stub — wires re-run against the same tender + updated evidence.")}
+        >
+          Re-run review after updating
+        </button>
+        <span className="text-[11.5px] text-stone-500 leading-relaxed" style={{ fontFamily: MONO }}>
+          Your $299 includes unlimited re-runs against this tender as you address gaps.
+        </span>
       </div>
     </Section>
   );
 }
 
-function RoutedSkuPanel({ sku, gaps }: { sku: ServiceSku; gaps: RoutedGap[] }) {
-  const tone = skuTone(sku);
-  const meta = SKU_META[sku];
-  // Use the first gap's rationale as the panel-level rationale; show others as bullets.
-  const headline = gaps[0]?.rationale ?? "";
+function SeverityPanel({ severity, gaps }: { severity: GapSeverity; gaps: RoutedGap[] }) {
+  const meta = SEVERITY_META[severity];
   return (
-    <div className={`rounded-md border ${tone.border} ${tone.bg} p-4`}>
-      <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
+    <div className={`rounded-md border ${meta.border} ${meta.bg} p-4`}>
+      <div className="flex items-baseline justify-between gap-2 flex-wrap mb-3">
         <div className="flex items-baseline gap-2 flex-wrap">
           <span
-            className={`rounded-sm px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white ${tone.badge}`}
+            className={`rounded-sm px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white ${meta.badge}`}
             style={{ fontFamily: MONO }}
           >
             {meta.label}
           </span>
-          <span className={`text-[12.5px] font-medium ${tone.tw}`} style={{ fontFamily: MONO }}>
-            {meta.price}
-          </span>
           <span className="text-[11px] text-stone-500" style={{ fontFamily: MONO }}>
-            · {gaps.length} gap{gaps.length === 1 ? "" : "s"}
+            · {gaps.length} item{gaps.length === 1 ? "" : "s"}
           </span>
         </div>
-        <button
-          className={`rounded-sm px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-white ${tone.badge} hover:opacity-90 transition-opacity`}
-          style={{ fontFamily: MONO }}
-          onClick={() => alert(`Sprint 6 stub: ${gaps[0]?.ctaCopy ?? meta.label} — Sprint 7 wires the checkout flow.`)}
-        >
-          {gaps[0]?.ctaCopy ?? meta.label}
-        </button>
       </div>
-      <p className={`text-[12.5px] italic leading-relaxed ${tone.tw} mb-3`}>{headline}</p>
-      <ul className="space-y-1.5">
-        {gaps.slice(0, 6).map((g, i) => (
-          <li key={i} className="flex gap-2 text-[12.5px] leading-relaxed text-stone-700">
-            <span className="text-stone-400 shrink-0 mt-0.5">·</span>
+      <p className={`text-[12.5px] italic leading-relaxed ${meta.tw} mb-3`}>{meta.subtitle}</p>
+      <ul className="space-y-2">
+        {gaps.slice(0, 8).map((g, i) => (
+          <li key={i} className="flex gap-2 text-[12.5px] leading-relaxed text-stone-800">
+            <span className={`shrink-0 mt-0.5 font-semibold ${meta.tw}`}>{meta.icon}</span>
             <span>
               {(g.lotId || g.criterionId) && (
                 <span className="text-[10.5px] text-stone-400 mr-1.5" style={{ fontFamily: MONO }}>
                   [{g.lotId ?? "notice"}{g.criterionId ? `/${g.criterionId}` : ""}]
                 </span>
               )}
-              {g.kind === "disqualifier" && <span className="text-red-700 mr-1">✗</span>}
               {g.text}
             </span>
           </li>
         ))}
-        {gaps.length > 6 && (
-          <li className="text-[11.5px] text-stone-500 italic">+ {gaps.length - 6} more</li>
+        {gaps.length > 8 && (
+          <li className="text-[11.5px] text-stone-500 italic">+ {gaps.length - 8} more</li>
         )}
       </ul>
     </div>
