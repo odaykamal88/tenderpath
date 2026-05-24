@@ -1,0 +1,14 @@
+{
+  "tenderId": "unicef-RFPS-DAN-2021-503347",
+  "title": "Global Long-term Arrangements (LTAs) for Oxygen Generation Plant Repair and Biomedical Engineering Technical Services",
+  "agency": "UNICEF",
+  "lane": "procurement",
+  "methodology": "cumulative",
+  "lotMetadata": [
+    { "lotId": "main", "label": "Services LTA (single-lot)", "scope": "Plant repair + biomedical engineering technical services, global" }
+  ],
+  "notices": [
+    { "noticeId": "135638", "subdir": "notice-135638", "published": "2021-07-29", "role": "base" },
+    { "noticeId": "146988", "subdir": "notice-146988", "published": "2021-10-01", "role": "amendment" }
+  ]
+}

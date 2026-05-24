@@ -31,14 +31,14 @@ export interface DocumentExtractionResult {
 
 const MAX_TEXT_CHARS = 24_000;
 
-function cleanText(value: string): string {
+function cleanText(value: string, cap: number = MAX_TEXT_CHARS): string {
   return value
     .replace(/\u0000/g, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]{2,}/g, " ")
     .trim()
-    .slice(0, MAX_TEXT_CHARS);
+    .slice(0, cap);
 }
 
 function decodeXmlEntities(value: string): string {
@@ -50,7 +50,7 @@ function decodeXmlEntities(value: string): string {
     .replace(/&apos;/g, "'");
 }
 
-function xmlText(xml: string): string {
+function xmlText(xml: string, cap: number = MAX_TEXT_CHARS): string {
   return cleanText(
     decodeXmlEntities(
       xml
@@ -59,10 +59,11 @@ function xmlText(xml: string): string {
         .replace(/<w:tab\/>/g, "\t")
         .replace(/<[^>]+>/g, " "),
     ),
+    cap,
   );
 }
 
-async function extractDocx(buffer: Buffer): Promise<string> {
+async function extractDocx(buffer: Buffer, cap: number = MAX_TEXT_CHARS): Promise<string> {
   const zip = await JSZip.loadAsync(buffer);
   const parts = [
     "word/document.xml",
@@ -72,10 +73,10 @@ async function extractDocx(buffer: Buffer): Promise<string> {
   const texts = await Promise.all(
     parts.map(async (part) => {
       const file = zip.file(part);
-      return file ? xmlText(await file.async("text")) : "";
+      return file ? xmlText(await file.async("text"), cap) : "";
     }),
   );
-  return cleanText(texts.filter(Boolean).join("\n\n"));
+  return cleanText(texts.filter(Boolean).join("\n\n"), cap);
 }
 
 function cellText(value: unknown): string {
@@ -95,7 +96,7 @@ function cellText(value: unknown): string {
   return "";
 }
 
-async function extractXlsx(buffer: Buffer): Promise<string> {
+async function extractXlsx(buffer: Buffer, cap: number = MAX_TEXT_CHARS): Promise<string> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
   const chunks: string[] = [];
@@ -111,10 +112,10 @@ async function extractXlsx(buffer: Buffer): Promise<string> {
     });
   });
 
-  return cleanText(chunks.join("\n"));
+  return cleanText(chunks.join("\n"), cap);
 }
 
-async function extractPdf(buffer: Buffer): Promise<string> {
+async function extractPdf(buffer: Buffer, cap: number = MAX_TEXT_CHARS): Promise<string> {
   // Dynamic import — see top-of-file note. pdfjs-dist is pure JS/WASM
   // with no NAPI bindings, so this loads reliably on Vercel serverless.
   // The legacy build is used because the default "modern" entry point
@@ -166,7 +167,7 @@ async function extractPdf(buffer: Buffer): Promise<string> {
         pageTexts.push(`\n\n--- page ${pageNum} of ${totalPages} ---\n\n`);
       }
     }
-    return cleanText(pageTexts.join(""));
+    return cleanText(pageTexts.join(""), cap);
   } finally {
     await doc.destroy().catch(() => {});
   }
@@ -191,16 +192,23 @@ export async function extractDocumentText(args: {
   buffer: Buffer;
   mimeType: string;
   fileName: string;
+  /** Optional. Override the per-call text cap. Defaults to MAX_TEXT_CHARS
+   *  (24,000), which is right for vault-preview use cases. Callers that
+   *  need fuller text (e.g. proposal-package rubric extraction) pass a
+   *  larger value such as 200,000. The cap is applied at the cleanText
+   *  step inside each format-specific extractor. */
+  maxChars?: number;
 }): Promise<DocumentExtractionResult> {
   try {
     let text = "";
+    const cap = args.maxChars ?? MAX_TEXT_CHARS;
     const pdf = isPdf(args.mimeType, args.fileName);
     if (pdf) {
-      text = await extractPdf(args.buffer);
+      text = await extractPdf(args.buffer, cap);
     } else if (isDocx(args.mimeType, args.fileName)) {
-      text = await extractDocx(args.buffer);
+      text = await extractDocx(args.buffer, cap);
     } else if (isXlsx(args.mimeType, args.fileName)) {
-      text = await extractXlsx(args.buffer);
+      text = await extractXlsx(args.buffer, cap);
     } else {
       return {
         status: "unsupported",

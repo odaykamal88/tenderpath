@@ -242,12 +242,35 @@ export interface LossReason {
 }
 
 // ============================================================================
+// Engine input
+// ============================================================================
+
+/**
+ * Input to extractRubric. The tender's identity, lane, methodology, and lot
+ * structure are KNOWN facts from the tender manifest (the LLM cannot reliably
+ * derive them across UN agencies and document layouts); extraction's job is
+ * to fill in the criteria + disqualifiers DETAILS. Binding Q&A clarifications
+ * are pre-classified upstream (see qa-extractor.ts) and treated as
+ * authoritative refinements to the base rubric.
+ */
+export interface TenderInput {
+  tenderId: string;
+  lane: 'procurement' | 'grant';
+  methodology: Methodology;
+  /** Always >=1 entry. Single-lot tenders pass one entry with lotId = "main". */
+  lotMetadata: Array<{ lotId: string; label: string; scope?: string }>;
+  docs: IngestedDoc[];
+  /** Optional. Pre-classified binding Q&A clarifications from qa-extractor.ts. */
+  bindingClarifications?: Array<{ entryId: string; touches: string; content: string }>;
+}
+
+// ============================================================================
 // The engine interface — both SKUs call exactly this
 // ============================================================================
 
 export interface ScoringEngine {
   /** Parse the full document SET into a structured, versioned rubric. */
-  extractRubric(docs: IngestedDoc[]): Promise<TenderRubric>;
+  extractRubric(input: TenderInput): Promise<TenderRubric>;
 
   /** Score a draft against a rubric. Pure read of inputs; emits no side effects. */
   score(draft: DraftSection[], rubric: TenderRubric): Promise<ScoreResult>;
@@ -290,7 +313,7 @@ class NotImplemented extends Error {
 }
 
 export class DefaultScoringEngine implements ScoringEngine {
-  async extractRubric(_docs: IngestedDoc[]): Promise<TenderRubric> {
+  async extractRubric(_input: TenderInput): Promise<TenderRubric> {
     throw new NotImplemented('extractRubric');
   }
   async score(_draft: DraftSection[], _rubric: TenderRubric): Promise<ScoreResult> {

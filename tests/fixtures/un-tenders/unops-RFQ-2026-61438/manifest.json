@@ -1,0 +1,15 @@
+{
+  "tenderId": "unops-RFQ-2026-61438",
+  "title": "Supply, testing, delivery and unloading of Pipes and Fittings to Warehouses of Multiple Cities Local Water and Sanitation Corporation/Authority — Yemen — YEHCP AF 03",
+  "agency": "UNOPS",
+  "lane": "procurement",
+  "methodology": "lowest_compliant",
+  "lotMetadata": [
+    { "lotId": "lot-1", "label": "Lot 1 — HDPE pipes and fittings, Taiz City" },
+    { "lotId": "lot-2", "label": "Lot 2 — Heavy-class GI pipes, repair clamps, valves, Taiz City" },
+    { "lotId": "lot-3", "label": "Lot 3 — HDPE / DI / GI pipes and fittings, Taiz (Al-Turbah)" }
+  ],
+  "notices": [
+    { "noticeId": "293188", "subdir": "notice-293188", "published": "2026-03-04", "role": "base" }
+  ]
+}

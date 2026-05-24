@@ -27,7 +27,7 @@ function getClient(): Anthropic {
   return _anthropic;
 }
 
-function safeParseJSON<T>(text: string, fallback: T, tag: string): T {
+export function safeParseJSON<T>(text: string, fallback: T, tag: string): T {
   // Two strategies. (1) Strip fenced code block and parse what's inside.
   // (2) Walk the text and parse the first balanced top-level JSON object,
   // tolerating trailing prose (Haiku sometimes appends a "Note:" paragraph
