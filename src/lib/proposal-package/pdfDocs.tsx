@@ -8,7 +8,9 @@ import type {
   CriterionAssessment,
   DraftSection,
   Confidence,
+  RoutedGap,
 } from "./scoring-engine";
+import { getLeafCriteria } from "./gap-routing";
 import type { ApplicantContext } from "./applicant-context";
 import type { RevisionAttemptSummary } from "./revision-loop";
 
@@ -282,9 +284,11 @@ export async function renderScoredDraftPdf(
   };
   const tag = refTag("DRAFT", args.workOrderId);
 
-  // Aggregate totals across lots
+  // Aggregate totals across lots — leaf-only (Sprint 4.5: parent rubric
+  // entries like "1 — Profile of institution (max 50)" are structural
+  // rollups of their children (1.1, 1.2…); summing both double-counts).
   const achievableTotal = args.rubric.lots.reduce(
-    (s, lot) => s + lot.criteria.reduce((ss, c) => ss + c.maxScore, 0),
+    (s, lot) => s + getLeafCriteria(lot.criteria).reduce((ss, c) => ss + c.maxScore, 0),
     0,
   );
   const estimatedTotal = args.score.lotResults.reduce((s, lr) => s + lr.estimatedTotal, 0);
@@ -365,7 +369,7 @@ export async function renderScoredDraftPdf(
           <Text style={styles.h2}>Per-lot summary</Text>
           {args.score.lotResults.map((lr) => {
             const lot = args.rubric.lots.find((l) => l.lotId === lr.lotId);
-            const lotMax = lot ? lot.criteria.reduce((s, c) => s + c.maxScore, 0) : 0;
+            const lotMax = lot ? getLeafCriteria(lot.criteria).reduce((s, c) => s + c.maxScore, 0) : 0;
             return (
               <View
                 key={lr.lotId}
@@ -536,6 +540,68 @@ export async function renderScoredDraftPdf(
               )}
             </View>
           ))}
+
+          <View style={{ position: "absolute", bottom: 28, left: 48, right: 48, flexDirection: "row", justifyContent: "space-between" }}>
+            <Text style={[styles.mono, { fontSize: 7, color: INK3 }]}>Generated {ctx.generatedAt}</Text>
+            <Text style={[styles.mono, { fontSize: 7, color: INK3 }]}>tenderpath.me · {tag}</Text>
+          </View>
+        </Page>
+      )}
+
+      {/* PAGE 4: ROUTED GAPS & NEXT ACTIONS (Sprint 4 — proposal-output-ux.md A3) */}
+      {args.score.routedGaps.length > 0 && (
+        <Page size="A4" style={styles.page}>
+          <View style={{ marginBottom: 14 }}>
+            <Text style={[styles.mono, { fontSize: 7, letterSpacing: 1.5, color: GOLD, textTransform: "uppercase", marginBottom: 4 }]}>
+              Scored draft · routed actions · {tag}
+            </Text>
+            <Text style={{ fontSize: 18, fontFamily: "Helvetica-Bold", color: INK }}>
+              Next actions, by gap
+            </Text>
+            <Text style={{ fontSize: 9, color: INK2, marginTop: 4, lineHeight: 1.4 }}>
+              Every gap surfaced above is routed to the TenderPath service that closes it. This is the moat: a generic LLM doesn&apos;t tell you which {"$"}39 / {"$"}49 / {"$"}749 step closes the gap it just listed.
+            </Text>
+          </View>
+          <View style={styles.ruleInk} />
+
+          {/* Group by routedTo for scannability */}
+          {(() => {
+            const grouped = new Map<string, RoutedGap[]>();
+            for (const g of args.score.routedGaps) {
+              if (!grouped.has(g.routedTo)) grouped.set(g.routedTo, []);
+              grouped.get(g.routedTo)!.push(g);
+            }
+            // Stable ordering of SKUs in the PDF: most-urgent first
+            const order = ["bid_no_bid", "matching", "roster", "proposal_draft"];
+            const ordered = Array.from(grouped.entries()).sort(
+              (a, b) => order.indexOf(a[0]) - order.indexOf(b[0]),
+            );
+            return ordered.map(([, gaps], i) => (
+              <View key={i} style={{ marginBottom: 14, borderLeftWidth: 2, borderLeftColor: GOLD, paddingLeft: 10 }}>
+                <View style={{ flexDirection: "row", alignItems: "baseline", marginBottom: 4 }}>
+                  <Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold", color: INK, flex: 1 }}>
+                    {gaps[0].ctaCopy}
+                  </Text>
+                  <Text style={[styles.mono, { fontSize: 8, color: INK3 }]}>{gaps.length} gap{gaps.length === 1 ? "" : "s"}</Text>
+                </View>
+                <Text style={{ fontSize: 9, color: INK2, marginBottom: 4, fontStyle: "italic", lineHeight: 1.4 }}>
+                  {gaps[0].rationale}
+                </Text>
+                {gaps.slice(0, 4).map((g: RoutedGap, j: number) => (
+                  <View key={j} style={{ marginTop: 3 }}>
+                    <Text style={[styles.bullet, { color: INK2, fontSize: 8.5, lineHeight: 1.35 }]}>
+                      · {g.lotId ? `[${g.lotId}${g.criterionId ? `/${g.criterionId}` : ""}] ` : "[notice-wide] "}
+                      {g.kind === "disqualifier" ? "✗ " : ""}
+                      {g.text.slice(0, 180)}
+                    </Text>
+                  </View>
+                ))}
+                {gaps.length > 4 && (
+                  <Text style={[styles.mono, { fontSize: 8, color: INK3, marginTop: 2 }]}>… +{gaps.length - 4} more</Text>
+                )}
+              </View>
+            ));
+          })()}
 
           <View style={{ position: "absolute", bottom: 28, left: 48, right: 48, flexDirection: "row", justifyContent: "space-between" }}>
             <Text style={[styles.mono, { fontSize: 7, color: INK3 }]}>Generated {ctx.generatedAt}</Text>

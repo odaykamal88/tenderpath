@@ -181,25 +181,36 @@ disqualifier integrity holds on both sides.
 
 **Goal:** Every claim traceable; gaps surfaced, not hidden; every gap routed to a paid SKU.
 **In scope:**
-  - **Provenance (PART A · A4):** thread `Claim` / `Provenance` through drafting; roll up to
-    `Confidence` (`evidenced / inferred / gap / unverified`) per claim AND per criterion (per
-    `proposal-output-ux.md` A4 — confidence is presentable at both levels). Extend `ProposalOutput`
-    to carry the labels.
-  - **Gap routing (PART A · A3 + readiness R1):** every `gap`-provenance claim states (a) what is
-    missing, (b) which criterion/requirement it maps to, (c) the named TenderPath service that
-    closes it. Build the routing as a SINGLE shared module
-    (`src/lib/proposal-package/gap-routing.ts`) used by both the $299 ProposalOutput and the
-    Sprint 5 free Readiness Assessment — the routing target is `bid_no_bid` ($39) / `matching`
-    ($49/mo) / `proposal_draft` ($299) / `roster` ($749), per `readiness-output-ux.md`.
+  - **Provenance (PART A · A4):** the draft-generator already emits per-claim
+    `provenance: { kind, sourceRef?, note? }` (since Sprint 2). Sprint 4 adds the criterion-level
+    rollup: `CriterionAssessment.mechanicalConfidence` (rolled up from claim provenance — independent
+    of the LLM's judgement so disagreement is detectable), `claimCount`, `claimsByProvenance`.
+    `provenanceToConfidence(kind)` + `rollupConfidenceFromClaims(claims)` live in `gap-routing.ts`
+    so the UI maps the 4-way `Confidence` taxonomy at both claim and criterion level (per A4).
+  - **Gap routing (PART A · A3 + readiness R1):** every gap surfaced — criterion weakness,
+    missing-evidence string, triggered disqualifier, claim-level `gap`-provenance — maps via
+    `routeAllGaps()` to one of `bid_no_bid` ($39) / `matching` ($49/mo) / `proposal_draft` ($299)
+    / `roster` ($749). Built as a SINGLE shared module (`src/lib/proposal-package/gap-routing.ts`)
+    that Sprint 5 imports unchanged. Routing rules are a debuggable table (6 categories: roster /
+    past performance / spec mismatch / mandatory form / eligibility / presentation) plus a
+    DisqualifierKind→SKU lookup. Origin-exclusion prevents recommending the SKU the user is
+    already inside (the $299 output never routes a gap back to "buy Proposal Draft").
+  - **`ScoreResult.routedGaps`:** populated automatically inside `scoreDraft()` so every score
+    result carries the routed list — no caller needs to remember to invoke routing.
 **Out of scope:** carry-forward (Sprint 8), loss-reason capture (Sprint 9), corpus (Sprint 10),
-output screens (Sprint 6).
-**Files:** `scoring-engine.ts`, drafting pipeline, `ProposalOutput` type, `gap-routing.ts` (NEW).
-**Acceptance:** every material claim in the UN-tender draft is tagged; unmet requirements appear as
-explicit `gap`s with a non-null `routedTo` service (never naked); each `routedTo` is one of the four
-named SKUs.
-**Done-when:** $299 output shows per-claim provenance + per-criterion confidence; every gap routes
-to a named service; `gap-routing.ts` is the single source of truth — the Sprint 5 readiness
-assessment imports it unchanged.
+output screens (Sprint 6), $299 checkout copy (Sprint 6 PART C).
+**Files:** `gap-routing.ts` (NEW), `scoring-engine.ts` (new types: `ServiceSku`, `OriginSku`,
+`RoutingContext`, `RoutedGap`; new `CriterionAssessment` fields; `ScoreResult.routedGaps`),
+`rubric-scorer.ts` (`enrichWithClaimMetrics` + `routeAllGaps` call), `pdfDocs.tsx` (PAGE 4 of the
+scored-draft PDF groups gaps by SKU with rationale + CTA), `scripts/sprint4-acceptance.ts` (NEW —
+two-phase synthetic + end-to-end).
+**Acceptance:** PHASE 1 synthetic — 6 routing categories fire correctly, origin-exclusion holds,
+all 5 disqualifier kinds route, confidence rollup priority is correct. PHASE 2 end-to-end on
+UNICEF — every CriterionAssessment carries `mechanicalConfidence` + `claimCount` +
+`claimsByProvenance`; `ScoreResult.routedGaps` is populated; every triggered disqualifier surfaces
+as a routed gap with its `SourceRef`; no `routedTo` is `proposal_draft`; PDF renders cleanly.
+**Done-when:** the engine emit shape is locked; `gap-routing.ts` is the single source of truth and
+the Sprint 5 readiness assessment imports it unchanged.
 **→ At this point the $299 product engine is submission-grade. UI lands in Sprint 6.**
 
 ---
