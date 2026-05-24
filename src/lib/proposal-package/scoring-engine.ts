@@ -328,15 +328,28 @@ export class DefaultScoringEngine implements ScoringEngine {
     return scoreDraft(draft, rubric);
   }
   async reextractAndDiff(
-    _priorRubric: TenderRubric,
-    _newDocs: IngestedDoc[]
+    priorRubric: TenderRubric,
+    newDocs: IngestedDoc[]
   ): Promise<{ rubric: TenderRubric; changed: boolean; deltas: RubricDelta[] }> {
-    throw new NotImplemented('reextractAndDiff');
+    // Sprint 3: delegate to reextract.ts. The engine contract carries only
+    // priorRubric + newDocs (that's the public interface); callers needing
+    // to pass priorDocs / bindingClarifications should call reextract.ts
+    // directly with the richer ReextractInput. Here we pass priorDocs=[]
+    // because callers using THIS interface don't carry the prior set
+    // around — the extractor will work off newDocs alone, which is the
+    // intended shape for "an amendment landed, give me the new rubric".
+    const { reextractAndDiff } = await import('./reextract');
+    return reextractAndDiff({ priorRubric, priorDocs: [], newDocs });
   }
   async recordSnapshot(
-    _input: Omit<GenerationSnapshot, 'snapshotId' | 'generatedAt'>
+    input: Omit<GenerationSnapshot, 'snapshotId' | 'generatedAt'>
   ): Promise<GenerationSnapshot> {
-    throw new NotImplemented('recordSnapshot');
+    // Sprint 3: delegate to snapshot.ts's lower-level assembleSnapshot,
+    // which matches this Omit<...> contract exactly. Acceptance scripts
+    // and the Sprint 6 work-order code use the higher-level recordSnapshot
+    // helper that computes hashes from a richer input.
+    const { assembleSnapshot } = await import('./snapshot');
+    return assembleSnapshot(input);
   }
   async recordLossReason(_reason: LossReason): Promise<void> {
     throw new NotImplemented('recordLossReason');

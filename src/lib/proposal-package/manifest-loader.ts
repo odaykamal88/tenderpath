@@ -47,14 +47,35 @@ export interface LoadedTender {
   qaEntries: QAEntry[];
 }
 
-export async function loadTender(tenderDir: string): Promise<LoadedTender> {
+export interface LoadTenderOptions {
+  /**
+   * Sprint 3: if set, only notices whose noticeId appears in this list are
+   * loaded. Used to reconstruct a "pre-amendment" view of a tender for
+   * rubric-diff acceptance: the same tenderDir produces a smaller doc set
+   * when notice-146988 (the amendment) is excluded. Supersession still
+   * applies within the filtered set.
+   *
+   * When omitted (the default), all notices in the manifest are loaded.
+   */
+  noticeFilter?: string[];
+}
+
+export async function loadTender(
+  tenderDir: string,
+  options: LoadTenderOptions = {},
+): Promise<LoadedTender> {
   const manifestPath = join(tenderDir, "manifest.json");
   const raw = await readFile(manifestPath, "utf8");
   const manifest = JSON.parse(raw) as TenderManifest;
 
+  const filter = options.noticeFilter
+    ? new Set(options.noticeFilter)
+    : null;
+
   const allDocs: IngestedDoc[] = [];
 
   for (const notice of manifest.notices) {
+    if (filter && !filter.has(notice.noticeId)) continue;
     const noticeDir = join(tenderDir, notice.subdir);
     let entries: string[] = [];
     try {
