@@ -313,11 +313,19 @@ class NotImplemented extends Error {
 }
 
 export class DefaultScoringEngine implements ScoringEngine {
-  async extractRubric(_input: TenderInput): Promise<TenderRubric> {
-    throw new NotImplemented('extractRubric');
+  async extractRubric(input: TenderInput): Promise<TenderRubric> {
+    // Sprint 1: delegate to rubric-extractor. Imported lazily so this module
+    // stays import-cycle-free (rubric-extractor imports types from here).
+    const { extractRubricFromInput } = await import('./rubric-extractor');
+    return extractRubricFromInput(input);
   }
-  async score(_draft: DraftSection[], _rubric: TenderRubric): Promise<ScoreResult> {
-    throw new NotImplemented('score');
+  async score(draft: DraftSection[], rubric: TenderRubric): Promise<ScoreResult> {
+    // Sprint 2: delegate to rubric-scorer. Same lazy-import pattern.
+    // Applicant context is optional at this layer; callers that need
+    // applicant-aware scoring should use scoreDraft from rubric-scorer
+    // directly (the higher-level revision-loop does this).
+    const { scoreDraft } = await import('./rubric-scorer');
+    return scoreDraft(draft, rubric);
   }
   async reextractAndDiff(
     _priorRubric: TenderRubric,
