@@ -4,15 +4,46 @@ import { sql } from "@/lib/db";
 import { getStripe } from "@/lib/stripe";
 import { ensureWorkOrderServiceContext } from "@/lib/service-context";
 import { generateProposalPackage } from "@/lib/proposal-package/generate-proposal";
+import { generateProposalPackageV2 } from "@/lib/proposal-package/generate-proposal-v2";
 import { generateRosterFastTrack } from "@/lib/proposal-package/generate-roster";
 import { PROPOSAL_PLAN, ROSTER_PLAN } from "@/lib/proposal-package/types";
+
+/**
+ * Sprint 6b dispatch flag for the proposal-draft plan.
+ *
+ *   - "v2" (default): runs the new scoring engine (extractRubric +
+ *     runRevisionLoop + cross-section cascade + gap routing) and persists
+ *     the Sprint-6 output shape (output.score / .draft / .routed_gaps /
+ *     .cascades / .revision_history / .tender_rubric). The dashboard
+ *     /dashboard/proposals/[workOrderId] page renders this via scored-view
+ *     adaptScored(). No DOCX/XLSX/PDF bundle yet — Sprint 6c wires those.
+ *
+ *   - "v1": falls back to the legacy generate-proposal.ts pipeline that
+ *     produces the 8-section ProposalOutput + full DOCX/XLSX/PDF bundle.
+ *     Set PROPOSAL_ENGINE=v1 in the env to opt back into the legacy
+ *     output (useful for comparison / debugging during rollout).
+ *
+ *   - "force-v2-everyone": forces v2 for everyone including any future
+ *     legacy data. Not generally needed since v2 is the default; reserved
+ *     for the lazy-re-run trigger from the LegacyView upgrade button.
+ *
+ * Routes that bypass this flag intentionally:
+ *   - /api/dashboard/work-orders/[id]/proposal-package POST?force=1 always
+ *     goes through this route which then runs v2 (the "upgrade to scored
+ *     draft" button relies on it).
+ */
+const PROPOSAL_ENGINE: "v1" | "v2" = (process.env.PROPOSAL_ENGINE === "v1") ? "v1" : "v2";
 import {
   evaluateServiceFulfillmentGate,
   markWorkOrderForFulfillmentGate,
 } from "@/lib/service-fulfillment-gates";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+// Sprint 6b: v2 engine runs extractRubric (~30s) + 2x scoreDraft (~60s each)
+// + 2x generateDraftSections (~90s each) + cascade detection (~20s). With
+// headroom for slow rubrics + retries that's ~5-7 min typical, ~10 min P99.
+// Vercel hobby tier caps at 60s, pro at 900s — we run on pro for this route.
+export const maxDuration = 800;
 
 type WorkOrderForGeneration = {
   id: number;
@@ -159,9 +190,29 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = isProposalPlan(plan)
-    ? await generateProposalPackage({ workOrderId: order.id, force: Boolean(body.force), silent: true })
-    : await generateRosterFastTrack({ workOrderId: order.id, force: Boolean(body.force), silent: true });
+  // Sprint 6b dispatch. Proposal-draft routes through v2 (the new scoring
+  // engine) by default; env var PROPOSAL_ENGINE=v1 opts back into the legacy
+  // 8-section pipeline. Roster keeps its existing pipeline either way.
+  let result;
+  if (isProposalPlan(plan)) {
+    if (PROPOSAL_ENGINE === "v2") {
+      const v2 = await generateProposalPackageV2({ workOrderId: order.id, force: Boolean(body.force) });
+      // Reshape v2 result to match the legacy contract the downstream
+      // code expects (so we don't have to fork the "pkg not produced" path).
+      result = {
+        ok: v2.ok,
+        attempts: v2.attempts,
+        packageId: v2.packageId,
+        skippedReason: v2.skippedReason,
+        error: v2.error,
+        zipUrl: null,
+      };
+    } else {
+      result = await generateProposalPackage({ workOrderId: order.id, force: Boolean(body.force), silent: true });
+    }
+  } else {
+    result = await generateRosterFastTrack({ workOrderId: order.id, force: Boolean(body.force), silent: true });
+  }
 
   const pkg = await latestPackage(user.id, order.id);
   if (!pkg) {

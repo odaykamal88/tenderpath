@@ -2,10 +2,63 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
 import { generateProposalPackage } from "@/lib/proposal-package/generate-proposal";
-import { PROPOSAL_PLAN, MAX_ATTEMPTS } from "@/lib/proposal-package/types";
+import { generateProposalPackageV2 } from "@/lib/proposal-package/generate-proposal-v2";
+import { PROPOSAL_PLAN, PROPOSAL_MAX_ATTEMPTS } from "@/lib/proposal-package/types";
+
+// Sprint 6b dispatch flag — mirrors the one in /api/proposals/generate.
+// Default v2 (new scoring engine); env PROPOSAL_ENGINE=v1 reverts.
+const PROPOSAL_ENGINE: "v1" | "v2" = (process.env.PROPOSAL_ENGINE === "v1") ? "v1" : "v2";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+// Sprint 6b: bumped from 300 to 800 for the v2 engine path (extractRubric +
+// runRevisionLoop runs ~5-7 min typical). See /api/proposals/generate route
+// for the per-step latency breakdown.
+export const maxDuration = 800;
+
+/**
+ * Sprint 6b. Drop the engine's SKU sales fields (rationale, ctaCopy, plus
+ * the top-level routed_gaps + cascades duplicates) from output JSONB BEFORE
+ * the response goes to the client.
+ *
+ * Background: gap-routing.ts still emits routedTo + rationale + ctaCopy on
+ * every gap (kept for analytics + future internal-review tooling), and the
+ * acceptance-shape mirrors score.routedGaps at top-level. The $299 page
+ * never renders these — but React serializes the entire `output` prop into
+ * the hydration JSON, so leaving them in puts "Start Roster Fast-Track
+ * ($749)" into view-source on every page load. This strip mirrors the one
+ * in /dev/proposal-preview/[name]/page.tsx that proved the principle.
+ *
+ * `routedTo` is retained as opaque analytics data.
+ */
+function stripSkuSalesFields<T>(pkg: T): T {
+  if (!pkg || typeof pkg !== "object") return pkg;
+  const row = pkg as { output?: unknown };
+  if (!row.output || typeof row.output !== "object") return pkg;
+
+  const output = row.output as Record<string, unknown>;
+  const { routed_gaps: _routed_gaps, cascades: _cascades, ...restOutput } = output;
+  void _routed_gaps;
+  void _cascades;
+
+  let cleanedOutput: Record<string, unknown> = restOutput;
+  const score = restOutput.score;
+  if (score && typeof score === "object") {
+    const s = score as Record<string, unknown>;
+    if (Array.isArray(s.routedGaps)) {
+      const cleanedGaps = s.routedGaps.map((g) => {
+        if (!g || typeof g !== "object") return g;
+        const gap = g as Record<string, unknown>;
+        const { rationale: _r, ctaCopy: _c, ...gapRest } = gap;
+        void _r;
+        void _c;
+        return gapRest;
+      });
+      cleanedOutput = { ...restOutput, score: { ...s, routedGaps: cleanedGaps } };
+    }
+  }
+
+  return { ...row, output: cleanedOutput } as T;
+}
 
 interface WorkOrderRow {
   id: number;
@@ -82,15 +135,20 @@ export async function GET(
     return NextResponse.json({
       exists: false,
       payment_status: result.order.payment_status,
-      max_attempts: MAX_ATTEMPTS,
+      // Sprint 6b. The proposal-draft plan has unlimited re-runs against this
+      // tender. The UI omits the regenerate-counter when these are null.
+      max_attempts: null,
+      remaining_regenerations: null,
     });
   }
   return NextResponse.json({
     exists: true,
-    package: pkg,
+    package: stripSkuSalesFields(pkg),
     payment_status: result.order.payment_status,
-    max_attempts: MAX_ATTEMPTS,
-    remaining_regenerations: Math.max(0, MAX_ATTEMPTS - (pkg.generation_attempts ?? 1)),
+    // PROPOSAL_MAX_ATTEMPTS is Infinity; JSON.stringify renders it as null,
+    // which is the same signal the UI uses to suppress the counter.
+    max_attempts: Number.isFinite(PROPOSAL_MAX_ATTEMPTS) ? PROPOSAL_MAX_ATTEMPTS : null,
+    remaining_regenerations: null,
   });
 }
 
@@ -109,16 +167,30 @@ export async function POST(
   const url = new URL(request.url);
   const force = url.searchParams.get("force") === "1";
 
-  const generation = await generateProposalPackage({
-    workOrderId: result.order.id,
-    force,
-    silent: false,
-  });
+  // Sprint 6b: route through v2 by default. The "Upgrade to scored draft"
+  // button on legacy packages lands here with force=1 — v2 then regenerates
+  // the row into the Sprint-6 shape on the next read.
+  const generation = PROPOSAL_ENGINE === "v2"
+    ? await (async () => {
+        const v2 = await generateProposalPackageV2({ workOrderId: result.order.id, force });
+        return {
+          ok: v2.ok,
+          attempts: v2.attempts,
+          packageId: v2.packageId,
+          skippedReason: v2.skippedReason,
+          error: v2.error,
+          zipUrl: null as string | null,
+        };
+      })()
+    : await generateProposalPackage({ workOrderId: result.order.id, force, silent: false });
 
   if (!generation.ok) {
     if (generation.skippedReason === "max_attempts") {
+      // Sprint 6b: with PROPOSAL_MAX_ATTEMPTS = Infinity this branch is
+      // unreachable from the proposal-draft plan, but we keep the case
+      // wired so a future per-day rate-limit can reuse it.
       return NextResponse.json(
-        { error: `You've used all ${MAX_ATTEMPTS} generation attempts. Reply to your proposal-ready email if something is materially off.` },
+        { error: "Daily re-run rate limit reached. Try again in a few hours." },
         { status: 429 },
       );
     }
@@ -134,6 +206,6 @@ export async function POST(
     package_id: generation.packageId,
     zip_url: generation.zipUrl,
     attempts: generation.attempts,
-    remaining_regenerations: Math.max(0, MAX_ATTEMPTS - generation.attempts),
+    remaining_regenerations: null,
   });
 }
