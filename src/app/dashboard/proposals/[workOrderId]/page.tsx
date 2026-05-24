@@ -1,31 +1,165 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+/**
+ * dashboard/proposals/[workOrderId]/page.tsx — the $299 proposal output page.
+ *
+ * Sprint 6 (proposal-output-ux.md PART B + PART C) repurposed this page to
+ * consume the new scoring-engine emit shape. Information hierarchy:
+ *
+ *   B1  Compliance verdict (TOP, most prominent) — passesGating +
+ *       triggered disqualifiers with plain rule + SourceRef
+ *   B2  Rubric score — estimatedTotal / achievableTotal + per-criterion
+ *       breakdown (score, confidence, mechanicalConfidence, claim counts,
+ *       weaknesses, missingEvidence)
+ *   B3  Routed gaps — grouped by paid SKU with CTAs (Sprint 4's
+ *       gap-routing module is the source of truth)
+ *   B4  Draft body — one section per criterion with inline provenance
+ *       badges on every claim (Sprint 2-5 DraftSection.claims)
+ *   B5  Export — through pdfDocs.tsx renderScoredDraftPdf
+ *
+ * Legacy packages (without `output.score`) render in a fallback path that
+ * preserves the existing 8-section ProposalDraftView with an upgrade
+ * banner pointing to Sprint 6b lazy-re-run wiring.
+ *
+ * Per readiness-output-ux.md C4: NO persistent footer disclaimer — the
+ * score + flagged gaps + provenance ARE the expectation-setting
+ * (proposal-output-ux.md C1). Legal disclaimer lives in T&C only (C3).
+ */
+
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { MONO, SERIF, confidenceTone, skuTone } from "@/lib/brand/tokens";
 
-interface ProposalOutput {
-  // proposal-draft fields
-  executive_summary?: string;
-  technical_approach?: string[];
-  compliance_checklist?: Array<string | ComplianceItem>;
-  required_documents?: string[];
-  cover_letter_draft?: string;
-  financial_template_notes?: string[];
-  missing_information?: string[];
-  next_steps?: string[];
-  source_quality?: SourceQuality;
-  gate_state?: GateState; // Sprint 11
-  // roster-fast-track fields
-  registration_checklist?: string[];
-  capability_statement_draft?: string;
-  organization_profile_notes?: string[];
-  submission_guidance?: string[];
-  // Sprint 14: per-agency readiness leaderboard for roster packages.
-  agency_readiness_breakdown?: AgencyReadiness[];
+// ============================================================================
+// Adapted shapes — the page reads from output.score / output.draft etc.
+// (stored as JSONB unknown in types.ts); these are the page-side typed
+// projections. Kept narrow: only the fields B1-B5 actually render.
+// ============================================================================
+
+type Confidence = "evidenced" | "inferred" | "gap" | "unverified";
+type ServiceSku = "bid_no_bid" | "matching" | "proposal_draft" | "roster";
+type DisqualifierKind = "mandatory_form" | "eligibility" | "format" | "deadline" | "financial";
+type ProvenanceKind = "uploaded_document" | "applicant_library" | "inferred" | "gap";
+
+interface SourceRef {
+  docId: string;
+  section?: string;
+  rubricVersion: number;
 }
 
-interface AgencyReadiness {
+interface Disqualifier {
+  id: string;
+  kind: DisqualifierKind;
+  rule: string;
+  source: SourceRef;
+}
+
+interface CriterionAssessment {
+  criterionId: string;
+  estimatedScore: number;
+  maxScore: number;
+  confidence: Confidence;
+  mechanicalConfidence?: Confidence;
+  claimCount?: number;
+  claimsByProvenance?: Partial<Record<ProvenanceKind, number>>;
+  weaknesses: string[];
+  missingEvidence: string[];
+}
+
+interface LotScoreResult {
+  lotId: string;
+  perCriterion: CriterionAssessment[];
+  estimatedTotal: number;
+  lotDisqualifiersTriggered: Disqualifier[];
+  passesGating: boolean;
+}
+
+interface ScoreResult {
+  rubricVersion: number;
+  lotResults: LotScoreResult[];
+  noticeWideDisqualifiersTriggered: Disqualifier[];
+  routedGaps: RoutedGap[];
+}
+
+interface RoutedGap {
+  text: string;
+  kind: "weakness" | "missing_evidence" | "disqualifier" | "claim_gap";
+  lotId?: string;
+  criterionId?: string;
+  routedTo: ServiceSku;
+  rationale: string;
+  ctaCopy: string;
+  sourceRef?: SourceRef;
+  ruleId: string;
+}
+
+interface Provenance {
+  kind: ProvenanceKind;
+  sourceRef?: SourceRef;
+  note?: string;
+}
+
+interface Claim {
+  text: string;
+  provenance: Provenance;
+}
+
+interface DraftSection {
+  lotId?: string;
+  criterionId: string;
+  content: string;
+  claims: Claim[];
+}
+
+interface RevisionAttemptSummary {
+  attempt: number;
+  estimatedTotal: number;
+  achievableTotal: number;
+  passesGating: boolean;
+  triggeredDisqualifierIds: string[];
+  weakCriteriaIds: string[];
+}
+
+interface ScoredView {
+  score: ScoreResult;
+  draft: DraftSection[];
+  revisionHistory: RevisionAttemptSummary[];
+  rubricLabels: Map<string, string>; // criterionId → label (from tender_rubric)
+}
+
+// ============================================================================
+// Legacy shape (preserved for fallback render)
+// ============================================================================
+
+interface LegacyComplianceItem {
+  requirement: string;
+  status: "compliant" | "partial" | "needs_action";
+  evidence_or_action: string;
+  priority?: "mandatory" | "recommended";
+  evidence_label?: "evidence_from_library" | "user_claim" | "inference" | "gap";
+}
+
+interface LegacyGateState {
+  total: number;
+  mandatory_gaps: number;
+  recommended_gaps: number;
+  gap_items: Array<{
+    requirement: string;
+    priority: "mandatory" | "recommended";
+    evidence_or_action: string;
+    evidence_label?: LegacyComplianceItem["evidence_label"];
+  }>;
+}
+
+interface LegacySourceQuality {
+  status: "ready" | "needs_review" | "blocked";
+  score_0_10: number;
+  missing_inputs?: string[];
+  warnings?: string[];
+}
+
+interface LegacyAgencyReadiness {
   agency_slug: string;
   agency_label: string;
   readiness_0_10: number;
@@ -38,32 +172,30 @@ interface AgencyReadiness {
   next_actions: string[];
 }
 
-interface ComplianceItem {
-  requirement: string;
-  status: "compliant" | "partial" | "needs_action";
-  evidence_or_action: string;
-  // Sprint 11
-  priority?: "mandatory" | "recommended";
-  evidence_label?: "evidence_from_library" | "user_claim" | "inference" | "gap";
-}
-
-interface GateState {
-  total: number;
-  mandatory_gaps: number;
-  recommended_gaps: number;
-  gap_items: Array<{
-    requirement: string;
-    priority: "mandatory" | "recommended";
-    evidence_or_action: string;
-    evidence_label?: ComplianceItem["evidence_label"];
-  }>;
-}
-
-interface SourceQuality {
-  status: "ready" | "needs_review" | "blocked";
-  score_0_10: number;
-  missing_inputs?: string[];
-  warnings?: string[];
+interface ProposalOutputJSON {
+  // Legacy fields (8-section narrative)
+  executive_summary?: string;
+  technical_approach?: string[];
+  compliance_checklist?: Array<string | LegacyComplianceItem>;
+  required_documents?: string[];
+  cover_letter_draft?: string;
+  financial_template_notes?: string[];
+  missing_information?: string[];
+  next_steps?: string[];
+  source_quality?: LegacySourceQuality;
+  gate_state?: LegacyGateState;
+  // Sprint 14 roster fields
+  registration_checklist?: string[];
+  capability_statement_draft?: string;
+  organization_profile_notes?: string[];
+  submission_guidance?: string[];
+  agency_readiness_breakdown?: LegacyAgencyReadiness[];
+  // Sprint 6 new fields (JSON, runtime-validated)
+  score?: unknown;
+  draft?: unknown;
+  routed_gaps?: unknown;
+  revision_history?: unknown;
+  tender_rubric?: unknown;
 }
 
 interface ProposalPackage {
@@ -71,7 +203,7 @@ interface ProposalPackage {
   plan: string;
   tender_title: string | null;
   agency: string | null;
-  output: ProposalOutput;
+  output: ProposalOutputJSON;
   created_at: string;
   generation_status?: string | null;
   error_message?: string | null;
@@ -80,8 +212,61 @@ interface ProposalPackage {
 
 type Stage = "loading" | "generating" | "ready" | "error";
 
-const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
-const SERIF = "'Fraunces', 'Times New Roman', serif";
+// ============================================================================
+// Runtime adapter — pull the scored view out of output JSON (or null)
+// ============================================================================
+
+function adaptScored(output: ProposalOutputJSON): ScoredView | null {
+  if (!output.score || typeof output.score !== "object") return null;
+  const score = output.score as ScoreResult;
+  if (!Array.isArray(score.lotResults) || !Array.isArray(score.routedGaps)) return null;
+
+  const draft = Array.isArray(output.draft) ? (output.draft as DraftSection[]) : [];
+  const revisionHistory = Array.isArray(output.revision_history)
+    ? (output.revision_history as RevisionAttemptSummary[])
+    : [];
+
+  // Build criterionId → label map from tender_rubric if present, otherwise
+  // fall back to the criterionId itself.
+  const rubricLabels = new Map<string, string>();
+  const tr = output.tender_rubric as { lots?: Array<{ criteria?: Array<{ id?: string; label?: string }> }> } | undefined;
+  if (tr?.lots) {
+    for (const lot of tr.lots) {
+      for (const c of lot.criteria ?? []) {
+        if (typeof c?.id === "string" && typeof c?.label === "string") rubricLabels.set(c.id, c.label);
+      }
+    }
+  }
+
+  return { score, draft, revisionHistory, rubricLabels };
+}
+
+// ============================================================================
+// SKU display catalog — mirrors gap-routing.SERVICE_CATALOG (frozen at the
+// page boundary so we don't import server-side modules into a client page)
+// ============================================================================
+
+const SKU_META: Record<ServiceSku, { label: string; price: string }> = {
+  bid_no_bid: { label: "Bid/No-Bid Analyst", price: "$39" },
+  matching: { label: "Matching Subscription", price: "$49/mo" },
+  proposal_draft: { label: "Proposal Draft", price: "$299" },
+  roster: { label: "Roster Fast-Track", price: "$749" },
+};
+
+const DISQ_KIND_LABEL: Record<DisqualifierKind, string> = {
+  mandatory_form: "Mandatory form",
+  eligibility: "Eligibility",
+  format: "Format",
+  deadline: "Deadline",
+  financial: "Financial",
+};
+
+const PROVENANCE_LABEL: Record<ProvenanceKind, string> = {
+  applicant_library: "Evidenced",
+  uploaded_document: "From tender doc",
+  inferred: "Inferred",
+  gap: "Gap",
+};
 
 function authHeaders(): HeadersInit {
   const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
@@ -90,14 +275,20 @@ function authHeaders(): HeadersInit {
     : { "content-type": "application/json" };
 }
 
+// ============================================================================
+// Shared building blocks (preserved brand idiom)
+// ============================================================================
+
 function Section({
   index,
   title,
   children,
+  subtitle,
 }: {
   index: string;
   title: string;
   children: React.ReactNode;
+  subtitle?: string;
 }) {
   return (
     <div className="rounded-md border border-stone-200/70 bg-white p-6">
@@ -108,654 +299,611 @@ function Section({
         >
           {index}
         </span>
-        <h3
-          className="text-[18px] font-medium text-stone-900"
-          style={{ fontFamily: SERIF }}
-        >
-          {title}
-        </h3>
+        <div className="flex-1">
+          <h3 className="text-[18px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+            {title}
+          </h3>
+          {subtitle && (
+            <p className="mt-0.5 text-[12px] text-stone-500" style={{ fontFamily: MONO }}>
+              {subtitle}
+            </p>
+          )}
+        </div>
       </div>
       {children}
     </div>
   );
 }
 
-function BulletList({ items }: { items: string[] }) {
-  if (!items?.length) return <p className="text-[13px] text-stone-400 italic">None identified.</p>;
-  return (
-    <ul className="space-y-2.5">
-      {items.map((item, i) => (
-        <li key={i} className="flex gap-2.5 text-[13.5px] leading-relaxed text-stone-700">
-          <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-stone-400" />
-          <span>{item}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
+// ============================================================================
+// B1 — COMPLIANCE VERDICT (top, most prominent)
+// ============================================================================
 
-function CheckList({ items }: { items: string[] }) {
-  if (!items?.length) return <p className="text-[13px] text-stone-400 italic">None identified.</p>;
+function ComplianceVerdict({ score }: { score: ScoreResult }) {
+  const allPassGating = score.lotResults.every((lr) => lr.passesGating);
+  const allDisqualifiers = [
+    ...score.noticeWideDisqualifiersTriggered.map((d) => ({ ...d, scope: "notice-wide" as const })),
+    ...score.lotResults.flatMap((lr) =>
+      lr.lotDisqualifiersTriggered.map((d) => ({ ...d, scope: `lot ${lr.lotId}` as const })),
+    ),
+  ];
+  const tone = allPassGating
+    ? { border: "border-emerald-700", bg: "bg-emerald-50/40", text: "text-emerald-900", label: "text-emerald-800", lead: "Passes gating" }
+    : { border: "border-red-700", bg: "bg-red-50/40", text: "text-red-900", label: "text-red-800", lead: "Fails gating" };
+
   return (
-    <ul className="space-y-2.5">
-      {items.map((item, i) => (
-        <li key={i} className="flex gap-2.5 text-[13.5px] leading-relaxed text-stone-700">
-          <svg
-            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
+    <div className={`mb-6 rounded-md border-l-2 ${tone.border} ${tone.bg} p-5`}>
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <div>
+          <div
+            className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${tone.label}`}
+            style={{ fontFamily: MONO }}
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-          </svg>
-          <span>{item}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function ComplianceList({ items }: { items: Array<string | ComplianceItem> }) {
-  if (!items?.length) return <p className="text-[13px] text-stone-400 italic">None identified.</p>;
-  const statusCopy: Record<ComplianceItem["status"], string> = {
-    compliant: "Compliant",
-    partial: "Partial",
-    needs_action: "Needs action",
-  };
-  const statusCls: Record<ComplianceItem["status"], string> = {
-    compliant: "text-emerald-700 border-emerald-200 bg-emerald-50",
-    partial: "text-amber-700 border-amber-200 bg-amber-50",
-    needs_action: "text-red-700 border-red-200 bg-red-50",
-  };
-  // Sprint 11
-  const evidenceCopy: Record<NonNullable<ComplianceItem["evidence_label"]>, string> = {
-    evidence_from_library: "Evidence on file",
-    user_claim: "Applicant claim",
-    inference: "Inference",
-    gap: "Gap",
-  };
-  const evidenceCls: Record<NonNullable<ComplianceItem["evidence_label"]>, string> = {
-    evidence_from_library: "text-emerald-700 border-emerald-200 bg-emerald-50/60",
-    user_claim: "text-stone-600 border-stone-200 bg-stone-50",
-    inference: "text-stone-500 border-stone-200 bg-white",
-    gap: "text-red-700 border-red-200 bg-red-50",
-  };
-  return (
-    <div className="space-y-3">
-      {items.map((item, i) => {
-        const row = typeof item === "string"
-          ? { requirement: item, status: "needs_action" as const, evidence_or_action: "Confirm evidence before submission." } as ComplianceItem
-          : item;
-        return (
-          <div key={i} className="rounded-sm border border-stone-200 bg-stone-50/50 p-3">
-            <div className="flex flex-wrap items-start gap-2">
-              <span
-                className={[
-                  "rounded-sm border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
-                  statusCls[row.status],
-                ].join(" ")}
+            Compliance verdict
+          </div>
+          <h2
+            className={`mt-1 text-[28px] leading-tight font-medium ${tone.text}`}
+            style={{ fontFamily: SERIF }}
+          >
+            {tone.lead}
+            {allDisqualifiers.length > 0 && (
+              <span className="text-[20px] font-normal text-stone-600">
+                {" "}
+                · {allDisqualifiers.length} disqualifier{allDisqualifiers.length === 1 ? "" : "s"} triggered
+              </span>
+            )}
+          </h2>
+        </div>
+      </div>
+      {allDisqualifiers.length > 0 ? (
+        <ul className="mt-4 space-y-2.5">
+          {allDisqualifiers.slice(0, 8).map((d) => (
+            <li key={`${d.scope}-${d.id}`} className="rounded-sm border border-red-200 bg-white px-3.5 py-3">
+              <div className="flex flex-wrap items-baseline gap-2 mb-1.5">
+                <span
+                  className="rounded-sm border border-red-300 bg-red-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-red-800"
+                  style={{ fontFamily: MONO }}
+                >
+                  {DISQ_KIND_LABEL[d.kind] ?? d.kind}
+                </span>
+                <span
+                  className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500"
+                  style={{ fontFamily: MONO }}
+                >
+                  {d.scope}
+                </span>
+              </div>
+              <p className="text-[13.5px] leading-relaxed text-stone-900">{d.rule}</p>
+              <p
+                className="mt-1.5 text-[10.5px] text-stone-500"
                 style={{ fontFamily: MONO }}
               >
-                {statusCopy[row.status]}
-              </span>
-              {row.priority === "mandatory" && (
-                <span
-                  className="rounded-sm border border-red-300 bg-red-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-red-800"
-                  style={{ fontFamily: MONO }}
-                >
-                  Mandatory
-                </span>
-              )}
-              {row.evidence_label && (
-                <span
-                  className={[
-                    "rounded-sm border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
-                    evidenceCls[row.evidence_label],
-                  ].join(" ")}
-                  style={{ fontFamily: MONO }}
-                  title={`Evidence source: ${row.evidence_label.replace(/_/g, " ")}`}
-                >
-                  {evidenceCopy[row.evidence_label]}
-                </span>
-              )}
-              <p className="flex-1 text-[13.5px] font-medium leading-relaxed text-stone-800">{row.requirement}</p>
+                ↳ {d.source.docId}
+                {d.source.section ? ` · ${d.source.section}` : ""}
+              </p>
+            </li>
+          ))}
+          {allDisqualifiers.length > 8 && (
+            <li className="text-[11.5px] text-stone-500 italic">+ {allDisqualifiers.length - 8} more disqualifiers below</li>
+          )}
+        </ul>
+      ) : (
+        <p className={`mt-2 text-[13.5px] leading-relaxed ${tone.text}`}>
+          No disqualifiers triggered. The draft passes administrative compliance gates; the rubric-score breakdown below shows where points are won and lost.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// B2 — RUBRIC SCORE (totals + per-criterion table)
+// ============================================================================
+
+function RubricScore({ score, rubricLabels }: { score: ScoreResult; rubricLabels: Map<string, string> }) {
+  const estimatedTotal = score.lotResults.reduce((s, lr) => s + lr.estimatedTotal, 0);
+  const achievableTotal = score.lotResults.reduce(
+    (s, lr) => s + lr.perCriterion.reduce((ss, c) => ss + c.maxScore, 0),
+    0,
+  );
+  const pct = achievableTotal > 0 ? Math.round((estimatedTotal / achievableTotal) * 100) : 0;
+
+  return (
+    <Section index="01" title="Rubric score" subtitle={`Scored against rubric v${score.rubricVersion}`}>
+      <div className="mb-5 rounded-sm border border-stone-200 bg-stone-50/40 p-4">
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <div>
+            <div
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+              style={{ fontFamily: MONO }}
+            >
+              Estimated total
             </div>
-            {row.evidence_or_action && (
-              <p className="mt-2 text-[12.5px] leading-relaxed text-stone-600">{row.evidence_or_action}</p>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span
+                className="text-[36px] font-medium tabular-nums text-stone-900"
+                style={{ fontFamily: SERIF }}
+              >
+                {estimatedTotal.toFixed(0)}
+              </span>
+              <span
+                className="text-[16px] tabular-nums text-stone-500"
+                style={{ fontFamily: MONO }}
+              >
+                / {achievableTotal}
+              </span>
+              <span
+                className="ml-2 text-[12px] text-stone-600 tabular-nums"
+                style={{ fontFamily: MONO }}
+              >
+                ({pct}%)
+              </span>
+            </div>
+          </div>
+          <div className="text-[11.5px] text-stone-500 leading-relaxed max-w-md">
+            Showing a score isn&apos;t a promise of award — it&apos;s how a UN evaluation panel would weight your draft against this tender&apos;s published criteria. Use it to find where to push.
+          </div>
+        </div>
+      </div>
+
+      {score.lotResults.map((lr) => {
+        const lotMax = lr.perCriterion.reduce((s, c) => s + c.maxScore, 0);
+        return (
+          <div key={lr.lotId} className="mb-5 last:mb-0">
+            {score.lotResults.length > 1 && (
+              <div className="mb-2 flex items-baseline gap-2">
+                <span
+                  className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+                  style={{ fontFamily: MONO }}
+                >
+                  Lot {lr.lotId}
+                </span>
+                <span className="text-[12.5px] text-stone-600 tabular-nums" style={{ fontFamily: MONO }}>
+                  {lr.estimatedTotal.toFixed(0)} / {lotMax}
+                </span>
+                <span className={lr.passesGating ? "text-emerald-700 text-[11px]" : "text-red-700 text-[11px]"}>
+                  · {lr.passesGating ? "passes gating" : "fails gating"}
+                </span>
+              </div>
             )}
+            <div className="space-y-2">
+              {lr.perCriterion.map((c) => (
+                <CriterionRow key={c.criterionId} c={c} label={rubricLabels.get(c.criterionId) ?? c.criterionId} />
+              ))}
+            </div>
           </div>
         );
       })}
-    </div>
+    </Section>
   );
 }
 
-function SourceQualityBanner({ quality }: { quality?: SourceQuality }) {
-  if (!quality) return null;
-  const tone = quality.status === "ready" ? "emerald" : quality.status === "needs_review" ? "amber" : "red";
-  const cls = tone === "emerald"
-    ? "border-emerald-600 bg-emerald-50/40 text-emerald-950"
-    : tone === "amber"
-      ? "border-amber-600 bg-amber-50/40 text-amber-950"
-      : "border-red-600 bg-red-50/40 text-red-950";
+function CriterionRow({ c, label }: { c: CriterionAssessment; label: string }) {
+  const llmTone = confidenceTone(c.confidence);
+  const mechTone = c.mechanicalConfidence ? confidenceTone(c.mechanicalConfidence) : null;
+  const disagreement = mechTone && c.mechanicalConfidence !== c.confidence;
+  const pct = c.maxScore > 0 ? (c.estimatedScore / c.maxScore) * 100 : 0;
   return (
-    <div className={`mb-6 rounded-sm border-l-2 px-4 py-3 ${cls}`}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="rounded-sm border border-stone-200 bg-white p-3">
+      <div className="flex items-baseline gap-3 flex-wrap mb-2">
         <span
-          className="text-[10px] font-semibold uppercase tracking-[0.18em]"
+          className="text-[10px] font-semibold tabular-nums text-stone-400 min-w-[3.5rem]"
           style={{ fontFamily: MONO }}
         >
-          Source quality · {quality.status}
+          {c.criterionId}
         </span>
-        <span className="text-[11px] font-semibold tabular-nums" style={{ fontFamily: MONO }}>
-          {quality.score_0_10}/10
+        <span className="flex-1 text-[13.5px] font-medium text-stone-900">{label}</span>
+        <span
+          className="text-[13px] font-medium tabular-nums text-stone-900"
+          style={{ fontFamily: MONO }}
+        >
+          {c.estimatedScore.toFixed(1)} / {c.maxScore}
         </span>
       </div>
-      {(quality.missing_inputs?.length || quality.warnings?.length) ? (
-        <div className="mt-2 space-y-1 text-[12px] leading-relaxed">
-          {quality.missing_inputs?.slice(0, 4).map((item) => (
-            <div key={`m-${item}`}>Missing: {item}</div>
+      {/* score bar */}
+      <div className="mb-2 h-1 w-full rounded-full bg-stone-100 overflow-hidden">
+        <div className="h-full rounded-full bg-stone-700" style={{ width: `${Math.min(100, pct)}%` }} />
+      </div>
+      <div className="flex items-center gap-2 flex-wrap text-[10.5px]" style={{ fontFamily: MONO }}>
+        <span
+          className={`rounded-sm border px-1.5 py-0.5 font-semibold uppercase tracking-[0.1em] ${llmTone.border} ${llmTone.bg} ${llmTone.tw}`}
+        >
+          {llmTone.label}
+        </span>
+        {mechTone && (
+          <span
+            className={`rounded-sm border px-1.5 py-0.5 font-semibold uppercase tracking-[0.1em] ${mechTone.border} ${mechTone.bg} ${mechTone.tw}`}
+            title="Mechanical rollup from draft claims"
+          >
+            mech · {mechTone.label}
+          </span>
+        )}
+        {disagreement && (
+          <span className="text-stone-500 italic">disagreement signal</span>
+        )}
+        {c.claimsByProvenance && (c.claimCount ?? 0) > 0 && (
+          <span className="text-stone-500">
+            {c.claimCount} claim{(c.claimCount ?? 0) === 1 ? "" : "s"}:{" "}
+            {Object.entries(c.claimsByProvenance)
+              .map(([k, v]) => `${v} ${PROVENANCE_LABEL[k as ProvenanceKind].toLowerCase()}`)
+              .join(", ")}
+          </span>
+        )}
+      </div>
+      {(c.weaknesses.length > 0 || c.missingEvidence.length > 0) && (
+        <div className="mt-3 space-y-1.5 text-[12.5px] leading-relaxed">
+          {c.weaknesses.slice(0, 3).map((w, i) => (
+            <p key={`w-${i}`} className="text-stone-700">
+              <span className="text-amber-700">·</span> {w}
+            </p>
           ))}
-          {quality.warnings?.slice(0, 3).map((item) => (
-            <div key={`w-${item}`}>{item}</div>
+          {c.missingEvidence.slice(0, 3).map((m, i) => (
+            <p key={`m-${i}`} className="text-stone-700">
+              <span className="text-red-700">⚠</span> Missing: {m}
+            </p>
           ))}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
 
-function WarningList({ items }: { items: string[] }) {
-  if (!items?.length)
-    return <p className="text-[13px] text-stone-400 italic">No gaps identified — review manually before submitting.</p>;
+// ============================================================================
+// B3 — ROUTED GAPS (grouped by SKU with CTAs)
+// ============================================================================
+
+function RoutedGaps({ score }: { score: ScoreResult }) {
+  const grouped = useMemo(() => {
+    const m = new Map<ServiceSku, RoutedGap[]>();
+    for (const g of score.routedGaps) {
+      if (!m.has(g.routedTo)) m.set(g.routedTo, []);
+      m.get(g.routedTo)!.push(g);
+    }
+    // Stable ordering for the SKU panels:
+    // bid_no_bid (catch admin gates) → matching → roster → proposal_draft
+    const order: ServiceSku[] = ["bid_no_bid", "matching", "roster", "proposal_draft"];
+    return order.filter((s) => m.has(s)).map((s) => [s, m.get(s)!] as const);
+  }, [score.routedGaps]);
+
+  if (score.routedGaps.length === 0) {
+    return (
+      <Section index="02" title="Next actions">
+        <p className="text-[13px] text-stone-500 italic">No gaps surfaced — clean draft.</p>
+      </Section>
+    );
+  }
+
   return (
-    <ul className="space-y-2.5">
-      {items.map((item, i) => (
-        <li key={i} className="flex gap-2.5 text-[13.5px] leading-relaxed text-stone-700">
-          <svg
-            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
-            />
-          </svg>
-          <span>{item}</span>
-        </li>
-      ))}
-    </ul>
+    <Section
+      index="02"
+      title="Next actions, by gap"
+      subtitle={`Every gap routed to the TenderPath service that closes it · ${score.routedGaps.length} total`}
+    >
+      <div className="space-y-4">
+        {grouped.map(([sku, gaps]) => (
+          <RoutedSkuPanel key={sku} sku={sku} gaps={gaps} />
+        ))}
+      </div>
+    </Section>
   );
 }
 
-function TextBlock({ text }: { text: string | undefined }) {
-  if (!text) return <p className="text-[13px] text-stone-400 italic">Not generated.</p>;
+function RoutedSkuPanel({ sku, gaps }: { sku: ServiceSku; gaps: RoutedGap[] }) {
+  const tone = skuTone(sku);
+  const meta = SKU_META[sku];
+  // Use the first gap's rationale as the panel-level rationale; show others as bullets.
+  const headline = gaps[0]?.rationale ?? "";
   return (
-    <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-stone-800">{text}</p>
-  );
-}
-
-function NumberedList({ items }: { items: string[] }) {
-  if (!items?.length) return <p className="text-[13px] text-stone-400 italic">None.</p>;
-  return (
-    <ol className="space-y-3">
-      {items.map((step, i) => (
-        <li key={i} className="flex gap-3.5 text-[13.5px] leading-relaxed text-stone-700">
+    <div className={`rounded-md border ${tone.border} ${tone.bg} p-4`}>
+      <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
+        <div className="flex items-baseline gap-2 flex-wrap">
           <span
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-[10px] font-semibold text-stone-700 tabular-nums mt-0.5"
+            className={`rounded-sm px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white ${tone.badge}`}
             style={{ fontFamily: MONO }}
           >
-            {i + 1}
+            {meta.label}
           </span>
-          <span className="pt-0.5">{step}</span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function GateBanner({ gate, onRegenerate, regenerating }: {
-  gate: GateState | undefined;
-  onRegenerate?: () => void;
-  regenerating?: boolean;
-}) {
-  if (!gate || gate.mandatory_gaps === 0) return null;
-  return (
-    <div className="mb-6 rounded-md border-l-2 border-red-700 bg-red-50/40 p-4">
-      <div
-        className="text-[10px] font-semibold uppercase tracking-[0.18em] text-red-800"
-        style={{ fontFamily: MONO }}
-      >
-        Compliance gate · {gate.mandatory_gaps} mandatory {gate.mandatory_gaps === 1 ? "item" : "items"} needs remediation
+          <span className={`text-[12.5px] font-medium ${tone.tw}`} style={{ fontFamily: MONO }}>
+            {meta.price}
+          </span>
+          <span className="text-[11px] text-stone-500" style={{ fontFamily: MONO }}>
+            · {gaps.length} gap{gaps.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        <button
+          className={`rounded-sm px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-white ${tone.badge} hover:opacity-90 transition-opacity`}
+          style={{ fontFamily: MONO }}
+          onClick={() => alert(`Sprint 6 stub: ${gaps[0]?.ctaCopy ?? meta.label} — Sprint 7 wires the checkout flow.`)}
+        >
+          {gaps[0]?.ctaCopy ?? meta.label}
+        </button>
       </div>
-      <p className="mt-2 text-[13.5px] leading-relaxed text-red-900">
-        The proposal package is being held until these items are resolved. Mandatory items affect administrative eligibility — leaving them unresolved risks rejection on submission.
-      </p>
-      <ul className="mt-3 space-y-2.5">
-        {gate.gap_items
-          .filter((g) => g.priority === "mandatory")
-          .slice(0, 8)
-          .map((g, i) => (
-            <li key={i} className="rounded-sm border border-red-200 bg-white px-3 py-2.5">
-              <p className="text-[13px] font-medium text-stone-900">{g.requirement}</p>
-              {g.evidence_or_action && (
-                <p className="mt-1.5 text-[12.5px] leading-relaxed text-stone-600">{g.evidence_or_action}</p>
+      <p className={`text-[12.5px] italic leading-relaxed ${tone.tw} mb-3`}>{headline}</p>
+      <ul className="space-y-1.5">
+        {gaps.slice(0, 6).map((g, i) => (
+          <li key={i} className="flex gap-2 text-[12.5px] leading-relaxed text-stone-700">
+            <span className="text-stone-400 shrink-0 mt-0.5">·</span>
+            <span>
+              {(g.lotId || g.criterionId) && (
+                <span className="text-[10.5px] text-stone-400 mr-1.5" style={{ fontFamily: MONO }}>
+                  [{g.lotId ?? "notice"}{g.criterionId ? `/${g.criterionId}` : ""}]
+                </span>
               )}
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Link
-                  href={`/dashboard/vault?gap=${encodeURIComponent(g.requirement.slice(0, 200))}`}
-                  className="rounded-sm border border-stone-700 bg-white px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-[0.15em] text-stone-900 hover:bg-stone-900 hover:text-white transition-colors"
-                  style={{ fontFamily: MONO }}
-                >
-                  Provide evidence →
-                </Link>
-                <button
-                  type="button"
-                  onClick={onRegenerate}
-                  disabled={regenerating}
-                  className="rounded-sm bg-stone-900 px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ fontFamily: MONO }}
-                >
-                  {regenerating ? "Regenerating…" : "Regenerate"}
-                </button>
-              </div>
-            </li>
-          ))}
+              {g.kind === "disqualifier" && <span className="text-red-700 mr-1">✗</span>}
+              {g.text}
+            </span>
+          </li>
+        ))}
+        {gaps.length > 6 && (
+          <li className="text-[11.5px] text-stone-500 italic">+ {gaps.length - 6} more</li>
+        )}
       </ul>
-      {gate.recommended_gaps > 0 && (
-        <p className="mt-3 text-[12px] text-red-900/80">
-          {gate.recommended_gaps} additional recommended improvements are flagged in the checklist below — they affect scoring but won&apos;t block submission.
-        </p>
-      )}
-      <p className="mt-3 border-t border-red-200 pt-2.5 text-[11.5px] leading-relaxed text-red-900/80">
-        Stuck? You have 30 days to upload the missing evidence and regenerate, or to request a
-        full refund — email{" "}
-        <a href="mailto:info@tenderpath.me" className="underline">info@tenderpath.me</a> with this
-        work-order ID. See{" "}
-        <Link href="/terms" className="underline">Terms section 6</Link> for the full refund
-        policy.
-      </p>
     </div>
   );
 }
 
-function ProposalDraftView({
-  output,
-  onRegenerate,
-  regenerating,
+// ============================================================================
+// B4 — DRAFT BODY (one section per criterion with inline provenance)
+// ============================================================================
+
+function DraftBody({ draft, rubricLabels }: { draft: DraftSection[]; rubricLabels: Map<string, string> }) {
+  if (draft.length === 0) {
+    return (
+      <Section index="03" title="Draft sections">
+        <p className="text-[13px] text-stone-500 italic">No draft body generated yet.</p>
+      </Section>
+    );
+  }
+  return (
+    <Section
+      index="03"
+      title="Draft body"
+      subtitle="One section per scored criterion · every claim is provenance-tagged"
+    >
+      <div className="space-y-5">
+        {draft.map((section, i) => (
+          <DraftSectionBlock key={i} section={section} label={rubricLabels.get(section.criterionId) ?? section.criterionId} />
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+function DraftSectionBlock({ section, label }: { section: DraftSection; label: string }) {
+  return (
+    <div className="rounded-sm border border-stone-200 bg-white p-4">
+      <div className="flex items-baseline gap-2 mb-3">
+        <span
+          className="text-[10px] font-semibold tabular-nums text-stone-400"
+          style={{ fontFamily: MONO }}
+        >
+          {section.lotId ? `${section.lotId} / ` : ""}{section.criterionId}
+        </span>
+        <span className="text-[14px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+          {label}
+        </span>
+      </div>
+      <p className="text-[13.5px] leading-relaxed text-stone-800 whitespace-pre-wrap">{section.content}</p>
+      {section.claims.length > 0 && (
+        <div className="mt-4 pt-3 border-t border-stone-100">
+          <div
+            className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500 mb-2"
+            style={{ fontFamily: MONO }}
+          >
+            Claims ({section.claims.length})
+          </div>
+          <ul className="space-y-1.5">
+            {section.claims.map((c, i) => (
+              <ClaimRow key={i} claim={c} />
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClaimRow({ claim }: { claim: Claim }) {
+  const tone = confidenceTone(
+    claim.provenance.kind === "applicant_library" || claim.provenance.kind === "uploaded_document"
+      ? "evidenced"
+      : claim.provenance.kind === "inferred"
+        ? "inferred"
+        : claim.provenance.kind === "gap"
+          ? "gap"
+          : "unverified",
+  );
+  return (
+    <li className="flex gap-2 text-[12.5px] leading-relaxed">
+      <span
+        className={`shrink-0 rounded-sm border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] ${tone.border} ${tone.bg} ${tone.tw} mt-0.5`}
+        style={{ fontFamily: MONO }}
+      >
+        {PROVENANCE_LABEL[claim.provenance.kind]}
+      </span>
+      <span className="text-stone-800">
+        {claim.text}
+        {claim.provenance.note && (
+          <span className="text-stone-500 italic"> — {claim.provenance.note}</span>
+        )}
+      </span>
+    </li>
+  );
+}
+
+// ============================================================================
+// B5 — EXPORT row + revision history footnote
+// ============================================================================
+
+function ExportRow({
+  workOrderId,
+  pdfUrl,
+  revisionHistory,
 }: {
-  output: ProposalOutput;
-  onRegenerate?: () => void;
-  regenerating?: boolean;
+  workOrderId: string;
+  pdfUrl: string | null;
+  revisionHistory: RevisionAttemptSummary[];
 }) {
   return (
+    <Section
+      index="04"
+      title="Export"
+      subtitle="Compliant, rubric-scored proposal draft with every gap flagged against this tender&rsquo;s evaluation criteria"
+    >
+      <div className="flex items-baseline gap-3 flex-wrap">
+        {pdfUrl ? (
+          <a
+            href={pdfUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-sm bg-stone-900 px-4 py-2.5 text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors"
+            style={{ fontFamily: MONO }}
+          >
+            Download scored draft PDF
+          </a>
+        ) : (
+          <button
+            disabled
+            className="rounded-sm bg-stone-300 px-4 py-2.5 text-[12.5px] font-semibold text-stone-600 cursor-not-allowed"
+            style={{ fontFamily: MONO }}
+          >
+            PDF not yet rendered
+          </button>
+        )}
+        <Link
+          href={`/dashboard/work-orders/${workOrderId}`}
+          className="rounded-sm border border-stone-300 px-4 py-2.5 text-[12.5px] font-semibold text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
+          style={{ fontFamily: MONO }}
+        >
+          Back to work order
+        </Link>
+      </div>
+      {revisionHistory.length > 1 && (
+        <div className="mt-4 pt-3 border-t border-stone-100">
+          <div
+            className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500 mb-2"
+            style={{ fontFamily: MONO }}
+          >
+            Revision history
+          </div>
+          <ul className="space-y-1">
+            {revisionHistory.map((h) => (
+              <li key={h.attempt} className="text-[12px] text-stone-600 tabular-nums" style={{ fontFamily: MONO }}>
+                attempt {h.attempt}: {h.estimatedTotal.toFixed(0)}/{h.achievableTotal} ·{" "}
+                {h.passesGating ? "pass" : "fail"} · weak:{h.weakCriteriaIds.length} · triggered:
+                {h.triggeredDisqualifierIds.length}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ============================================================================
+// Legacy-package fallback (preserved)
+// ============================================================================
+
+function LegacyView({ output }: { output: ProposalOutputJSON }) {
+  return (
     <div className="space-y-5">
-      <GateBanner gate={output.gate_state} onRegenerate={onRegenerate} regenerating={regenerating} />
+      <div className="mb-2 rounded-md border-l-2 border-amber-600 bg-amber-50/40 p-4">
+        <div
+          className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-800"
+          style={{ fontFamily: MONO }}
+        >
+          Previous-format proposal
+        </div>
+        <p className="mt-1.5 text-[13px] text-stone-700 leading-relaxed">
+          This package was generated under the previous format. The scored-draft format adds:
+          compliance verdict with source-cited disqualifiers, per-criterion rubric scoring with
+          provenance, and routed action gaps that map every weakness to the TenderPath service
+          that closes it.
+        </p>
+        <button
+          disabled
+          className="mt-3 rounded-sm bg-stone-300 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-600 cursor-not-allowed"
+          style={{ fontFamily: MONO }}
+          title="Sprint 6b will wire the generator switch and lazy re-run"
+        >
+          Upgrade to scored draft (Sprint 6b)
+        </button>
+      </div>
 
       <Section index="01" title="Executive summary">
-        <TextBlock text={output.executive_summary} />
+        {output.executive_summary ? (
+          <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-stone-800">{output.executive_summary}</p>
+        ) : (
+          <p className="text-[13px] text-stone-400 italic">Not generated.</p>
+        )}
       </Section>
-
       <Section index="02" title="Technical approach">
         {output.technical_approach?.length ? (
           <div className="space-y-3.5">
-            {output.technical_approach.map((para, i) => (
-              <p key={i} className="text-[14px] leading-relaxed text-stone-800">
-                {para}
-              </p>
+            {output.technical_approach.map((p, i) => (
+              <p key={i} className="text-[14px] leading-relaxed text-stone-800">{p}</p>
             ))}
           </div>
         ) : (
           <p className="text-[13px] text-stone-400 italic">Not generated.</p>
         )}
       </Section>
-
       <Section index="03" title="Compliance checklist">
-        <ComplianceList items={output.compliance_checklist ?? []} />
+        {output.compliance_checklist?.length ? (
+          <ul className="space-y-2.5">
+            {output.compliance_checklist.map((item, i) => {
+              const row = typeof item === "string" ? { requirement: item } : item;
+              return <li key={i} className="text-[13.5px] leading-relaxed text-stone-700">· {row.requirement}</li>;
+            })}
+          </ul>
+        ) : (
+          <p className="text-[13px] text-stone-400 italic">None.</p>
+        )}
       </Section>
-
-      <Section index="04" title="Required documents">
-        <BulletList items={output.required_documents ?? []} />
-      </Section>
-
-      <Section index="05" title="Cover letter draft">
-        <TextBlock text={output.cover_letter_draft} />
-      </Section>
-
-      <Section index="06" title="Financial template notes">
-        <BulletList items={output.financial_template_notes ?? []} />
-      </Section>
-
-      <Section index="07" title="Missing information">
-        <WarningList items={output.missing_information ?? []} />
-      </Section>
-
-      <Section index="08" title="Next steps">
-        <NumberedList items={output.next_steps ?? []} />
-      </Section>
-    </div>
-  );
-}
-
-function RosterPackageView({ output }: { output: ProposalOutput }) {
-  const breakdown = output.agency_readiness_breakdown ?? [];
-  return (
-    <div className="space-y-5">
-      {breakdown.length > 0 && (
-        <Section index="00" title="Agency readiness · where to start">
-          <AgencyReadinessLeaderboard breakdown={breakdown} />
-        </Section>
-      )}
-
-      <Section index="01" title="Registration checklist">
-        <CheckList items={output.registration_checklist ?? []} />
-      </Section>
-
-      <Section index="02" title="Capability statement">
-        <TextBlock text={output.capability_statement_draft} />
-      </Section>
-
-      <Section index="03" title="Required documents">
-        <BulletList items={output.required_documents ?? []} />
-      </Section>
-
-      <Section index="04" title="Organisation profile notes">
-        <BulletList items={output.organization_profile_notes ?? []} />
-      </Section>
-
-      <Section index="05" title="Cover letter draft">
-        <TextBlock text={output.cover_letter_draft} />
-      </Section>
-
-      <Section index="06" title="Submission guidance">
-        <BulletList items={output.submission_guidance ?? []} />
-      </Section>
-
-      <Section index="07" title="Missing information">
-        <WarningList items={output.missing_information ?? []} />
-      </Section>
-
-      <Section index="08" title="Next steps">
-        <NumberedList items={output.next_steps ?? []} />
-      </Section>
-    </div>
-  );
-}
-
-/**
- * Sprint 14. Per-agency readiness leaderboard for the roster package
- * view (the /dashboard/proposals/[id] surface — secondary to the
- * /dashboard/work-orders/[id] workspace panel but shown alongside the
- * proposal-draft view in the same route). Same shape as the workspace
- * panel's AgencyReadinessSection, lighter chrome to fit the
- * Section/BulletList visual idiom of this surface.
- */
-function AgencyReadinessLeaderboard({ breakdown }: { breakdown: AgencyReadiness[] }) {
-  const startHere = breakdown.find((a) => a.recommendation === "start_here");
-  const viable = breakdown.filter((a) => a.recommendation === "viable");
-  const blocked = breakdown.filter((a) => a.recommendation === "blocked");
-  return (
-    <div className="space-y-3">
-      {startHere && <AgencyLeaderCard agency={startHere} variant="start_here" />}
-      {viable.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500" style={{ fontFamily: MONO }}>
-            Also viable
-          </div>
-          {viable.map((a) => <AgencyLeaderCard key={a.agency_slug} agency={a} variant="viable" />)}
-        </div>
-      )}
-      {blocked.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500" style={{ fontFamily: MONO }}>
-            Skip for now
-          </div>
-          {blocked.map((a) => <AgencyLeaderCard key={a.agency_slug} agency={a} variant="blocked" />)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AgencyLeaderCard({ agency, variant }: { agency: AgencyReadiness; variant: "start_here" | "viable" | "blocked" }) {
-  const tone = variant === "start_here"
-    ? { border: "border-emerald-300", bg: "bg-emerald-50/70", label: "Start here", labelBg: "bg-emerald-700", score: "text-emerald-900" }
-    : variant === "viable"
-    ? { border: "border-stone-200", bg: "bg-white", label: "Viable", labelBg: "bg-stone-700", score: "text-stone-900" }
-    : { border: "border-amber-200", bg: "bg-amber-50/40", label: "Blocked", labelBg: "bg-amber-700", score: "text-amber-900" };
-  return (
-    <div className={`rounded-sm border ${tone.border} ${tone.bg} p-4`}>
-      <div className="flex items-baseline gap-3 mb-1.5 flex-wrap">
-        <span className={`text-[14px] font-semibold ${tone.score}`} style={{ fontFamily: MONO }}>{agency.agency_label}</span>
-        <span className={`text-[16px] font-bold tabular-nums ${tone.score}`} style={{ fontFamily: MONO }}>
-          {agency.readiness_0_10}<span className="text-[11px] font-normal text-stone-500">/10</span>
-        </span>
-        <span
-          className={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-white ${tone.labelBg}`}
-          style={{ fontFamily: MONO }}
-        >
-          {tone.label}
-        </span>
-        <span className="text-[10.5px] text-stone-500 tabular-nums" style={{ fontFamily: MONO }}>
-          docs {agency.document_coverage_0_10}/10 · category {agency.category_fit_0_10}/10 · geo {agency.geographic_fit_0_10}/10
-        </span>
-      </div>
-      <p className="text-[12.5px] text-stone-800 leading-relaxed">{agency.rationale}</p>
-      {agency.missing_documents.length > 0 && (
-        <div className="mt-2.5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500 mb-1" style={{ fontFamily: MONO }}>Missing</div>
-          <ul className="text-[12px] text-stone-700 space-y-0.5">
-            {agency.missing_documents.map((d, i) => (
-              <li key={i} className="flex gap-1.5"><span className="text-stone-400 shrink-0">·</span><span>{d}</span></li>
+      <Section index="04" title="Missing information">
+        {output.missing_information?.length ? (
+          <ul className="space-y-2.5">
+            {output.missing_information.map((m, i) => (
+              <li key={i} className="text-[13.5px] leading-relaxed text-amber-800">⚠ {m}</li>
             ))}
           </ul>
-        </div>
-      )}
-      {variant !== "blocked" && agency.next_actions.length > 0 && (
-        <div className="mt-2.5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500 mb-1" style={{ fontFamily: MONO }}>Next actions</div>
-          <ul className="text-[12px] text-stone-800 space-y-0.5">
-            {agency.next_actions.map((a, i) => (
-              <li key={i} className="flex gap-1.5"><span className="text-emerald-700 shrink-0">→</span><span>{a}</span></li>
+        ) : (
+          <p className="text-[13px] text-stone-400 italic">None identified.</p>
+        )}
+      </Section>
+      <Section index="05" title="Next steps">
+        {output.next_steps?.length ? (
+          <ol className="space-y-2.5 list-decimal pl-5">
+            {output.next_steps.map((s, i) => (
+              <li key={i} className="text-[13.5px] leading-relaxed text-stone-700">{s}</li>
             ))}
-          </ul>
-        </div>
-      )}
+          </ol>
+        ) : (
+          <p className="text-[13px] text-stone-400 italic">None.</p>
+        )}
+      </Section>
     </div>
   );
 }
 
-function SupplementaryInfoForm({ workOrderId }: { workOrderId: string }) {
-  const [notes, setNotes] = useState("");
-  const [uploadedFile, setUploadedFile] = useState<{ name: string; url: string } | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    setError(null);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-      const headers: HeadersInit = token ? { authorization: `Bearer ${token}` } : {};
-      const res = await fetch("/api/dashboard/vault/upload", { method: "POST", headers, body: formData });
-      const data = (await res.json().catch(() => ({}))) as { url?: string; name?: string; error?: string };
-      if (!res.ok || !data.url) {
-        setError(data.error ?? "File upload failed.");
-        return;
-      }
-      setUploadedFile({ url: data.url, name: data.name ?? file.name });
-    } catch {
-      setError("File upload failed.");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  async function handleSave() {
-    if (!notes && !uploadedFile) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const intake: Record<string, string> = {};
-      if (notes) intake.supplementary_notes = notes;
-      if (uploadedFile) {
-        intake.supplementary_vault_url = uploadedFile.url;
-        intake.supplementary_filename = uploadedFile.name;
-      }
-      const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-      const headers: HeadersInit = {
-        "content-type": "application/json",
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      };
-      const res = await fetch(`/api/dashboard/work-orders/${workOrderId}`, {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify({ intake }),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(data.error ?? "Could not save.");
-        return;
-      }
-      setSaved(true);
-      setNotes("");
-      setUploadedFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    } catch {
-      setError("Could not save. Please try again.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="mt-6 rounded-md border border-stone-200/70 bg-stone-50/40 p-6">
-      <div className="flex items-baseline gap-3 mb-1.5">
-        <span
-          className="text-[10px] font-semibold tabular-nums text-stone-400"
-          style={{ fontFamily: MONO }}
-        >
-          09
-        </span>
-        <h3
-          className="text-[18px] font-medium text-stone-900"
-          style={{ fontFamily: SERIF }}
-        >
-          Add more information
-        </h3>
-      </div>
-      <p className="text-[12.5px] leading-relaxed text-stone-600 mb-4">
-        Return any time while the tender window is open to upload additional documents or notes — your support access stays active until the window closes.
-      </p>
-      <div className="space-y-3">
-        <div>
-          <label
-            className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
-            style={{ fontFamily: MONO }}
-          >
-            Additional notes or context
-          </label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="New requirements, agency feedback, registration status update…"
-            rows={4}
-            className="mt-1.5 w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] text-stone-900 focus:border-stone-700 focus:outline-none resize-none"
-          />
-        </div>
-        <div>
-          <label
-            className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
-            style={{ fontFamily: MONO }}
-          >
-            Upload additional document
-          </label>
-          {uploadedFile ? (
-            <div
-              className="mt-1.5 flex items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 text-[12px] text-emerald-800"
-              style={{ fontFamily: MONO }}
-            >
-              <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
-              </svg>
-              <span className="flex-1 truncate">{uploadedFile.name}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setUploadedFile(null);
-                  if (fileInputRef.current) fileInputRef.current.value = "";
-                }}
-                className="shrink-0 text-emerald-700 underline underline-offset-2 hover:text-emerald-900"
-              >
-                Remove
-              </button>
-            </div>
-          ) : (
-            <label className="mt-1.5 flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-stone-300 bg-white px-3.5 py-3 text-[12px] text-stone-500 hover:border-stone-700 hover:text-stone-700 transition-colors">
-              <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span className="leading-snug flex-1">
-                {uploading ? "Uploading…" : <><span className="font-semibold text-stone-700">Choose file</span> — PDF, Word, or Excel up to 10 MB</>}
-              </span>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.doc,.docx,.xls,.xlsx"
-                className="sr-only"
-                disabled={uploading}
-                onChange={handleFileChange}
-              />
-            </label>
-          )}
-        </div>
-        {error && (
-          <p className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3.5 py-2.5 text-[12px] text-red-700">
-            {error}
-          </p>
-        )}
-        {saved && (
-          <p className="rounded-sm border-l-2 border-emerald-600 bg-emerald-50/40 px-3.5 py-2.5 text-[12px] text-emerald-800">
-            Information saved — our team will incorporate it into your support.
-          </p>
-        )}
-        <button
-          onClick={handleSave}
-          disabled={saving || uploading || (!notes && !uploadedFile)}
-          className="rounded-sm bg-stone-900 px-4 py-2.5 text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {saving ? "Saving…" : "Save additional information"}
-        </button>
-      </div>
-    </div>
-  );
-}
+// ============================================================================
+// Page
+// ============================================================================
 
 export default function ProposalPackagePage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const workOrderId = params.workOrderId as string;
   const sessionId = searchParams.get("session_id");
+  const fixtureName = searchParams.get("fixture"); // Sprint 6 dev-only
 
   const [stage, setStage] = useState<Stage>("loading");
   const [pkg, setPkg] = useState<ProposalPackage | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [regenerating, setRegenerating] = useState(false);
 
-  const generate = useCallback(async (opts?: { force?: boolean }) => {
-    if (!opts?.force) setStage("generating");
+  const generate = useCallback(async () => {
+    setStage("generating");
     try {
       const res = await fetch("/api/proposals/generate", {
         method: "POST",
@@ -763,20 +911,17 @@ export default function ProposalPackagePage() {
         body: JSON.stringify({
           work_order_id: Number(workOrderId),
           stripe_session_id: sessionId,
-          force: opts?.force === true,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         package?: ProposalPackage;
         error?: string;
-        code?: string;
       };
       if (!res.ok || !data.package) {
-        const isPaymentPending = res.status === 402;
         setErrorMsg(
-          isPaymentPending
-            ? "Your payment is still being verified — this can take up to a minute. Click Retry in a moment, or contact support if it persists."
-            : data.error ?? "Generation failed. Please try again or contact support."
+          res.status === 402
+            ? "Your payment is still being verified — try again in a moment."
+            : data.error ?? "Generation failed.",
         );
         setStage("error");
         return;
@@ -791,6 +936,28 @@ export default function ProposalPackagePage() {
 
   useEffect(() => {
     if (!workOrderId) return;
+
+    // Sprint 6 dev-only fixture loader. Loads a typed fixture JSON via
+    // a server route, bypasses auth + DB. NEVER active in production.
+    if (fixtureName) {
+      (async () => {
+        try {
+          const res = await fetch(`/api/dev/fixture/${encodeURIComponent(fixtureName)}`);
+          if (!res.ok) {
+            setErrorMsg(`Fixture "${fixtureName}" not available.`);
+            setStage("error");
+            return;
+          }
+          const fixturePkg = (await res.json()) as ProposalPackage;
+          setPkg(fixturePkg);
+          setStage("ready");
+        } catch {
+          setErrorMsg("Fixture load failed.");
+          setStage("error");
+        }
+      })();
+      return;
+    }
 
     (async () => {
       try {
@@ -810,33 +977,14 @@ export default function ProposalPackagePage() {
         await generate();
       }
     })();
-  }, [workOrderId, generate]);
+  }, [workOrderId, fixtureName, generate]);
 
-  // Sprint 11: regenerate when the compliance gate is open. We don't kick
-  // back into the full "generating…" splash since the user already has the
-  // draft view loaded; we just refresh the package quietly.
-  const regenerate = useCallback(async () => {
-    setRegenerating(true);
-    try {
-      await generate({ force: true });
-    } finally {
-      setRegenerating(false);
-    }
-  }, [generate]);
-
+  const scored = useMemo(() => (pkg ? adaptScored(pkg.output) : null), [pkg]);
   const isProposal = !pkg || pkg.plan !== "roster-fast-track";
   const title = isProposal ? "Proposal package" : "Roster / LTA package";
   const subtitle = pkg?.tender_title
     ? [pkg.tender_title, pkg.agency].filter(Boolean).join(" · ")
     : null;
-  const sourceQualityStatus = pkg?.output.source_quality?.status;
-  // Sprint 11: compliance-gate state trumps source-quality state in the header label.
-  const gateBlocked = (pkg?.output.gate_state?.mandatory_gaps ?? 0) > 0;
-  const packageStatusLabel = gateBlocked
-    ? `needs remediation · ${pkg?.output.gate_state?.mandatory_gaps} mandatory ${pkg?.output.gate_state?.mandatory_gaps === 1 ? "item" : "items"}`
-    : sourceQualityStatus && sourceQualityStatus !== "ready"
-      ? "ready · source review required"
-      : "ready";
 
   if (stage === "loading" || stage === "generating") {
     return (
@@ -859,10 +1007,10 @@ export default function ProposalPackagePage() {
         <div className="rounded-md border border-stone-200/70 bg-white p-10 text-center">
           <div className="mx-auto mb-4 h-7 w-7 animate-spin rounded-full border-2 border-stone-300 border-t-stone-900" />
           <p className="text-[14px] font-medium text-stone-900">
-            {stage === "generating" ? "Generating your package — this takes about 30 seconds…" : "Loading…"}
+            {stage === "generating" ? "Generating your scored draft — this takes about a minute…" : "Loading…"}
           </p>
           <p className="mt-1 text-[12px] text-stone-500">
-            Claude is analysing the tender requirements against your company profile.
+            Scoring against the tender&apos;s rubric, flagging compliance gates, routing every gap to its closest paid action.
           </p>
         </div>
       </div>
@@ -872,14 +1020,12 @@ export default function ProposalPackagePage() {
   if (stage === "error") {
     return (
       <div className="px-8 py-8 max-w-4xl">
-        <div className="mb-7">
-          <h1
-            className="text-[40px] leading-[1.05] font-medium text-stone-900 tracking-tight"
-            style={{ fontFamily: SERIF }}
-          >
-            {title}
-          </h1>
-        </div>
+        <h1
+          className="text-[40px] leading-[1.05] font-medium text-stone-900 tracking-tight mb-6"
+          style={{ fontFamily: SERIF }}
+        >
+          {title}
+        </h1>
         <div className="rounded-md border-l-2 border-red-600 bg-red-50/40 p-6">
           <div
             className="text-[10px] font-semibold uppercase tracking-[0.18em] text-red-700 mb-2"
@@ -890,7 +1036,7 @@ export default function ProposalPackagePage() {
           <p className="text-[13.5px] text-red-900 leading-relaxed">{errorMsg}</p>
           <div className="mt-4 flex flex-wrap gap-3">
             <button
-              onClick={() => generate()}
+              onClick={generate}
               className="rounded-sm bg-stone-900 px-4 py-2.5 text-[12.5px] font-semibold text-white hover:bg-stone-800"
             >
               Retry
@@ -911,76 +1057,80 @@ export default function ProposalPackagePage() {
 
   return (
     <div className="px-8 py-8 max-w-4xl">
-      {/* Back link */}
       <Link
-        href="/dashboard/pipeline"
+        href={fixtureName ? "/dashboard" : "/dashboard/pipeline"}
         className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-500 hover:text-stone-900 transition-colors"
         style={{ fontFamily: MONO }}
       >
-        ← Pipeline
+        ← {fixtureName ? "Dashboard" : "Pipeline"}
       </Link>
 
-      {/* Header */}
-      <div className="mt-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between mb-7">
-        <div className="max-w-3xl">
-          <div className="flex items-center gap-3 text-[11px] text-stone-500">
-            <span
-              className="font-semibold uppercase tracking-[0.18em] text-stone-400"
-              style={{ fontFamily: MONO }}
-            >
-              Workbench · Proposal output
-            </span>
-            <span className="text-stone-300">·</span>
-            <span style={{ fontFamily: MONO }}>
-              Generated{" "}
-              {new Date(pkg.created_at).toLocaleDateString("en-GB", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              })}
-            </span>
-          </div>
-          <h1
-            className="mt-1 text-[44px] leading-[1.05] font-medium text-stone-900 tracking-tight"
-            style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
+      <div className="mt-5 mb-7">
+        <div className="flex items-center gap-3 text-[11px] text-stone-500">
+          <span
+            className="font-semibold uppercase tracking-[0.18em] text-stone-400"
+            style={{ fontFamily: MONO }}
           >
-            {title}
-          </h1>
-          {subtitle && (
-            <p className="mt-1 text-[14.5px] text-stone-600 leading-relaxed">{subtitle}</p>
+            Workbench · Proposal output
+          </span>
+          <span className="text-stone-300">·</span>
+          <span style={{ fontFamily: MONO }}>
+            Generated{" "}
+            {new Date(pkg.created_at).toLocaleDateString("en-GB", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}
+          </span>
+          {fixtureName && (
+            <>
+              <span className="text-stone-300">·</span>
+              <span
+                className="rounded-sm bg-amber-100 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-amber-900"
+                style={{ fontFamily: MONO }}
+              >
+                fixture · {fixtureName}
+              </span>
+            </>
           )}
         </div>
-      </div>
-
-      {/* Ready banner */}
-      <div className="mb-6 rounded-sm border-l-2 border-emerald-600 bg-emerald-50/40 px-4 py-3">
-        <div
-          className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700"
-          style={{ fontFamily: MONO }}
+        <h1
+          className="mt-1 text-[44px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+          style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
         >
-          Status · {packageStatusLabel}
-        </div>
-        <p className="mt-0.5 text-[13px] text-emerald-900 leading-relaxed">
-          Your {title.toLowerCase()} is ready. Review each section carefully and fill in any missing information before submission.
-        </p>
+          {title}
+        </h1>
+        {subtitle && (
+          <p className="mt-1 text-[14.5px] text-stone-600 leading-relaxed">{subtitle}</p>
+        )}
       </div>
 
-      <SourceQualityBanner quality={pkg.output.source_quality} />
-
-      {/* Sections */}
-      {isProposal ? (
-        <ProposalDraftView output={pkg.output} onRegenerate={regenerate} regenerating={regenerating} />
-      ) : (
+      {/* B1 → B2 → B3 → B4 → B5  (when the new scoring-engine fields are present) */}
+      {scored ? (
         <>
-          <RosterPackageView output={pkg.output} />
-          <SupplementaryInfoForm workOrderId={workOrderId} />
+          <ComplianceVerdict score={scored.score} />
+          <div className="space-y-5">
+            <RubricScore score={scored.score} rubricLabels={scored.rubricLabels} />
+            <RoutedGaps score={scored.score} />
+            <DraftBody draft={scored.draft} rubricLabels={scored.rubricLabels} />
+            <ExportRow
+              workOrderId={workOrderId}
+              pdfUrl={pkg.pdf_url ?? null}
+              revisionHistory={scored.revisionHistory}
+            />
+          </div>
         </>
+      ) : (
+        <LegacyView output={pkg.output} />
       )}
-
-      {/* Footer disclaimer */}
-      <div className="mt-7 rounded-sm border-l-2 border-stone-300 bg-stone-50/60 px-4 py-3 text-[11.5px] leading-relaxed text-stone-500">
-        This package is AI-generated and should be reviewed by your team before submission. TenderPath is not responsible for submission outcomes. Always verify requirements directly with the contracting authority.
-      </div>
+      {/*
+       * NOTE: Per proposal-output-ux.md C4 the persistent footer disclaimer
+       * was REMOVED in Sprint 6. The compliance-verdict (B1) + the
+       * provenance-tagged claims (B4) + the per-criterion confidence (B2)
+       * do the expectation-setting that a standing "we don't guarantee
+       * outcomes" banner used to do, more credibly. Legal disclaimer
+       * lives in T&C (C3) only.
+       */}
     </div>
   );
 }
