@@ -249,8 +249,10 @@ async function main(): Promise<void> {
   console.log(`✓ Sprint 6 fixture ready at ${FIXTURE_PATH}`);
   console.log("\n  Visual verification:");
   console.log("    1. npm run dev");
-  console.log("    2. open http://localhost:3000/dashboard/proposals/ANY?fixture=unicef-scored");
-  console.log("       (NODE_ENV!=production gates the fixture loader to dev only)");
+  console.log("    2. open http://localhost:3000/dev/proposal-preview/unicef-scored");
+  console.log("       (route sits outside /dashboard so it bypasses proxy.ts auth +");
+  console.log("        the dashboard client-layout localStorage gate — works without");
+  console.log("        DATABASE_URL. Hard-gated on NODE_ENV !== production.)");
   console.log("    3. confirm B1 verdict, B2 score, B3 routed gaps, B4 draft+claims, B5 export render\n");
 }
 
