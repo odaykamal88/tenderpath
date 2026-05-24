@@ -198,6 +198,33 @@ Rules:
 - For ${rubric.methodology === "cumulative" ? "cumulative" : "lowest_compliant"}: ${rubric.methodology === "cumulative" ? `produce ONE section per criterion across ALL lots; ${rubric.lots.reduce((s, l) => s + l.criteria.length, 0)} sections total.` : `produce ONE section per lot covering all disqualifiers; ${rubric.lots.length} sections total.`}
 - Claims must be specific and tied back to applicant evidence. If you write "Atlas has ISO 9001", make ISO 9001 a claim with provenance "applicant_library".
 - Mark a claim "gap" when the applicant context does NOT contain the required evidence. Sprint 2 surfaces these explicitly to the user — do not hide them in confident prose.
+
+AGGREGATION RULE (Sprint 4.6 — added 2026-05-24 after A5 empirical check):
+  If a claim states a TOTAL or COMBINED value across multiple contracts /
+  engagements / years (e.g. "combined past-performance value: USD X",
+  "total years of relevant experience: Y", "served Z countries"),
+  EVERY component of the sum MUST be an applicant_library claim somewhere
+  in the same section AND the arithmetic must check out. If you cannot
+  list the named components AND have them sum to the stated aggregate,
+  the aggregate is provenance="gap", note explaining what is missing —
+  NOT "inferred". A fabricated aggregate tagged "inferred" is the
+  worst kind of failure mode for this product because it ACTIVELY
+  misleads the buyer. When in doubt, omit the aggregate and let the
+  individual contracts stand on their own.
+
+DEPENDENCY RULE (Sprint 4.6 — A5 finding #6, OEM-auth cascade case):
+  When a section cites a document, certificate, or authorisation as
+  supporting evidence (OEM authorisation letters, audited financials,
+  partnership MoUs, ISO certificates, named-personnel CVs, sanctions
+  declarations), and the applicant context does NOT confirm that
+  document is in hand, EVERY section that depends on it must include
+  a claim of provenance="gap" naming the missing dependency. Do NOT
+  cite the document as confirmed evidence in section X while another
+  section Y flags it as missing — that's a cross-section inconsistency
+  a senior evaluator catches immediately. A separate cascade-
+  detection pass runs after this draft (cross-section-cascade.ts),
+  but solving this inline reduces post-processing dependencies.
+
 - Do not output markdown. content is plain prose.
 - Return ONLY valid JSON.${isRevision ? "\n- Revision mode: ONLY output sections for the criteria listed in REVISION GUIDANCE. Do not include other sections." : ""}`;
 }
