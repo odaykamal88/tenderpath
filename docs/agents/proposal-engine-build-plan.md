@@ -215,32 +215,60 @@ the Sprint 5 readiness assessment imports it unchanged.
 
 ---
 
-## Sprint 5 — Free Vendor Readiness Assessment engine (top-of-funnel)
+## Sprint 5 — Free Vendor Readiness Assessment engine (top-of-funnel) ← SHIPPED
 
 **Goal:** Ship the FREE conversion engine: a vendor enters their company; the system scores them
 against generic UN/UNGM readiness criteria and emits a payload where every gap routes to a paid SKU
 via the Sprint 4 `gap-routing.ts`. Per `readiness-output-ux.md`: this is the core conversion engine
 and the seed of the applicant library Sprint 8 depends on.
-**In scope:**
-  - Static UN-generic readiness rubric: UNGM registration completeness, past performance shape +
-    age + value, agency coverage, financial documentation depth, geographic + sector fit. Lives as
-    a typed constant — no tender-specific rubric extraction needed.
-  - Scoring runs through the same `Claim` / `Provenance` / `gap` types as the $299 (per R2 — reuse,
-    don't fork the type system).
-  - Every readiness gap MUST route via `gap-routing.ts` (R1 acceptance).
-  - Founder-credibility line is a STRUCTURED field on the output payload (data, not UI prose), per
-    readiness S4.
-  - Persists to `proposal_packages` with `kind = 'readiness'` discriminator (decision locked
-    2026-05-24: reuse the proposal-packages table; readiness is a flavor of generation, not a new
-    storage shape).
-**Out of scope:** screens (Sprint 7), applicant-library carry-forward (Sprint 8), $299 output UI
-(Sprint 6), website-crawl / company-classification (already lives in `src/lib/assessment/`).
-**Files:** `src/lib/proposal-package/readiness-engine.ts` (NEW), `readiness-rubric.ts` (NEW —
-the static UN-generic rubric), persist.ts wiring for `kind='readiness'`.
-**Acceptance:** a free run for a synthetic vendor produces a readiness payload where every gap has
-a non-null `routedTo` SKU and a one-line action; the founder-credibility line is present in the
-payload (independent of any UI).
-**Done-when:** running the readiness engine end-to-end produces a routed, structured payload that
+
+**What shipped:**
+  - **readiness-rubric.ts** — static 8-criterion rubric (UNGM=15, years=10, agencies=20, value=15,
+    sectors=10, geo=10, personnel=10, certs=10; total 100). Each criterion has a deterministic
+    `score(applicant)` function that emits `{estimatedScore, confidence, weaknesses,
+    missingEvidence, claims}` — no LLM. `buildReadinessRubric()` produces the full TenderRubric
+    shape so callers that want generic-engine integration can use it.
+  - **readiness-engine.ts** — `scoreReadiness(applicant)` orchestrator. Builds synthetic
+    DraftSections from the per-criterion scoring (claims flow through `mechanicalConfidence` +
+    `claimsByProvenance` rollup unchanged). Builds a ScoreResult with `lotResults[0].perCriterion`
+    populated from the deterministic rules. Calls `routeAllGaps(score, { originSku: 'readiness' })`
+    — origin='readiness' opens all 4 SKUs (no origin-exclusion). Wraps everything in a
+    `ReadinessOutput` payload with `summary` (overallScore, band, primaryAction, headline) and
+    `founderCredibility` (structured, not UI-only prose).
+  - **Band-driven primary CTA** — `pickPrimaryAction` returns `roster` for low band, `matching`
+    for high band, and falls through to routing-distribution for medium. The first-pass count-
+    driven picker had a subtle inversion (a WEAK applicant's many fallback-to-matching gaps
+    out-voted the foundational-roster signal); band-driven is the correct semantic.
+  - **Routing-fallback fix** — Sprint 5 audit caught that the gap-routing fallback target was
+    `proposal_draft` ($299, most expensive). Auto-recommending the most expensive SKU for any
+    keyword-miss inverted the "right action for the gap" framing. Fallback now routes to
+    `matching` ($49/mo) — the lowest-friction recurring SKU that's always a defensible generic
+    recommendation. This change also benefits the $299 flow (no longer surfaces $299 CTAs from
+    gaps it can't categorize) though the visible impact is minor because origin-exclusion already
+    excluded `proposal_draft` for that flow.
+
+**Out of scope (deferred to Sprint 7+):** persist.ts wiring for `kind='readiness'` (lands with the
+Sprint 7 screen when there's a user-facing surface that needs DB writes), website-crawl /
+company-classification (already lives in `src/lib/assessment/`), real-time UNGM lookup / sanctions
+screening (architectural integrations, Sprint 8+).
+
+**Files:** `src/lib/proposal-package/readiness-rubric.ts` (NEW), `readiness-engine.ts` (NEW),
+`gap-routing.ts` (fallback-target fix), `scripts/sprint5-acceptance.ts` (NEW — three synthetic
+applicants: strong / medium / weak), `docs/agents/proposal-engine-build-plan.md` (this update).
+
+**Acceptance (all pass):**
+  - STRONG (Atlas, DEMO_APPLICANT): 87/100 high band, primary CTA=Matching, 4 routed gaps
+  - MEDIUM (BlueHorizon, UNGM + 1 UN contract): 54/100 medium band, primary CTA=Matching, 12 gaps
+    across 2 SKUs
+  - WEAK (Riverbend, no UN history): 13/100 low band, primary CTA=Roster, 20 gaps across 3 SKUs
+  - Engine runs in ~14ms (deterministic, no LLM) — viable as a free top-of-funnel tool.
+  - Every CriterionAssessment carries `mechanicalConfidence` + `claimCount` + `claimsByProvenance`
+    (A4 holds for readiness output as it does for $299).
+  - Every routedGap has non-null `routedTo` in the 4-SKU set + non-empty rationale + ctaCopy +
+    ruleId (A3 / R1 hold).
+  - `founderCredibility` populated as structured data (S4).
+
+**Done-when:** ✅ `scoreReadiness(applicant)` produces a routed, structured `ReadinessOutput` that
 the Sprint 7 screen can consume verbatim.
 
 ---
