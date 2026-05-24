@@ -1,5 +1,11 @@
 import { sql } from "@/lib/db";
-import type { GateState, ProposalOutput, RosterOutput, TenderRequirements } from "./types";
+import type {
+  GateState,
+  GenerationStatus,
+  ProposalOutput,
+  RosterOutput,
+  TenderRequirements,
+} from "./types";
 
 export interface UpsertArgs {
   workOrderId: number;
@@ -25,9 +31,13 @@ export interface UpsertArgs {
   parsedRequirements?: TenderRequirements | null;
   /** Sprint 11: gate summary mirrored from output.gate_state for direct query. */
   gateState?: GateState | null;
-  /** Sprint 11: generation_status to persist. Defaults to 'ready' when not supplied.
-   *  Use 'needs_remediation' when the compliance gate is open. */
-  generationStatus?: "ready" | "needs_remediation";
+  /** generation_status to persist. Defaults to 'ready' when not supplied.
+   *  - 'needs_remediation' when the Sprint 11 compliance gate is open.
+   *  - 'rubric_stale' when the Sprint 3 corrigendum/Q&A watcher fires (GATE 0, 2026-05-24).
+   *  Other values ('pending', 'generating', 'failed') are written by the orchestrator
+   *  or the `markFailure` helper; callers of `upsertPackage` typically only pick the
+   *  three terminal/blocked states above. */
+  generationStatus?: GenerationStatus;
 }
 
 export async function upsertPackage(args: UpsertArgs): Promise<number> {
