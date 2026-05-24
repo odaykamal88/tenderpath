@@ -8,6 +8,32 @@
  * view continues to render legacy packages without migration.
  */
 
+/**
+ * Lifecycle states for a `proposal_packages.generation_status` row. The DB
+ * column is `TEXT` (no CHECK constraint) so adding values here is purely a
+ * TypeScript widening; no migration is required.
+ *
+ *  - `pending`             default on insert; generation has not started
+ *  - `generating`          generation is in flight
+ *  - `ready`               generation completed and the artefact is fresh
+ *  - `needs_remediation`   Sprint 11 compliance gate is open; applicant must act
+ *  - `rubric_stale`        Sprint 3 corrigendum/Q&A watcher (GATE 0, 2026-05-24):
+ *                          a newer amendment or Q&A round has changed the rubric
+ *                          this draft was scored against; user must re-run before
+ *                          submission. See docs/agents/amendment-versioning-flow.md
+ *  - `failed`              unrecoverable error during generation
+ *
+ * UI surfaces that read `generation_status` (the Sprint 25 LEFT JOIN pattern in
+ * `getViewerActivity`) consume any of these six values.
+ */
+export type GenerationStatus =
+  | "pending"
+  | "generating"
+  | "ready"
+  | "needs_remediation"
+  | "rubric_stale"
+  | "failed";
+
 export interface ProposalOutput {
   executive_summary: string;
   technical_approach: string[];
