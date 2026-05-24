@@ -220,7 +220,11 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
         <button
           type="button"
           onClick={handleRegenerate}
-          disabled={regenBusy || (data?.remaining_regenerations ?? 0) <= 0}
+          // Sprint 6b: the proposal-draft plan has unlimited re-runs against
+          // this tender. The button is enabled unless a request is in flight
+          // OR the API explicitly returned a finite remaining counter (which
+          // only happens once we add the per-day rate-limit gate).
+          disabled={regenBusy || (data?.remaining_regenerations != null && data.remaining_regenerations <= 0)}
           className="mt-3 rounded-sm bg-stone-900 px-3.5 py-2 text-[11.5px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ fontFamily: MONO }}
         >
@@ -231,7 +235,11 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
   }
 
   const out = pkg.output;
-  const remaining = data?.remaining_regenerations ?? 0;
+  // Sprint 6b: `null` is the API signal for "unlimited" (PROPOSAL_MAX_ATTEMPTS
+  // = Infinity). Old callers still send a number; treat undefined as 0 so the
+  // legacy guard keeps working.
+  const remaining = data?.remaining_regenerations;
+  const isUnlimited = remaining == null;
   const scored = adaptScoredFromOutput(out);
 
   // ─────────────────────────────────────────────────────────────────────
@@ -351,17 +359,23 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
 
         <div className="border-t border-stone-100 p-5 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <p className="text-[11px] text-stone-500" style={{ fontFamily: MONO }}>
-            Generation {pkg.generation_attempts ?? 1} · {remaining} regenerate{remaining === 1 ? "" : "s"} left
+            {isUnlimited
+              ? `Generation ${pkg.generation_attempts ?? 1} · unlimited re-runs included`
+              : `Generation ${pkg.generation_attempts ?? 1} · ${remaining} regenerate${remaining === 1 ? "" : "s"} left`}
           </p>
           {error && <p className="text-[11.5px] text-red-700">{error}</p>}
           <button
             type="button"
             onClick={handleRegenerate}
-            disabled={regenBusy || remaining <= 0}
+            disabled={regenBusy || (!isUnlimited && (remaining ?? 0) <= 0)}
             className="rounded-sm border border-stone-300 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ fontFamily: MONO }}
           >
-            {regenBusy ? "Regenerating…" : remaining <= 0 ? "Regenerate limit reached" : "Regenerate →"}
+            {regenBusy
+              ? "Regenerating…"
+              : (!isUnlimited && (remaining ?? 0) <= 0)
+                ? "Regenerate limit reached"
+                : "Regenerate →"}
           </button>
         </div>
       </section>
@@ -429,17 +443,23 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
 
       <div className="border-t border-stone-100 p-5 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <p className="text-[11px] text-stone-500" style={{ fontFamily: MONO }}>
-          Generation {pkg.generation_attempts ?? 1} · {remaining} regenerate{remaining === 1 ? "" : "s"} left
+          {isUnlimited
+            ? `Generation ${pkg.generation_attempts ?? 1} · unlimited re-runs included`
+            : `Generation ${pkg.generation_attempts ?? 1} · ${remaining} regenerate${remaining === 1 ? "" : "s"} left`}
         </p>
         {error && <p className="text-[11.5px] text-red-700">{error}</p>}
         <button
           type="button"
           onClick={handleRegenerate}
-          disabled={regenBusy || remaining <= 0}
+          disabled={regenBusy || (!isUnlimited && (remaining ?? 0) <= 0)}
           className="rounded-sm border border-stone-300 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ fontFamily: MONO }}
         >
-          {regenBusy ? "Regenerating…" : remaining <= 0 ? "Regenerate limit reached" : "Regenerate package →"}
+          {regenBusy
+            ? "Regenerating…"
+            : (!isUnlimited && (remaining ?? 0) <= 0)
+              ? "Regenerate limit reached"
+              : "Regenerate package →"}
         </button>
       </div>
     </section>

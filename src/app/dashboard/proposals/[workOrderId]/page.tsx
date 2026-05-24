@@ -75,7 +75,15 @@ function authHeaders(): HeadersInit {
 // Legacy-package fallback (preserved — renders when output.score is absent)
 // ============================================================================
 
-function LegacyView({ output }: { output: ProposalOutputJSON }) {
+function LegacyView({
+  output,
+  onUpgrade,
+  upgradeBusy,
+}: {
+  output: ProposalOutputJSON;
+  onUpgrade?: () => void;
+  upgradeBusy?: boolean;
+}) {
   return (
     <div className="space-y-5">
       <div className="mb-2 rounded-md border-l-2 border-amber-600 bg-amber-50/40 p-4">
@@ -88,16 +96,17 @@ function LegacyView({ output }: { output: ProposalOutputJSON }) {
         <p className="mt-1.5 text-[13px] text-stone-700 leading-relaxed">
           This package was generated under the previous format. The scored-draft format adds:
           compliance verdict with source-cited disqualifiers, per-criterion rubric scoring with
-          provenance, and routed action gaps that map every weakness to the TenderPath service
-          that closes it.
+          inline provenance, and per-criterion findings — what to address, where to upload
+          evidence, and how to push the score before submission.
         </p>
         <button
-          disabled
-          className="mt-3 rounded-sm bg-stone-300 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-600 cursor-not-allowed"
+          type="button"
+          onClick={onUpgrade}
+          disabled={!onUpgrade || upgradeBusy}
+          className="mt-3 rounded-sm bg-stone-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-white hover:bg-stone-800 transition-colors disabled:bg-stone-300 disabled:text-stone-600 disabled:cursor-not-allowed"
           style={{ fontFamily: MONO }}
-          title="Sprint 6b will wire the generator switch and lazy re-run"
         >
-          Upgrade to scored draft (Sprint 6b)
+          {upgradeBusy ? "Upgrading…" : "Upgrade to scored draft →"}
         </button>
       </div>
 
@@ -170,6 +179,7 @@ export default function ProposalPackagePage() {
   const [stage, setStage] = useState<Stage>("loading");
   const [pkg, setPkg] = useState<ProposalPackage | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [rerunBusy, setRerunBusy] = useState(false);
 
   const generate = useCallback(async () => {
     setStage("generating");
@@ -202,6 +212,50 @@ export default function ProposalPackagePage() {
       setStage("error");
     }
   }, [workOrderId, sessionId]);
+
+  // Sprint 6b. The two B3 footer CTAs.
+  //   - onUpload: opens the Vault in a new tab. Sprint 8 will use the
+  //     applicant_library row newly populated there as evidence on the
+  //     next re-run; for now the file simply lands in the vault and the
+  //     user comes back to click Re-run.
+  //   - onRerun: POSTs to the proposal-package endpoint with force=1,
+  //     bypassing the "already_generated" short-circuit. PROPOSAL_MAX_ATTEMPTS
+  //     is Infinity so the API never returns max_attempts in this path.
+  const onUpload = useCallback(() => {
+    if (typeof window !== "undefined") window.open("/dashboard/vault", "_blank");
+  }, []);
+
+  const onRerun = useCallback(async () => {
+    if (rerunBusy) return;
+    setRerunBusy(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch(
+        `/api/dashboard/work-orders/${workOrderId}/proposal-package?force=1`,
+        { method: "POST", headers: authHeaders() },
+      );
+      const body = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!res.ok || !body.ok) {
+        setErrorMsg(body.error ?? `${res.status} ${res.statusText}`);
+        return;
+      }
+      // Re-fetch the package to pick up the new generation.
+      const get = await fetch(`/api/proposals/generate?work_order_id=${workOrderId}`, {
+        headers: authHeaders(),
+      });
+      if (get.ok) {
+        const data = (await get.json()) as { exists: boolean; package?: ProposalPackage };
+        if (data.exists && data.package) setPkg(data.package);
+      }
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Re-run failed.");
+    } finally {
+      setRerunBusy(false);
+    }
+  }, [rerunBusy, workOrderId]);
 
   useEffect(() => {
     if (!workOrderId) return;
@@ -353,7 +407,7 @@ export default function ProposalPackagePage() {
           <ComplianceVerdict score={scored.score} />
           <div className="space-y-5">
             <RubricScore score={scored.score} rubricLabels={scored.rubricLabels} />
-            <RoutedGaps score={scored.score} />
+            <RoutedGaps score={scored.score} onUpload={onUpload} onRerun={onRerun} rerunBusy={rerunBusy} />
             <DraftBody draft={scored.draft} rubricLabels={scored.rubricLabels} />
             <ExportRow
               workOrderId={workOrderId}
@@ -363,7 +417,7 @@ export default function ProposalPackagePage() {
           </div>
         </>
       ) : (
-        <LegacyView output={pkg.output} />
+        <LegacyView output={pkg.output} onUpgrade={onRerun} upgradeBusy={rerunBusy} />
       )}
       {/*
        * NOTE: Per proposal-output-ux.md C4 the persistent footer disclaimer

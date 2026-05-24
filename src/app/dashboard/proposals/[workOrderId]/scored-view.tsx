@@ -595,7 +595,28 @@ function CriterionRow({ c, label }: { c: CriterionAssessment; label: string }) {
 // the unlimited-re-runs-against-this-tender policy is part of what the
 // $299 buys.
 
-export function RoutedGaps({ score }: { score: ScoreResult }) {
+/**
+ * Sprint 6b. The two operational CTAs at the foot of B3 — both are optional
+ * so the dev preview can render the view without wiring real handlers. The
+ * dashboard page provides:
+ *   - onUpload  → opens /dashboard/vault in a new tab (the file added there
+ *                 feeds the next re-run via Sprint 8's applicant_library)
+ *   - onRerun   → POSTs to /api/dashboard/work-orders/{id}/proposal-package?force=1
+ *                 and re-fetches the package row
+ * When undefined (dev preview), the buttons fire an alert stub instead.
+ */
+export interface RoutedGapsHandlers {
+  onUpload?: () => void;
+  onRerun?: () => void;
+  rerunBusy?: boolean;
+}
+
+export function RoutedGaps({
+  score,
+  onUpload,
+  onRerun,
+  rerunBusy = false,
+}: { score: ScoreResult } & RoutedGapsHandlers) {
   const grouped = useMemo(() => {
     const m = new Map<GapSeverity, RoutedGap[]>();
     for (const g of score.routedGaps) {
@@ -630,23 +651,25 @@ export function RoutedGaps({ score }: { score: ScoreResult }) {
       </div>
 
       {/* Applicant action footer — the only two operational levers the
-          user has within the $299 envelope. Sprint 6b wires both. */}
+          user has within the $299 envelope. Real handlers wired by the
+          dashboard page; dev preview falls back to alert stubs. */}
       <div className="mt-5 pt-4 border-t border-stone-200 flex flex-wrap items-center gap-3">
         <button
           type="button"
           className="rounded-sm bg-stone-900 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors"
           style={{ fontFamily: MONO }}
-          onClick={() => alert("Sprint 6b stub — wires vault upload to feed the next re-run.")}
+          onClick={onUpload ?? (() => alert("Dev preview — real handler wires Vault upload."))}
         >
           Upload supporting documents
         </button>
         <button
           type="button"
-          className="rounded-sm border border-stone-300 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
+          disabled={rerunBusy}
+          className="rounded-sm border border-stone-300 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ fontFamily: MONO }}
-          onClick={() => alert("Sprint 6b stub — wires re-run against the same tender + updated evidence.")}
+          onClick={onRerun ?? (() => alert("Dev preview — real handler POSTs to /api/.../proposal-package?force=1."))}
         >
-          Re-run review after updating
+          {rerunBusy ? "Re-running…" : "Re-run review after updating"}
         </button>
         <span className="text-[11.5px] text-stone-500 leading-relaxed" style={{ fontFamily: MONO }}>
           Your $299 includes unlimited re-runs against this tender as you address gaps.

@@ -284,4 +284,23 @@ export const ROSTER_PLAN = "roster-fast-track";
 // tight to absorb the new round-trip workflow without falling back to
 // concierge. The senior-review escape hatch remains for genuinely stuck
 // cases.
+//
+// Sprint 6b: kept at 6 for Roster + Bid/No-Bid (each its own MAX_ATTEMPTS
+// import). The PROPOSAL_PLAN policy moved to PROPOSAL_MAX_ATTEMPTS below —
+// the $299 page advertises unlimited re-runs against this tender, which is
+// part of the product framing (the buyer owns the verified proposal, not a
+// quota-capped credit pack). A soft per-day rate-limit lives at the API
+// route level to prevent runaway cost from a stuck loop.
 export const MAX_ATTEMPTS = 6;
+
+/**
+ * Sprint 6b. The $299 Proposal Draft plan: effectively unlimited re-runs
+ * against the same tender as the applicant uploads evidence and refines the
+ * draft. POSITIVE_INFINITY is deliberate over a large finite number — the
+ * route renders no "N regenerates left" counter when the cap is infinite,
+ * which matches the product copy ("unlimited re-runs included").
+ *
+ * If runaway cost ever becomes a concern, the right fix is a per-day API
+ * rate-limit (Sprint 6b TODO), NOT a hard cap that contradicts the page.
+ */
+export const PROPOSAL_MAX_ATTEMPTS = Number.POSITIVE_INFINITY;

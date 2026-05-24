@@ -2,7 +2,7 @@ import { sendProposalReadyEmail } from "@/lib/email/sendProposalPackageNotificat
 import { track } from "@/lib/telemetry/funnel";
 import {
   PROPOSAL_PLAN,
-  MAX_ATTEMPTS,
+  PROPOSAL_MAX_ATTEMPTS,
   type GateState,
   type ProposalOutput,
 } from "./types";
@@ -74,7 +74,7 @@ export async function generateProposalPackage({
       skippedReason: "already_generated",
     };
   }
-  if (force && previousAttempts >= MAX_ATTEMPTS) {
+  if (force && previousAttempts >= PROPOSAL_MAX_ATTEMPTS) {
     return { ok: false, attempts: previousAttempts, skippedReason: "max_attempts" };
   }
 
