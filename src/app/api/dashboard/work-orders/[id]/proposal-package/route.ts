@@ -2,10 +2,18 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
 import { generateProposalPackage } from "@/lib/proposal-package/generate-proposal";
+import { generateProposalPackageV2 } from "@/lib/proposal-package/generate-proposal-v2";
 import { PROPOSAL_PLAN, PROPOSAL_MAX_ATTEMPTS } from "@/lib/proposal-package/types";
 
+// Sprint 6b dispatch flag — mirrors the one in /api/proposals/generate.
+// Default v2 (new scoring engine); env PROPOSAL_ENGINE=v1 reverts.
+const PROPOSAL_ENGINE: "v1" | "v2" = (process.env.PROPOSAL_ENGINE === "v1") ? "v1" : "v2";
+
 export const runtime = "nodejs";
-export const maxDuration = 300;
+// Sprint 6b: bumped from 300 to 800 for the v2 engine path (extractRubric +
+// runRevisionLoop runs ~5-7 min typical). See /api/proposals/generate route
+// for the per-step latency breakdown.
+export const maxDuration = 800;
 
 /**
  * Sprint 6b. Drop the engine's SKU sales fields (rationale, ctaCopy, plus
@@ -159,11 +167,22 @@ export async function POST(
   const url = new URL(request.url);
   const force = url.searchParams.get("force") === "1";
 
-  const generation = await generateProposalPackage({
-    workOrderId: result.order.id,
-    force,
-    silent: false,
-  });
+  // Sprint 6b: route through v2 by default. The "Upgrade to scored draft"
+  // button on legacy packages lands here with force=1 — v2 then regenerates
+  // the row into the Sprint-6 shape on the next read.
+  const generation = PROPOSAL_ENGINE === "v2"
+    ? await (async () => {
+        const v2 = await generateProposalPackageV2({ workOrderId: result.order.id, force });
+        return {
+          ok: v2.ok,
+          attempts: v2.attempts,
+          packageId: v2.packageId,
+          skippedReason: v2.skippedReason,
+          error: v2.error,
+          zipUrl: null as string | null,
+        };
+      })()
+    : await generateProposalPackage({ workOrderId: result.order.id, force, silent: false });
 
   if (!generation.ok) {
     if (generation.skippedReason === "max_attempts") {
