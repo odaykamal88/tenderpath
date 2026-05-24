@@ -1,11 +1,42 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { MONO as MONO_BRAND, SERIF as SERIF_BRAND, skuTone } from "@/lib/brand/tokens";
 
 interface ComplianceItem {
   requirement: string;
   status: "compliant" | "partial" | "needs_action";
   evidence_or_action: string;
+}
+
+// Sprint 6: minimal scored-shape adapter (full types live in the standalone
+// page; the panel only needs a handful of fields to render the slim view).
+type ServiceSku = "bid_no_bid" | "matching" | "proposal_draft" | "roster";
+type DisqualifierKind = "mandatory_form" | "eligibility" | "format" | "deadline" | "financial";
+interface ScoredCriterion {
+  criterionId: string;
+  estimatedScore: number;
+  maxScore: number;
+}
+interface ScoredLot {
+  lotId: string;
+  perCriterion: ScoredCriterion[];
+  estimatedTotal: number;
+  lotDisqualifiersTriggered: Array<{ id: string; rule: string; kind: DisqualifierKind }>;
+  passesGating: boolean;
+}
+interface ScoredRoute {
+  text: string;
+  routedTo: ServiceSku;
+  rationale: string;
+  ctaCopy: string;
+  kind: string;
+}
+interface ScoredView {
+  lotResults: ScoredLot[];
+  noticeWideDisqualifiersTriggered: Array<{ id: string; rule: string; kind: DisqualifierKind }>;
+  routedGaps: ScoredRoute[];
 }
 
 interface ProposalOutput {
@@ -17,7 +48,17 @@ interface ProposalOutput {
   financial_template_notes: string[];
   missing_information: string[];
   next_steps: string[];
+  // Sprint 6 new shape (optional — panel falls back to compliance_checklist
+  // counts when absent).
+  score?: unknown;
 }
+
+const SKU_LABEL: Record<ServiceSku, string> = {
+  bid_no_bid: "Bid/No-Bid",
+  matching: "Matching",
+  proposal_draft: "Proposal Draft",
+  roster: "Roster",
+};
 
 interface PackageRow {
   id: number;
@@ -42,26 +83,24 @@ interface Props {
   paymentStatus: string | null;
 }
 
-const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
-const SERIF = "'Fraunces', 'Times New Roman', serif";
+// Sprint 6: brand tokens lifted into src/lib/brand/tokens.ts. The local
+// MONO/SERIF aliases keep existing JSX references stable while the
+// import canonicalizes the source.
+const MONO = MONO_BRAND;
+const SERIF = SERIF_BRAND;
 const POLL_MS = 8000;
 const MAX_POLLS = 40;
+
+function adaptScoredFromOutput(output: ProposalOutput): ScoredView | null {
+  if (!output.score || typeof output.score !== "object") return null;
+  const s = output.score as ScoredView;
+  if (!Array.isArray(s.lotResults) || !Array.isArray(s.routedGaps)) return null;
+  return s;
+}
 
 function authHeaders(): HeadersInit {
   const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
   return token ? { authorization: `Bearer ${token}` } : {};
-}
-
-function statusTint(status: ComplianceItem["status"]): string {
-  if (status === "compliant") return "text-emerald-700";
-  if (status === "partial") return "text-amber-700";
-  return "text-red-700";
-}
-
-function statusLabel(status: ComplianceItem["status"]): string {
-  if (status === "compliant") return "compliant";
-  if (status === "partial") return "partial";
-  return "needs action";
 }
 
 export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Props) {
@@ -197,76 +236,182 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
 
   const out = pkg.output;
   const remaining = data?.remaining_regenerations ?? 0;
+  const scored = adaptScoredFromOutput(out);
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Sprint 6: when the new scored shape is present, render the slim view
+  // (B1 verdict + score headline + top routed gaps + link to full page).
+  // Falls back to legacy compliance-checklist counts when absent.
+  // ─────────────────────────────────────────────────────────────────────
+  if (scored) {
+    const passes = scored.lotResults.every((lr) => lr.passesGating);
+    const estimatedTotal = scored.lotResults.reduce((s, lr) => s + lr.estimatedTotal, 0);
+    const achievableTotal = scored.lotResults.reduce(
+      (s, lr) => s + lr.perCriterion.reduce((ss, c) => ss + c.maxScore, 0),
+      0,
+    );
+    const pct = achievableTotal > 0 ? Math.round((estimatedTotal / achievableTotal) * 100) : 0;
+    const triggeredCount =
+      scored.noticeWideDisqualifiersTriggered.length +
+      scored.lotResults.reduce((s, lr) => s + lr.lotDisqualifiersTriggered.length, 0);
+
+    // Group routed gaps by SKU; show top 3 SKUs with one CTA each.
+    const byRoute = new Map<ServiceSku, ScoredRoute[]>();
+    for (const g of scored.routedGaps) {
+      if (!byRoute.has(g.routedTo)) byRoute.set(g.routedTo, []);
+      byRoute.get(g.routedTo)!.push(g);
+    }
+    const skuOrder: ServiceSku[] = ["bid_no_bid", "matching", "roster", "proposal_draft"];
+    const topRoutes = skuOrder.filter((s) => byRoute.has(s)).slice(0, 3);
+
+    return (
+      <section className={`rounded-md border-l-2 ${passes ? "border-emerald-700" : "border-red-700"} bg-white shadow-sm`}>
+        <div className="p-5 border-b border-stone-100">
+          <div className="flex items-baseline justify-between mb-3 flex-wrap gap-3">
+            <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+              Proposal package
+            </h2>
+            <Link
+              href={`/dashboard/proposals/${workOrderId}`}
+              className="rounded-sm bg-stone-900 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors"
+              style={{ fontFamily: MONO }}
+            >
+              View full proposal →
+            </Link>
+          </div>
+          {/* B1 verdict — compact */}
+          <div className="flex items-baseline gap-3 flex-wrap mb-3">
+            <span
+              className={`rounded-sm border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                passes
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                  : "border-red-300 bg-red-50 text-red-800"
+              }`}
+              style={{ fontFamily: MONO }}
+            >
+              {passes ? "Passes gating" : "Fails gating"}
+            </span>
+            {triggeredCount > 0 && (
+              <span className="text-[11.5px] text-red-800" style={{ fontFamily: MONO }}>
+                {triggeredCount} disqualifier{triggeredCount === 1 ? "" : "s"} triggered
+              </span>
+            )}
+            <span className="text-stone-300">·</span>
+            <span className="text-[16px] font-medium tabular-nums text-stone-900" style={{ fontFamily: SERIF }}>
+              {estimatedTotal.toFixed(0)}
+              <span className="text-[12px] text-stone-500" style={{ fontFamily: MONO }}>
+                {" "}
+                / {achievableTotal} · {pct}%
+              </span>
+            </span>
+          </div>
+          <p className="text-[13px] leading-relaxed text-stone-600">
+            Compliance verdict, per-criterion rubric scoring, and routed action gaps for every weakness. Full breakdown and draft body on the proposal page.
+          </p>
+        </div>
+
+        {topRoutes.length > 0 && (
+          <div className="border-t border-stone-100 p-5">
+            <div
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-3"
+              style={{ fontFamily: MONO }}
+            >
+              Top action gaps · {scored.routedGaps.length} routed
+            </div>
+            <div className="space-y-2.5">
+              {topRoutes.map((sku) => {
+                const tone = skuTone(sku);
+                const gaps = byRoute.get(sku)!;
+                return (
+                  <div
+                    key={sku}
+                    className={`rounded-sm border ${tone.border} ${tone.bg} px-3.5 py-2.5`}
+                  >
+                    <div className="flex items-baseline justify-between gap-2 flex-wrap mb-1">
+                      <div className="flex items-baseline gap-2">
+                        <span
+                          className={`rounded-sm px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-white ${tone.badge}`}
+                          style={{ fontFamily: MONO }}
+                        >
+                          {SKU_LABEL[sku]}
+                        </span>
+                        <span className={`text-[10.5px] ${tone.tw}`} style={{ fontFamily: MONO }}>
+                          {gaps.length} gap{gaps.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                    </div>
+                    <p className={`text-[12px] italic ${tone.tw} leading-relaxed`}>{gaps[0]?.rationale}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="border-t border-stone-100 p-5 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <p className="text-[11px] text-stone-500" style={{ fontFamily: MONO }}>
+            Generation {pkg.generation_attempts ?? 1} · {remaining} regenerate{remaining === 1 ? "" : "s"} left
+          </p>
+          {error && <p className="text-[11.5px] text-red-700">{error}</p>}
+          <button
+            type="button"
+            onClick={handleRegenerate}
+            disabled={regenBusy || remaining <= 0}
+            className="rounded-sm border border-stone-300 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ fontFamily: MONO }}
+          >
+            {regenBusy ? "Regenerating…" : remaining <= 0 ? "Regenerate limit reached" : "Regenerate →"}
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Legacy panel render (pre-Sprint-6 ProposalOutput shape) — preserved
+  // verbatim so existing customers see the same view they always have.
+  // Sprint 6b will switch the generator so new orders land in `scored`
+  // above; legacy rows continue to render here until they're regenerated.
+  // ─────────────────────────────────────────────────────────────────────
   const compliant = out.compliance_checklist.filter((c) => c.status === "compliant").length;
   const partial = out.compliance_checklist.filter((c) => c.status === "partial").length;
-  const gaps = out.compliance_checklist.filter((c) => c.status === "needs_action").length;
+  const gapsCount = out.compliance_checklist.filter((c) => c.status === "needs_action").length;
 
   return (
     <section className="rounded-md border-l-2 border-emerald-700 bg-white shadow-sm">
       <div className="p-5 border-b border-stone-100">
-        <div className="flex items-baseline justify-between mb-4">
+        <div className="flex items-baseline justify-between mb-4 flex-wrap gap-3">
           <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
-              Proposal package
+            Proposal package
           </h2>
-          {pkg.pdf_url && (
-            <a
-              href={pkg.pdf_url}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-sm bg-stone-900 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors"
+          <div className="flex items-baseline gap-2">
+            <Link
+              href={`/dashboard/proposals/${workOrderId}`}
+              className="rounded-sm border border-stone-300 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
               style={{ fontFamily: MONO }}
             >
-              Download bundle (.zip) ↓
-            </a>
-          )}
+              View full proposal →
+            </Link>
+            {pkg.pdf_url && (
+              <a
+                href={pkg.pdf_url}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-sm bg-stone-900 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors"
+                style={{ fontFamily: MONO }}
+              >
+                Download bundle (.zip) ↓
+              </a>
+            )}
+          </div>
         </div>
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-6">
-          <p className="text-[11px] uppercase tracking-[0.16em] text-stone-500" style={{ fontFamily: MONO }}>
-            Compliance · {compliant} compliant · {partial} partial · {gaps} gap{gaps === 1 ? "" : "s"}
-          </p>
-        </div>
+        <p className="text-[11px] uppercase tracking-[0.16em] text-stone-500" style={{ fontFamily: MONO }}>
+          Compliance · {compliant} compliant · {partial} partial · {gapsCount} gap{gapsCount === 1 ? "" : "s"}
+        </p>
         <p className="mt-3 text-[14px] leading-relaxed text-stone-800" style={{ fontFamily: SERIF }}>
           {out.executive_summary}
         </p>
       </div>
-
-      <div className="p-5 border-b border-stone-100">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-2" style={{ fontFamily: MONO }}>
-          Bundle contents
-        </div>
-        <ul className="grid grid-cols-1 gap-1.5 text-[13px] text-stone-800 lg:grid-cols-2">
-          <li className="flex gap-2"><span className="text-emerald-700 shrink-0">·</span><span><span className="font-semibold">Technical proposal</span> <span className="text-stone-500">(.docx — editable in Word)</span></span></li>
-          <li className="flex gap-2"><span className="text-emerald-700 shrink-0">·</span><span><span className="font-semibold">Cover letter</span> <span className="text-stone-500">(.docx — editable)</span></span></li>
-          <li className="flex gap-2"><span className="text-emerald-700 shrink-0">·</span><span><span className="font-semibold">Financial template</span> <span className="text-stone-500">(.xlsx — formulas pre-wired)</span></span></li>
-          <li className="flex gap-2"><span className="text-emerald-700 shrink-0">·</span><span><span className="font-semibold">Compliance matrix</span> <span className="text-stone-500">(.pdf — requirement-by-requirement)</span></span></li>
-        </ul>
-      </div>
-
-      {out.compliance_checklist.length > 0 && (
-        <div className="border-t border-stone-100 p-5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-2" style={{ fontFamily: MONO }}>
-            Compliance snapshot
-          </div>
-          <ul className="space-y-2 text-[13px] text-stone-800">
-            {out.compliance_checklist.slice(0, 8).map((c, i) => (
-              <li key={i}>
-                <div className="flex items-baseline gap-2">
-                  <span className={`text-[9px] uppercase tracking-[0.16em] font-semibold ${statusTint(c.status)}`} style={{ fontFamily: MONO }}>
-                    {statusLabel(c.status)}
-                  </span>
-                  <span className="font-semibold leading-snug">{c.requirement}</span>
-                </div>
-                <p className="ml-[88px] text-[12px] text-stone-600 leading-relaxed">{c.evidence_or_action}</p>
-              </li>
-            ))}
-          </ul>
-          {out.compliance_checklist.length > 8 && (
-            <p className="mt-3 text-[11.5px] text-stone-500">
-              + {out.compliance_checklist.length - 8} more requirements in the full compliance matrix PDF.
-            </p>
-          )}
-        </div>
-      )}
 
       {out.missing_information.length > 0 && (
         <div className="border-t border-stone-100 bg-amber-50/40 p-5">
@@ -278,24 +423,6 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
               <li key={i}>· {m}</li>
             ))}
           </ul>
-        </div>
-      )}
-
-      {out.next_steps.length > 0 && (
-        <div className="border-t border-stone-100 p-5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-2" style={{ fontFamily: MONO }}>
-            Next steps
-          </div>
-          <ol className="text-[13px] text-stone-800 space-y-1.5">
-            {out.next_steps.map((s, i) => (
-              <li key={i} className="flex gap-2.5">
-                <span className="text-emerald-700 tabular-nums shrink-0" style={{ fontFamily: MONO }}>
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <span>{s}</span>
-              </li>
-            ))}
-          </ol>
         </div>
       )}
 

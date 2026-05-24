@@ -49,6 +49,31 @@ export interface ProposalOutput {
    *  generation_status="needs_remediation" until the applicant resolves
    *  the gates (provide evidence, skip with explanation, or regenerate). */
   gate_state?: GateState;
+  /**
+   * Sprint 6 (proposal-output-ux.md PART B). The new scoring-engine emit
+   * shape. When ANY of these fields is present, the dashboard renders
+   * the new B1/B2/B3/B4/B5 hierarchy (compliance verdict → rubric score
+   * → routed gaps → draft + inline provenance → export). When absent
+   * (legacy packages from the pre-Sprint-6 pipeline), the page renders
+   * the existing 8-section view with an "upgrade to scored draft" CTA.
+   *
+   * The Sprint 6b follow-up wires generate-proposal.ts to emit these
+   * fields for new orders; lazy-re-run on first GET for legacy
+   * packages also lands in 6b. Until then, Sprint 6 visual verification
+   * runs against the cached UNICEF fixture via the dev `?fixture=`
+   * query param (page-side only, never in prod).
+   *
+   * Types kept as `unknown` here to avoid pulling scoring-engine types
+   * into the storage layer (proposal_packages.output is JSONB). The
+   * page-side renders cast to the concrete shapes via a typed runtime
+   * adapter (see toScoredProposal in the dashboard route).
+   */
+  score?: unknown;
+  draft?: unknown;
+  routed_gaps?: unknown;
+  cascades?: unknown;
+  revision_history?: unknown;
+  tender_rubric?: unknown;
 }
 
 export interface GateState {
