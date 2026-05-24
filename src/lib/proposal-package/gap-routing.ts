@@ -430,8 +430,13 @@ export function routeCriterionWeakness(
       };
     }
   }
-  // No rule matched → fallback per origin
-  const to = applyOriginExclusion("proposal_draft", context);
+  // No rule matched → fallback to MATCHING ($49/mo, lowest-friction
+  // recurring SKU). Sprint 5 audit caught this: fallback was originally
+  // proposal_draft ($299), which auto-recommended the most expensive SKU
+  // for any gap text without a keyword match — not aligned with the
+  // "right action for the gap" framing. Matching is the universal-safe
+  // fallback because better tender selection always reduces gap pressure.
+  const to = applyOriginExclusion("matching", context);
   return {
     text,
     kind: opts.kind ?? "weakness",
