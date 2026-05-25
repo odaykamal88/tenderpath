@@ -4,6 +4,11 @@ import { sql } from "@/lib/db";
 import { generateProposalPackage } from "@/lib/proposal-package/generate-proposal";
 import { generateProposalPackageV2 } from "@/lib/proposal-package/generate-proposal-v2";
 import { PROPOSAL_PLAN, PROPOSAL_MAX_ATTEMPTS } from "@/lib/proposal-package/types";
+import {
+  checkRerunQuota,
+  recordRerun,
+  rateLimitedResponseBody,
+} from "@/lib/proposal-package/rate-limit";
 
 // Sprint 6b dispatch flag — mirrors the one in /api/proposals/generate.
 // Default v2 (new scoring engine); env PROPOSAL_ENGINE=v1 reverts.
@@ -166,6 +171,23 @@ export async function POST(
 
   if (result.order.payment_status !== "paid") {
     return NextResponse.json({ error: "Payment not confirmed yet for this work order." }, { status: 402 });
+  }
+
+  // Proposal-draft re-run rate limit. PROPOSAL_MAX_ATTEMPTS = ∞ means
+  // nothing else in the codepath caps cost; this is the only place that
+  // bounds runaway Anthropic spend (10 re-runs / 24h per user). The check
+  // is keyed to the authenticated user, not the work-order, so a user
+  // with multiple WOs shares one quota across all of them.
+  const userId = result.order.user_id;
+  if (userId != null) {
+    const quota = await checkRerunQuota(userId);
+    if (!quota.allowed) {
+      return NextResponse.json(rateLimitedResponseBody(quota), { status: 429 });
+    }
+    // Record BEFORE generation so simultaneous triggers can't both squeak
+    // past a check seeing the same recent-runs count. Failures inside
+    // generation still count — protecting Anthropic budget is the goal.
+    await recordRerun({ userId, workOrderId: result.order.id });
   }
 
   const url = new URL(request.url);
