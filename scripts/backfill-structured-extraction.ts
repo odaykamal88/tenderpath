@@ -41,10 +41,24 @@
  *   --concurrency <N> — parallel LLM calls (default 4; max 8 — Anthropic rate-limit safe)
  */
 
-import { config } from "dotenv";
-import { resolve } from "path";
+import fs from "node:fs";
 
-config({ path: resolve(process.cwd(), ".env.local") });
+// Manual .env.local loader — matches the pattern used by other .ts scripts
+// in /scripts (expire-grants.ts, etc.). Avoids a `dotenv` dependency that
+// would land in TSC's type-check pass during `next build` on Vercel and
+// fail the deploy ("Cannot find module 'dotenv'"). Callers who prefer
+// inline env vars just don't need a .env.local file.
+try {
+  const env = fs.readFileSync(".env.local", "utf-8");
+  for (const line of env.split("\n")) {
+    const i = line.indexOf("=");
+    if (i > 0 && !line.trim().startsWith("#")) {
+      process.env[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+    }
+  }
+} catch {
+  // No .env.local — assume env vars were passed inline.
+}
 
 import { sql } from "@/lib/db";
 import {
