@@ -303,6 +303,19 @@ export async function persistDocumentExtraction(args: {
         error: err instanceof Error ? err.message : String(err),
       });
     });
+
+    // Sprint 8b: structured-field extraction for CV / past_performance /
+    // certificate rows. Runs AFTER auto-tag because the canonical `type`
+    // may be upgraded from "other" to one of those three. Non-fatal —
+    // failure here just leaves library-enrichment in Sprint 8 fallback
+    // mode for this row.
+    await runStructuredExtractionFor(args.userId, args.vaultDocumentId, args.fileName, args.result.text).catch((err) => {
+      console.warn("[tp:extract:structured_after_extraction_failed]", {
+        userId: args.userId,
+        vaultDocumentId: args.vaultDocumentId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
   }
   return {
     id: row.id as number,
@@ -310,6 +323,55 @@ export async function persistDocumentExtraction(args: {
     charCount: row.char_count as number,
     error: row.error as string | null,
   };
+}
+
+/**
+ * Sprint 8b. Reads the (possibly auto-tag-upgraded) row type from the
+ * database, runs the structured extractor if the type is supported,
+ * and persists the JSONB payload back on document_extractions.
+ *
+ * Idempotent: skips if structured_extraction is already populated.
+ */
+async function runStructuredExtractionFor(
+  userId: number,
+  vaultDocumentId: number,
+  fileName: string,
+  text: string,
+): Promise<void> {
+  // Pull the (possibly upgraded) type + current structured_extraction
+  // state. If already populated, skip — re-extraction is opt-in via a
+  // future force flag, not a side effect of re-saving.
+  const stateRows = await sql`
+    SELECT vd.type, de.structured_extraction
+    FROM vault_documents vd
+    LEFT JOIN document_extractions de
+      ON de.user_id = vd.user_id AND de.vault_document_id = vd.id
+    WHERE vd.id = ${vaultDocumentId} AND vd.user_id = ${userId}
+    LIMIT 1
+  ` as unknown as Array<{ type: string; structured_extraction: unknown | null }>;
+  const state = stateRows[0];
+  if (!state) return;
+  if (state.structured_extraction != null) return;
+
+  const { extractStructuredFromDocument } = await import("@/lib/applicant-evidence/structured-extractor");
+  const structured = await extractStructuredFromDocument({
+    type: state.type,
+    textContent: text,
+    fileName,
+  });
+  if (!structured) return;
+
+  await sql`
+    UPDATE document_extractions
+    SET structured_extraction = ${JSON.stringify(structured)}::jsonb,
+        updated_at = NOW()
+    WHERE user_id = ${userId} AND vault_document_id = ${vaultDocumentId}
+  `;
+  console.log("[tp:extract:structured_persisted]", {
+    userId,
+    vaultDocumentId,
+    type: structured.type,
+  });
 }
 
 export async function linkExtractionToVaultDocument(args: {

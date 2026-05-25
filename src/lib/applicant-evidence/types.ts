@@ -54,6 +54,20 @@ export interface EvidenceMatch {
   score: number;
 }
 
+/**
+ * Sprint 8b structured-extraction payload. One discriminated record per
+ * vault document, persisted as JSONB on document_extractions. Optional —
+ * legacy rows + uploads that haven't run the structured extractor yet
+ * carry `null`, in which case library-enrichment falls back to filename
+ * + tag heuristics.
+ */
+export interface EvidenceStructuredExtraction {
+  type: "cv" | "past_performance" | "certificate";
+  extracted_at: string;
+  model: string;
+  data: Record<string, unknown>;
+}
+
 export interface EvidenceLibraryRow {
   vault_document_id: number;
   user_id: number;
@@ -65,4 +79,12 @@ export interface EvidenceLibraryRow {
   char_count: number;
   extraction_status: string | null;
   created_at: string;
+  /** Sprint 8b. Structured fields LLM-extracted from text_content. Null
+   *  or undefined when the document hasn't been processed by
+   *  structured-extractor.ts (legacy rows, unsupported types, or
+   *  recently uploaded rows where the async extractor hasn't completed).
+   *  Optional so pre-Sprint-8b fixture scripts and call sites continue
+   *  to compile — the consumer in library-enrichment.ts reads this with
+   *  optional chaining and falls back to filename heuristics. */
+  structured_extraction?: EvidenceStructuredExtraction | null;
 }
