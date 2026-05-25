@@ -208,6 +208,14 @@ CREATE INDEX IF NOT EXISTS document_extractions_user_idx ON document_extractions
 ALTER TABLE document_extractions ADD COLUMN IF NOT EXISTS structured_extraction JSONB;
 CREATE INDEX IF NOT EXISTS document_extractions_structured_idx ON document_extractions ((structured_extraction->>'type')) WHERE structured_extraction IS NOT NULL;
 
+CREATE TABLE IF NOT EXISTS proposal_rerun_log (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  work_order_id INTEGER NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+  ran_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS proposal_rerun_log_user_time ON proposal_rerun_log (user_id, ran_at DESC);
+
 CREATE TABLE IF NOT EXISTS purchase_logs (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id),

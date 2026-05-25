@@ -7,6 +7,11 @@ import { generateProposalPackage } from "@/lib/proposal-package/generate-proposa
 import { generateProposalPackageV2 } from "@/lib/proposal-package/generate-proposal-v2";
 import { generateRosterFastTrack } from "@/lib/proposal-package/generate-roster";
 import { PROPOSAL_PLAN, ROSTER_PLAN } from "@/lib/proposal-package/types";
+import {
+  checkRerunQuota,
+  recordRerun,
+  rateLimitedResponseBody,
+} from "@/lib/proposal-package/rate-limit";
 
 /**
  * Sprint 6b dispatch flag for the proposal-draft plan.
@@ -193,6 +198,20 @@ export async function POST(request: Request) {
       },
       { status: gate.payment_allowed ? 409 : 402 },
     );
+  }
+
+  // Proposal-draft re-run rate limit (10 / 24h per user). Gated only for
+  // proposal-draft plans — roster has its own MAX_ATTEMPTS=6 cap baked in
+  // and doesn't go through this module. Record-before-generate so
+  // simultaneous triggers can't both squeak past the same recent-runs
+  // count; failures inside generation still count, because the goal is
+  // bounding Anthropic spend, not protecting against engine errors.
+  if (isProposalPlan(plan)) {
+    const quota = await checkRerunQuota(user.id);
+    if (!quota.allowed) {
+      return NextResponse.json(rateLimitedResponseBody(quota), { status: 429 });
+    }
+    await recordRerun({ userId: user.id, workOrderId: order.id });
   }
 
   // Sprint 6b dispatch. Proposal-draft routes through v2 (the new scoring
