@@ -28,13 +28,15 @@
  * require them.
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Gap, MatchedTender, MatchedGrant, ReadinessDimensions, TierSlug } from "@/lib/types";
 import { decodeHtmlEntities } from "@/lib/text/entities";
 import { scoreReadiness } from "@/lib/proposal-package/readiness-engine";
 import type { ApplicantContext } from "@/lib/proposal-package/applicant-context";
 import type { ServiceSku, RoutedGap } from "@/lib/proposal-package/scoring-engine";
+import { enrichApplicantContextFromLibrary } from "@/lib/proposal-package/library-enrichment";
+import type { LibraryContextResponse } from "@/lib/proposal-package/library-context";
 
 interface AssessmentData {
   id: number;
@@ -121,7 +123,54 @@ export default function AssessmentResults({
   data: AssessmentData;
   onReset: () => void;
 }) {
-  const applicant = useMemo(() => applicantFromLegacyAssessment(data), [data]);
+  // Sprint 8c. Anonymous-wizard library carry-forward.
+  //
+  // GET /api/assessment/library-context fires on mount and tells us three
+  // things: whether the typed email matches a registered user, how many
+  // enrichable evidence docs that user has on file, and (only when the
+  // current viewer is authenticated AS that user) the library payload
+  // itself. The three states drive:
+  //
+  //   - no email match → libraryContext.doc_count === 0 → no banner, no
+  //     enrichment (Sprint 7 behaviour preserved verbatim)
+  //   - email match, viewer unauthed → banner: "you have N docs on file,
+  //     sign in to factor them in"
+  //   - email match, viewer signed in → silent enrichment + small badge:
+  //     "including N documents from your vault in this readiness"
+  //
+  // The fetch is best-effort; failure leaves libraryContext null and the
+  // page degrades to Sprint 7 behaviour silently.
+  const [libraryContext, setLibraryContext] = useState<LibraryContextResponse | null>(null);
+
+  useEffect(() => {
+    if (!data.email) return;
+    let cancelled = false;
+    fetch(`/api/assessment/library-context?email=${encodeURIComponent(data.email)}`, {
+      credentials: "include",
+    })
+      .then((r) => (r.ok ? (r.json() as Promise<LibraryContextResponse>) : null))
+      .then((j) => {
+        if (!cancelled && j) setLibraryContext(j);
+      })
+      .catch(() => {
+        // Silent — Sprint 7 behaviour is the safe fallback.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [data.email]);
+
+  // When the viewer is signed in as the email-matched user, the response
+  // includes the library payload and we enrich the ApplicantContext
+  // before scoring. Otherwise the context is the wizard's data alone.
+  const applicant = useMemo(() => {
+    const base = applicantFromLegacyAssessment(data);
+    if (libraryContext?.library && libraryContext.library.length > 0) {
+      return enrichApplicantContextFromLibrary(base, libraryContext.library);
+    }
+    return base;
+  }, [data, libraryContext]);
+
   const readiness = useMemo(() => scoreReadiness(applicant), [applicant]);
   const { summary, score, founderCredibility } = readiness;
   const primaryMeta = SKU_META[summary.primaryAction];
@@ -204,6 +253,47 @@ export default function AssessmentResults({
           )}
         </div>
       </section>
+
+      {/* Sprint 8c — library carry-forward signal.
+       *
+       * Two states render, always between the S1 hero and the S4 founder
+       * line — that's the highest-impact placement (immediately after the
+       * score, before the user has fully consumed the gaps).
+       *
+       *   signed_in_match=true  → small badge confirming enrichment ran
+       *   signed_in_match=false → banner inviting sign-in to enrich
+       *
+       * The banner is conversion-relevant: it surfaces a real reason to
+       * sign in (factor existing evidence into the score) without lying
+       * about what the lift would be (we don't run the enriched score
+       * client-side for an unauthed viewer).
+       */}
+      {libraryContext && libraryContext.doc_count > 0 && (
+        libraryContext.signed_in_match ? (
+          <section className="mb-10 pb-6 border-b border-rule">
+            <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-accent">
+              Library applied · {libraryContext.doc_count} document{libraryContext.doc_count === 1 ? "" : "s"} factored into this readiness
+            </p>
+          </section>
+        ) : (
+          <section className="mb-10 pb-6 border-b border-rule">
+            <div className="grid lg:grid-cols-[180px_1fr_auto] gap-4 lg:gap-10 items-baseline">
+              <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-mute">
+                Evidence on file
+              </p>
+              <p className="font-serif text-[16px] lg:text-[17px] leading-[1.5] text-ink">
+                You have {libraryContext.doc_count} evidence document{libraryContext.doc_count === 1 ? "" : "s"} on file from a previous session. Sign in to factor {libraryContext.doc_count === 1 ? "it" : "them"} into this score.
+              </p>
+              <Link
+                href={`/login?next=${encodeURIComponent("/assessment")}`}
+                className="font-mono text-[10px] tracking-[0.12em] uppercase text-ink border-b border-ink hover:text-accent hover:border-accent pb-0.5 whitespace-nowrap"
+              >
+                Sign in →
+              </Link>
+            </div>
+          </section>
+        )
+      )}
 
       {/* S4 — Founder-credibility line at the trust moment */}
       <section className="mb-14 pb-10 border-b border-rule">
