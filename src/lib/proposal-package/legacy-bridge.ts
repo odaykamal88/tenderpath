@@ -44,6 +44,7 @@ import {
   type WorkOrderRow,
 } from "./context";
 import { safeParseJSON } from "./llm";
+import type { MinedProfileFacts } from "@/lib/applicant-evidence/profile-miner";
 
 const HAIKU_MODEL = "claude-haiku-4-5-20251001";
 
@@ -244,27 +245,47 @@ export async function buildTenderInputFromLegacy(
  *
  * The engine handles missing fields gracefully — claims tagged with
  * provenance="gap" surface as gaps in B3 rather than crashing the run.
- * Sprint 8 (evidence carry-forward) will populate keyPersonnel and
+ * Sprint 8 (evidence carry-forward) populates keyPersonnel and
  * pastPerformance from applicant_library uploads, lifting first-pass quality.
+ *
+ * Sprint 8e: optional `minedFacts` overlays free-text-intake-mined facts
+ * onto the result. Policy is GAP-FILL ONLY — assessment-derived data always
+ * wins; mined facts only fill empty fields (yearsOfExperience=0, empty
+ * sectorsCovered/geographicReach, missing capabilityNarrative). This keeps
+ * the engine's "evidence > inferred" hierarchy intact: assessment data is
+ * crawled or wizard-collected; mined facts are user CLAIMS from intake.
  */
 export function buildApplicantContextFromAssessment(
   assessment: AssessmentRow | null,
   workOrder: WorkOrderRow,
+  minedFacts: MinedProfileFacts | null = null,
 ): ApplicantContext {
-  if (!assessment) {
-    return {
-      companyName: workOrder.email?.split("@")[0] ?? `Vendor ${workOrder.id}`,
-      countryOfRegistration: "Unknown",
-      yearsOfExperience: 0,
-      sectorsCovered: [],
-      keyPersonnel: [],
-      pastPerformance: [],
-      certifications: [],
-      geographicReach: [],
-      capabilityNarrative: "No company profile available — the applicant submitted this work order without completing the assessment flow.",
-    };
-  }
+  const base: ApplicantContext = assessment
+    ? buildFromAssessmentOnly(assessment, workOrder)
+    : {
+        companyName: workOrder.email?.split("@")[0] ?? `Vendor ${workOrder.id}`,
+        countryOfRegistration: "Unknown",
+        yearsOfExperience: 0,
+        sectorsCovered: [],
+        keyPersonnel: [],
+        pastPerformance: [],
+        certifications: [],
+        geographicReach: [],
+        capabilityNarrative:
+          "No company profile available — the applicant submitted this work order without completing the assessment flow.",
+      };
 
+  if (!minedFacts) return base;
+  return overlayMinedFacts(base, minedFacts);
+}
+
+/** Internal: build the assessment-only branch. Kept separate so the overlay
+ *  function has a clean input and the no-assessment branch reuses the same
+ *  shape rather than diverging in two places. */
+function buildFromAssessmentOnly(
+  assessment: AssessmentRow,
+  workOrder: WorkOrderRow,
+): ApplicantContext {
   const ai = (assessment.ai_analysis ?? {}) as Record<string, unknown>;
   const aiCapabilities = Array.isArray(ai.capabilities)
     ? (ai.capabilities as unknown[]).filter((c): c is string => typeof c === "string")
@@ -292,4 +313,76 @@ export function buildApplicantContextFromAssessment(
     geographicReach: Array.isArray(assessment.countries) ? assessment.countries : [],
     capabilityNarrative: assessment.description ?? undefined,
   };
+}
+
+/**
+ * Overlay mined intake facts onto a base ApplicantContext with a strict
+ * GAP-FILL policy:
+ *
+ *   - yearsOfExperience: filled only when base is 0 / falsy
+ *   - sectorsCovered:    filled only when base is empty; mined sectors AND
+ *                        capabilities both contribute (deduped)
+ *   - geographicReach:   filled only when base is empty
+ *   - capabilityNarrative: filled only when base is missing/empty; synthesised
+ *                        from agencies + capabilities + years to give the
+ *                        engine SOMETHING to reason against
+ *
+ * Mined facts are CLAIMS — they never overwrite assessment-derived data. The
+ * engine's provenance labelling (`evidence` vs `inferred`) keeps these from
+ * being fraudulently elevated to "evidenced" requirement matches downstream.
+ *
+ * Pure — exported for the acceptance test.
+ */
+export function overlayMinedFacts(
+  base: ApplicantContext,
+  mined: MinedProfileFacts,
+): ApplicantContext {
+  const out: ApplicantContext = { ...base };
+
+  if ((!out.yearsOfExperience || out.yearsOfExperience === 0) && typeof mined.years_of_experience === "number") {
+    out.yearsOfExperience = mined.years_of_experience;
+  }
+
+  if (out.sectorsCovered.length === 0) {
+    const minedSectors = [
+      ...(mined.sectors_covered ?? []),
+      ...(mined.key_capabilities ?? []),
+    ].filter((s) => typeof s === "string" && s.length > 0);
+    if (minedSectors.length > 0) {
+      out.sectorsCovered = Array.from(new Set(minedSectors));
+    }
+  }
+
+  if (out.geographicReach.length === 0 && Array.isArray(mined.geographic_reach) && mined.geographic_reach.length > 0) {
+    out.geographicReach = Array.from(new Set(mined.geographic_reach));
+  }
+
+  const baseNarrative = out.capabilityNarrative?.trim() ?? "";
+  if (baseNarrative.length === 0) {
+    const synth = synthesizeNarrativeFromMined(mined);
+    if (synth) out.capabilityNarrative = synth;
+  }
+
+  return out;
+}
+
+function synthesizeNarrativeFromMined(mined: MinedProfileFacts): string | null {
+  const parts: string[] = [];
+  if (typeof mined.years_of_experience === "number" && mined.years_of_experience > 0) {
+    parts.push(`${mined.years_of_experience} years of operating experience`);
+  }
+  if (mined.sectors_covered && mined.sectors_covered.length > 0) {
+    parts.push(`active in ${mined.sectors_covered.slice(0, 4).join(", ")}`);
+  }
+  if (mined.key_capabilities && mined.key_capabilities.length > 0) {
+    parts.push(`with capabilities in ${mined.key_capabilities.slice(0, 4).join(", ")}`);
+  }
+  if (mined.agencies_worked_with && mined.agencies_worked_with.length > 0) {
+    parts.push(`engaged previously with ${mined.agencies_worked_with.slice(0, 6).join(", ")}`);
+  }
+  if (mined.geographic_reach && mined.geographic_reach.length > 0) {
+    parts.push(`operating in ${mined.geographic_reach.slice(0, 4).join(", ")}`);
+  }
+  if (parts.length === 0) return null;
+  return `Vendor self-described (intake claims, not verified): ${parts.join("; ")}.`;
 }

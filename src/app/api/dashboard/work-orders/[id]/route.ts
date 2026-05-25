@@ -1,6 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
+import {
+  mineProfileFactsFromIntake,
+  mergeMinedFacts,
+  type MinedProfileFacts,
+} from "@/lib/applicant-evidence/profile-miner";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const guard = await requireAuth(request);
@@ -61,6 +66,53 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!rows.length) {
     return NextResponse.json({ error: "Work order not found" }, { status: 404 });
   }
+
+  // Sprint 8e: free-text intake mining. Run a Haiku pass on the merged intake
+  // to extract structured profile facts (years_of_experience, sectors_covered,
+  // agencies_worked_with, geographic_reach, key_capabilities) and merge them
+  // into users.mined_profile_facts. These are CLAIMS, not EVIDENCE — the
+  // engine treats them as inferred fallbacks, not evidenced requirement
+  // matches. Subsequent engine runs read mined_profile_facts to fill empty
+  // ApplicantContext fields the user hasn't supplied via the wizard.
+  //
+  // Wrapped in after() so the user's PATCH returns immediately; the miner
+  // (one Haiku call, ~1-2s) runs post-response and is non-fatal. Mining only
+  // fires when the merged intake has free-text material worth processing —
+  // mineProfileFactsFromIntake guards on MIN_TEXT_CHARS internally.
+  const userId = guard.user!.id;
+  const fullIntake = (rows[0] as { intake: Record<string, unknown> }).intake;
+  after(async () => {
+    try {
+      const fresh = await mineProfileFactsFromIntake(fullIntake);
+      if (!fresh) return; // not enough text, or LLM failed — miner already logged
+
+      const priorRows = await sql`
+        SELECT mined_profile_facts FROM users WHERE id = ${userId} LIMIT 1
+      ` as unknown as Array<{ mined_profile_facts: MinedProfileFacts | null }>;
+      const prior = priorRows[0]?.mined_profile_facts ?? {};
+      const merged = mergeMinedFacts(prior, fresh);
+
+      await sql`
+        UPDATE users
+        SET mined_profile_facts = ${JSON.stringify(merged)}::jsonb,
+            updated_at = NOW()
+        WHERE id = ${userId}
+      `;
+      console.log("[applicant-evidence:profile_miner:merged]", {
+        userId,
+        workOrderId: numericId,
+        priorKeys: Object.keys(prior).length,
+        freshKeys: Object.keys(fresh).length,
+        mergedKeys: Object.keys(merged).length,
+      });
+    } catch (err) {
+      console.warn("[applicant-evidence:profile_miner:after_failed]", {
+        userId,
+        workOrderId: numericId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
 
   return NextResponse.json({ workOrder: rows[0] });
 }
