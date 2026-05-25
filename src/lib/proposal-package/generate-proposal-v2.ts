@@ -51,6 +51,8 @@ import { renderFinancialTemplateXlsx } from "./xlsx";
 import { bundleAndUpload, safeFilenameStem } from "./bundle";
 import { loadEvidenceLibrary } from "@/lib/applicant-evidence/query";
 import { enrichApplicantContextFromLibrary, summarizeEnrichment } from "./library-enrichment";
+import { sql } from "@/lib/db";
+import type { MinedProfileFacts } from "@/lib/applicant-evidence/profile-miner";
 
 export interface GenerateProposalV2Result {
   ok: boolean;
@@ -148,7 +150,31 @@ export async function generateProposalPackageV2({
   const pipelineItem = await loadPipelineItem(order.pipeline_item_id);
 
   const tenderInput = await buildTenderInputFromLegacy(order, pipelineItem);
-  const baseApplicant = buildApplicantContextFromAssessment(assessment, order);
+
+  // Sprint 8e: load mined_profile_facts (free-text intake mining output) so
+  // the builder can fill empty ApplicantContext fields with user-typed claims.
+  // GAP-FILL ONLY — assessment data always wins. Anonymous orders skip the
+  // lookup (mined facts are user-scoped). Read failures are non-fatal: the
+  // builder falls back to assessment-only construction.
+  let minedFacts: MinedProfileFacts | null = null;
+  if (order.user_id != null) {
+    try {
+      const minedRows = await sql`
+        SELECT mined_profile_facts FROM users WHERE id = ${order.user_id} LIMIT 1
+      ` as unknown as Array<{ mined_profile_facts: MinedProfileFacts | null }>;
+      const raw = minedRows[0]?.mined_profile_facts ?? null;
+      // Defensive: empty-object JSONB rows shouldn't trigger overlay logic.
+      minedFacts = raw && Object.keys(raw).length > 0 ? raw : null;
+    } catch (err) {
+      console.warn("[proposal-v2:mined_facts_load_failed]", {
+        workOrderId,
+        userId: order.user_id,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  const baseApplicant = buildApplicantContextFromAssessment(assessment, order, minedFacts);
 
   // ----------------------------------------------------------------------
   // Sprint 8 carry-forward: enrich the ApplicantContext with structured
