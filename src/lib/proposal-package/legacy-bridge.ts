@@ -13,19 +13,23 @@
  *
  * This module bridges the two by producing a TenderInput with a single
  * "solicitation" IngestedDoc (the flattened tender prose) and an
- * ApplicantContext built from the assessment + AI analysis. It's an
- * intentionally lossy bridge — multi-lot detection, corrigendum
- * supersession, and Q&A binding only land when the upstream upload
- * pipeline starts producing the multi-doc shape (Sprint 6c+).
+ * ApplicantContext built from the assessment + AI analysis.
  *
- * The single-doc + cumulative-methodology default works for the majority
- * of paid orders TenderPath sees today (single-document RFPs / single-lot
- * RFQs / grant calls). Multi-lot bidders running the new pipeline against
- * a true UN multi-lot ITB will see ONE merged criteria set on the page;
- * the engine still scores it, just not lot-by-lot. Sprint 6c lifts this.
+ * Sprint 6c: multi-lot detection now runs before the engine. A regex
+ * heuristic ("Lot 1" / "Lot A" / "Lot I" markers) short-circuits to
+ * single-lot when the tender prose has no such markers (~95% of paid
+ * orders today). When markers appear, a Haiku call returns the lot list
+ * so the rubric is scored per-lot. This closes the silent-correctness
+ * bug where a multi-lot ITB was scored as one merged criteria set.
+ *
+ * Still lossy: corrigendum supersession + Q&A binding land when the
+ * upstream upload pipeline starts producing the multi-doc shape; today
+ * the entire tender corpus collapses into one "solicitation" doc.
  */
 
 import { createHash } from "node:crypto";
+
+import Anthropic from "@anthropic-ai/sdk";
 
 import type {
   DocManifestEntry,
@@ -39,6 +43,19 @@ import {
   type PipelineRow,
   type WorkOrderRow,
 } from "./context";
+import { safeParseJSON } from "./llm";
+
+const HAIKU_MODEL = "claude-haiku-4-5-20251001";
+
+let _client: Anthropic | null = null;
+function getClient(): Anthropic {
+  if (!_client) {
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) throw new Error("ANTHROPIC_API_KEY is not set");
+    _client = new Anthropic({ apiKey: key, maxRetries: 3, timeout: 60_000 });
+  }
+  return _client;
+}
 
 /** Stable 16-char SHA1 prefix for DocManifestEntry.contentHash. */
 function shortHash(text: string): string {
@@ -54,17 +71,134 @@ function safeSlug(text: string, maxLen = 60): string {
     .toLowerCase() || "tender";
 }
 
+export interface DetectedLot {
+  lotId: string;
+  label: string;
+  scope?: string;
+}
+
+/**
+ * Markers that suggest a multi-lot tender. Conservative on purpose — false
+ * positives trigger a useless ~5s Haiku call; false negatives quietly collapse
+ * a multi-lot tender to single-lot scoring (the bug we're closing). The regex
+ * matches "Lot 1", "Lot-1", "Lot A", "Lot I" but NOT "lot of work".
+ */
+const LOT_MARKER = /\blot[- ]?(?:\d{1,3}|[IVX]{1,5}\b|[A-Z]\b)/i;
+
+const LOT_DETECTION_PROMPT = `You are a UN procurement lot extractor. Given the tender prose below, identify whether this is a multi-lot tender and return the list of lots.
+
+A LOT is a separately-biddable group of items within ONE tender notice. Multi-lot tenders evaluate per-lot (a vendor may quote on a subset), single-lot tenders evaluate the whole bid as one.
+
+RULES:
+- Return [] when the tender is single-lot (one indivisible scope).
+- When multi-lot, return ONE entry per lot. Use the tender's own lot identifier as lotId ("1", "2", "A", "I"); fall back to "lot-1" / "lot-2" if the tender doesn't number them.
+- Label should be a short human-readable description from the tender (e.g. "HDPE pipes and fittings, Taiz City"). 80 chars max.
+- Scope is optional; include only if the tender clearly states a separate scope per lot.
+
+Return JSON: {"lots": [{"lotId": string, "label": string, "scope"?: string}]}
+Return {"lots": []} for single-lot tenders — do NOT invent a "main" lot.
+
+TENDER:
+`;
+
+interface LotDetectionResponse {
+  lots?: Array<{ lotId?: unknown; label?: unknown; scope?: unknown }>;
+}
+
+/**
+ * Detect lot metadata from tender prose. Heuristic-first: when no "Lot N"
+ * markers appear, returns single-lot without calling the LLM (cheap +
+ * correct for the dominant case). When markers DO appear, asks Haiku to
+ * enumerate. Falls back to single-lot on any LLM failure / parse error so
+ * the run never fails on lot detection alone.
+ *
+ * Returned array is ALWAYS non-empty. Single-lot path returns one entry
+ * with lotId="main" — the engine's convention (LotRubric.lotId="main")
+ * so downstream code can address a lot without conditional logic.
+ */
+export async function detectLotMetadata(
+  tenderText: string,
+  tenderTitle: string,
+): Promise<DetectedLot[]> {
+  const fallback: DetectedLot[] = [
+    { lotId: "main", label: tenderTitle.slice(0, 80) },
+  ];
+
+  if (!LOT_MARKER.test(tenderText)) {
+    return fallback;
+  }
+
+  try {
+    const client = getClient();
+    const truncated = tenderText.slice(0, 30_000); // bound the prompt
+    const completion = await client.messages.create({
+      model: HAIKU_MODEL,
+      max_tokens: 1024,
+      temperature: 0,
+      messages: [
+        { role: "user", content: `${LOT_DETECTION_PROMPT}${truncated}` },
+      ],
+    });
+    const textBlock = completion.content.find((b) => b.type === "text");
+    if (!textBlock || textBlock.type !== "text") {
+      console.warn("[legacy-bridge:lot_detection_no_text_block]", { tenderTitle });
+      return fallback;
+    }
+
+    const parsed = safeParseJSON<LotDetectionResponse>(
+      textBlock.text,
+      { lots: [] },
+      "legacy-bridge:lot_detection",
+    );
+    if (!Array.isArray(parsed.lots) || parsed.lots.length === 0) {
+      // Markers present but model couldn't enumerate — likely a false-positive
+      // marker (e.g. "a lot of work"). Single-lot is the safe fall-back.
+      return fallback;
+    }
+
+    const cleaned: DetectedLot[] = [];
+    for (const lot of parsed.lots) {
+      if (typeof lot?.lotId !== "string" || typeof lot?.label !== "string") continue;
+      const lotId = lot.lotId.trim().slice(0, 32);
+      const label = lot.label.trim().slice(0, 80);
+      if (!lotId || !label) continue;
+      const scope = typeof lot.scope === "string" ? lot.scope.trim().slice(0, 240) : undefined;
+      cleaned.push(scope ? { lotId, label, scope } : { lotId, label });
+    }
+
+    if (cleaned.length === 0) return fallback;
+    console.log("[legacy-bridge:lot_detection_succeeded]", {
+      tenderTitle,
+      lotCount: cleaned.length,
+      lotIds: cleaned.map((l) => l.lotId),
+    });
+    return cleaned;
+  } catch (err) {
+    console.warn("[legacy-bridge:lot_detection_failed]", {
+      tenderTitle,
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return fallback;
+  }
+}
+
 /**
  * Build a TenderInput from a legacy work-order row. The tender prose is
- * flattened into ONE IngestedDoc with role="solicitation". The contentHash
- * lets the engine detect "did this exact input change between runs" — when
- * the applicant re-runs after editing intake or after a pipeline crawl
- * refresh, a new hash triggers a fresh extraction.
+ * flattened into ONE IngestedDoc with role="solicitation" — corrigendum /
+ * amendment / Q&A binding will lift in a future sprint once the upload
+ * pipeline produces per-role files.
+ *
+ * Multi-lot detection runs inline (Sprint 6c). Single-lot tenders (the
+ * dominant case) short-circuit on the regex heuristic and never call
+ * the LLM. Multi-lot tenders trigger a Haiku enumeration so the engine
+ * scores per-lot instead of merging criteria.
+ *
+ * Async because of the lot-detection LLM call. Callers must await.
  */
-export function buildTenderInputFromLegacy(
+export async function buildTenderInputFromLegacy(
   workOrder: WorkOrderRow,
   pipelineItem: PipelineRow | null,
-): TenderInput {
+): Promise<TenderInput> {
   const tenderText = buildTenderText(workOrder, pipelineItem);
   const tenderTitle =
     pipelineItem?.tender_title ?? workOrder.tender_title ?? `Work Order ${workOrder.id}`;
@@ -87,14 +221,16 @@ export function buildTenderInputFromLegacy(
     text: tenderText,
   };
 
+  const lotMetadata = await detectLotMetadata(tenderText, tenderTitle);
+
   return {
     tenderId,
     // Legacy data doesn't carry an explicit lane flag. Default to procurement
     // since 95%+ of paid orders are UN/IFI procurement; grant lanes will
-    // overrides this via pipeline_items.opportunity_type in 6c.
+    // override this via pipeline_items.opportunity_type in a later sprint.
     lane: "procurement",
     methodology: "cumulative",
-    lotMetadata: [{ lotId: "main", label: tenderTitle.slice(0, 80) }],
+    lotMetadata,
     docs: [solicitationDoc],
   };
 }
