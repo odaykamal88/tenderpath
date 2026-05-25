@@ -205,6 +205,8 @@ CREATE TABLE IF NOT EXISTS document_extractions (
   UNIQUE(user_id, file_url)
 );
 CREATE INDEX IF NOT EXISTS document_extractions_user_idx ON document_extractions (user_id, created_at DESC);
+ALTER TABLE document_extractions ADD COLUMN IF NOT EXISTS structured_extraction JSONB;
+CREATE INDEX IF NOT EXISTS document_extractions_structured_idx ON document_extractions ((structured_extraction->>'type')) WHERE structured_extraction IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS purchase_logs (
   id SERIAL PRIMARY KEY,

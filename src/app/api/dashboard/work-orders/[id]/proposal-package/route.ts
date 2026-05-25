@@ -10,10 +10,14 @@ import { PROPOSAL_PLAN, PROPOSAL_MAX_ATTEMPTS } from "@/lib/proposal-package/typ
 const PROPOSAL_ENGINE: "v1" | "v2" = (process.env.PROPOSAL_ENGINE === "v1") ? "v1" : "v2";
 
 export const runtime = "nodejs";
-// Sprint 6b: bumped from 300 to 800 for the v2 engine path (extractRubric +
-// runRevisionLoop runs ~5-7 min typical). See /api/proposals/generate route
-// for the per-step latency breakdown.
-export const maxDuration = 800;
+// Vercel Pro caps maxDuration at 300s. Sprint 6b-2 set this to 800s
+// (mis-remembering the ceiling as 900s) — the build succeeded but Vercel
+// rejected the lambda config at deploy time, putting the deployment in
+// ERROR state with no signal in the build log. Every deploy from Sprint
+// 6b-2 to 8b failed for this reason. If the v2 engine path legitimately
+// needs more than 300s, the right answer is a background job (Sprint 6c
+// commit message tagged this as deferred), not a higher number.
+export const maxDuration = 300;
 
 /**
  * Sprint 6b. Drop the engine's SKU sales fields (rationale, ctaCopy, plus

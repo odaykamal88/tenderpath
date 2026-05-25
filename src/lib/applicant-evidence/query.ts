@@ -15,7 +15,7 @@
  * because filenames are noisy.
  */
 import { sql } from "@/lib/db";
-import type { EvidenceLibraryRow, EvidenceMatch } from "./types";
+import type { EvidenceLibraryRow, EvidenceMatch, EvidenceStructuredExtraction } from "./types";
 
 const STOPWORDS = new Set([
   "a","an","and","applicant","applicants","are","as","at","be","before","being","by","each","for","from","have","in","is","it","its","lead","may","must","not","of","on","or","other","required","requirement","requirements","shall","should","sources","stable","sufficient","the","this","to","with",
@@ -69,7 +69,8 @@ export async function loadEvidenceLibrary(
       vd.created_at,
       de.text_content,
       de.char_count,
-      de.status AS extraction_status
+      de.status AS extraction_status,
+      de.structured_extraction
     FROM vault_documents vd
     LEFT JOIN document_extractions de
       ON de.user_id = vd.user_id
@@ -88,6 +89,7 @@ export async function loadEvidenceLibrary(
     text_content: string | null;
     char_count: number | null;
     extraction_status: string | null;
+    structured_extraction: EvidenceStructuredExtraction | null;
   }>;
   return rows.map((r) => ({
     vault_document_id: r.vault_document_id,
@@ -100,6 +102,9 @@ export async function loadEvidenceLibrary(
     char_count: r.char_count ?? 0,
     extraction_status: r.extraction_status,
     created_at: r.created_at,
+    // Sprint 8b: pass the structured payload through unchanged. NULL for
+    // legacy rows + rows whose async structured extraction hasn't completed.
+    structured_extraction: r.structured_extraction ?? null,
   }));
 }
 

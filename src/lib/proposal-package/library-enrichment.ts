@@ -77,32 +77,112 @@ function deriveYear(fileName: string, tags: string[]): number {
   return 0;
 }
 
-function derivePersonnel(row: EvidenceLibraryRow) {
-  return {
-    name: deriveDisplayNameFromFile(row.file_name),
-    role: "Senior staff",
-    yearsExperience: 0,
-    sectors: row.tags.length > 0 ? row.tags.slice(0, 3) : undefined,
-  };
+/**
+ * Read a string field from a structured_extraction payload. Returns the
+ * trimmed string when present and non-empty, otherwise null. Used by the
+ * derivers below to prefer LLM-extracted data over filename heuristics
+ * without hard-failing on missing / typo'd fields.
+ */
+function structuredString(
+  row: EvidenceLibraryRow,
+  expectedType: "cv" | "past_performance" | "certificate",
+  field: string,
+): string | null {
+  const se = row.structured_extraction;
+  if (!se || se.type !== expectedType) return null;
+  const raw = se.data?.[field];
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
-function derivePastPerformance(row: EvidenceLibraryRow) {
-  const project = deriveDisplayNameFromFile(row.file_name);
-  // Use the first non-noise tag as the client signal if present
-  const client = row.tags.find((t) => t.length >= 3) ?? "Unknown client";
+function structuredNumber(
+  row: EvidenceLibraryRow,
+  expectedType: "cv" | "past_performance" | "certificate",
+  field: string,
+): number | null {
+  const se = row.structured_extraction;
+  if (!se || se.type !== expectedType) return null;
+  const raw = se.data?.[field];
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+  return raw;
+}
+
+function structuredStringArray(
+  row: EvidenceLibraryRow,
+  expectedType: "cv" | "past_performance" | "certificate",
+  field: string,
+): string[] | null {
+  const se = row.structured_extraction;
+  if (!se || se.type !== expectedType) return null;
+  const raw = se.data?.[field];
+  if (!Array.isArray(raw)) return null;
+  const cleaned = raw.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map((x) => x.trim());
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+/**
+ * Sprint 8 ships filename → role/years placeholders. Sprint 8b prefers
+ * LLM-extracted fields when they're present on the row. Order of
+ * preference for each field:
+ *   structured (Sprint 8b)  →  filename / tag heuristic (Sprint 8)
+ */
+function derivePersonnel(row: EvidenceLibraryRow) {
+  const structuredName = structuredString(row, "cv", "name");
+  const structuredRole = structuredString(row, "cv", "role");
+  const structuredYears = structuredNumber(row, "cv", "years_experience");
+  const structuredSectors = structuredStringArray(row, "cv", "sectors");
+
   return {
-    client,
-    project,
-    year: deriveYear(row.file_name, row.tags),
-    sector: row.tags[0] && row.tags[0] !== client ? row.tags[0] : undefined,
+    name: structuredName ?? deriveDisplayNameFromFile(row.file_name),
+    role: structuredRole ?? "Senior staff",
+    yearsExperience: structuredYears ?? 0,
+    sectors: structuredSectors ?? (row.tags.length > 0 ? row.tags.slice(0, 3) : undefined),
   };
 }
 
 /**
- * Take a row's filename + tags as the certification label. The engine
- * counts entries; the precise wording is less important than presence.
+ * Format a numeric USD amount as the rendered `value` string the
+ * ApplicantContext.pastPerformance[] entry expects (e.g. 220000 → "USD 220,000").
+ * Returns undefined when no amount was LLM-extracted.
+ */
+function formatAmountUsd(amount: number | null): string | undefined {
+  if (amount == null || amount <= 0) return undefined;
+  return `USD ${amount.toLocaleString("en-US")}`;
+}
+
+function derivePastPerformance(row: EvidenceLibraryRow) {
+  const structuredClient = structuredString(row, "past_performance", "client");
+  const structuredProject = structuredString(row, "past_performance", "project");
+  const structuredYear = structuredNumber(row, "past_performance", "year");
+  const structuredSector = structuredString(row, "past_performance", "sector");
+  const structuredAmount = structuredNumber(row, "past_performance", "amount_usd");
+
+  const project = structuredProject ?? deriveDisplayNameFromFile(row.file_name);
+  const client = structuredClient ?? (row.tags.find((t) => t.length >= 3) ?? "Unknown client");
+  const sector = structuredSector ?? (row.tags[0] && row.tags[0] !== client ? row.tags[0] : undefined);
+
+  return {
+    client,
+    project,
+    year: structuredYear ?? deriveYear(row.file_name, row.tags),
+    sector,
+    // Sprint 8b: `value` is the rendered string the ApplicantContext
+    // schema expects. Omitted when no amount was LLM-extracted — the
+    // engine's "did this past performance meet the amount threshold?"
+    // check sees `undefined` as unknown and degrades to inferred, not gap.
+    value: formatAmountUsd(structuredAmount),
+  };
+}
+
+/**
+ * Sprint 8 used the filename / tag as the certification label. Sprint 8b
+ * prefers the LLM-extracted "standard" field (e.g. "ISO 9001:2015") so
+ * the rendered cert list reads naturally.
  */
 function deriveCertificationLabel(row: EvidenceLibraryRow): string {
+  const structuredStandard = structuredString(row, "certificate", "standard");
+  if (structuredStandard) return structuredStandard;
   // Prefer a tag that looks like an ISO/standard code, otherwise filename
   const isoTag = row.tags.find((t) => /\b(iso|en|bs)\b/i.test(t) || /^iso[-_ ]?\d{4,5}/i.test(t));
   if (isoTag) return isoTag;

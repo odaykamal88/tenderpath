@@ -39,11 +39,16 @@ import {
 } from "@/lib/service-fulfillment-gates";
 
 export const runtime = "nodejs";
-// Sprint 6b: v2 engine runs extractRubric (~30s) + 2x scoreDraft (~60s each)
-// + 2x generateDraftSections (~90s each) + cascade detection (~20s). With
-// headroom for slow rubrics + retries that's ~5-7 min typical, ~10 min P99.
-// Vercel hobby tier caps at 60s, pro at 900s — we run on pro for this route.
-export const maxDuration = 800;
+// Vercel Pro caps maxDuration at 300s (NOT 900s as the prior comment
+// claimed). Sprint 6b-2 set this to 800s and every deploy through 8b
+// silently failed: build succeeded, lambda-config validation rejected
+// the 800s value, deployment went to ERROR state with no error in the
+// build log. The v2 engine's typical run (~5-7 min, with extractRubric
+// + 2x scoreDraft + 2x generateDraftSections + cascades) sits right at
+// the 300s ceiling — long-tail runs will time out, the retry path in
+// generate-proposal-v2 absorbs that. A background-job migration is the
+// proper unblock for sustained >300s work.
+export const maxDuration = 300;
 
 type WorkOrderForGeneration = {
   id: number;
