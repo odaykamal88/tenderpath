@@ -37,6 +37,7 @@ import {
   loadExistingPackage,
   loadAssessmentForOrder,
   loadPipelineItem,
+  generatedAtLabel,
 } from "./context";
 import { upsertPackage, markFailure } from "./persist";
 import { extractRubricFromInput } from "./rubric-extractor";
@@ -45,6 +46,9 @@ import {
   buildTenderInputFromLegacy,
   buildApplicantContextFromAssessment,
 } from "./legacy-bridge";
+import { renderScoredDraftPdf } from "./pdfDocs";
+import { renderFinancialTemplateXlsx } from "./xlsx";
+import { bundleAndUpload, safeFilenameStem } from "./bundle";
 
 export interface GenerateProposalV2Result {
   ok: boolean;
@@ -141,7 +145,7 @@ export async function generateProposalPackageV2({
   const assessment = await loadAssessmentForOrder(order);
   const pipelineItem = await loadPipelineItem(order.pipeline_item_id);
 
-  const tenderInput = buildTenderInputFromLegacy(order, pipelineItem);
+  const tenderInput = await buildTenderInputFromLegacy(order, pipelineItem);
   const applicant = buildApplicantContextFromAssessment(assessment, order);
 
   const tenderTitle = pipelineItem?.tender_title ?? order.tender_title;
@@ -205,6 +209,69 @@ export async function generateProposalPackageV2({
       tenderRubric: rubric,
     });
 
+    // ----------------------------------------------------------------------
+    // Render the deliverable bundle (Sprint 6c).
+    //
+    // The new scored PDF (renderScoredDraftPdf) is the primary artefact —
+    // it renders the engine's emit shape directly (B1 verdict → B2 score
+    // → B3 routed gaps → B4 draft with inline provenance → B5 history).
+    // The financial template XLSX gives the applicant a pre-formatted form
+    // to fill in. Both bundle into one ZIP at the same vault path the
+    // legacy pipeline uses, so downstream callers (email + dashboard
+    // Download buttons) don't change.
+    //
+    // Rendering / upload failures DO NOT block persistence — the screen
+    // view is still useful. uploadError lands in proposal_packages.error_message
+    // so the failure is queryable from the DB.
+    // ----------------------------------------------------------------------
+    const generatedAt = generatedAtLabel();
+    let pdfUrl: string | null = null;
+    let pdfPathname: string | null = null;
+    let uploadError: string | null = null;
+    try {
+      const [scoredPdf, financialXlsx] = await Promise.all([
+        renderScoredDraftPdf({
+          rubric,
+          draft: result.finalDraft,
+          score: result.finalScore,
+          applicant,
+          history: result.history,
+          workOrderId,
+          tenderTitle: tenderTitle ?? null,
+          agency: agency ?? null,
+          generatedAt,
+        }),
+        renderFinancialTemplateXlsx(output, {
+          companyName: applicant.companyName,
+          tenderTitle: tenderTitle ?? null,
+          agency: agency ?? null,
+          generatedAt,
+        }),
+      ]);
+      const stem = safeFilenameStem(tenderTitle ?? null, `proposal-${workOrderId}`);
+      const uploaded = await bundleAndUpload(
+        [
+          { filename: `${stem}-scored-draft.pdf`, content: scoredPdf },
+          { filename: `${stem}-financial-template.xlsx`, content: financialXlsx },
+        ],
+        `proposal-draft/${workOrderId}-${Date.now()}.zip`,
+      );
+      pdfUrl = uploaded.url;
+      pdfPathname = uploaded.pathname;
+      uploadError = uploaded.error;
+      console.log("[proposal-v2:bundle_uploaded]", {
+        workOrderId,
+        pdfBytes: scoredPdf.byteLength,
+        xlsxBytes: financialXlsx.byteLength,
+        pdfUrl,
+        uploadError,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[proposal-v2:bundle_failed]", { workOrderId, error: msg });
+      uploadError = `bundle_failed: ${msg}`;
+    }
+
     const packageId = await upsertPackage({
       workOrderId,
       userId: order.user_id,
@@ -216,9 +283,9 @@ export async function generateProposalPackageV2({
       intake: order.intake ?? {},
       stripeSessionId: order.stripe_session_id,
       output,
-      pdfUrl: null, // Sprint 6c: wire renderScoredDraftPdf + bundle upload
-      pdfPathname: null,
-      uploadError: null,
+      pdfUrl,
+      pdfPathname,
+      uploadError,
       attempts,
       existingPackageId: existing?.id ?? null,
       generationStatus: "ready",
