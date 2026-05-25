@@ -55,7 +55,30 @@ export async function applyAutoTagsForVaultDocument(args: {
   const merged = Array.from(new Set([...existingTags, ...result.tags]));
   // Type policy: upgrade only when the user-declared type is "other" and
   // the auto-tagger produced something more specific. Otherwise leave alone.
-  const nextType = row.type === "other" && result.type !== "other" ? result.type : row.type;
+  let nextType = row.type === "other" && result.type !== "other" ? result.type : row.type;
+
+  // Sprint 8d: LLM type-recovery fallback. When the keyword auto-tagger
+  // left the row as "other" but we have enough extracted text, ask Haiku
+  // to classify the document. Only fires when (1) current type IS still
+  // "other" after keyword rules, (2) text_content is present and long
+  // enough, and (3) the LLM returns a high-confidence specific type —
+  // the helper itself returns null for low-confidence / "other" / any
+  // failure, so the row stays "other" by default (safe).
+  if (nextType === "other" && row.text_content && row.text_content.length >= MIN_TEXT_CHARS_FOR_CLASSIFIER) {
+    const { classifyEvidenceType } = await import("./type-classifier");
+    const llmType = await classifyEvidenceType({
+      fileName: row.name,
+      textContent: row.text_content,
+    });
+    if (llmType) {
+      console.log("[applicant-evidence:type_classifier:recovered]", {
+        vaultDocumentId: args.vaultDocumentId,
+        from: "other",
+        to: llmType,
+      });
+      nextType = llmType;
+    }
+  }
 
   // Skip write if nothing changed (idempotent / cheap repeated call).
   const tagsUnchanged = existingTags.length === merged.length
@@ -70,3 +93,10 @@ export async function applyAutoTagsForVaultDocument(args: {
       AND user_id = ${args.userId}
   `;
 }
+
+// Sprint 8d. Imported lazily inside applyAutoTagsForVaultDocument so the
+// module load cost of @anthropic-ai/sdk only happens on the codepath that
+// actually needs LLM classification. The constant mirrors the classifier's
+// own MIN_TEXT_CHARS — duplicating it as a literal avoids pulling the
+// classifier module just to read a number.
+const MIN_TEXT_CHARS_FOR_CLASSIFIER = 300;
