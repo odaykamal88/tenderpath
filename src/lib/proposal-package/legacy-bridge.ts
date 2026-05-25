@@ -31,6 +31,7 @@ import { createHash } from "node:crypto";
 
 import Anthropic from "@anthropic-ai/sdk";
 
+import { sql } from "@/lib/db";
 import type {
   DocManifestEntry,
   IngestedDoc,
@@ -183,18 +184,246 @@ export async function detectLotMetadata(
   }
 }
 
+// --------------------------------------------------------------------------
+// Supplementary tender docs — corrigendum / amendment + Q&A binding (Sprint 9)
+// --------------------------------------------------------------------------
+
 /**
- * Build a TenderInput from a legacy work-order row. The tender prose is
- * flattened into ONE IngestedDoc with role="solicitation" — corrigendum /
- * amendment / Q&A binding will lift in a future sprint once the upload
- * pipeline produces per-role files.
+ * Intake shape for a single supplementary document the user has uploaded.
+ * Parallel to the existing `vault_url` / `vault_filename` / `vault_doc_id`
+ * triplet that addresses the main solicitation. Persisted on
+ * `work_orders.intake` as keys:
+ *
+ *   amendment_url, amendment_filename, amendment_doc_id   (corrigendum)
+ *   qa_url, qa_filename, qa_doc_id                        (Q&A round)
+ *
+ * The MVP supports ONE corrigendum + ONE Q&A doc per tender — the dominant
+ * case at submission time, and AGENTS.md's "assume one corrigendum exists
+ * until proven otherwise" guidance. Multi-amendment support promotes to
+ * arrays in a later sprint.
+ */
+export interface SupplementaryDocRef {
+  url?: string | null;
+  filename?: string | null;
+  vaultDocId?: number | null;
+  role: "amendment" | "qa";
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function asPositiveInt(value: unknown): number | null {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
+}
+
+/**
+ * Extract supplementary doc references from an intake JSONB. Pure — testable.
+ * Returns a (possibly empty) list of refs the bridge will try to resolve to
+ * extracted text. Either `url` or `vaultDocId` must be present for each ref
+ * to be returned — a filename without a payload is useless to the engine.
+ */
+export function extractSupplementaryDocRefs(
+  intake: Record<string, unknown> | null | undefined,
+): SupplementaryDocRef[] {
+  if (!intake) return [];
+  const refs: SupplementaryDocRef[] = [];
+
+  const amendmentUrl = asString(intake.amendment_url);
+  const amendmentVaultId = asPositiveInt(intake.amendment_doc_id);
+  if (amendmentUrl || amendmentVaultId) {
+    refs.push({
+      url: amendmentUrl,
+      filename: asString(intake.amendment_filename),
+      vaultDocId: amendmentVaultId,
+      role: "amendment",
+    });
+  }
+
+  const qaUrl = asString(intake.qa_url);
+  const qaVaultId = asPositiveInt(intake.qa_doc_id);
+  if (qaUrl || qaVaultId) {
+    refs.push({
+      url: qaUrl,
+      filename: asString(intake.qa_filename),
+      vaultDocId: qaVaultId,
+      role: "qa",
+    });
+  }
+
+  return refs;
+}
+
+/**
+ * Shape of the extraction row needed to build a supplementary IngestedDoc.
+ * Exported so the acceptance test can feed a hand-crafted row into
+ * buildIngestedDocFromExtraction without touching the DB.
+ */
+export interface SupplementaryExtractionRow {
+  file_name: string | null;
+  file_url: string | null;
+  text_content: string | null;
+  char_count: number | null;
+  status: string | null;
+}
+
+type ExtractionLookupRow = SupplementaryExtractionRow;
+
+/**
+ * Pure transformer: turn a (ref, extraction) pair into an IngestedDoc, or
+ * null when the extraction isn't usable (missing text, not in "extracted"
+ * status). Pure — exported for the acceptance test.
+ *
+ * Amendments emit `supersedes: ["solicitation"]` so the rubric extractor's
+ * prompt surfaces the corrigendum override explicitly. Q&A docs carry no
+ * supersedes — the engine reads them under role=qa with the
+ * "published clarifications are binding" prompt instruction.
+ */
+export function buildIngestedDocFromExtraction(
+  ref: SupplementaryDocRef,
+  extraction: SupplementaryExtractionRow | null,
+): IngestedDoc | null {
+  if (!extraction || !extraction.text_content || extraction.status !== "extracted") {
+    return null;
+  }
+  const filename = ref.filename ?? extraction.file_name ?? `${ref.role}.txt`;
+  const text = extraction.text_content;
+  const manifest: DocManifestEntry = {
+    docId: ref.role,
+    filename,
+    contentHash: shortHash(text),
+    role: ref.role,
+    supersedes: ref.role === "amendment" ? ["solicitation"] : undefined,
+  };
+  return { manifest, text };
+}
+
+/**
+ * Resolve a single supplementary doc ref to an extraction row. Tries the
+ * direct file_url match first (covers the vault_url legacy path), falls back
+ * to the vault_documents join when only a vault_doc_id is present. Returns
+ * null on lookup failure — the caller logs and continues without the doc.
+ */
+async function loadExtractionForRef(
+  userId: number,
+  ref: SupplementaryDocRef,
+): Promise<ExtractionLookupRow | null> {
+  try {
+    if (ref.url) {
+      const rows = await sql`
+        SELECT file_name, file_url, text_content, char_count, status
+        FROM document_extractions
+        WHERE user_id = ${userId} AND file_url = ${ref.url}
+        ORDER BY updated_at DESC NULLS LAST
+        LIMIT 1
+      ` as unknown as ExtractionLookupRow[];
+      if (rows[0]) return rows[0];
+    }
+    if (ref.vaultDocId) {
+      const rows = await sql`
+        SELECT
+          COALESCE(de.file_name, vd.name) AS file_name,
+          vd.file_url,
+          de.text_content,
+          de.char_count,
+          de.status
+        FROM vault_documents vd
+        LEFT JOIN document_extractions de
+          ON de.user_id = vd.user_id
+         AND (de.vault_document_id = vd.id OR de.file_url = vd.file_url)
+        WHERE vd.user_id = ${userId} AND vd.id = ${ref.vaultDocId}
+        ORDER BY de.updated_at DESC NULLS LAST
+        LIMIT 1
+      ` as unknown as ExtractionLookupRow[];
+      if (rows[0]) return rows[0];
+    }
+    return null;
+  } catch (err) {
+    console.warn("[legacy-bridge:supp_doc_lookup_failed]", {
+      userId,
+      role: ref.role,
+      url: ref.url,
+      vaultDocId: ref.vaultDocId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+/**
+ * Build a list of IngestedDocs for the supplementary roles (amendment + qa).
+ * Used by buildTenderInputFromLegacy to produce the multi-doc TenderInput
+ * that the rubric extractor already knows how to prioritise (rolePriority in
+ * rubric-extractor.ts: solicitation > tor > amendment > guidelines > qa).
+ *
+ * Amendments carry `supersedes: ['solicitation']` so the extractor's
+ * supersession-aware prompt knows the amendment text overrides matching
+ * points in the base solicitation — exactly the AGENTS.md hard rule:
+ * "Mis-scoring against an outdated rubric is a trust-killer; corrigendum-
+ * driven changes must be surfaced explicitly."
+ *
+ * Q&A docs are passed in as their own IngestedDoc rather than parsed into
+ * typed QAEntry[] / bindingClarifications. The extractor sees the full Q&A
+ * text under role=qa and the prompt instructs it to treat published Q&A as
+ * binding. A future sprint may add a Haiku pass that classifies Q&A entries
+ * into binding/informational/noise — for now, the model handles it inline.
+ */
+export async function loadSupplementaryTenderDocs(
+  intake: Record<string, unknown> | null | undefined,
+  userId: number | null,
+): Promise<IngestedDoc[]> {
+  if (!userId) return []; // anonymous orders never have a vault library
+  const refs = extractSupplementaryDocRefs(intake);
+  if (refs.length === 0) return [];
+
+  const out: IngestedDoc[] = [];
+  for (const ref of refs) {
+    const extraction = await loadExtractionForRef(userId, ref);
+    const doc = buildIngestedDocFromExtraction(ref, extraction);
+    if (!doc) {
+      console.warn("[legacy-bridge:supp_doc_not_extracted]", {
+        userId,
+        role: ref.role,
+        url: ref.url,
+        vaultDocId: ref.vaultDocId,
+        status: extraction?.status ?? "no_extraction",
+      });
+      continue;
+    }
+    out.push(doc);
+  }
+  return out;
+}
+
+/**
+ * Build a TenderInput from a legacy work-order row.
+ *
+ * The base solicitation prose (tender title + agency + pasted context +
+ * uploaded main TOR/RFP text via service-context) lands in ONE IngestedDoc
+ * with role="solicitation".
+ *
+ * Sprint 9: if the intake carries corrigendum / amendment or Q&A round
+ * uploads (amendment_url + qa_url shape — see SupplementaryDocRef above),
+ * each lands as its OWN IngestedDoc with role="amendment" / role="qa". The
+ * rubric extractor's rolePriority + supersession-aware prompt then treats
+ * them as authoritative overrides of the original solicitation, closing
+ * the AGENTS.md hard rule:
+ *
+ *   "Any proposal review must read the call's corrigenda and Q&A appendix
+ *    before scoring against the original guidelines."
  *
  * Multi-lot detection runs inline (Sprint 6c). Single-lot tenders (the
- * dominant case) short-circuit on the regex heuristic and never call
- * the LLM. Multi-lot tenders trigger a Haiku enumeration so the engine
- * scores per-lot instead of merging criteria.
+ * dominant case) short-circuit on the regex heuristic and never call the
+ * LLM. Multi-lot tenders trigger a Haiku enumeration so the engine scores
+ * per-lot instead of merging criteria.
  *
- * Async because of the lot-detection LLM call. Callers must await.
+ * Async because of the lot-detection LLM call + supplementary-doc DB
+ * lookups. Callers must await.
  */
 export async function buildTenderInputFromLegacy(
   workOrder: WorkOrderRow,
@@ -210,7 +439,7 @@ export async function buildTenderInputFromLegacy(
     ? `pipeline-${pipelineItem.tender_id}`
     : `wo-${workOrder.id}`;
 
-  const manifest: DocManifestEntry = {
+  const solicitationManifest: DocManifestEntry = {
     docId: "solicitation",
     filename: `${safeSlug(tenderTitle)}.txt`,
     contentHash: shortHash(tenderText),
@@ -218,11 +447,24 @@ export async function buildTenderInputFromLegacy(
   };
 
   const solicitationDoc: IngestedDoc = {
-    manifest,
+    manifest: solicitationManifest,
     text: tenderText,
   };
 
+  const supplementaryDocs = await loadSupplementaryTenderDocs(
+    workOrder.intake ?? null,
+    workOrder.user_id,
+  );
+
   const lotMetadata = await detectLotMetadata(tenderText, tenderTitle);
+
+  if (supplementaryDocs.length > 0) {
+    console.log("[legacy-bridge:supplementary_docs_loaded]", {
+      workOrderId: workOrder.id,
+      tenderTitle,
+      roles: supplementaryDocs.map((d) => d.manifest.role),
+    });
+  }
 
   return {
     tenderId,
@@ -232,7 +474,7 @@ export async function buildTenderInputFromLegacy(
     lane: "procurement",
     methodology: "cumulative",
     lotMetadata,
-    docs: [solicitationDoc],
+    docs: [solicitationDoc, ...supplementaryDocs],
   };
 }
 

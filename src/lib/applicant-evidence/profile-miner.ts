@@ -92,8 +92,17 @@ const SKIP_KEYS = new Set([
   "tender_file_name",
   "service_context",
   "service_documents",
-  "amendments_url",
+  // Sprint 9 — corrigendum + Q&A binding upload references. The
+  // SKIP_KEY_PATTERN regex catches these by suffix already, but listing them
+  // explicitly is self-documenting and survives any future regex tightening.
+  "amendment_url",
+  "amendment_filename",
+  "amendment_doc_id",
   "qa_url",
+  "qa_filename",
+  "qa_doc_id",
+  // Defensive: legacy plural in case any older callers emit it.
+  "amendments_url",
 ]);
 
 // Suffixes / patterns that always indicate non-narrative fields. Quick
