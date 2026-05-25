@@ -49,6 +49,8 @@ import {
 import { renderScoredDraftPdf } from "./pdfDocs";
 import { renderFinancialTemplateXlsx } from "./xlsx";
 import { bundleAndUpload, safeFilenameStem } from "./bundle";
+import { loadEvidenceLibrary } from "@/lib/applicant-evidence/query";
+import { enrichApplicantContextFromLibrary, summarizeEnrichment } from "./library-enrichment";
 
 export interface GenerateProposalV2Result {
   ok: boolean;
@@ -146,7 +148,37 @@ export async function generateProposalPackageV2({
   const pipelineItem = await loadPipelineItem(order.pipeline_item_id);
 
   const tenderInput = await buildTenderInputFromLegacy(order, pipelineItem);
-  const applicant = buildApplicantContextFromAssessment(assessment, order);
+  const baseApplicant = buildApplicantContextFromAssessment(assessment, order);
+
+  // ----------------------------------------------------------------------
+  // Sprint 8 carry-forward: enrich the ApplicantContext with structured
+  // derivations from the user's evidence library (vault_documents +
+  // document_extractions). The legacy proposal pipeline already keyword-
+  // matched the library via formatEvidenceLibraryForPrompt; v2 needs
+  // STRUCTURED enrichment because the new rubric scores typed fields
+  // (keyPersonnel[] / pastPerformance[] / certifications[]) rather than
+  // free-text claims.
+  //
+  // Anonymous orders (user_id null) skip the enrichment — the library is
+  // user-scoped. Library load failures are non-fatal: the engine still
+  // runs against baseApplicant. Sprint 8b will add LLM extraction so the
+  // structured entries carry real personnel / past-performance detail
+  // instead of filename-derived placeholders.
+  // ----------------------------------------------------------------------
+  let applicant = baseApplicant;
+  if (order.user_id != null) {
+    try {
+      const library = await loadEvidenceLibrary(order.user_id);
+      applicant = enrichApplicantContextFromLibrary(baseApplicant, library);
+      const summary = summarizeEnrichment(baseApplicant, applicant, library.length);
+      console.log("[proposal-v2:enriched]", { workOrderId, ...summary });
+    } catch (err) {
+      console.warn("[proposal-v2:enrichment_failed]", {
+        workOrderId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   const tenderTitle = pipelineItem?.tender_title ?? order.tender_title;
   const agency = pipelineItem?.tender_agency ?? order.agency;
