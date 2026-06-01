@@ -16,6 +16,7 @@ import { useMemo } from "react";
 import {
   adaptScored,
   ComplianceVerdict,
+  TenderInputNotice,
   RubricScore,
   RoutedGaps,
   DraftBody,
@@ -96,6 +97,11 @@ export default function PreviewClient({
         </div>
 
         <ComplianceVerdict score={scored.score} />
+        <TenderInputNotice
+          score={scored.score}
+          extractionConfidence={scored.extractionConfidence}
+          amendmentContext={scored.amendmentContext}
+        />
         <div className="space-y-5">
           <RubricScore
             score={scored.score}
