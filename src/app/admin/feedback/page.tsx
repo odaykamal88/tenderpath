@@ -98,6 +98,7 @@ export default function FeedbackQueuePage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [calibration, setCalibration] = useState<CalibrationReport | null>(null);
   const [tab, setTab] = useState<FeedbackState | "all">("captured");
+  const [kindFilter, setKindFilter] = useState<"all" | FeedbackKind>("all");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +112,10 @@ export default function FeedbackQueuePage() {
     setLoading(true);
     setError(null);
     try {
-      const qs = tab === "all" ? "" : `?state=${tab}`;
+      const params = new URLSearchParams();
+      if (tab !== "all") params.set("state", tab);
+      if (kindFilter !== "all") params.set("kind", kindFilter);
+      const qs = params.toString() ? `?${params.toString()}` : "";
       const res = await fetch(`/api/admin/feedback${qs}`, { headers: authHeaders() });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const body = (await res.json()) as { records: FeedbackRow[]; stats: Stats; calibration: CalibrationReport | null };
@@ -123,7 +127,7 @@ export default function FeedbackQueuePage() {
     } finally {
       setLoading(false);
     }
-  }, [tab]);
+  }, [tab, kindFilter]);
 
   useEffect(() => {
     load();
@@ -295,6 +299,18 @@ export default function FeedbackQueuePage() {
             </button>
           ))}
         </div>
+        {/* Kind filter — keep the review queue focused (e.g. exclude the
+            high-volume auto-captured loss_reasons that feed Loop 2's aggregate). */}
+        <label className={styles.woFilter}>
+          <span>Kind</span>
+          <select value={kindFilter} onChange={(e) => setKindFilter(e.target.value as "all" | FeedbackKind)}>
+            <option value="all">All kinds</option>
+            <option value="outcome">Outcomes</option>
+            <option value="extraction_correction">Corrections</option>
+            <option value="loss_reason">Loss reasons</option>
+            <option value="exemplar">Exemplars</option>
+          </select>
+        </label>
       </section>
 
       {loading ? (
