@@ -15,6 +15,7 @@
 import { sql } from "@/lib/db";
 import type {
   CalibrationVerdict,
+  CapturedFrom,
   FeedbackInput,
   FeedbackKind,
   FeedbackRecord,
@@ -238,6 +239,82 @@ export async function getPromotedOutcomes(limit = 1000): Promise<FeedbackRecord[
     LIMIT ${capped}
   `) as unknown[];
   return rows.map(rowToRecord);
+}
+
+/** The latest outcome record for a given proposal package (Loop 1). One per
+ *  package — re-reporting updates it (see upsertOutcome). */
+export async function getOutcomeForPackage(proposalPackageId: number): Promise<FeedbackRecord | null> {
+  await ensureFeedbackStore();
+  const rows = (await sql`
+    SELECT * FROM feedback_records
+    WHERE kind = 'outcome' AND proposal_package_id = ${proposalPackageId}
+    ORDER BY created_at DESC
+    LIMIT 1
+  `) as unknown[];
+  return rows.length > 0 ? rowToRecord(rows[0]) : null;
+}
+
+export interface UpsertOutcomeInput {
+  proposalPackageId: number;
+  outcome: OutcomeValue;
+  workOrderId?: number | null;
+  userId?: number | null;
+  tenderTitle?: string | null;
+  agency?: string | null;
+  predictedScore?: number | null;
+  predictedMax?: number | null;
+  predictedBand?: string | null;
+  rubricVersion?: number | null;
+  detail?: string | null;
+  capturedFrom?: CapturedFrom;
+}
+
+/**
+ * Record (or re-record) the outcome of a delivered proposal — one outcome per
+ * package. A re-report UPDATES the existing record and resets it to `captured`
+ * so a prior promote/reject no longer stands on now-stale data (a vendor who
+ * corrects won->lost must be re-curated). Returns the persisted record.
+ */
+export async function upsertOutcome(input: UpsertOutcomeInput): Promise<FeedbackRecord> {
+  await ensureFeedbackStore();
+  const existing = await getOutcomeForPackage(input.proposalPackageId);
+  if (existing) {
+    const rows = (await sql`
+      UPDATE feedback_records SET
+        outcome = ${input.outcome},
+        detail = ${input.detail ?? null},
+        predicted_score = ${input.predictedScore ?? null},
+        predicted_max = ${input.predictedMax ?? null},
+        predicted_band = ${input.predictedBand ?? null},
+        rubric_version = ${input.rubricVersion ?? null},
+        state = 'captured',
+        reviewed_by = NULL,
+        reviewed_at = NULL,
+        review_notes = NULL,
+        updated_at = NOW()
+      WHERE id = ${existing.id}
+      RETURNING *
+    `) as unknown[];
+    return rowToRecord(rows[0]);
+  }
+  const id = await insertFeedback({
+    kind: "outcome",
+    capturedFrom: input.capturedFrom ?? "user_prompt",
+    userId: input.userId ?? null,
+    workOrderId: input.workOrderId ?? null,
+    proposalPackageId: input.proposalPackageId,
+    tenderTitle: input.tenderTitle ?? null,
+    agency: input.agency ?? null,
+    outcome: input.outcome,
+    predictedScore: input.predictedScore ?? null,
+    predictedMax: input.predictedMax ?? null,
+    predictedBand: input.predictedBand ?? null,
+    rubricVersion: input.rubricVersion ?? null,
+    detail: input.detail ?? null,
+  });
+  const rec = await getFeedbackById(id);
+  if (!rec) throw new Error("upsertOutcome: insert succeeded but readback failed");
+  return rec;
 }
 
 // ============================================================================
