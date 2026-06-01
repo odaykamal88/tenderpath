@@ -115,6 +115,19 @@ export default function ServiceIntakeForm({
   // documents" field (which was removed for bid-no-bid).
   const [tenderFile, setTenderFile] = useState<UploadedFile | null>(null);
   const [uploadingTender, setUploadingTender] = useState<UploadStage | null>(null);
+  // Sprint 10 — proposal-only: optional corrigendum / amendment and Q&A round
+  // uploads. These ride alongside the main TOR/RFP upload (uploadedFile) so
+  // Sprint 9's loadSupplementaryTenderDocs lands them as properly-roled
+  // IngestedDocs (role=amendment with supersedes=['solicitation'] / role=qa)
+  // before the rubric extractor scores anything. Closes the AGENTS.md hard
+  // rule: "Any proposal review must read the call's corrigenda and Q&A
+  // appendix before scoring against the original guidelines."
+  const [amendmentFile, setAmendmentFile] = useState<UploadedFile | null>(null);
+  const [uploadingAmendment, setUploadingAmendment] = useState<UploadStage | null>(null);
+  const [amendmentProgress, setAmendmentProgress] = useState<number | null>(null);
+  const [qaFile, setQaFile] = useState<UploadedFile | null>(null);
+  const [uploadingQa, setUploadingQa] = useState<UploadStage | null>(null);
+  const [qaProgress, setQaProgress] = useState<number | null>(null);
   // PR-I (2026-05-23): visible upload progress per slot. The earlier
   // build only logged percentage to devtools, leaving the user staring at
   // a generic "Uploading file…" spinner for tens of seconds with no signal
@@ -357,6 +370,38 @@ export default function ServiceIntakeForm({
     setTenderProgress(null);
   }
 
+  // Sprint 10 — proposal-only corrigendum upload. Tagged "supporting" in the
+  // vault row (it's context, not the primary tender). The intake submission
+  // serialises amendment_url + amendment_filename, which Sprint 9's
+  // loadSupplementaryTenderDocs reads to build an IngestedDoc with
+  // role='amendment' and supersedes=['solicitation'].
+  async function handleAmendmentFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setAmendmentProgress(0);
+    const result = await uploadOne(file, setUploadingAmendment, "supporting", setAmendmentProgress);
+    if ("error" in result) setError(result.error);
+    else setAmendmentFile(result);
+    setUploadingAmendment(null);
+    setAmendmentProgress(null);
+  }
+
+  // Sprint 10 — proposal-only Q&A round upload. Same plumbing as amendments;
+  // Sprint 9 emits an IngestedDoc with role='qa' (no supersedes — binding by
+  // virtue of role).
+  async function handleQaFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setQaProgress(0);
+    const result = await uploadOne(file, setUploadingQa, "supporting", setQaProgress);
+    if ("error" in result) setError(result.error);
+    else setQaFile(result);
+    setUploadingQa(null);
+    setQaProgress(null);
+  }
+
   // Supporting-URL chip list (bid-no-bid). addSupportingUrl normalizes and
   // dedupes; removeSupportingUrl drops an index. Pressing Enter in the input
   // adds without submitting the parent form (we e.preventDefault() inline).
@@ -504,6 +549,12 @@ export default function ServiceIntakeForm({
         ...(finalSupportingUrls.length ? { supporting_link_urls: finalSupportingUrls } : {}),
         ...(docId ? { vault_doc_id: docId } : {}),
         ...(confirmedPrimarySector ? { confirmed_primary_sector: confirmedPrimarySector } : {}),
+        // Sprint 10 — proposal-draft corrigendum + Q&A binding. These keys
+        // match Sprint 9's extractSupplementaryDocRefs intake shape exactly.
+        // The widgets render proposal-only so amendmentFile/qaFile will be
+        // null in every other service flow.
+        ...(amendmentFile ? { amendment_url: amendmentFile.url, amendment_filename: amendmentFile.name } : {}),
+        ...(qaFile ? { qa_url: qaFile.url, qa_filename: qaFile.name } : {}),
       };
 
       const res = await fetch("/api/service-orders", {
@@ -872,6 +923,167 @@ export default function ServiceIntakeForm({
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* Sprint 10 — proposal-draft only: optional corrigendum / amendment
+          + Q&A round uploads. Most UN tenders publish at least one of these
+          mid-cycle ("assume one corrigendum exists until proven otherwise"
+          per AGENTS.md). When the user attaches them, Sprint 9's bridge
+          (loadSupplementaryTenderDocs) emits per-role IngestedDocs into the
+          engine's TenderInput — amendments with supersedes=['solicitation']
+          so the rubric extractor surfaces corrigendum-driven changes
+          explicitly, Q&A under role='qa' so binding clarifications get
+          their own slot in the prioritised docs block. */}
+      {service === "proposal" && (
+        <div className="space-y-3 rounded-sm border border-amber-200 bg-amber-50/40 px-3.5 py-3">
+          <div>
+            <h4
+              className="text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-900"
+              style={{ fontFamily: MONO }}
+            >
+              Corrigenda & clarifications (highly recommended)
+            </h4>
+            <p
+              className="mt-1 text-[11.5px] leading-snug text-amber-800"
+              style={{ fontFamily: MONO }}
+            >
+              UN tenders almost always publish at least one corrigendum or Q&A round
+              that changes the rubric — score bands shift, eligibility tightens,
+              deadlines move. Attaching them here lets the engine score against
+              what the call <em>actually</em> requires, not what it shipped on day one.
+            </p>
+          </div>
+
+          {/* Corrigendum / amendment slot */}
+          <div>
+            <label className={labelCls} style={{ fontFamily: MONO }}>
+              Corrigendum / amendment
+            </label>
+            <div className="mt-1.5">
+              {amendmentFile ? (
+                <div
+                  className="flex items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 text-[12px] text-emerald-800"
+                  style={{ fontFamily: MONO }}
+                >
+                  <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+                  </svg>
+                  <span className="flex-1 truncate">
+                    {amendmentFile.name} · {amendmentFile.extraction?.status === "extracted"
+                      ? `extracted ${amendmentFile.extraction.charCount.toLocaleString()} chars`
+                      : amendmentFile.extraction?.status
+                        ? `uploaded, extraction ${amendmentFile.extraction.status}`
+                        : "uploaded"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAmendmentFile(null)}
+                    className="shrink-0 text-emerald-700 hover:text-emerald-900 underline underline-offset-2"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-amber-300 bg-white px-3.5 py-3 text-[12px] text-stone-500 hover:border-amber-700 hover:text-stone-700 transition-colors">
+                  {uploadingAmendment ? (
+                    <svg className="h-4 w-4 shrink-0 mt-0.5 animate-spin text-stone-500" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
+                      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    </svg>
+                  ) : (
+                    <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                  <span className="leading-snug flex-1">
+                    {uploadingAmendment === "uploading"
+                      ? `Uploading file… ${amendmentProgress != null ? `${amendmentProgress}%` : ""}`
+                      : uploadingAmendment === "extracting"
+                      ? "Reading document…"
+                      : (
+                        <>
+                          <span className="font-semibold text-stone-700">Choose file</span> —
+                          {" "}Corrigendum, addendum, or amendment PDF (the engine will treat it as overriding the original TOR).
+                        </>
+                      )}
+                  </span>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    className="sr-only"
+                    disabled={!!uploadingAmendment}
+                    onChange={handleAmendmentFileChange}
+                  />
+                </label>
+              )}
+            </div>
+          </div>
+
+          {/* Q&A round slot */}
+          <div>
+            <label className={labelCls} style={{ fontFamily: MONO }}>
+              Q&A round / clarifications
+            </label>
+            <div className="mt-1.5">
+              {qaFile ? (
+                <div
+                  className="flex items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 text-[12px] text-emerald-800"
+                  style={{ fontFamily: MONO }}
+                >
+                  <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+                  </svg>
+                  <span className="flex-1 truncate">
+                    {qaFile.name} · {qaFile.extraction?.status === "extracted"
+                      ? `extracted ${qaFile.extraction.charCount.toLocaleString()} chars`
+                      : qaFile.extraction?.status
+                        ? `uploaded, extraction ${qaFile.extraction.status}`
+                        : "uploaded"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setQaFile(null)}
+                    className="shrink-0 text-emerald-700 hover:text-emerald-900 underline underline-offset-2"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-amber-300 bg-white px-3.5 py-3 text-[12px] text-stone-500 hover:border-amber-700 hover:text-stone-700 transition-colors">
+                  {uploadingQa ? (
+                    <svg className="h-4 w-4 shrink-0 mt-0.5 animate-spin text-stone-500" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
+                      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    </svg>
+                  ) : (
+                    <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                  <span className="leading-snug flex-1">
+                    {uploadingQa === "uploading"
+                      ? `Uploading file… ${qaProgress != null ? `${qaProgress}%` : ""}`
+                      : uploadingQa === "extracting"
+                      ? "Reading document…"
+                      : (
+                        <>
+                          <span className="font-semibold text-stone-700">Choose file</span> —
+                          {" "}Published Q&A or clarifications round (the engine will treat the answers as binding).
+                        </>
+                      )}
+                  </span>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    className="sr-only"
+                    disabled={!!uploadingQa}
+                    onChange={handleQaFileChange}
+                  />
+                </label>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
