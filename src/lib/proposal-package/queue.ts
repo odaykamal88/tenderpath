@@ -54,8 +54,20 @@ import { PROPOSAL_PLAN } from "./types";
 /** How long a 'generating' row can sit before the reaper resets it. */
 export const STALE_GENERATING_MINUTES = 10;
 
-/** Cron tick interval the worker is configured to run at. Used for telemetry copy. */
-export const WORKER_TICK_SECONDS = 60;
+/**
+ * Cron tick interval the worker is configured to run at. Used for telemetry
+ * copy + the message string returned by the enqueue routes.
+ *
+ * Note (Sprint 11 deploy fix): Vercel rejected the original `* * * * *`
+ * (every-minute) cron with a redirect to /docs/cron-jobs/usage-and-pricing.
+ * The project's effective cron tier doesn't permit per-minute schedules,
+ * even though `maxDuration=300` on compute routes confirms the Pro plan
+ * for lambdas — cron-job billing has its own tier toggle. Dropped to 5min,
+ * which Vercel accepts and keeps the queue drain latency well below the
+ * engine's typical 5–7 min run cost. The STALE_GENERATING_MINUTES=10
+ * threshold still bounds recovery to well under a typical user session.
+ */
+export const WORKER_TICK_SECONDS = 300;
 
 /**
  * Soft cap on generation_attempts before the worker stops auto-picking up

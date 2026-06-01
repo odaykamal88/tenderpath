@@ -232,7 +232,7 @@ export async function POST(
         status: "pending",
         package_id: enqueueResult.packageId,
         attempts: enqueueResult.attempts,
-        message: "Generation enqueued. The worker will pick this up within ~60 seconds; the dashboard polls until it lands.",
+        message: "Generation enqueued. The worker will pick this up within ~5 minutes; the dashboard polls until it lands.",
         remaining_regenerations: null,
       });
     } catch (err) {

@@ -20,7 +20,14 @@ export const maxDuration = 300;
 /**
  * Sprint 11 background-job worker for proposal-draft generation.
  *
- * Triggered every minute by Vercel cron (see vercel.json). Each tick:
+ * Triggered every 5 minutes by Vercel cron (see vercel.json). Originally
+ * configured as the every-minute schedule — Vercel rejected the deploy
+ * because cron-job billing has its own tier toggle that's tighter than the
+ * lambda-compute Pro plan we're otherwise on. The "every 5 minutes"
+ * schedule (slash-5 in the minute field) deploys cleanly and keeps
+ * queue-drain latency well below the engine's typical 5–7 min run.
+ *
+ * Each tick:
  *
  *   1. Reap stale rows — any proposal_packages row in 'generating' state
  *      whose updated_at is older than STALE_GENERATING_MINUTES is reset

@@ -240,7 +240,7 @@ export async function POST(request: Request) {
         status: "pending",
         package_id: enqueueResult.packageId,
         attempts: enqueueResult.attempts,
-        message: "Generation enqueued. The cron worker picks this up on its next tick (~60 seconds). Poll /api/proposals/generate?work_order_id=… for status.",
+        message: "Generation enqueued. The cron worker picks this up on its next tick (~5 minutes). Poll /api/proposals/generate?work_order_id=… for status.",
       });
     } catch (err) {
       console.error("[proposals/generate:enqueue_failed]", {

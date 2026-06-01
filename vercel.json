@@ -23,7 +23,7 @@
     },
     {
       "path": "/api/cron/proposal-worker",
-      "schedule": "* * * * *"
+      "schedule": "*/5 * * * *"
     }
   ]
 }
