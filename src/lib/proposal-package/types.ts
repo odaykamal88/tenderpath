@@ -74,6 +74,11 @@ export interface ProposalOutput {
   cascades?: unknown;
   revision_history?: unknown;
   tender_rubric?: unknown;
+  /** Phase 2a. Per-run integrity / compliance verdict (IntegrityVerdict from
+   *  integrity.ts) computed at generation time. Internal monitoring — read by
+   *  /api/admin/proposal-health, not shown to the customer. `unknown` to keep
+   *  scoring/monitor types out of the storage layer. */
+  integrity?: unknown;
 }
 
 export interface GateState {

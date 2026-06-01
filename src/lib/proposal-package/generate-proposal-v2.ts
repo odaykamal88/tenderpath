@@ -30,6 +30,7 @@ import type {
   RoutedGap,
   ScoreResult,
 } from "./scoring-engine";
+import { assessIntegrity, type IntegrityVerdict } from "./integrity";
 import { PROPOSAL_PLAN } from "./types";
 import type { ProposalOutput } from "./types";
 import {
@@ -83,6 +84,7 @@ function buildOutputFromEngine(args: {
   history: RevisionAttemptSummary[];
   cascades: unknown[];
   tenderRubric: unknown;
+  integrity: IntegrityVerdict;
 }): ProposalOutput {
   // Best-effort legacy-field backfill so any old reader that still expects
   // the 8-section narrative doesn't see an empty object. The dashboard
@@ -107,6 +109,7 @@ function buildOutputFromEngine(args: {
     cascades: args.cascades,
     revision_history: args.history,
     tender_rubric: args.tenderRubric,
+    integrity: args.integrity,
   } as unknown as ProposalOutput;
 }
 
@@ -259,12 +262,27 @@ export async function generateProposalPackageV2({
       routedGaps: result.finalScore.routedGaps.length,
     });
 
+    // Phase 2a: per-run integrity / compliance monitor. Cheap, pure — runs on
+    // every output so each run's health is explicit (silent failure is a launch
+    // blocker). Stored on output.integrity; aggregated by /api/admin/proposal-health.
+    const integrity = assessIntegrity({
+      score: result.finalScore,
+      draft: result.finalDraft,
+      rubric,
+    });
+    console.log("[proposal:integrity:assessed]", {
+      workOrderId,
+      ok: integrity.ok,
+      flags: integrity.flags,
+    });
+
     const output = buildOutputFromEngine({
       finalDraft: result.finalDraft,
       finalScore: result.finalScore,
       history: result.history,
       cascades: result.cascades,
       tenderRubric: rubric,
+      integrity,
     });
 
     // ----------------------------------------------------------------------
