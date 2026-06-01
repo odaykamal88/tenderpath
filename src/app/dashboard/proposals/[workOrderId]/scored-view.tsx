@@ -128,11 +128,23 @@ export interface RevisionAttemptSummary {
   weakCriteriaIds: string[];
 }
 
+/**
+ * A3: mechanical confidence that the engine parsed THIS tender's rubric.
+ * Page-side mirror of RubricExtractionConfidence in scoring-engine.ts (the
+ * `signals` block is omitted — the UI only needs level + warnings; the raw
+ * signals are for the Phase 2 integrity monitor).
+ */
+export interface ExtractionConfidence {
+  level: "high" | "medium" | "low";
+  warnings: string[];
+}
+
 export interface ScoredView {
   score: ScoreResult;
   draft: DraftSection[];
   revisionHistory: RevisionAttemptSummary[];
   rubricLabels: Map<string, string>; // criterionId → label (from tender_rubric)
+  extractionConfidence?: ExtractionConfidence | null;
 }
 
 // ============================================================================
@@ -224,7 +236,10 @@ export function adaptScored(output: ProposalOutputJSON): ScoredView | null {
   // Build criterionId → label map from tender_rubric if present, otherwise
   // fall back to the criterionId itself.
   const rubricLabels = new Map<string, string>();
-  const tr = output.tender_rubric as { lots?: Array<{ criteria?: Array<{ id?: string; label?: string }> }> } | undefined;
+  const tr = output.tender_rubric as {
+    lots?: Array<{ criteria?: Array<{ id?: string; label?: string }> }>;
+    extractionConfidence?: { level?: unknown; warnings?: unknown };
+  } | undefined;
   if (tr?.lots) {
     for (const lot of tr.lots) {
       for (const c of lot.criteria ?? []) {
@@ -233,7 +248,28 @@ export function adaptScored(output: ProposalOutputJSON): ScoredView | null {
     }
   }
 
-  return { score, draft, revisionHistory, rubricLabels };
+  return {
+    score,
+    draft,
+    revisionHistory,
+    rubricLabels,
+    extractionConfidence: normalizeExtractionConfidence(tr?.extractionConfidence),
+  };
+}
+
+/** Validate the persisted extractionConfidence (JSONB `unknown`) into the
+ *  narrow page-side shape. Returns null when absent or malformed — the UI
+ *  treats "unknown" as no-signal, never as "high". */
+function normalizeExtractionConfidence(
+  raw: { level?: unknown; warnings?: unknown } | undefined,
+): ExtractionConfidence | null {
+  if (!raw || typeof raw !== "object") return null;
+  const level = raw.level;
+  if (level !== "high" && level !== "medium" && level !== "low") return null;
+  const warnings = Array.isArray(raw.warnings)
+    ? raw.warnings.filter((w): w is string => typeof w === "string")
+    : [];
+  return { level, warnings };
 }
 
 // ============================================================================
@@ -446,7 +482,7 @@ export function ComplianceVerdict({ score }: { score: ScoreResult }) {
 // figure. No engine change — this is pure presentation over existing data.
 
 interface CoverageBand {
-  key: "strong" | "adequate" | "indicative" | "blocked";
+  key: "strong" | "adequate" | "indicative" | "blocked" | "unreadable";
   label: string;
   tw: string;
   bg: string;
@@ -462,9 +498,10 @@ interface CoverageRollup {
   pct: number;
   band: CoverageBand;
   indicative: boolean;
+  extractionWarnings: string[];
 }
 
-export function computeCoverage(score: ScoreResult): CoverageRollup {
+export function computeCoverage(score: ScoreResult, extraction?: ExtractionConfidence | null): CoverageRollup {
   const counts: Record<Confidence, number> = { evidenced: 0, inferred: 0, gap: 0, unverified: 0 };
   let achievableTotal = 0;
   let estimatedTotal = 0;
@@ -503,11 +540,27 @@ export function computeCoverage(score: ScoreResult): CoverageRollup {
     indicative = true;
   }
 
-  return { totalCriteria, addressed, counts, estimatedTotal, achievableTotal, pct, band, indicative };
+  // A3 override: if the engine could not confidently extract the rubric, the
+  // score is indicative no matter how the individual criteria scored. A gating
+  // failure ("blocked") is the more severe message, so it wins over this.
+  if (extraction?.level === "low" && band.key !== "blocked") {
+    band = { key: "unreadable", label: "Indicative — rubric not confidently extracted", tw: "text-amber-900", bg: "bg-amber-50/40", border: "border-amber-300" };
+    indicative = true;
+  }
+
+  return { totalCriteria, addressed, counts, estimatedTotal, achievableTotal, pct, band, indicative, extractionWarnings: extraction?.warnings ?? [] };
 }
 
-export function RubricScore({ score, rubricLabels }: { score: ScoreResult; rubricLabels: Map<string, string> }) {
-  const cov = computeCoverage(score);
+export function RubricScore({
+  score,
+  rubricLabels,
+  extractionConfidence,
+}: {
+  score: ScoreResult;
+  rubricLabels: Map<string, string>;
+  extractionConfidence?: ExtractionConfidence | null;
+}) {
+  const cov = computeCoverage(score, extractionConfidence);
 
   return (
     <Section index="01" title="Rubric score" subtitle={`Scored against rubric v${score.rubricVersion}`}>
@@ -539,6 +592,20 @@ export function RubricScore({ score, rubricLabels }: { score: ScoreResult; rubri
           {cov.counts.unverified > 0 && <span className="text-stone-500">{cov.counts.unverified} unverified</span>}
         </div>
 
+        {/* A3: extraction warnings — what the engine could not confidently read
+            from the tender. Surfaced here because they undercut the score's
+            reliability at the root. */}
+        {cov.extractionWarnings.length > 0 && (
+          <ul className="mt-2.5 space-y-1">
+            {cov.extractionWarnings.slice(0, 4).map((w, i) => (
+              <li key={i} className="flex gap-1.5 text-[11px] leading-snug text-amber-800">
+                <span className="shrink-0">⚠</span>
+                <span>{w}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
         {/* Raw estimate — demoted to a secondary, explicitly-estimated figure. */}
         <div className="mt-3 pt-3 border-t border-stone-200/70 flex items-baseline gap-2 flex-wrap">
           <span
@@ -558,9 +625,11 @@ export function RubricScore({ score, rubricLabels }: { score: ScoreResult; rubri
         <p className="mt-2 text-[11.5px] text-stone-500 leading-relaxed max-w-2xl">
           {cov.band.key === "blocked"
             ? "The draft fails an administrative compliance gate (see the verdict above), so it would be set aside before scoring — treat this estimate as moot until that’s resolved. It isn’t a promise of award."
-            : cov.band.key === "indicative"
-              ? "Treat this as indicative, not a predicted result: the estimate rests largely on inferred or unverified coverage. It isn’t a promise of award — it’s how a UN evaluation panel would weight this draft against the tender’s published criteria. Upload supporting evidence to firm it up, then re-run."
-              : "Not a promise of award — it’s how a UN evaluation panel would weight this draft against the tender’s published criteria. Use it to find where to push."}
+            : cov.band.key === "unreadable"
+              ? "We couldn’t confidently extract this tender’s scoring criteria, so the rubric we scored against may be incomplete — treat the score as indicative and verify it against the original tender. It isn’t a promise of award."
+              : cov.band.key === "indicative"
+                ? "Treat this as indicative, not a predicted result: the estimate rests largely on inferred or unverified coverage. It isn’t a promise of award — it’s how a UN evaluation panel would weight this draft against the tender’s published criteria. Upload supporting evidence to firm it up, then re-run."
+                : "Not a promise of award — it’s how a UN evaluation panel would weight this draft against the tender’s published criteria. Use it to find where to push."}
         </p>
       </div>
 

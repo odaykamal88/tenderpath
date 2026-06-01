@@ -97,7 +97,11 @@ export default function PreviewClient({
 
         <ComplianceVerdict score={scored.score} />
         <div className="space-y-5">
-          <RubricScore score={scored.score} rubricLabels={scored.rubricLabels} />
+          <RubricScore
+            score={scored.score}
+            rubricLabels={scored.rubricLabels}
+            extractionConfidence={scored.extractionConfidence}
+          />
           <RoutedGaps score={scored.score} />
           <DraftBody draft={scored.draft} rubricLabels={scored.rubricLabels} />
           <ExportRow
