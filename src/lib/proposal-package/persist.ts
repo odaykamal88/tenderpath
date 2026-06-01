@@ -62,7 +62,14 @@ export async function upsertPackage(args: UpsertArgs): Promise<number> {
         tender_url = COALESCE(${args.tenderUrl}, tender_url),
         intake = ${intakeJson}::jsonb,
         parsed_requirements = COALESCE(${requirementsJson}::jsonb, parsed_requirements),
-        gate_state = ${gateJson}::jsonb
+        gate_state = ${gateJson}::jsonb,
+        -- Sprint 11: bump updated_at on every UPDATE so the worker's stale-row
+        -- reaper has an accurate "last status change" timestamp. Without this,
+        -- a row that the engine just transitioned 'pending' → 'generating'
+        -- would keep its old updated_at and the reaper would instantly retarget
+        -- it. Every status transition that flows through upsertPackage updates
+        -- this column.
+        updated_at = NOW()
       WHERE id = ${args.existingPackageId}
       RETURNING id
     ` as unknown as Array<{ id: number }>;
@@ -77,13 +84,13 @@ export async function upsertPackage(args: UpsertArgs): Promise<number> {
       tender_title, agency, tender_url, intake,
       stripe_session_id, output, pdf_url, pdf_pathname,
       generation_status, generation_attempts, error_message,
-      parsed_requirements, gate_state
+      parsed_requirements, gate_state, updated_at
     ) VALUES (
       ${args.userId}, ${args.workOrderId}, ${args.pipelineItemId}, ${args.plan},
       ${args.tenderTitle}, ${args.agency}, ${args.tenderUrl}, ${intakeJson}::jsonb,
       ${args.stripeSessionId}, ${outputJson}::jsonb, ${args.pdfUrl}, ${args.pdfPathname},
       ${generationStatus}, ${args.attempts}, ${errorMessage},
-      ${requirementsJson}::jsonb, ${gateJson}::jsonb
+      ${requirementsJson}::jsonb, ${gateJson}::jsonb, NOW()
     )
     RETURNING id
   ` as unknown as Array<{ id: number }>;
@@ -105,7 +112,8 @@ export async function markFailure(args: FailureArgs): Promise<void> {
       UPDATE proposal_packages SET
         generation_status = 'failed',
         generation_attempts = ${args.attempts},
-        error_message = ${args.errorMessage}
+        error_message = ${args.errorMessage},
+        updated_at = NOW()
       WHERE id = ${args.existingPackageId}
     `;
     return;
@@ -116,10 +124,10 @@ export async function markFailure(args: FailureArgs): Promise<void> {
   await sql`
     INSERT INTO proposal_packages (
       user_id, work_order_id, plan,
-      output, generation_status, generation_attempts, error_message
+      output, generation_status, generation_attempts, error_message, updated_at
     ) VALUES (
       ${args.userId}, ${args.workOrderId}, ${args.plan},
-      '{}'::jsonb, 'failed', ${args.attempts}, ${args.errorMessage}
+      '{}'::jsonb, 'failed', ${args.attempts}, ${args.errorMessage}, NOW()
     )
   `;
 }

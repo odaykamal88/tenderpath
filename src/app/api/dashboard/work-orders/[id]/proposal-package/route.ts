@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
 import { generateProposalPackage } from "@/lib/proposal-package/generate-proposal";
@@ -9,10 +9,26 @@ import {
   recordRerun,
   rateLimitedResponseBody,
 } from "@/lib/proposal-package/rate-limit";
+import { enqueueProposalGeneration, reapStaleGenerating } from "@/lib/proposal-package/queue";
 
 // Sprint 6b dispatch flag — mirrors the one in /api/proposals/generate.
 // Default v2 (new scoring engine); env PROPOSAL_ENGINE=v1 reverts.
 const PROPOSAL_ENGINE: "v1" | "v2" = (process.env.PROPOSAL_ENGINE === "v1") ? "v1" : "v2";
+
+// Sprint 11 (revised for Hobby plan compatibility). Originally designed
+// around a Vercel cron job that drained a 'pending' queue; Vercel's cron
+// tier on the Hobby plan rejects anything more frequent than once-per-day,
+// which makes the cron-based drain useless for interactive UX. The revised
+// design uses next/server's after() to fire the engine post-response inside
+// the same lambda's lifecycle — the user gets an instant 'pending' ACK and
+// the engine runs in the background of the same invocation, bounded by
+// maxDuration. No cron, no scheduler, no plan upgrade required.
+//
+// Trade-off: each enqueue burns one lambda budget (~300s on Pro, less on
+// Hobby). Long-tail engine runs that exceed the budget time out. The reaper
+// at the top of every enqueue resets stuck 'generating' rows on the next
+// trigger so the user can retry without a permanent stuck state.
+const PROPOSAL_QUEUE_ENABLED = process.env.PROPOSAL_QUEUE_ENABLED !== "false";
 
 export const runtime = "nodejs";
 // Vercel Pro caps maxDuration at 300s. Sprint 6b-2 set this to 800s
@@ -193,9 +209,98 @@ export async function POST(
   const url = new URL(request.url);
   const force = url.searchParams.get("force") === "1";
 
-  // Sprint 6b: route through v2 by default. The "Upgrade to scored draft"
-  // button on legacy packages lands here with force=1 — v2 then regenerates
-  // the row into the Sprint-6 shape on the next read.
+  // Sprint 11 (revised for Hobby). The route writes the row as 'pending',
+  // schedules the engine via after(), and returns immediately. The user gets
+  // an instant ACK; the engine runs post-response inside this same lambda's
+  // lifecycle (bounded by maxDuration). The dashboard panel
+  // (ProposalPackagePanel.tsx) already polls until generation_status='ready'
+  // so the UX transition is transparent — 'pending' → 'generating' → 'ready'
+  // under the existing "Drafting your proposal…" copy.
+  //
+  // Reaping stale 'generating' rows happens here too, since we no longer
+  // have a cron worker to do it on a schedule. A row stuck in 'generating'
+  // from a prior dead lambda (>10min old) is reset to 'pending' before we
+  // enqueue, so the user's click is the trigger for clean-up + new run.
+  //
+  // Falls back to the synchronous v2 path when the env flag is off
+  // (PROPOSAL_QUEUE_ENABLED=false) or PROPOSAL_ENGINE=v1.
+  if (PROPOSAL_ENGINE === "v2" && PROPOSAL_QUEUE_ENABLED) {
+    void force; // The engine always force-runs on 'pending' rows; the query-
+                // string flag is preserved for parity with the legacy path.
+    try {
+      // Reap before enqueue so a previously-dead row doesn't squat over
+      // this enqueue's intent.
+      const reaped = await reapStaleGenerating();
+      if (reaped.reaped > 0) {
+        console.log("[proposal-package:reaped_stale_pre_enqueue]", {
+          count: reaped.reaped,
+          ids: reaped.reapedIds,
+        });
+      }
+
+      const enqueueResult = await enqueueProposalGeneration({
+        workOrderId: result.order.id,
+        userId: result.order.user_id ?? null,
+        pipelineItemId: null, // existing row will preserve its prior value via COALESCE in upsertPackage
+        plan: PROPOSAL_PLAN,
+        tenderTitle: null,
+        agency: null,
+        tenderUrl: null,
+        intake: {},
+        stripeSessionId: null,
+      });
+
+      // Schedule the engine post-response. after() keeps the lambda alive
+      // until this Promise resolves OR maxDuration hits — whichever comes
+      // first. Errors are caught + logged: the row stays in 'generating'
+      // and the next user trigger reaps + retries.
+      after(async () => {
+        try {
+          console.log("[proposal-package:after_engine_start]", {
+            workOrderId: result.order.id,
+            packageId: enqueueResult.packageId,
+          });
+          const v2 = await generateProposalPackageV2({
+            workOrderId: result.order.id,
+            force: true,
+          });
+          console.log("[proposal-package:after_engine_done]", {
+            workOrderId: result.order.id,
+            packageId: enqueueResult.packageId,
+            ok: v2.ok,
+            attempts: v2.attempts,
+            skippedReason: v2.skippedReason ?? null,
+          });
+        } catch (err) {
+          console.error("[proposal-package:after_engine_failed]", {
+            workOrderId: result.order.id,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        }
+      });
+
+      return NextResponse.json({
+        ok: true,
+        status: "pending",
+        package_id: enqueueResult.packageId,
+        attempts: enqueueResult.attempts,
+        message: "Generation started. The dashboard will update once it lands (typically 5–7 minutes).",
+        remaining_regenerations: null,
+      });
+    } catch (err) {
+      console.error("[proposal-package:enqueue_failed]", {
+        workOrderId: result.order.id,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return NextResponse.json(
+        { error: "Could not enqueue the generation. Try again." },
+        { status: 500 },
+      );
+    }
+  }
+
+  // Sprint 6b fallback (PROPOSAL_ENGINE=v1 or PROPOSAL_QUEUE_ENABLED=false):
+  // legacy synchronous engine call.
   const generation = PROPOSAL_ENGINE === "v2"
     ? await (async () => {
         const v2 = await generateProposalPackageV2({ workOrderId: result.order.id, force });

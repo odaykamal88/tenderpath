@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
 import { getStripe } from "@/lib/stripe";
@@ -12,6 +12,13 @@ import {
   recordRerun,
   rateLimitedResponseBody,
 } from "@/lib/proposal-package/rate-limit";
+import { enqueueProposalGeneration, reapStaleGenerating } from "@/lib/proposal-package/queue";
+
+// Sprint 11 (revised for Hobby) — see /api/dashboard/work-orders/[id]/proposal-package
+// for the canonical comment. Route writes the row as 'pending', schedules
+// the engine via after() post-response, returns immediately. No cron, no
+// scheduler — Hobby-compatible.
+const PROPOSAL_QUEUE_ENABLED = process.env.PROPOSAL_QUEUE_ENABLED !== "false";
 
 /**
  * Sprint 6b dispatch flag for the proposal-draft plan.
@@ -214,9 +221,84 @@ export async function POST(request: Request) {
     await recordRerun({ userId: user.id, workOrderId: order.id });
   }
 
+  // Sprint 11 (revised for Hobby): enqueue 'pending', schedule engine via
+  // after(), return immediately. Roster keeps its inline path (different
+  // engine, no >300s issue today). Reap stale rows before enqueue so a
+  // previously-dead lambda's row doesn't squat the queue.
+  if (isProposalPlan(plan) && PROPOSAL_ENGINE === "v2" && PROPOSAL_QUEUE_ENABLED) {
+    try {
+      const reaped = await reapStaleGenerating();
+      if (reaped.reaped > 0) {
+        console.log("[proposals/generate:reaped_stale_pre_enqueue]", {
+          count: reaped.reaped,
+          ids: reaped.reapedIds,
+        });
+      }
+
+      const enqueueResult = await enqueueProposalGeneration({
+        workOrderId: order.id,
+        userId: user.id,
+        pipelineItemId: null,
+        plan: PROPOSAL_PLAN,
+        tenderTitle: null,
+        agency: null,
+        tenderUrl: null,
+        intake: {},
+        stripeSessionId: null,
+      });
+
+      // Run the engine in the post-response phase. Lambda stays alive until
+      // the engine resolves or maxDuration hits. Errors logged + swallowed so
+      // they don't try to mutate the response after it's been sent.
+      after(async () => {
+        try {
+          console.log("[proposals/generate:after_engine_start]", {
+            workOrderId: order.id,
+            packageId: enqueueResult.packageId,
+          });
+          const v2 = await generateProposalPackageV2({
+            workOrderId: order.id,
+            force: true,
+          });
+          console.log("[proposals/generate:after_engine_done]", {
+            workOrderId: order.id,
+            packageId: enqueueResult.packageId,
+            ok: v2.ok,
+            attempts: v2.attempts,
+            skippedReason: v2.skippedReason ?? null,
+          });
+        } catch (err) {
+          console.error("[proposals/generate:after_engine_failed]", {
+            workOrderId: order.id,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        }
+      });
+
+      return NextResponse.json({
+        ok: true,
+        status: "pending",
+        package_id: enqueueResult.packageId,
+        attempts: enqueueResult.attempts,
+        message: "Generation started. Poll /api/proposals/generate?work_order_id=… for status. Typical runtime is 5–7 minutes.",
+      });
+    } catch (err) {
+      console.error("[proposals/generate:enqueue_failed]", {
+        workOrderId: order.id,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return NextResponse.json(
+        { error: "Could not enqueue the generation. Try again." },
+        { status: 500 },
+      );
+    }
+  }
+
   // Sprint 6b dispatch. Proposal-draft routes through v2 (the new scoring
   // engine) by default; env var PROPOSAL_ENGINE=v1 opts back into the legacy
-  // 8-section pipeline. Roster keeps its existing pipeline either way.
+  // 8-section pipeline. Roster keeps its existing pipeline either way. This
+  // branch only fires when the queue is disabled (env override) or for the
+  // legacy v1 path / roster lane.
   let result;
   if (isProposalPlan(plan)) {
     if (PROPOSAL_ENGINE === "v2") {
