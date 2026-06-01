@@ -401,13 +401,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </Link>
                 <Link
                   href="/dashboard/services/lta-roster"
-                  className={`block rounded-sm px-2 py-2.5 lg:py-2 text-[13px] lg:text-[12.5px] transition-colors ${
+                  className={`flex items-center justify-between gap-2 rounded-sm px-2 py-2.5 lg:py-2 text-[13px] lg:text-[12.5px] transition-colors ${
                     pathname?.startsWith("/dashboard/services/lta-roster")
                       ? "text-stone-900 font-medium"
-                      : "text-stone-500 hover:text-stone-900"
+                      : "text-stone-400 hover:text-stone-700"
                   }`}
                 >
-                  Fast Track LTA Roster
+                  <span>Fast Track LTA Roster</span>
+                  <span className="shrink-0 rounded-sm border border-amber-300 px-1 py-px text-[8.5px] font-semibold uppercase tracking-[0.1em] text-amber-700">
+                    Soon
+                  </span>
                 </Link>
               </div>
             )}

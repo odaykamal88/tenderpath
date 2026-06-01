@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import type { AssessmentInput, TierSlug, Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
 import AssessmentResults from "./AssessmentResults";
 import { Step1, Step2, Step3, type WizardData, type CrawlPreview } from "./WizardSteps";
+import OpportunitySignal from "@/components/assessment/OpportunitySignal";
 
 // Audit 2026-05-19 P2 #14: landing-page CTAs pass ?goal=<intent> so the
 // wizard pre-selects the intent chip in Step 1. Saves a click and gives us
@@ -604,6 +605,16 @@ function AssessmentWizard() {
           )}
 
           {isWizardStep && <WizardProgress phase={phase} />}
+
+          {/* Live opportunity signal — appears once sector (Step 2) and country
+              (Step 1) are both selected, giving an early sense of how big the
+              user's opportunity pool is before they finish. */}
+          {(phase === "step2" || phase === "step3") && (
+            <OpportunitySignal
+              sectors={wizard.sectors}
+              countries={wizard.operatingCountries}
+            />
+          )}
 
           {phase === "step1" && (
             <Step1 data={wizard} preview={preview} onChange={patch} onNext={() => setPhase("step2")} />

@@ -8,7 +8,7 @@ import { loadStripe } from "@stripe/stripe-js";
 const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
   : null;
-import { TIERS } from "@/lib/pricing";
+import { TIERS, isComingSoonTier } from "@/lib/pricing";
 
 const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
 const SERIF = "'Fraunces', 'Times New Roman', serif";
@@ -626,7 +626,17 @@ function PayPage() {
     { id: "usdt", label: "USDT" },
     ...(hideWire ? [] : [{ id: "wire" as Tab, label: "Wire" }]),
   ];
-  const disabledReason = readiness && !readiness.payment_allowed ? readiness.message : undefined;
+  // Product-wide "coming soon" gate (e.g. Roster/LTA). When the selected plan
+  // is held back, disabledReason flows into CardTab (button disabled) and
+  // UsdtTab (renders the gate notice instead of the address/form); Wire is
+  // already hidden for one-time service plans. The /api/pay/checkout route is
+  // the hard server-side backstop.
+  const planComingSoon = isComingSoonTier(selectedSlug);
+  const disabledReason = planComingSoon
+    ? "This service is coming soon — checkout is paused. We'll announce when it opens."
+    : readiness && !readiness.payment_allowed
+      ? readiness.message
+      : undefined;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#fafaf7" }}>
@@ -671,8 +681,21 @@ function PayPage() {
         </div>
 
         <ContextCard context={context} />
-        <ReadinessCard readiness={readiness} />
-        {readinessError && (
+        {planComingSoon && (
+          <div className="rounded-md border-l-2 border-amber-600 bg-amber-50/60 px-4 py-3.5">
+            <div
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700"
+              style={{ fontFamily: MONO }}
+            >
+              Coming soon
+            </div>
+            <p className="mt-1 text-[13px] leading-relaxed text-amber-950">
+              {preselectedTier?.name ?? "This service"} isn&rsquo;t available for purchase yet — we&rsquo;ve paused checkout. Explore the other services in the meantime, and we&rsquo;ll announce when this one opens.
+            </p>
+          </div>
+        )}
+        {!planComingSoon && <ReadinessCard readiness={readiness} />}
+        {!planComingSoon && readinessError && (
           <div className="rounded-sm border-l-2 border-amber-600 bg-amber-50/40 px-3.5 py-3 text-[12px] text-amber-900 leading-relaxed">
             {readinessError}
           </div>

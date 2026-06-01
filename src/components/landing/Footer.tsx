@@ -6,11 +6,14 @@ export default function Footer() {
   // wizard intent so Step 1 pre-selects the corresponding chip.
   // PR-K (2026-05-23): "Weekly digest · $49/mo" link removed from the
   // product cluster — the digest subscription is going away.
-  const product = [
+  // Roster fast-track is held back as "Coming soon" across the product (see
+  // isComingSoonTier in pricing.ts). No href → renders as muted text, not a
+  // purchase link.
+  const product: Array<{ label: string; href?: string }> = [
     { label: "Free assessment", href: "/assessment" },
     { label: "Bid/no-bid analysis · $39", href: "/assessment?goal=evaluate-tender" },
     { label: "Proposal draft · $299", href: "/assessment?goal=prepare-proposal" },
-    { label: "Roster fast-track · $749", href: "/assessment?goal=register-roster" },
+    { label: "Roster fast-track · Coming soon" },
   ];
 
   const resources = [
@@ -84,7 +87,7 @@ function FooterColumn({
   links,
 }: {
   title: string;
-  links: Array<{ label: string; href: string }>;
+  links: Array<{ label: string; href?: string }>;
 }) {
   return (
     <div>
@@ -94,7 +97,9 @@ function FooterColumn({
       <ul className="space-y-3">
         {links.map((link) => (
           <li key={link.label}>
-            {link.href.startsWith("http") ? (
+            {!link.href ? (
+              <span className="text-[13px] text-mute">{link.label}</span>
+            ) : link.href.startsWith("http") ? (
               <a
                 href={link.href}
                 target="_blank"

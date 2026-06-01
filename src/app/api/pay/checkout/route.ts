@@ -4,7 +4,7 @@ import { getUserFromRequest } from "@/lib/auth";
 import { track } from "@/lib/telemetry/funnel";
 import { evaluateServiceFulfillmentGate } from "@/lib/service-fulfillment-gates";
 import { assertTenderDeadlineIsLive } from "@/lib/tender-deadline-guard";
-import { resolveTierSlug } from "@/lib/pricing";
+import { resolveTierSlug, isComingSoonTier } from "@/lib/pricing";
 import { TRIAL_DAYS } from "@/lib/access";
 
 const SLUG_TO_PRICE_ENV: Record<string, string> = {
@@ -56,6 +56,16 @@ export async function POST(request: Request) {
   if (!plan) {
     console.warn("[pay:slug:unknown]", { requestedPlan });
     return NextResponse.json({ error: "Unknown plan" }, { status: 400 });
+  }
+
+  // Product-wide "coming soon" gate (e.g. Roster/LTA). Block at the server so a
+  // direct API call can't buy a held-back tier, not just the UI.
+  if (isComingSoonTier(plan)) {
+    console.warn("[pay:slug:coming_soon_blocked]", { plan });
+    return NextResponse.json(
+      { error: "This service is coming soon and isn't available for purchase yet.", code: "PLAN_COMING_SOON" },
+      { status: 403 },
+    );
   }
 
   const priceEnvKey = SLUG_TO_PRICE_ENV[plan];

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { TIERS } from "@/lib/pricing";
+import { TIERS, isComingSoonTier } from "@/lib/pricing";
 import ServiceIntakeForm from "../ServiceIntakeForm";
 import SampleOutputPreview, { type SamplePreviewType } from "@/components/SampleOutputPreview";
 import { getCurrentUserAssessment } from "@/lib/assessment";
@@ -185,6 +185,9 @@ export default async function ServiceDetailPage({
     tenderUrl: firstValue(query.tender_url),
   };
   const tier = TIERS.find((item) => item.slug === service.tierSlug);
+  // Held-back services (e.g. Roster/LTA "coming soon") show a notice instead of
+  // the order form. The checkout APIs are the hard backstop.
+  const comingSoon = tier ? isComingSoonTier(tier.slug) : false;
   const hasContext = Boolean(context.tender || context.agency || context.pipelineItemId);
 
   // Fetch a slim view of the current assessment so the ConfidenceGate can
@@ -256,7 +259,9 @@ export default async function ServiceDetailPage({
                 {tier.billingPeriod}
               </span>
             </div>
-            <div className="mt-1 text-[11.5px] text-stone-500 leading-snug">{tier.billingNote}</div>
+            <div className="mt-1 text-[11.5px] text-stone-500 leading-snug">
+              {comingSoon ? "Coming soon" : tier.billingNote}
+            </div>
           </div>
         )}
       </header>
@@ -408,18 +413,41 @@ export default async function ServiceDetailPage({
               icon next to the "Work context" heading (2026-05-21) so the
               order panel reads cleaner. */}
 
-          {/* Intake form */}
-          <ServiceIntakeForm
-            service={service.slug}
-            plan={service.tierSlug}
-            pipelineItemId={context.pipelineItemId}
-            tenderTitle={context.tender}
-            agency={context.agency}
-            docId={context.docId}
-            initialTenderUrl={context.tenderUrl}
-            label={service.cta}
-            assessmentSnapshot={assessmentSnapshot}
-          />
+          {/* Intake form — gated when the service is held back ("coming soon") */}
+          {comingSoon ? (
+            <div className="mt-4 rounded-md border-l-2 border-amber-600 bg-amber-50/50 px-4 py-4">
+              <div
+                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700"
+                style={{ fontFamily: MONO_FONT }}
+              >
+                Coming soon
+              </div>
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-amber-950">
+                This service isn&rsquo;t open for orders yet — we&rsquo;re putting the finishing
+                touches on it. Explore the other service paths in the meantime, and we&rsquo;ll
+                announce the moment it opens.
+              </p>
+              <Link
+                href="/dashboard/services/bid-no-bid"
+                className="mt-3 inline-block text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:text-stone-900"
+                style={{ fontFamily: MONO_FONT }}
+              >
+                ← Browse available services
+              </Link>
+            </div>
+          ) : (
+            <ServiceIntakeForm
+              service={service.slug}
+              plan={service.tierSlug}
+              pipelineItemId={context.pipelineItemId}
+              tenderTitle={context.tender}
+              agency={context.agency}
+              docId={context.docId}
+              initialTenderUrl={context.tenderUrl}
+              label={service.cta}
+              assessmentSnapshot={assessmentSnapshot}
+            />
+          )}
         </aside>
       </div>
     </div>

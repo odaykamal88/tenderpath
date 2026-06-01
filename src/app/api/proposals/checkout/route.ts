@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
+import { isComingSoonTier } from "@/lib/pricing";
 import { getStripe } from "@/lib/stripe";
 import { evaluateServiceFulfillmentGate } from "@/lib/service-fulfillment-gates";
 import { assertTenderDeadlineIsLive } from "@/lib/tender-deadline-guard";
@@ -32,6 +33,15 @@ export async function POST(request: Request) {
 
   if (!plan || !PLAN_CONFIG[plan]) {
     return NextResponse.json({ error: "Invalid plan. Expected proposal-draft or roster-fast-track." }, { status: 400 });
+  }
+
+  // Product-wide "coming soon" gate (e.g. Roster/LTA) — refuse to sell a
+  // held-back tier even via direct API call.
+  if (isComingSoonTier(plan)) {
+    return NextResponse.json(
+      { error: "This service is coming soon and isn't available for purchase yet.", code: "PLAN_COMING_SOON" },
+      { status: 403 },
+    );
   }
 
   if (!work_order_id) {
