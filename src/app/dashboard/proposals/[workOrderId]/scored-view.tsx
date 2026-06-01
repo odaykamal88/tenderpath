@@ -435,51 +435,133 @@ export function ComplianceVerdict({ score }: { score: ScoreResult }) {
 // ============================================================================
 // B2 — RUBRIC SCORE (totals + per-criterion table)
 // ============================================================================
+//
+// B1 honest-presentation (POST-SPRINT-10 Stage B): until the estimated
+// score has been calibrated against known award outcomes, a precise
+// "36 / 45" reads as a prediction it has not earned. So the summary LEADS
+// with a coverage band + the confidence distribution that already lives on
+// each CriterionAssessment, and DEMOTES the raw number. When the score
+// rests largely on inferred / unverified coverage (or gating fails), the
+// band flips to an explicit "indicative" framing rather than a confident
+// figure. No engine change — this is pure presentation over existing data.
+
+interface CoverageBand {
+  key: "strong" | "adequate" | "indicative" | "blocked";
+  label: string;
+  tw: string;
+  bg: string;
+  border: string;
+}
+
+interface CoverageRollup {
+  totalCriteria: number;
+  addressed: number;
+  counts: Record<Confidence, number>;
+  estimatedTotal: number;
+  achievableTotal: number;
+  pct: number;
+  band: CoverageBand;
+  indicative: boolean;
+}
+
+export function computeCoverage(score: ScoreResult): CoverageRollup {
+  const counts: Record<Confidence, number> = { evidenced: 0, inferred: 0, gap: 0, unverified: 0 };
+  let achievableTotal = 0;
+  let estimatedTotal = 0;
+  let evidencedWeight = 0;
+  let gapWeight = 0;
+  for (const lr of score.lotResults) {
+    for (const c of lr.perCriterion) {
+      const k: Confidence = c.confidence;
+      counts[k] += 1;
+      achievableTotal += c.maxScore;
+      estimatedTotal += c.estimatedScore;
+      if (k === "evidenced") evidencedWeight += c.maxScore;
+      else if (k === "gap") gapWeight += c.maxScore;
+    }
+  }
+  const totalCriteria = counts.evidenced + counts.inferred + counts.gap + counts.unverified;
+  const addressed = totalCriteria - counts.gap;
+  const pct = achievableTotal > 0 ? Math.round((estimatedTotal / achievableTotal) * 100) : 0;
+  const evidencedShare = achievableTotal > 0 ? evidencedWeight / achievableTotal : 0;
+  const gapShare = achievableTotal > 0 ? gapWeight / achievableTotal : 0;
+  const allPassGating = score.lotResults.length > 0 && score.lotResults.every((lr) => lr.passesGating);
+
+  let band: CoverageBand;
+  let indicative: boolean;
+  if (!allPassGating) {
+    band = { key: "blocked", label: "Indicative — compliance gates not passed", tw: "text-red-900", bg: "bg-red-50/55", border: "border-red-300" };
+    indicative = true;
+  } else if (evidencedShare >= 0.6 && gapShare <= 0.15) {
+    band = { key: "strong", label: "Strong coverage", tw: "text-emerald-900", bg: "bg-emerald-50/50", border: "border-emerald-300" };
+    indicative = false;
+  } else if (evidencedShare >= 0.35) {
+    band = { key: "adequate", label: "Adequate coverage", tw: "text-amber-900", bg: "bg-amber-50/50", border: "border-amber-300" };
+    indicative = false;
+  } else {
+    band = { key: "indicative", label: "Indicative — largely inferred", tw: "text-amber-900", bg: "bg-amber-50/40", border: "border-amber-300" };
+    indicative = true;
+  }
+
+  return { totalCriteria, addressed, counts, estimatedTotal, achievableTotal, pct, band, indicative };
+}
 
 export function RubricScore({ score, rubricLabels }: { score: ScoreResult; rubricLabels: Map<string, string> }) {
-  const estimatedTotal = score.lotResults.reduce((s, lr) => s + lr.estimatedTotal, 0);
-  const achievableTotal = score.lotResults.reduce(
-    (s, lr) => s + lr.perCriterion.reduce((ss, c) => ss + c.maxScore, 0),
-    0,
-  );
-  const pct = achievableTotal > 0 ? Math.round((estimatedTotal / achievableTotal) * 100) : 0;
+  const cov = computeCoverage(score);
 
   return (
     <Section index="01" title="Rubric score" subtitle={`Scored against rubric v${score.rubricVersion}`}>
-      <div className="mb-5 rounded-sm border border-stone-200 bg-stone-50/40 p-4">
-        <div className="flex items-baseline justify-between gap-3 flex-wrap">
-          <div>
-            <div
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
-              style={{ fontFamily: MONO }}
-            >
-              Estimated total
-            </div>
-            <div className="mt-1 flex items-baseline gap-2">
-              <span
-                className="text-[36px] font-medium tabular-nums text-stone-900"
-                style={{ fontFamily: SERIF }}
-              >
-                {estimatedTotal.toFixed(0)}
-              </span>
-              <span
-                className="text-[16px] tabular-nums text-stone-500"
-                style={{ fontFamily: MONO }}
-              >
-                / {achievableTotal}
-              </span>
-              <span
-                className="ml-2 text-[12px] text-stone-600 tabular-nums"
-                style={{ fontFamily: MONO }}
-              >
-                ({pct}%)
-              </span>
-            </div>
-          </div>
-          <div className="text-[11.5px] text-stone-500 leading-relaxed max-w-md">
-            Showing a score isn&apos;t a promise of award — it&apos;s how a UN evaluation panel would weight your draft against this tender&apos;s published criteria. Use it to find where to push.
-          </div>
+      <div className={`mb-5 rounded-sm border ${cov.band.border} ${cov.band.bg} p-4`}>
+        {/* Lead with the coverage band, not the raw number (B1). */}
+        <div
+          className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+          style={{ fontFamily: MONO }}
+        >
+          Rubric coverage
         </div>
+        <div className="mt-1 flex items-baseline gap-3 flex-wrap">
+          <span className={`text-[24px] font-medium leading-tight ${cov.band.tw}`} style={{ fontFamily: SERIF }}>
+            {cov.band.label}
+          </span>
+          <span className="text-[12.5px] text-stone-600 tabular-nums" style={{ fontFamily: MONO }}>
+            addressed {cov.addressed} of {cov.totalCriteria} scored criteri{cov.totalCriteria === 1 ? "on" : "a"}
+          </span>
+        </div>
+
+        {/* Confidence distribution — where the coverage is solid vs. inferred. */}
+        <div
+          className="mt-2 flex items-center gap-x-3 gap-y-1 flex-wrap text-[11px] tabular-nums"
+          style={{ fontFamily: MONO }}
+        >
+          {cov.counts.evidenced > 0 && <span className="text-emerald-700">{cov.counts.evidenced} evidenced</span>}
+          {cov.counts.inferred > 0 && <span className="text-amber-700">{cov.counts.inferred} inferred</span>}
+          {cov.counts.gap > 0 && <span className="text-red-700">{cov.counts.gap} gap{cov.counts.gap === 1 ? "" : "s"}</span>}
+          {cov.counts.unverified > 0 && <span className="text-stone-500">{cov.counts.unverified} unverified</span>}
+        </div>
+
+        {/* Raw estimate — demoted to a secondary, explicitly-estimated figure. */}
+        <div className="mt-3 pt-3 border-t border-stone-200/70 flex items-baseline gap-2 flex-wrap">
+          <span
+            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+            style={{ fontFamily: MONO }}
+          >
+            Estimated rubric score
+          </span>
+          <span className="text-[22px] font-medium tabular-nums text-stone-800" style={{ fontFamily: SERIF }}>
+            {cov.estimatedTotal.toFixed(0)}
+          </span>
+          <span className="text-[13px] tabular-nums text-stone-500" style={{ fontFamily: MONO }}>
+            / {cov.achievableTotal} ({cov.pct}%)
+          </span>
+        </div>
+
+        <p className="mt-2 text-[11.5px] text-stone-500 leading-relaxed max-w-2xl">
+          {cov.band.key === "blocked"
+            ? "The draft fails an administrative compliance gate (see the verdict above), so it would be set aside before scoring — treat this estimate as moot until that’s resolved. It isn’t a promise of award."
+            : cov.band.key === "indicative"
+              ? "Treat this as indicative, not a predicted result: the estimate rests largely on inferred or unverified coverage. It isn’t a promise of award — it’s how a UN evaluation panel would weight this draft against the tender’s published criteria. Upload supporting evidence to firm it up, then re-run."
+              : "Not a promise of award — it’s how a UN evaluation panel would weight this draft against the tender’s published criteria. Use it to find where to push."}
+        </p>
       </div>
 
       {score.lotResults.map((lr) => {
