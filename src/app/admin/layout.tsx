@@ -19,6 +19,7 @@ const NAV = [
   { href: "/admin/bid-analysis", label: "Bid Analysis",  hint: "04" },
   { href: "/admin/matching",     label: "Matching",      hint: "05" },
   { href: "/admin/feedback",     label: "Feedback",      hint: "06" },
+  { href: "/admin/proposal-health", label: "Health",     hint: "07" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
