@@ -317,6 +317,30 @@ export async function upsertOutcome(input: UpsertOutcomeInput): Promise<Feedback
   return rec;
 }
 
+export interface FeedbackStats {
+  byState: Record<FeedbackState, number>;
+  byKind: Record<FeedbackKind, number>;
+  /** captured count — the curation queue depth (what's waiting on a human). */
+  pendingReview: number;
+}
+
+/** Aggregate counts for the admin curation queue + the Phase 2 monitor. */
+export async function feedbackStats(): Promise<FeedbackStats> {
+  await ensureFeedbackStore();
+  const rows = (await sql`
+    SELECT state, kind, count(*)::int AS n
+    FROM feedback_records
+    GROUP BY state, kind
+  `) as Array<{ state: string; kind: string; n: number }>;
+  const byState: Record<FeedbackState, number> = { captured: 0, promoted: 0, rejected: 0 };
+  const byKind: Record<FeedbackKind, number> = { outcome: 0, loss_reason: 0, extraction_correction: 0, exemplar: 0 };
+  for (const r of rows) {
+    if (isFeedbackState(r.state)) byState[r.state] += r.n;
+    if (isFeedbackKind(r.kind)) byKind[r.kind] += r.n;
+  }
+  return { byState, byKind, pendingReview: byState.captured };
+}
+
 // ============================================================================
 // Row mapping
 // ============================================================================
