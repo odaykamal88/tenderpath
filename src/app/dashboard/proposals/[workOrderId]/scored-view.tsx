@@ -139,12 +139,26 @@ export interface ExtractionConfidence {
   warnings: string[];
 }
 
+/**
+ * A4: what the engine folded in from amendments / Q&A. The live engine merges
+ * amendments + binding Q&A into ONE extraction (it does not diff them), so the
+ * honest signal is "these were folded in — verify against the latest", plus a
+ * `conflict` flag when more than one document revises the same section
+ * (the duplicated-amendment case). Derived in adaptScored from the persisted
+ * tender_rubric.documentSet roles + supersedes relations. */
+export interface AmendmentContext {
+  amendmentCount: number;
+  qaCount: number;
+  conflict: boolean;
+}
+
 export interface ScoredView {
   score: ScoreResult;
   draft: DraftSection[];
   revisionHistory: RevisionAttemptSummary[];
   rubricLabels: Map<string, string>; // criterionId → label (from tender_rubric)
   extractionConfidence?: ExtractionConfidence | null;
+  amendmentContext?: AmendmentContext | null;
 }
 
 // ============================================================================
@@ -254,6 +268,7 @@ export function adaptScored(output: ProposalOutputJSON): ScoredView | null {
     revisionHistory,
     rubricLabels,
     extractionConfidence: normalizeExtractionConfidence(tr?.extractionConfidence),
+    amendmentContext: summarizeAmendments(output.tender_rubric),
   };
 }
 
@@ -270,6 +285,36 @@ function normalizeExtractionConfidence(
     ? raw.warnings.filter((w): w is string => typeof w === "string")
     : [];
   return { level, warnings };
+}
+
+/** A4: summarize amendment/Q&A folding from the persisted
+ *  tender_rubric.documentSet. Counts amendment + qa roles and flags a
+ *  `conflict` when the same target doc is superseded by more than one
+ *  document (more than one revision of the same section). Returns null when
+ *  there are no amendments/Q&A (nothing to caution about) or the documentSet
+ *  is absent. */
+function summarizeAmendments(rubricRaw: unknown): AmendmentContext | null {
+  if (!rubricRaw || typeof rubricRaw !== "object") return null;
+  const ds = (rubricRaw as { documentSet?: unknown }).documentSet;
+  if (!Array.isArray(ds)) return null;
+
+  let amendmentCount = 0;
+  let qaCount = 0;
+  const supersededTargets = new Map<string, number>();
+  for (const d of ds) {
+    const manifest = (d as { manifest?: { role?: unknown; supersedes?: unknown } })?.manifest;
+    if (manifest?.role === "amendment") amendmentCount += 1;
+    else if (manifest?.role === "qa") qaCount += 1;
+    if (Array.isArray(manifest?.supersedes)) {
+      for (const t of manifest.supersedes) {
+        if (typeof t === "string") supersededTargets.set(t, (supersededTargets.get(t) ?? 0) + 1);
+      }
+    }
+  }
+
+  if (amendmentCount === 0 && qaCount === 0) return null;
+  const conflict = [...supersededTargets.values()].some((n) => n > 1);
+  return { amendmentCount, qaCount, conflict };
 }
 
 // ============================================================================
@@ -446,13 +491,19 @@ export function ComplianceVerdict({ score }: { score: ScoreResult }) {
                 </span>
               </div>
               <p className="text-[13.5px] leading-relaxed text-stone-900">{d.rule}</p>
-              <p
-                className="mt-1.5 text-[10.5px] text-stone-500"
-                style={{ fontFamily: MONO }}
-              >
-                ↳ {d.source.docId}
-                {d.source.section ? ` · ${d.source.section}` : ""}
-              </p>
+              {d.source.docId ? (
+                <p className="mt-1.5 text-[10.5px] text-stone-500" style={{ fontFamily: MONO }}>
+                  ↳ {d.source.docId}
+                  {d.source.section ? ` · ${d.source.section}` : ""}
+                </p>
+              ) : (
+                /* A5: a triggered disqualifier we could not anchor to a source
+                   clause is itself unverified — say so rather than present it
+                   as certain. */
+                <p className="mt-1.5 text-[10.5px] text-amber-700" style={{ fontFamily: MONO }}>
+                  ↳ no source clause cited — unverified rule
+                </p>
+              )}
             </li>
           ))}
           {allDisqualifiers.length > 8 && (
@@ -464,6 +515,89 @@ export function ComplianceVerdict({ score }: { score: ScoreResult }) {
           No disqualifiers triggered. The draft passes administrative compliance gates; the rubric-score breakdown below shows where points are won and lost.
         </p>
       )}
+    </div>
+  );
+}
+
+// ============================================================================
+// B1.5 — TENDER-INPUT NOTICES (A4 amendments folded in + A5 disqualifier
+// detection uncertainty). Sits between the compliance verdict and the score
+// because both qualify how much to trust the verdict above. Renders nothing
+// when there's nothing to caution about.
+// ============================================================================
+
+export function TenderInputNotice({
+  score,
+  extractionConfidence,
+  amendmentContext,
+}: {
+  score: ScoreResult;
+  extractionConfidence?: ExtractionConfidence | null;
+  amendmentContext?: AmendmentContext | null;
+}) {
+  const allDisq = [
+    ...score.noticeWideDisqualifiersTriggered,
+    ...score.lotResults.flatMap((lr) => lr.lotDisqualifiersTriggered),
+  ];
+  const hasUnanchoredDisq = allDisq.some((d) => !d.source.docId);
+  // A5: disqualifier detection is uncertain when the rubric extraction was
+  // low-confidence (the disqualifier SET may be incomplete) or a triggered
+  // rule could not be anchored. A missed disqualifier is the worst outcome,
+  // so this caution shows even on a passing bid.
+  const disqUncertain = extractionConfidence?.level === "low" || hasUnanchoredDisq;
+  const showAmendment =
+    !!amendmentContext && (amendmentContext.amendmentCount > 0 || amendmentContext.qaCount > 0);
+
+  if (!showAmendment && !disqUncertain) return null;
+
+  return (
+    <div className="mb-6 space-y-3">
+      {showAmendment && <AmendmentNote ctx={amendmentContext!} />}
+      {disqUncertain && <DisqualifierCaution />}
+    </div>
+  );
+}
+
+function AmendmentNote({ ctx }: { ctx: AmendmentContext }) {
+  const parts: string[] = [];
+  if (ctx.amendmentCount > 0) parts.push(`${ctx.amendmentCount} amendment${ctx.amendmentCount === 1 ? "" : "s"}`);
+  if (ctx.qaCount > 0) parts.push(`${ctx.qaCount} Q&A round${ctx.qaCount === 1 ? "" : "s"}`);
+  const list = parts.join(" + ");
+  const singular = ctx.amendmentCount + ctx.qaCount === 1;
+  return (
+    <div className="rounded-md border-l-2 border-amber-500 bg-amber-50/40 p-4">
+      <div
+        className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-800"
+        style={{ fontFamily: MONO }}
+      >
+        Amendments folded in
+      </div>
+      <p className="mt-1.5 text-[13px] leading-relaxed text-stone-800">
+        {`This tender's ${list} ${singular ? "was" : "were"} folded into the single consolidated rubric scored below. We don't separately diff amendments, so verify the consolidated scoring criteria and eligibility against the latest amendment — and re-run if a newer amendment lands.${
+          ctx.conflict
+            ? " More than one document revises the same section — confirm which revision is authoritative before relying on the score."
+            : ""
+        }`}
+      </p>
+    </div>
+  );
+}
+
+function DisqualifierCaution() {
+  return (
+    <div className="rounded-md border-l-2 border-amber-600 bg-amber-50/50 p-4">
+      <div
+        className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-800"
+        style={{ fontFamily: MONO }}
+      >
+        Disqualifier detection uncertain
+      </div>
+      <p className="mt-1.5 text-[13px] leading-relaxed text-stone-800">
+        We could not fully verify this tender&rsquo;s eligibility and mandatory-form requirements,
+        so the disqualifier list above may be incomplete — and a missed mandatory requirement can
+        get a bid rejected before scoring. Re-check the eligibility and mandatory-forms sections of
+        the original tender before submitting.
+      </p>
     </div>
   );
 }

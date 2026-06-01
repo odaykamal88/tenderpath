@@ -38,6 +38,7 @@ import { MONO, SERIF } from "@/lib/brand/tokens";
 import {
   adaptScored,
   ComplianceVerdict,
+  TenderInputNotice,
   RubricScore,
   RoutedGaps,
   DraftBody,
@@ -405,6 +406,11 @@ export default function ProposalPackagePage() {
       {scored ? (
         <>
           <ComplianceVerdict score={scored.score} />
+          <TenderInputNotice
+            score={scored.score}
+            extractionConfidence={scored.extractionConfidence}
+            amendmentContext={scored.amendmentContext}
+          />
           <div className="space-y-5">
             <RubricScore
               score={scored.score}
