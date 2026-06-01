@@ -53,6 +53,7 @@ import { bundleAndUpload, safeFilenameStem } from "./bundle";
 import { loadEvidenceLibrary } from "@/lib/applicant-evidence/query";
 import { enrichApplicantContextFromLibrary, summarizeEnrichment } from "./library-enrichment";
 import { sql } from "@/lib/db";
+import { replaceAutoLossReasons } from "@/lib/feedback/store";
 import type { MinedProfileFacts } from "@/lib/applicant-evidence/profile-miner";
 
 export interface GenerateProposalV2Result {
@@ -368,6 +369,32 @@ export async function generateProposalPackageV2({
     });
 
     console.log("[proposal-v2:persisted]", { workOrderId, packageId });
+
+    // Phase 3 / Loop 2: auto-capture this run's surfaced weaknesses as
+    // loss_reason records (replacing any prior auto set for this package), so
+    // the admin can aggregate systematic weaknesses across drafts and "fix it
+    // once". Best-effort — a failure here must never affect the delivered package.
+    try {
+      const lossItems = result.finalScore.routedGaps
+        .filter((g) => g.kind === "weakness" || g.kind === "missing_evidence" || g.kind === "claim_gap")
+        .map((g) => ({
+          criterionId: g.criterionId ?? null,
+          lossKind:
+            g.kind === "missing_evidence" ? "missing_evidence" : g.kind === "claim_gap" ? "unsupported_claim" : "rubric_miss",
+          detail: g.text,
+        }));
+      const captured = await replaceAutoLossReasons(
+        packageId,
+        { workOrderId, userId: order.user_id, tenderTitle: tenderTitle ?? null, agency: agency ?? null },
+        lossItems,
+      );
+      console.log("[proposal:loss_reasons_captured]", { workOrderId, packageId, count: captured });
+    } catch (lossErr) {
+      console.warn("[proposal-v2:loss_capture_failed]", {
+        workOrderId,
+        err: lossErr instanceof Error ? lossErr.message : String(lossErr),
+      });
+    }
 
     return {
       ok: true,

@@ -15,8 +15,9 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
-import { feedbackStats, getPromotedOutcomes } from "@/lib/feedback/store";
+import { feedbackStats, getPromotedOutcomes, listFeedback } from "@/lib/feedback/store";
 import { computeCalibration } from "@/lib/feedback/calibration";
+import { aggregateLossReasons } from "@/lib/feedback/loss-patterns";
 
 export const runtime = "nodejs";
 
@@ -101,9 +102,15 @@ export async function GET(request: Request) {
     byOutcome,
   };
 
-  // 4. Calibration (promoted outcomes only) + 5. curation queue depth.
-  const [promoted, stats] = await Promise.all([getPromotedOutcomes(), feedbackStats()]);
+  // 4. Calibration (promoted outcomes only) + 5. curation queue depth +
+  //    6. Loop 2 systematic-weakness patterns (loss reasons clustered by criterion).
+  const [promoted, stats, lossReasons] = await Promise.all([
+    getPromotedOutcomes(),
+    feedbackStats(),
+    listFeedback({ kind: "loss_reason", limit: 500 }),
+  ]);
   const calibration = computeCalibration(promoted);
+  const lossPatterns = aggregateLossReasons(lossReasons).slice(0, 12);
 
   // Rollup health flag.
   const degraded =
@@ -117,6 +124,7 @@ export async function GET(request: Request) {
     integrity,
     outcomes,
     calibration,
+    lossPatterns,
     curationQueueDepth: stats.pendingReview,
   });
 }

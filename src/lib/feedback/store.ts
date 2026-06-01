@@ -351,6 +351,54 @@ export async function recordLossReason(input: LossReasonInput): Promise<number> 
   });
 }
 
+export interface AutoLossItem {
+  criterionId: string | null;
+  lossKind: string;
+  detail: string;
+}
+export interface AutoLossContext {
+  workOrderId?: number | null;
+  userId?: number | null;
+  tenderTitle?: string | null;
+  agency?: string | null;
+}
+
+/**
+ * Loop 2 auto-capture: replace a package's auto-scored loss reasons with the
+ * current run's set (delete-then-insert keyed on proposal_package_id +
+ * captured_from='auto_score'). Unlimited re-runs therefore don't accumulate
+ * duplicate weakness records. User-reported loss notes (captured_from=
+ * 'user_prompt') are left untouched. Returns the number inserted.
+ */
+export async function replaceAutoLossReasons(
+  proposalPackageId: number,
+  ctx: AutoLossContext,
+  items: AutoLossItem[],
+): Promise<number> {
+  await ensureFeedbackStore();
+  await sql`
+    DELETE FROM feedback_records
+    WHERE kind = 'loss_reason' AND captured_from = 'auto_score' AND proposal_package_id = ${proposalPackageId}
+  `;
+  let inserted = 0;
+  for (const it of items) {
+    if (!it.detail || !it.detail.trim()) continue;
+    await insertFeedback({
+      kind: "loss_reason",
+      capturedFrom: "auto_score",
+      userId: ctx.userId ?? null,
+      workOrderId: ctx.workOrderId ?? null,
+      proposalPackageId,
+      tenderTitle: ctx.tenderTitle ?? null,
+      agency: ctx.agency ?? null,
+      detail: it.detail.slice(0, 2000),
+      payload: { criterionId: it.criterionId, lossKind: it.lossKind },
+    });
+    inserted += 1;
+  }
+  return inserted;
+}
+
 export interface FeedbackStats {
   byState: Record<FeedbackState, number>;
   byKind: Record<FeedbackKind, number>;

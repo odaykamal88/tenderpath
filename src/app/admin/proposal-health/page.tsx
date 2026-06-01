@@ -14,12 +14,20 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import styles from "../admin.module.css";
 
+interface LossPattern {
+  criterionId: string;
+  count: number;
+  agencies: string[];
+  samples: string[];
+}
+
 interface Health {
   status: "ok" | "degraded";
   generation: { ready: number; needs_remediation: number; failed: number; rubric_stale: number; pending: number; generating: number; total: number };
   integrity: { assessed: number; ok: number; flagged: number; noVerdict: number; byCategory: { incomplete: number; score_validity: number; honest_claim: number; other: number } };
   outcomes: { readyPackages: number; captured: number; captureRatePct: number; byOutcome: Record<string, number> };
   calibration: { totalOutcomes: number; sampleSize: number; aligned: number; optimistic: number; pessimistic: number; optimisticRate: number; alignedRate: number; calibrated: boolean; note: string };
+  lossPatterns: LossPattern[];
   curationQueueDepth: number;
 }
 
@@ -172,6 +180,38 @@ export default function ProposalHealthPage() {
               </div>
             </div>
           </section>
+
+          {data.lossPatterns.length > 0 && (
+            <section className={styles.panel} style={{ marginTop: 16 }}>
+              <div className={styles.panelHead}>
+                <div className={styles.panelTitle}>Systematic weaknesses (Loop 2)</div>
+              </div>
+              <div className={styles.panelBody}>
+                <p className={styles.panelSub} style={{ marginTop: 0, marginBottom: 8 }}>
+                  Criteria flagged across multiple drafts. A criterion that recurs is one systematic
+                  weakness in rubric extraction or drafting — fix it once and every future draft benefits.
+                </p>
+                {data.lossPatterns.map((p) => (
+                  <div key={p.criterionId} style={{ padding: "6px 0", borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <span>
+                        <b>{p.criterionId}</b>
+                        {p.agencies.length > 0 && <span className={styles.mute}> · {p.agencies.join(", ")}</span>}
+                      </span>
+                      <span className={`${styles.mono} ${p.count >= 3 ? styles.warnNum : styles.muteNum}`}>
+                        {p.count} draft{p.count === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                    {p.samples.length > 0 && (
+                      <div className={styles.mute} style={{ fontSize: 12, marginTop: 2 }}>
+                        {p.samples[0]}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </>
       )}
     </>
