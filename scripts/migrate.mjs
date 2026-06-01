@@ -455,6 +455,41 @@ CREATE TABLE IF NOT EXISTS tender_vendor_matches (
 CREATE INDEX IF NOT EXISTS tender_vendor_matches_tender_idx ON tender_vendor_matches (tender_id);
 CREATE INDEX IF NOT EXISTS tender_vendor_matches_assessment_idx ON tender_vendor_matches (assessment_id);
 CREATE INDEX IF NOT EXISTS tender_vendor_matches_status_idx ON tender_vendor_matches (status, updated_at DESC);
+
+-- Phase 1 feedback store: unified flywheel records (outcomes, loss reasons,
+-- extraction corrections, consented exemplars). The state column IS the
+-- curation gate: only state=promoted records may affect scoring calibration,
+-- extraction, or retrieval. Anchored to proposal_packages (snapshots are not a
+-- queryable table). The frozen model reads the promoted store; a human curates.
+CREATE TABLE IF NOT EXISTS feedback_records (
+  id SERIAL PRIMARY KEY,
+  kind TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'captured',
+  captured_from TEXT NOT NULL DEFAULT 'user_prompt',
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  work_order_id INTEGER REFERENCES work_orders(id) ON DELETE SET NULL,
+  proposal_package_id INTEGER REFERENCES proposal_packages(id) ON DELETE SET NULL,
+  tender_title TEXT,
+  agency TEXT,
+  outcome TEXT,
+  predicted_score NUMERIC,
+  predicted_max NUMERIC,
+  predicted_band TEXT,
+  rubric_version INTEGER,
+  detail TEXT,
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ,
+  review_notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT feedback_records_kind_chk CHECK (kind IN ('outcome','loss_reason','extraction_correction','exemplar')),
+  CONSTRAINT feedback_records_state_chk CHECK (state IN ('captured','promoted','rejected')),
+  CONSTRAINT feedback_records_outcome_chk CHECK (outcome IS NULL OR outcome IN ('won','lost','shortlisted','disqualified','withdrawn','pending'))
+);
+CREATE INDEX IF NOT EXISTS feedback_records_state_kind_idx ON feedback_records (state, kind, created_at DESC);
+CREATE INDEX IF NOT EXISTS feedback_records_package_idx ON feedback_records (proposal_package_id) WHERE proposal_package_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS feedback_records_promoted_outcome_idx ON feedback_records (kind, state) WHERE kind = 'outcome' AND state = 'promoted';
 `;
 
 async function migrate() {

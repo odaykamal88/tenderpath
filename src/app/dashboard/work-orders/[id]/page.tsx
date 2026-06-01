@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import BidNoBidPanel from "./BidNoBidPanel";
 import ProposalPackagePanel from "./ProposalPackagePanel";
+import OutcomeCapture from "./OutcomeCapture";
 import RosterWorkspacePanel from "./RosterWorkspacePanel";
 
 interface WorkOrder {
@@ -186,6 +187,9 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
       {isProposalOrder(order) && (
         <div className="mt-6">
           <ProposalPackagePanel workOrderId={order.id} paymentStatus={order.payment_status} />
+          {/* Loop 1: capture the real outcome once the proposal is delivered.
+              Self-gates — renders nothing until a ready package exists. */}
+          <OutcomeCapture workOrderId={order.id} />
         </div>
       )}
 
