@@ -128,11 +128,23 @@ export interface RevisionAttemptSummary {
   weakCriteriaIds: string[];
 }
 
+/**
+ * A3: mechanical confidence that the engine parsed THIS tender's rubric.
+ * Page-side mirror of RubricExtractionConfidence in scoring-engine.ts (the
+ * `signals` block is omitted — the UI only needs level + warnings; the raw
+ * signals are for the Phase 2 integrity monitor).
+ */
+export interface ExtractionConfidence {
+  level: "high" | "medium" | "low";
+  warnings: string[];
+}
+
 export interface ScoredView {
   score: ScoreResult;
   draft: DraftSection[];
   revisionHistory: RevisionAttemptSummary[];
   rubricLabels: Map<string, string>; // criterionId → label (from tender_rubric)
+  extractionConfidence?: ExtractionConfidence | null;
 }
 
 // ============================================================================
@@ -224,7 +236,10 @@ export function adaptScored(output: ProposalOutputJSON): ScoredView | null {
   // Build criterionId → label map from tender_rubric if present, otherwise
   // fall back to the criterionId itself.
   const rubricLabels = new Map<string, string>();
-  const tr = output.tender_rubric as { lots?: Array<{ criteria?: Array<{ id?: string; label?: string }> }> } | undefined;
+  const tr = output.tender_rubric as {
+    lots?: Array<{ criteria?: Array<{ id?: string; label?: string }> }>;
+    extractionConfidence?: { level?: unknown; warnings?: unknown };
+  } | undefined;
   if (tr?.lots) {
     for (const lot of tr.lots) {
       for (const c of lot.criteria ?? []) {
@@ -233,7 +248,28 @@ export function adaptScored(output: ProposalOutputJSON): ScoredView | null {
     }
   }
 
-  return { score, draft, revisionHistory, rubricLabels };
+  return {
+    score,
+    draft,
+    revisionHistory,
+    rubricLabels,
+    extractionConfidence: normalizeExtractionConfidence(tr?.extractionConfidence),
+  };
+}
+
+/** Validate the persisted extractionConfidence (JSONB `unknown`) into the
+ *  narrow page-side shape. Returns null when absent or malformed — the UI
+ *  treats "unknown" as no-signal, never as "high". */
+function normalizeExtractionConfidence(
+  raw: { level?: unknown; warnings?: unknown } | undefined,
+): ExtractionConfidence | null {
+  if (!raw || typeof raw !== "object") return null;
+  const level = raw.level;
+  if (level !== "high" && level !== "medium" && level !== "low") return null;
+  const warnings = Array.isArray(raw.warnings)
+    ? raw.warnings.filter((w): w is string => typeof w === "string")
+    : [];
+  return { level, warnings };
 }
 
 // ============================================================================
@@ -435,51 +471,166 @@ export function ComplianceVerdict({ score }: { score: ScoreResult }) {
 // ============================================================================
 // B2 — RUBRIC SCORE (totals + per-criterion table)
 // ============================================================================
+//
+// B1 honest-presentation (POST-SPRINT-10 Stage B): until the estimated
+// score has been calibrated against known award outcomes, a precise
+// "36 / 45" reads as a prediction it has not earned. So the summary LEADS
+// with a coverage band + the confidence distribution that already lives on
+// each CriterionAssessment, and DEMOTES the raw number. When the score
+// rests largely on inferred / unverified coverage (or gating fails), the
+// band flips to an explicit "indicative" framing rather than a confident
+// figure. No engine change — this is pure presentation over existing data.
 
-export function RubricScore({ score, rubricLabels }: { score: ScoreResult; rubricLabels: Map<string, string> }) {
-  const estimatedTotal = score.lotResults.reduce((s, lr) => s + lr.estimatedTotal, 0);
-  const achievableTotal = score.lotResults.reduce(
-    (s, lr) => s + lr.perCriterion.reduce((ss, c) => ss + c.maxScore, 0),
-    0,
-  );
+interface CoverageBand {
+  key: "strong" | "adequate" | "indicative" | "blocked" | "unreadable";
+  label: string;
+  tw: string;
+  bg: string;
+  border: string;
+}
+
+interface CoverageRollup {
+  totalCriteria: number;
+  addressed: number;
+  counts: Record<Confidence, number>;
+  estimatedTotal: number;
+  achievableTotal: number;
+  pct: number;
+  band: CoverageBand;
+  indicative: boolean;
+  extractionWarnings: string[];
+}
+
+export function computeCoverage(score: ScoreResult, extraction?: ExtractionConfidence | null): CoverageRollup {
+  const counts: Record<Confidence, number> = { evidenced: 0, inferred: 0, gap: 0, unverified: 0 };
+  let achievableTotal = 0;
+  let estimatedTotal = 0;
+  let evidencedWeight = 0;
+  let gapWeight = 0;
+  for (const lr of score.lotResults) {
+    for (const c of lr.perCriterion) {
+      const k: Confidence = c.confidence;
+      counts[k] += 1;
+      achievableTotal += c.maxScore;
+      estimatedTotal += c.estimatedScore;
+      if (k === "evidenced") evidencedWeight += c.maxScore;
+      else if (k === "gap") gapWeight += c.maxScore;
+    }
+  }
+  const totalCriteria = counts.evidenced + counts.inferred + counts.gap + counts.unverified;
+  const addressed = totalCriteria - counts.gap;
   const pct = achievableTotal > 0 ? Math.round((estimatedTotal / achievableTotal) * 100) : 0;
+  const evidencedShare = achievableTotal > 0 ? evidencedWeight / achievableTotal : 0;
+  const gapShare = achievableTotal > 0 ? gapWeight / achievableTotal : 0;
+  const allPassGating = score.lotResults.length > 0 && score.lotResults.every((lr) => lr.passesGating);
+
+  let band: CoverageBand;
+  let indicative: boolean;
+  if (!allPassGating) {
+    band = { key: "blocked", label: "Indicative — compliance gates not passed", tw: "text-red-900", bg: "bg-red-50/55", border: "border-red-300" };
+    indicative = true;
+  } else if (evidencedShare >= 0.6 && gapShare <= 0.15) {
+    band = { key: "strong", label: "Strong coverage", tw: "text-emerald-900", bg: "bg-emerald-50/50", border: "border-emerald-300" };
+    indicative = false;
+  } else if (evidencedShare >= 0.35) {
+    band = { key: "adequate", label: "Adequate coverage", tw: "text-amber-900", bg: "bg-amber-50/50", border: "border-amber-300" };
+    indicative = false;
+  } else {
+    band = { key: "indicative", label: "Indicative — largely inferred", tw: "text-amber-900", bg: "bg-amber-50/40", border: "border-amber-300" };
+    indicative = true;
+  }
+
+  // A3 override: if the engine could not confidently extract the rubric, the
+  // score is indicative no matter how the individual criteria scored. A gating
+  // failure ("blocked") is the more severe message, so it wins over this.
+  if (extraction?.level === "low" && band.key !== "blocked") {
+    band = { key: "unreadable", label: "Indicative — rubric not confidently extracted", tw: "text-amber-900", bg: "bg-amber-50/40", border: "border-amber-300" };
+    indicative = true;
+  }
+
+  return { totalCriteria, addressed, counts, estimatedTotal, achievableTotal, pct, band, indicative, extractionWarnings: extraction?.warnings ?? [] };
+}
+
+export function RubricScore({
+  score,
+  rubricLabels,
+  extractionConfidence,
+}: {
+  score: ScoreResult;
+  rubricLabels: Map<string, string>;
+  extractionConfidence?: ExtractionConfidence | null;
+}) {
+  const cov = computeCoverage(score, extractionConfidence);
 
   return (
     <Section index="01" title="Rubric score" subtitle={`Scored against rubric v${score.rubricVersion}`}>
-      <div className="mb-5 rounded-sm border border-stone-200 bg-stone-50/40 p-4">
-        <div className="flex items-baseline justify-between gap-3 flex-wrap">
-          <div>
-            <div
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
-              style={{ fontFamily: MONO }}
-            >
-              Estimated total
-            </div>
-            <div className="mt-1 flex items-baseline gap-2">
-              <span
-                className="text-[36px] font-medium tabular-nums text-stone-900"
-                style={{ fontFamily: SERIF }}
-              >
-                {estimatedTotal.toFixed(0)}
-              </span>
-              <span
-                className="text-[16px] tabular-nums text-stone-500"
-                style={{ fontFamily: MONO }}
-              >
-                / {achievableTotal}
-              </span>
-              <span
-                className="ml-2 text-[12px] text-stone-600 tabular-nums"
-                style={{ fontFamily: MONO }}
-              >
-                ({pct}%)
-              </span>
-            </div>
-          </div>
-          <div className="text-[11.5px] text-stone-500 leading-relaxed max-w-md">
-            Showing a score isn&apos;t a promise of award — it&apos;s how a UN evaluation panel would weight your draft against this tender&apos;s published criteria. Use it to find where to push.
-          </div>
+      <div className={`mb-5 rounded-sm border ${cov.band.border} ${cov.band.bg} p-4`}>
+        {/* Lead with the coverage band, not the raw number (B1). */}
+        <div
+          className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+          style={{ fontFamily: MONO }}
+        >
+          Rubric coverage
         </div>
+        <div className="mt-1 flex items-baseline gap-3 flex-wrap">
+          <span className={`text-[24px] font-medium leading-tight ${cov.band.tw}`} style={{ fontFamily: SERIF }}>
+            {cov.band.label}
+          </span>
+          <span className="text-[12.5px] text-stone-600 tabular-nums" style={{ fontFamily: MONO }}>
+            addressed {cov.addressed} of {cov.totalCriteria} scored criteri{cov.totalCriteria === 1 ? "on" : "a"}
+          </span>
+        </div>
+
+        {/* Confidence distribution — where the coverage is solid vs. inferred. */}
+        <div
+          className="mt-2 flex items-center gap-x-3 gap-y-1 flex-wrap text-[11px] tabular-nums"
+          style={{ fontFamily: MONO }}
+        >
+          {cov.counts.evidenced > 0 && <span className="text-emerald-700">{cov.counts.evidenced} evidenced</span>}
+          {cov.counts.inferred > 0 && <span className="text-amber-700">{cov.counts.inferred} inferred</span>}
+          {cov.counts.gap > 0 && <span className="text-red-700">{cov.counts.gap} gap{cov.counts.gap === 1 ? "" : "s"}</span>}
+          {cov.counts.unverified > 0 && <span className="text-stone-500">{cov.counts.unverified} unverified</span>}
+        </div>
+
+        {/* A3: extraction warnings — what the engine could not confidently read
+            from the tender. Surfaced here because they undercut the score's
+            reliability at the root. */}
+        {cov.extractionWarnings.length > 0 && (
+          <ul className="mt-2.5 space-y-1">
+            {cov.extractionWarnings.slice(0, 4).map((w, i) => (
+              <li key={i} className="flex gap-1.5 text-[11px] leading-snug text-amber-800">
+                <span className="shrink-0">⚠</span>
+                <span>{w}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Raw estimate — demoted to a secondary, explicitly-estimated figure. */}
+        <div className="mt-3 pt-3 border-t border-stone-200/70 flex items-baseline gap-2 flex-wrap">
+          <span
+            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+            style={{ fontFamily: MONO }}
+          >
+            Estimated rubric score
+          </span>
+          <span className="text-[22px] font-medium tabular-nums text-stone-800" style={{ fontFamily: SERIF }}>
+            {cov.estimatedTotal.toFixed(0)}
+          </span>
+          <span className="text-[13px] tabular-nums text-stone-500" style={{ fontFamily: MONO }}>
+            / {cov.achievableTotal} ({cov.pct}%)
+          </span>
+        </div>
+
+        <p className="mt-2 text-[11.5px] text-stone-500 leading-relaxed max-w-2xl">
+          {cov.band.key === "blocked"
+            ? "The draft fails an administrative compliance gate (see the verdict above), so it would be set aside before scoring — treat this estimate as moot until that’s resolved. It isn’t a promise of award."
+            : cov.band.key === "unreadable"
+              ? "We couldn’t confidently extract this tender’s scoring criteria, so the rubric we scored against may be incomplete — treat the score as indicative and verify it against the original tender. It isn’t a promise of award."
+              : cov.band.key === "indicative"
+                ? "Treat this as indicative, not a predicted result: the estimate rests largely on inferred or unverified coverage. It isn’t a promise of award — it’s how a UN evaluation panel would weight this draft against the tender’s published criteria. Upload supporting evidence to firm it up, then re-run."
+                : "Not a promise of award — it’s how a UN evaluation panel would weight this draft against the tender’s published criteria. Use it to find where to push."}
+        </p>
       </div>
 
       {score.lotResults.map((lr) => {

@@ -142,6 +142,36 @@ export interface LotRubric {
   financialFormRef?: SourceRef;
 }
 
+/**
+ * Mechanical confidence in the rubric EXTRACTION itself (Phase 0 / A3).
+ * Structural — NOT an LLM self-rating — derived from how complete the parsed
+ * rubric came back. `warnings` are plain-language and presentable to the user;
+ * `signals` are the raw counts the Phase 2 integrity monitor reads.
+ *
+ *   high   — clean parse; criteria carry max scores + source anchors.
+ *   medium — partial gaps (a few unanchored criteria, thinnish input).
+ *   low    — the scoring criteria could NOT be confidently extracted (a lot
+ *            failed to parse, a cumulative tender returned zero criteria, half
+ *            the criteria lack a readable max score, or the input was too
+ *            thin). A `low` extraction makes any score built on this rubric
+ *            INDICATIVE regardless of how the individual criteria scored.
+ */
+export interface RubricExtractionConfidence {
+  level: 'high' | 'medium' | 'low';
+  warnings: string[];
+  signals: {
+    lotsRequested: number;
+    lotsReturned: number;
+    criteriaTotal: number;
+    criteriaMissingMaxScore: number;
+    criteriaMissingSource: number;
+    disqualifiersMissingSource: number;
+    expectedScoredButEmpty: boolean;
+    emptyRubric: boolean;
+    docCharsTotal: number;
+  };
+}
+
 export interface TenderRubric {
   tenderId: string;
   lane: 'procurement' | 'grant';   // the Gate-0 decision, recorded per tender (data, not a branch)
@@ -159,6 +189,14 @@ export interface TenderRubric {
   noticeWideDisqualifiers: Disqualifier[];
   documentSet: IngestedDoc[];      // guidelines + corrigenda + Q&A + annexes, with supersession
   rubricVersion: number;           // bumps whenever a corrigendum/Q&A changes scoring or disqualifiers
+  /**
+   * Phase 0 / A3: mechanical confidence that we parsed this tender's scoring
+   * criteria correctly. Computed in rubric-extractor's assembleTenderRubric.
+   * Optional for back-compat — rubrics extracted before this field existed,
+   * and the synthetic readiness rubric, leave it undefined (treated as
+   * "unknown", never as "high").
+   */
+  extractionConfidence?: RubricExtractionConfidence;
 }
 
 // ============================================================================

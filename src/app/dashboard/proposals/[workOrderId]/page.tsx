@@ -406,7 +406,11 @@ export default function ProposalPackagePage() {
         <>
           <ComplianceVerdict score={scored.score} />
           <div className="space-y-5">
-            <RubricScore score={scored.score} rubricLabels={scored.rubricLabels} />
+            <RubricScore
+              score={scored.score}
+              rubricLabels={scored.rubricLabels}
+              extractionConfidence={scored.extractionConfidence}
+            />
             <RoutedGaps score={scored.score} onUpload={onUpload} onRerun={onRerun} rerunBusy={rerunBusy} />
             <DraftBody draft={scored.draft} rubricLabels={scored.rubricLabels} />
             <ExportRow

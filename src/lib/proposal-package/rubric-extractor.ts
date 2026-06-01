@@ -22,6 +22,8 @@ import type {
   EvaluationCriterion,
   IngestedDoc,
   SourceRef,
+  Methodology,
+  RubricExtractionConfidence,
 } from "./scoring-engine";
 import type { LoadedTender } from "./manifest-loader";
 import { filterBinding } from "./qa-extractor";
@@ -245,6 +247,20 @@ function assembleTenderRubric(
     ? parsed.noticeWideDisqualifiers.filter(isValidDisqualifier).map(normalizeDisqualifier)
     : [];
 
+  // A3: record how confidently we parsed the rubric. lotsReturned counts the
+  // lots the LLM actually populated (vs. empty shells emitted above when a lot
+  // was missing); docCharsTotal is the raw input the extractor had to work with.
+  const lotsReturned = input.lotMetadata.filter((m) => llmLotsById.has(m.lotId)).length;
+  const docCharsTotal = docs.reduce((sum, d) => sum + d.text.length, 0);
+  const extractionConfidence = computeExtractionConfidence({
+    lotsRequested: input.lotMetadata.length,
+    lotsReturned,
+    lots,
+    noticeWideDisqualifiers,
+    methodology: input.methodology,
+    docCharsTotal,
+  });
+
   return {
     tenderId: input.tenderId,
     lane: input.lane,
@@ -253,6 +269,108 @@ function assembleTenderRubric(
     noticeWideDisqualifiers,
     documentSet: docs,
     rubricVersion: 1,
+    extractionConfidence,
+  };
+}
+
+/**
+ * A3 — mechanical confidence in the extraction. Structural only (no LLM
+ * self-rating): reads the completeness of the parsed rubric. Exported so the
+ * acceptance script can exercise the banding directly, and so reextract.ts can
+ * recompute it after an amendment re-extraction.
+ *
+ *   low    — a structural failure makes the rubric untrustworthy: a lot failed
+ *            to parse, a cumulative tender returned zero criteria, the rubric
+ *            is entirely empty, ≥half the criteria lack a readable max score,
+ *            or the input was too thin to extract from.
+ *   medium — partial gaps: some unanchored criteria/disqualifiers, a missing
+ *            max score here and there, or a thinnish document set.
+ *   high   — clean: every criterion carries a max score and a source anchor.
+ */
+export function computeExtractionConfidence(args: {
+  lotsRequested: number;
+  lotsReturned: number;
+  lots: LotRubric[];
+  noticeWideDisqualifiers: Disqualifier[];
+  methodology: Methodology;
+  docCharsTotal: number;
+}): RubricExtractionConfidence {
+  const { lotsRequested, lotsReturned, lots, noticeWideDisqualifiers, methodology, docCharsTotal } = args;
+
+  const allCriteria = lots.flatMap((l) => l.criteria);
+  const allDisqualifiers = [...noticeWideDisqualifiers, ...lots.flatMap((l) => l.disqualifiers)];
+  const criteriaTotal = allCriteria.length;
+  const criteriaMissingMaxScore = allCriteria.filter((c) => !(c.maxScore > 0)).length;
+  const criteriaMissingSource = allCriteria.filter((c) => !c.source.docId).length;
+  const disqualifiersMissingSource = allDisqualifiers.filter((d) => !d.source.docId).length;
+  // A scored (cumulative) tender that came back with zero criteria means the
+  // rubric format defeated extraction. lowest_compliant tenders legitimately
+  // have no scored criteria (pass disqualifiers, lowest price wins) so they
+  // are NOT flagged here.
+  const expectedScoredButEmpty = methodology === "cumulative" && criteriaTotal === 0;
+  // Nothing at all parsed — neither criteria nor disqualifiers — is an empty
+  // rubric regardless of methodology.
+  const emptyRubric = criteriaTotal === 0 && allDisqualifiers.length === 0;
+
+  const warnings: string[] = [];
+  if (lotsReturned < lotsRequested) {
+    warnings.push(
+      `We could not parse ${lotsRequested - lotsReturned} of ${lotsRequested} lot(s) — those were left empty.`,
+    );
+  }
+  if (expectedScoredButEmpty) {
+    warnings.push(
+      "This is a scored (cumulative) tender, but no scoring criteria could be extracted — the rubric may be in a format we could not read.",
+    );
+  }
+  if (emptyRubric) {
+    warnings.push("No scoring criteria or disqualifiers could be extracted from this tender.");
+  }
+  if (criteriaTotal > 0 && criteriaMissingMaxScore > 0) {
+    warnings.push(
+      `${criteriaMissingMaxScore} of ${criteriaTotal} criteria came back without a readable maximum score.`,
+    );
+  }
+  if (criteriaTotal > 0 && criteriaMissingSource > 0) {
+    warnings.push(
+      `${criteriaMissingSource} of ${criteriaTotal} criteria could not be anchored to a source clause.`,
+    );
+  }
+  if (allDisqualifiers.length > 0 && disqualifiersMissingSource > 0) {
+    warnings.push(
+      `${disqualifiersMissingSource} of ${allDisqualifiers.length} disqualifiers could not be anchored to a source clause.`,
+    );
+  }
+  if (docCharsTotal < 2000) {
+    warnings.push(
+      "The tender document set was very thin — there may not have been enough text to extract a reliable rubric.",
+    );
+  }
+
+  const halfCriteriaMissingScore = criteriaTotal > 0 && criteriaMissingMaxScore / criteriaTotal >= 0.5;
+  let level: RubricExtractionConfidence["level"];
+  if (expectedScoredButEmpty || emptyRubric || lotsReturned < lotsRequested || halfCriteriaMissingScore || docCharsTotal < 2000) {
+    level = "low";
+  } else if (criteriaMissingMaxScore > 0 || criteriaMissingSource > 0 || disqualifiersMissingSource > 0 || docCharsTotal < 10000) {
+    level = "medium";
+  } else {
+    level = "high";
+  }
+
+  return {
+    level,
+    warnings,
+    signals: {
+      lotsRequested,
+      lotsReturned,
+      criteriaTotal,
+      criteriaMissingMaxScore,
+      criteriaMissingSource,
+      disqualifiersMissingSource,
+      expectedScoredButEmpty,
+      emptyRubric,
+      docCharsTotal,
+    },
   };
 }
 
