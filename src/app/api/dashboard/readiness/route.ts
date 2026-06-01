@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireDashboardAccess } from "@/lib/access";
+import { isComingSoonTier } from "@/lib/pricing";
 import type { Gap, TierSlug } from "@/lib/types";
 
 type VaultDocType = "certification" | "financial" | "cv" | "past_performance" | "other";
@@ -30,7 +31,9 @@ function recommendedDocType(gap: Gap): VaultDocType {
 }
 
 function paidActionForTier(tier: TierSlug): { label: string; href: string } {
-  if (tier === "strategic-partnership") {
+  // Roster/LTA is held back ("coming soon") — don't route the readiness upsell
+  // to a checkout the user can't complete. Fall through to the proposal action.
+  if (tier === "strategic-partnership" && !isComingSoonTier(tier)) {
     return {
       label: "Get roster help",
       href: "/pay?plan=roster-fast-track",

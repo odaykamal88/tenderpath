@@ -22,8 +22,8 @@ const steps = [
   {
     n: "04",
     title: "Submit, fast.",
-    body: "When you decide to bid, our drafting service delivers an 80% complete proposal package in 48–72 hours. Or fast-track full roster registration for a target agency.",
-    output: "Output · Proposal package or roster registration",
+    body: "When you decide to bid, our drafting service delivers an 80% complete proposal package in 48–72 hours. Full roster-registration fast-track is coming soon.",
+    output: "Output · Proposal package · Roster fast-track coming soon",
   },
 ];
 

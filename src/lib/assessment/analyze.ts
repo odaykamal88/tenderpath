@@ -1,5 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { CrawledData, AIAnalysis, Gap, ReadinessDimensions, TierSlug } from "@/lib/types";
+import { isComingSoonTier } from "@/lib/pricing";
+
+// While a tier is held back ("coming soon", e.g. Roster/LTA → strategic-
+// partnership), never recommend it as the next step — fall back to the best
+// available paid tier so the funnel stays actionable.
+function availableTier(tier: TierSlug): TierSlug {
+  return isComingSoonTier(tier) ? "submission-package" : tier;
+}
 
 type IndustryClassification = {
   detected_industry: string;
@@ -622,11 +630,11 @@ export function determineRecommendedTier(
 ): TierSlug {
   if (intent === "track-tenders" || intent === "evaluate-tender") return "tender-intelligence";
   if (intent === "prepare-proposal") return "submission-package";
-  if (intent === "register-roster") return "strategic-partnership";
+  if (intent === "register-roster") return availableTier("strategic-partnership");
 
   const highGaps = gaps.filter((g) => g.severity === "high").length;
   if (overallScore >= 60) return "tender-intelligence";
   if (overallScore >= 40) return "submission-package";
   if (highGaps <= 1) return "submission-package";
-  return "strategic-partnership";
+  return availableTier("strategic-partnership");
 }

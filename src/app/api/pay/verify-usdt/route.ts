@@ -6,6 +6,7 @@ import { generateBidNoBid, BID_PLAN } from "@/lib/bid-no-bid/generate";
 import { generateProposalPackage } from "@/lib/proposal-package/generate-proposal";
 import { generateRosterFastTrack } from "@/lib/proposal-package/generate-roster";
 import { PROPOSAL_PLAN, ROSTER_PLAN } from "@/lib/proposal-package/types";
+import { isComingSoonTier } from "@/lib/pricing";
 import {
   evaluateServiceFulfillmentGate,
   markWorkOrderForFulfillmentGate,
@@ -81,6 +82,14 @@ export async function POST(req: NextRequest) {
   }
   if (!rawId || !plan) {
     return NextResponse.json({ error: "work_order_id and plan are required" }, { status: 400 });
+  }
+  // Product-wide "coming soon" gate (e.g. Roster/LTA) — don't verify/fulfil a
+  // crypto payment for a held-back tier.
+  if (isComingSoonTier(plan)) {
+    return NextResponse.json(
+      { error: "This service is coming soon and isn't available for purchase yet.", code: "PLAN_COMING_SOON" },
+      { status: 403 },
+    );
   }
   const workOrderId = Number(rawId);
   if (!Number.isInteger(workOrderId) || workOrderId <= 0) {

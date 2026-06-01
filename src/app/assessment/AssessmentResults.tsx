@@ -31,6 +31,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Gap, MatchedTender, MatchedGrant, ReadinessDimensions, TierSlug } from "@/lib/types";
+import { isComingSoonTier } from "@/lib/pricing";
 import { decodeHtmlEntities } from "@/lib/text/entities";
 import { scoreReadiness } from "@/lib/proposal-package/readiness-engine";
 import type { ApplicantContext } from "@/lib/proposal-package/applicant-context";
@@ -467,12 +468,18 @@ export default function AssessmentResults({
           <div className="flex items-baseline gap-1">
             <span className="font-serif text-[40px] leading-none tabular-nums">{primaryMeta.price}</span>
           </div>
-          <Link
-            href={`/pay?plan=${primaryMeta.paySlug}`}
-            className="bg-paper text-ink font-mono text-[11px] tracking-[0.14em] uppercase px-7 py-3.5 hover:bg-accent-2 transition-colors"
-          >
-            Start {primaryMeta.label} →
-          </Link>
+          {isComingSoonTier(primaryMeta.paySlug) ? (
+            <span className="font-mono text-[11px] tracking-[0.14em] uppercase text-paper-2/60 border border-paper-2/20 px-7 py-3.5">
+              Coming soon
+            </span>
+          ) : (
+            <Link
+              href={`/pay?plan=${primaryMeta.paySlug}`}
+              className="bg-paper text-ink font-mono text-[11px] tracking-[0.14em] uppercase px-7 py-3.5 hover:bg-accent-2 transition-colors"
+            >
+              Start {primaryMeta.label} →
+            </Link>
+          )}
           <Link
             href="/login"
             className="font-mono text-[11px] tracking-[0.12em] uppercase text-paper-2/70 hover:text-paper border-b border-paper-2/30 hover:border-paper pb-0.5"
@@ -532,16 +539,22 @@ function SkuGapPanel({
             </span>
           )}
         </div>
-        <Link
-          href={`/pay?plan=${meta.paySlug}`}
-          className={`font-mono text-[10px] tracking-[0.12em] uppercase pb-0.5 border-b ${
-            isPrimary
-              ? "text-ink border-ink hover:text-accent hover:border-accent"
-              : "text-ink-3 border-rule hover:text-ink hover:border-ink"
-          }`}
-        >
-          Start {meta.label} →
-        </Link>
+        {isComingSoonTier(meta.paySlug) ? (
+          <span className="font-mono text-[10px] tracking-[0.12em] uppercase pb-0.5 text-mute">
+            Coming soon
+          </span>
+        ) : (
+          <Link
+            href={`/pay?plan=${meta.paySlug}`}
+            className={`font-mono text-[10px] tracking-[0.12em] uppercase pb-0.5 border-b ${
+              isPrimary
+                ? "text-ink border-ink hover:text-accent hover:border-accent"
+                : "text-ink-3 border-rule hover:text-ink hover:border-ink"
+            }`}
+          >
+            Start {meta.label} →
+          </Link>
+        )}
       </header>
       {rationale && (
         <p className="text-[13px] text-ink-2 leading-[1.6] mb-4 italic">{rationale}</p>

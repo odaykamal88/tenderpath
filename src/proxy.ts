@@ -17,6 +17,9 @@ const PUBLIC_PATHS = new Set([
   "/api/cron/daily-digest",
   "/api/assessment/public",
   "/api/assessment/preview",
+  // Live "opportunity signal" counts shown in the public assessment wizard
+  // before the user has any session. Read-only aggregate counts, no PII.
+  "/api/assessment/opportunity-signal",
   // PDF report — opened via `<a href="/api/report?id={uuid}">` so the browser
   // can't supply a Bearer header (anchor nav drops Authorization). The route
   // itself authorizes via UUID capability through authorizeAssessmentRead,

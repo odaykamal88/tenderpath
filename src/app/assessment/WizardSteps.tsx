@@ -79,7 +79,7 @@ const INTENT_OPTIONS = [
   { value: "track-tenders", label: "Find & track tenders" },
   { value: "evaluate-tender", label: "Evaluate a specific tender" },
   { value: "prepare-proposal", label: "Prepare a proposal" },
-  { value: "register-roster", label: "Register on a roster / LTA" },
+  { value: "register-roster", label: "Register on a roster / LTA (soon)" },
 ];
 
 const CONTRACT_VOLUME_OPTIONS = [

@@ -33,6 +33,11 @@ export interface Tier {
   cta: string;
   ctaHref: string;
   featured: boolean;
+  // Held back from sale: surfaces present it as "Coming soon" and every
+  // purchase path (checkout routes, pay page, service intake, assessment CTAs)
+  // refuses to sell it. Fulfillment machinery for already-purchased orders is
+  // unaffected. Flip to false / remove to relaunch.
+  comingSoon?: boolean;
 }
 
 export const TIERS: Tier[] = [
@@ -120,6 +125,7 @@ export const TIERS: Tier[] = [
     cta: "Fast-track my roster",
     ctaHref: "/assessment?goal=register-roster",
     featured: false,
+    comingSoon: true,
   },
   // PR-L (2026-05-23): annual dashboard access — full feature unlock at
   // a flat yearly rate. Two slugs map to the same Stripe product:
@@ -171,6 +177,18 @@ export const TIERS: Tier[] = [
     featured: true,
   },
 ];
+
+// Single source of truth for the product-wide "coming soon" gate. Resolves
+// legacy backend slugs (e.g. strategic-partnership → roster-fast-track) so a
+// caller can pass either form. Every purchase/recommendation surface reads
+// this — checkout APIs, the pay page, the assessment results CTA, the dashboard
+// service intake, and the recommendation engine. Returns false for unknown
+// slugs so nothing else is accidentally gated.
+export function isComingSoonTier(slug: string | null | undefined): boolean {
+  const canonical = resolveTierSlug(slug);
+  if (!canonical) return false;
+  return TIERS.some((t) => t.slug === canonical && t.comingSoon === true);
+}
 
 export interface LegacyTierInfo {
   name: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { TIERS } from "@/lib/pricing";
+import { TIERS, isComingSoonTier } from "@/lib/pricing";
 
 /* Services — 5-stage journey + flat rate sheet · mobile-tuned at 375px */
 
@@ -9,11 +9,15 @@ import { TIERS } from "@/lib/pricing";
 // removed — the digest CTA is going away across the product. The dashboard
 // covers tender matching directly once a user signs in. Journey reads as
 // Assess → Decide → Submit → Roster now.
+// Roster (Stage 04 / roster-fast-track tier) is held back as "Coming soon" —
+// the rate sheet below reads the shared `isComingSoonTier` flag from pricing.ts
+// so the journey diagram and the rate sheet (and the rest of the product) stay
+// in sync. Flip `comingSoon` off on the tier to relaunch.
 const journey = [
   { n: "01", label: "Assess", price: "Free", body: "Score readiness, identify gaps, preview matched tenders." },
   { n: "02", label: "Decide", price: "$39", body: "Bid/no-bid memo per tender. Fit reasoning + checklist." },
   { n: "03", label: "Submit", price: "$299", body: "80% complete proposal package, delivered in 48–72 hrs." },
-  { n: "04", label: "Roster", price: "$749", body: "Per-agency readiness leaderboard across 8 UN portals + full registration package for the highest-fit agency." },
+  { n: "04", label: "Roster", price: "$749", body: "Per-agency readiness leaderboard across 8 UN portals + full registration package for the highest-fit agency.", comingSoon: true },
 ];
 
 export default function Services() {
@@ -39,9 +43,15 @@ export default function Services() {
                   <span className="font-mono text-[10px] tracking-[0.14em] sm:tracking-[0.16em] uppercase text-accent">
                     Stage {j.n}
                   </span>
-                  <span className="font-mono text-[10px] text-ink-3 tabular-nums">
-                    {j.price}
-                  </span>
+                  {j.comingSoon ? (
+                    <span className="font-mono text-[8px] tracking-[0.14em] uppercase text-mute border border-rule px-1.5 py-0.5">
+                      Coming soon
+                    </span>
+                  ) : (
+                    <span className="font-mono text-[10px] text-ink-3 tabular-nums">
+                      {j.price}
+                    </span>
+                  )}
                 </div>
                 <h3 className="font-serif text-[26px] sm:text-[28px] text-ink leading-none tracking-[-0.02em] mb-2.5 sm:mb-3">
                   {j.label}
@@ -73,10 +83,12 @@ export default function Services() {
             {TIERS.filter((tier) => tier.slug !== "grants-tenders-matching"
                 && tier.slug !== "annual-access"
                 && tier.slug !== "annual-access-founding"
-              ).map((tier) => (
+              ).map((tier) => {
+              const comingSoon = isComingSoonTier(tier.slug);
+              return (
               <article
                 key={tier.slug}
-                className="grid grid-cols-[1fr_auto] lg:grid-cols-[1.2fr_2fr_auto] gap-x-4 gap-y-4 lg:gap-10 py-6 sm:py-7 border-b border-rule items-baseline"
+                className={`grid grid-cols-[1fr_auto] lg:grid-cols-[1.2fr_2fr_auto] gap-x-4 gap-y-4 lg:gap-10 py-6 sm:py-7 border-b border-rule items-baseline ${comingSoon ? "opacity-70" : ""}`}
               >
                 {/* Title block */}
                 <div className="min-w-0">
@@ -86,9 +98,14 @@ export default function Services() {
                   <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-mute mt-1.5 sm:mt-2">
                     {tier.label}
                   </p>
-                  {tier.featured && (
+                  {tier.featured && !comingSoon && (
                     <span className="inline-block mt-2 font-mono text-[9px] tracking-[0.16em] uppercase text-accent border border-accent px-2 py-0.5">
                       Most chosen
+                    </span>
+                  )}
+                  {comingSoon && (
+                    <span className="inline-block mt-2 font-mono text-[9px] tracking-[0.16em] uppercase text-mute border border-rule px-2 py-0.5">
+                      Coming soon
                     </span>
                   )}
                 </div>
@@ -106,19 +123,26 @@ export default function Services() {
                       {tier.billingPeriod}
                     </span>
                   </div>
-                  <a
-                    href={tier.ctaHref}
-                    className="font-mono text-[10px] tracking-[0.1em] sm:tracking-[0.12em] uppercase text-ink hover:text-accent border-b border-ink hover:border-accent pb-0.5 whitespace-nowrap"
-                  >
-                    {tier.cta} →
-                  </a>
+                  {comingSoon ? (
+                    <span className="font-mono text-[10px] tracking-[0.1em] sm:tracking-[0.12em] uppercase text-mute pb-0.5 whitespace-nowrap">
+                      Coming soon
+                    </span>
+                  ) : (
+                    <a
+                      href={tier.ctaHref}
+                      className="font-mono text-[10px] tracking-[0.1em] sm:tracking-[0.12em] uppercase text-ink hover:text-accent border-b border-ink hover:border-accent pb-0.5 whitespace-nowrap"
+                    >
+                      {tier.cta} →
+                    </a>
+                  )}
                 </div>
                 {/* Mobile-only tagline (full width) */}
                 <p className="lg:hidden col-span-2 text-[13px] text-ink-2 leading-[1.55]">
                   {tier.tagline}
                 </p>
               </article>
-            ))}
+              );
+            })}
           </div>
         </div>
 

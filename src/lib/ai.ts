@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import type { CrawledData, AIAnalysis, Gap } from "./types";
+import { isComingSoonTier } from "./pricing";
 
 function getClient(): OpenAI {
   return new OpenAI({
@@ -143,7 +144,9 @@ export function determineRecommendedTier(
   overallScore: number
 ): string {
   const highSeverityGaps = gaps.filter((g) => g.severity === "high").length;
-  if (highSeverityGaps >= 2) return "strategic-partnership";
+  // Don't recommend a held-back tier (Roster/LTA "coming soon") — fall back to
+  // the proposal tier so the funnel stays actionable.
+  if (highSeverityGaps >= 2) return isComingSoonTier("strategic-partnership") ? "submission-package" : "strategic-partnership";
   if (overallScore < 50) return "submission-package";
   return "tender-intelligence";
 }
