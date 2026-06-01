@@ -12,6 +12,12 @@ import {
   recordRerun,
   rateLimitedResponseBody,
 } from "@/lib/proposal-package/rate-limit";
+import { enqueueProposalGeneration } from "@/lib/proposal-package/queue";
+
+// Sprint 11 background-job migration — see /api/dashboard/work-orders/[id]/proposal-package
+// for the canonical comment. When v2 + queue are both on, this route enqueues a
+// 'pending' row and returns immediately; the cron worker drives the engine.
+const PROPOSAL_QUEUE_ENABLED = process.env.PROPOSAL_QUEUE_ENABLED !== "false";
 
 /**
  * Sprint 6b dispatch flag for the proposal-draft plan.
@@ -214,9 +220,45 @@ export async function POST(request: Request) {
     await recordRerun({ userId: user.id, workOrderId: order.id });
   }
 
+  // Sprint 11 background-job migration: enqueue and return for proposal-draft.
+  // Roster keeps its inline path (different engine, no >300s issue today).
+  if (isProposalPlan(plan) && PROPOSAL_ENGINE === "v2" && PROPOSAL_QUEUE_ENABLED) {
+    try {
+      const enqueueResult = await enqueueProposalGeneration({
+        workOrderId: order.id,
+        userId: user.id,
+        pipelineItemId: null,
+        plan: PROPOSAL_PLAN,
+        tenderTitle: null,
+        agency: null,
+        tenderUrl: null,
+        intake: {},
+        stripeSessionId: null,
+      });
+      return NextResponse.json({
+        ok: true,
+        status: "pending",
+        package_id: enqueueResult.packageId,
+        attempts: enqueueResult.attempts,
+        message: "Generation enqueued. The cron worker picks this up on its next tick (~60 seconds). Poll /api/proposals/generate?work_order_id=… for status.",
+      });
+    } catch (err) {
+      console.error("[proposals/generate:enqueue_failed]", {
+        workOrderId: order.id,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return NextResponse.json(
+        { error: "Could not enqueue the generation. Try again." },
+        { status: 500 },
+      );
+    }
+  }
+
   // Sprint 6b dispatch. Proposal-draft routes through v2 (the new scoring
   // engine) by default; env var PROPOSAL_ENGINE=v1 opts back into the legacy
-  // 8-section pipeline. Roster keeps its existing pipeline either way.
+  // 8-section pipeline. Roster keeps its existing pipeline either way. This
+  // branch only fires when the queue is disabled (env override) or for the
+  // legacy v1 path / roster lane.
   let result;
   if (isProposalPlan(plan)) {
     if (PROPOSAL_ENGINE === "v2") {

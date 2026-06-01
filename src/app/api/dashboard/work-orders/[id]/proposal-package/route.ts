@@ -9,10 +9,18 @@ import {
   recordRerun,
   rateLimitedResponseBody,
 } from "@/lib/proposal-package/rate-limit";
+import { enqueueProposalGeneration } from "@/lib/proposal-package/queue";
 
 // Sprint 6b dispatch flag — mirrors the one in /api/proposals/generate.
 // Default v2 (new scoring engine); env PROPOSAL_ENGINE=v1 reverts.
 const PROPOSAL_ENGINE: "v1" | "v2" = (process.env.PROPOSAL_ENGINE === "v1") ? "v1" : "v2";
+
+// Sprint 11 background-job migration. v2 dispatches to the cron-driven
+// worker; v1 stays synchronous for the legacy comparison path. Default true
+// so production traffic gets the decoupled UX automatically. Flip
+// PROPOSAL_QUEUE_ENABLED=false in the env to fall back to inline generation
+// if the worker has a regression we need to bypass quickly.
+const PROPOSAL_QUEUE_ENABLED = process.env.PROPOSAL_QUEUE_ENABLED !== "false";
 
 export const runtime = "nodejs";
 // Vercel Pro caps maxDuration at 300s. Sprint 6b-2 set this to 800s
@@ -193,9 +201,54 @@ export async function POST(
   const url = new URL(request.url);
   const force = url.searchParams.get("force") === "1";
 
-  // Sprint 6b: route through v2 by default. The "Upgrade to scored draft"
-  // button on legacy packages lands here with force=1 — v2 then regenerates
-  // the row into the Sprint-6 shape on the next read.
+  // Sprint 11 background-job migration. v2 + queue enabled → enqueue the
+  // job and return immediately; the /api/cron/proposal-worker route picks
+  // it up on the next minute tick (~60s) and runs the engine independently
+  // of this HTTP request. The user-facing panel (ProposalPackagePanel.tsx)
+  // already polls until generation_status === 'ready', so the transition is
+  // transparent: status flips 'pending' → 'generating' → 'ready' under the
+  // existing "Drafting your proposal…" copy.
+  //
+  // Falls back to the synchronous v2 path when the env flag is off or
+  // PROPOSAL_ENGINE=v1 (legacy comparison path).
+  if (PROPOSAL_ENGINE === "v2" && PROPOSAL_QUEUE_ENABLED) {
+    void force; // Sprint 11: the worker always force-runs the engine on a
+                // 'pending' row; we kept the query-string flag for parity
+                // with the legacy synchronous path / future replay tooling.
+    try {
+      const enqueueResult = await enqueueProposalGeneration({
+        workOrderId: result.order.id,
+        userId: result.order.user_id ?? null,
+        pipelineItemId: null, // existing row will preserve its prior value via COALESCE in upsertPackage
+        plan: PROPOSAL_PLAN,
+        tenderTitle: null,
+        agency: null,
+        tenderUrl: null,
+        intake: {},
+        stripeSessionId: null,
+      });
+      return NextResponse.json({
+        ok: true,
+        status: "pending",
+        package_id: enqueueResult.packageId,
+        attempts: enqueueResult.attempts,
+        message: "Generation enqueued. The worker will pick this up within ~60 seconds; the dashboard polls until it lands.",
+        remaining_regenerations: null,
+      });
+    } catch (err) {
+      console.error("[proposal-package:enqueue_failed]", {
+        workOrderId: result.order.id,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return NextResponse.json(
+        { error: "Could not enqueue the generation. Try again." },
+        { status: 500 },
+      );
+    }
+  }
+
+  // Sprint 6b fallback (PROPOSAL_ENGINE=v1 or PROPOSAL_QUEUE_ENABLED=false):
+  // legacy synchronous engine call.
   const generation = PROPOSAL_ENGINE === "v2"
     ? await (async () => {
         const v2 = await generateProposalPackageV2({ workOrderId: result.order.id, force });
