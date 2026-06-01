@@ -1,5 +1,6 @@
 /**
- * queue.ts — Sprint 11 background-job queue for proposal-draft generation.
+ * queue.ts — Sprint 11 (revised for Hobby plan) background-job helpers for
+ * proposal-draft generation.
  *
  * Why this exists
  * ===============
@@ -7,44 +8,55 @@
  * Pre-Sprint-11, both proposal-draft generation routes (the dashboard
  * "Re-run" button and /api/proposals/generate) ran `generateProposalPackageV2`
  * SYNCHRONOUSLY inside the request lambda. The engine typically takes 5–7
- * minutes (extractRubric + 2× scoreDraft + 2× generateDraftSections + cascade
- * detection); Vercel Pro caps lambda duration at 300 s. Long-tail tenders
- * timed out, the user saw a generic 500, and the work_order silently failed.
+ * minutes; the user's browser waited the whole time and saw a generic 500
+ * on any hiccup.
  *
- * Sprint 11 decouples trigger from execution:
+ * Sprint 11 (original design): the routes wrote the row as 'pending', a
+ * Vercel cron job drained the queue every minute, the engine ran on the
+ * cron worker's lambda budget.
+ *
+ * Sprint 11 (revised, this file): Vercel's Hobby plan rejects any cron
+ * schedule more frequent than once-per-day, which makes the cron-worker
+ * drain useless for interactive UX. The revised design uses next/server's
+ * `after()` to fire the engine post-response inside the SAME lambda:
  *
  *   1. The user-facing routes call `enqueueProposalGeneration` — flips the
  *      proposal_packages row to generation_status='pending', returns the row
- *      ID, and exits in <100ms. No engine call on the request critical path.
+ *      ID, and exits in <100ms (HTTP response is sent).
  *
- *   2. A Vercel cron job hits /api/cron/proposal-worker every minute. The
- *      worker claims the oldest 'pending' row, marks it 'generating', and
- *      calls generateProposalPackageV2 inline. Each worker invocation has its
- *      own 300 s budget — independent of the user's request — so the engine
- *      runs without competing with the HTTP response.
+ *   2. after() fires after the HTTP response is sent. Inside it the route
+ *      calls generateProposalPackageV2. The lambda stays alive until the
+ *      engine resolves OR the lambda's maxDuration hits — whichever comes
+ *      first. From the user's perspective, the request returns instantly
+ *      and the dashboard polls until the row flips to 'ready'.
  *
- *   3. Rows stuck in 'generating' for more than STALE_THRESHOLD_MINUTES are
- *      reset to 'pending' by `reapStaleGenerating` (called at the top of every
- *      worker tick). Captures the case where the worker crashed or timed out
- *      mid-engine — the next tick picks the row back up. Bounded retries are
- *      enforced by generation_attempts, which the dashboard reads to render a
- *      "we've tried N times" message after MAX_ATTEMPTS reaches.
+ *   3. Each enqueue route calls `reapStaleGenerating` BEFORE enqueue. This
+ *      replaces the cron worker's reaper — any row left in 'generating' by
+ *      a previously-dead lambda (>STALE_GENERATING_MINUTES) is reset to
+ *      'pending' so the next click can move it forward.
  *
  * Existing UI behavior (ProposalPackagePanel.tsx, MAX_POLLS poll loop) treats
  * 'pending' identically to 'generating' — "Drafting your proposal…" — so this
  * is a transparent UX upgrade with no panel changes required.
  *
- * What's NOT in Sprint 11
- * =======================
+ * Trade-offs vs the original cron design
+ * ======================================
  *
- *   - True engine staging (running extractRubric in one worker tick, scoring
- *     in the next, etc.). The engine is still atomic per worker invocation;
- *     if a single run takes >300 s it'll be reaped and retried. Real stage
- *     persistence is the natural Sprint 14+ follow-up.
+ *   - Each user re-run burns one lambda budget. The engine still has to
+ *     fit within maxDuration — no relief vs the pre-Sprint-11 status quo
+ *     for >300s engines. The user-facing improvement is the instant ACK,
+ *     not an uncap.
  *
- *   - Per-user concurrency caps. We claim one row at a time, FIFO. If two
- *     users enqueue simultaneously, the second waits one cron tick (~60 s).
- *     A multi-worker fan-out is straightforward when load demands it.
+ *   - claimNextPending() is unused in the after() flow (the route calls
+ *     the engine directly with the workOrderId it already knows). Kept
+ *     exported because the helpers are still useful for an ops-tool that
+ *     drains the queue manually, and for the future Pro-plan-with-cron
+ *     migration that would re-introduce a worker route.
+ *
+ *   - True engine staging (checkpointing between extractRubric / scoreDraft
+ *     / revise calls so a run can survive a lambda death) is the natural
+ *     Sprint 14+ follow-up. The queue helpers in this file are the
+ *     foundation for it.
  */
 
 import { sql } from "@/lib/db";
@@ -55,19 +67,13 @@ import { PROPOSAL_PLAN } from "./types";
 export const STALE_GENERATING_MINUTES = 10;
 
 /**
- * Cron tick interval the worker is configured to run at. Used for telemetry
- * copy + the message string returned by the enqueue routes.
- *
- * Note (Sprint 11 deploy fix): Vercel rejected the original `* * * * *`
- * (every-minute) cron with a redirect to /docs/cron-jobs/usage-and-pricing.
- * The project's effective cron tier doesn't permit per-minute schedules,
- * even though `maxDuration=300` on compute routes confirms the Pro plan
- * for lambdas — cron-job billing has its own tier toggle. Dropped to 5min,
- * which Vercel accepts and keeps the queue drain latency well below the
- * engine's typical 5–7 min run cost. The STALE_GENERATING_MINUTES=10
- * threshold still bounds recovery to well under a typical user session.
+ * Vestigial constant from the original cron-worker design. The revised
+ * after()-based flow has no recurring tick — the engine fires once per
+ * user click. Kept exported so any external script that imported it (e.g.
+ * an ops-tool computing stale-row windows) keeps compiling. New code
+ * should reference STALE_GENERATING_MINUTES directly.
  */
-export const WORKER_TICK_SECONDS = 300;
+export const WORKER_TICK_SECONDS = 0;
 
 /**
  * Soft cap on generation_attempts before the worker stops auto-picking up
