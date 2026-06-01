@@ -3234,3 +3234,20 @@ Whichever: tsc + lint + build before push; commit message via /tmp file (NOT her
 - **Phase 3 Loop 2 (commit 6798177):** loss-reason auto-capture + systematic-weakness aggregation. `feedback/loss-patterns.ts` `aggregateLossReasons()` clusters loss_reasons by criterion (count + distinct agencies + samples) = the "fix it once" signal. `store.replaceAutoLossReasons()` per-package delete-then-insert (re-runs replace, don't accumulate; user notes untouched). `generate-proposal-v2` best-effort auto-captures each run's surfaced gaps (weakness/missing_evidence/claim_gap) as loss_reasons. Surfaced as a "Systematic weaknesses (Loop 2)" panel on `/admin/proposal-health`. `loss-patterns-acceptance.ts` 6/6 + live replace roundtrip. Deferred: `/admin/feedback` kind-filter (queue hygiene once loss_reasons accrue).
 - **GIT GOTCHA (almost bit this phase):** local `main` is STALE (stuck at 314aba6) because `main` is checked out in a sibling worktree and I land via `git push origin <branch>:main`. Branching `git checkout -b X main` gave a stale base missing Phase 1c-2b — caught it by grepping for `assessIntegrity` before building. **Always branch from `origin/main`.**
 - NEXT: Phase 3 **Loop 4** (the meatier piece) — extraction-correction capture → promotion → rubric-extractor per-format priors. Then Phase 4 (GATED): Stage E LTA, Loop 3 consented exemplars. **1e** graduates the score once `calibrated===true`.
+
+---
+
+### Session Update — Phase 3 Loop 4 (extraction corrections); Phase 3 COMPLETE
+- Agent: Claude (Opus 4.8, 1M context) · Date: 2026-06-01 (same session, continued)
+- Shipped + merged to `main` (commit 12e8748): **Loop 4 — extraction corrections → per-format extraction priors.** When the engine mis-reads a tender's rubric for an agency/format, a human records the correction; once PROMOTED it becomes a prompt prior so the extractor stops repeating that mistake. Model stays frozen; the curated corrections improve extraction.
+  - `rubric-extractor.extractRubricFromInput(input, docs?, corrections?)` + `formatCorrectionsForPrompt()` → "KNOWN FORMAT CORRECTIONS" prompt prior.
+  - `store.recordExtractionCorrection()` (lands captured) + `getPromotedCorrections(agency)` (read path: agency-specific + global agency-IS-NULL, PROMOTED only).
+  - `generate-proposal-v2` loads promoted corrections for the agency before extraction (best-effort).
+  - `/api/admin/feedback` POST + `/admin/feedback` "Add extraction correction" form.
+  - `scripts/seed-extraction-corrections.ts` (idempotent) STAGED 4 hypothesis corrections (UNICEF double-weight methodology / UNOPS eligibility in Annex C / WFP %-not-points / global shall-vs-should) as CAPTURED in prod (ids 10-13) — **founder reviews + promotes the real ones; nothing affects extraction until promoted.** `extraction-corrections-acceptance.ts` + live read-path roundtrip (gate holds).
+- Pre-launch approach (founder's call): start from a hypothesis + examples, validate the mechanism now, refine as volume arrives — there's not enough real data yet.
+- Verified: tsc + eslint + build clean; acceptance; live roundtrip (captured hidden from extractor, promoted visible, global applies to any agency, agency-specific doesn't leak).
+- **PHASE 3 COMPLETE** (Loop 2 systematic-weakness aggregation + Loop 4 extraction corrections).
+- FOUNDER providing next session: prod walkthrough of the admin surfaces; UN-modeling gut-check (disqualifier buckets, band semantics, the seeded correction hypotheses).
+- REMAINING: Phase 4 GATED (Stage E LTA on real demand; Loop 3 consented exemplars, consent-model-first); 1e graduate the score once `calibrated===true`.
+- GIT: branch from `origin/main` (local `main` is stale in a sibling worktree); land via `git push origin <branch>:main`.
