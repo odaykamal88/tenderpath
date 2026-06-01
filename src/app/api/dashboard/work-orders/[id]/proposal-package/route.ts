@@ -8,8 +8,11 @@ import {
   checkRerunQuota,
   recordRerun,
   rateLimitedResponseBody,
+  PROPOSAL_RERUN_LIMIT,
+  PROPOSAL_RERUN_WINDOW_HOURS,
 } from "@/lib/proposal-package/rate-limit";
 import { enqueueProposalGeneration, reapStaleGenerating } from "@/lib/proposal-package/queue";
+import { extractSupplementaryDocRefs } from "@/lib/proposal-package/legacy-bridge";
 
 // Sprint 6b dispatch flag — mirrors the one in /api/proposals/generate.
 // Default v2 (new scoring engine); env PROPOSAL_ENGINE=v1 reverts.
@@ -92,6 +95,9 @@ interface WorkOrderRow {
   payment_status: string | null;
   plan: string;
   service_slug: string | null;
+  // Sprint 13: surface supplementary-doc flags in the GET response so the
+  // dashboard panel can show "Engine read 1 corrigendum + 1 Q&A round".
+  intake: Record<string, unknown> | null;
 }
 
 interface PackageRow {
@@ -120,7 +126,7 @@ async function ensureOwnedProposalOrder(
   }
 
   const rows = await sql`
-    SELECT id, user_id, email, payment_status, plan, service_slug
+    SELECT id, user_id, email, payment_status, plan, service_slug, intake
     FROM work_orders
     WHERE id = ${numericId} AND (user_id = ${guard.user!.id} OR email = ${guard.user!.email})
     LIMIT 1
@@ -156,6 +162,35 @@ export async function GET(
   if (!result.ok) return result.response;
 
   const pkg = await loadPackage(result.order.id);
+
+  // Sprint 13 dashboard-hints bundle:
+  //   - quota: surface the per-user 10-re-runs-per-24h rate-limit headroom
+  //     so the dashboard can render "X / 10 re-runs used today" near the
+  //     Re-run button (proactive UX vs Sprint 6c's reactive 429).
+  //   - supplementary_docs: surface which corrigendum / Q&A doc keys the
+  //     intake actually carries, so the panel can render "Engine read 1
+  //     corrigendum + 1 Q&A round against the original TOR" — closing the
+  //     loop for AGENTS.md's "explain why the engine made a recommendation".
+  // Both reads are non-recording: quota just LOOKS at the proposal_rerun_log;
+  // supplementary docs are derived from the cached work_orders.intake.
+  const quota = result.order.user_id != null ? await checkRerunQuota(result.order.user_id) : null;
+  const supplementaryRefs = extractSupplementaryDocRefs(result.order.intake);
+  const supplementary_docs = {
+    amendment_loaded: supplementaryRefs.some((r) => r.role === "amendment"),
+    qa_loaded: supplementaryRefs.some((r) => r.role === "qa"),
+    count: supplementaryRefs.length,
+  };
+
+  const quotaPayload = quota
+    ? {
+        limit: PROPOSAL_RERUN_LIMIT,
+        window_hours: PROPOSAL_RERUN_WINDOW_HOURS,
+        remaining: quota.remaining,
+        used: PROPOSAL_RERUN_LIMIT - quota.remaining,
+        next_allowed_at: quota.resetAt?.toISOString() ?? null,
+      }
+    : null;
+
   if (!pkg) {
     return NextResponse.json({
       exists: false,
@@ -164,6 +199,8 @@ export async function GET(
       // tender. The UI omits the regenerate-counter when these are null.
       max_attempts: null,
       remaining_regenerations: null,
+      quota: quotaPayload,
+      supplementary_docs,
     });
   }
   return NextResponse.json({
@@ -174,6 +211,8 @@ export async function GET(
     // which is the same signal the UI uses to suppress the counter.
     max_attempts: Number.isFinite(PROPOSAL_MAX_ATTEMPTS) ? PROPOSAL_MAX_ATTEMPTS : null,
     remaining_regenerations: null,
+    quota: quotaPayload,
+    supplementary_docs,
   });
 }
 

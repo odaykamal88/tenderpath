@@ -55,6 +55,29 @@ function docRef(id: number): string {
   return `DOC-${id.toString(16).toUpperCase().padStart(4, "0")}`;
 }
 
+// Sprint 13. Shape of the mined_profile_facts JSONB column (mirrors
+// MinedProfileFacts from src/lib/applicant-evidence/profile-miner.ts).
+// Inlined here as a UI-local type so the Vault page doesn't depend on a
+// server-only module.
+interface MinedFactsUi {
+  years_of_experience?: number;
+  sectors_covered?: string[];
+  agencies_worked_with?: string[];
+  geographic_reach?: string[];
+  key_capabilities?: string[];
+}
+
+function minedFactsCount(f: MinedFactsUi | null | undefined): number {
+  if (!f) return 0;
+  let n = 0;
+  if (typeof f.years_of_experience === "number") n += 1;
+  if (Array.isArray(f.sectors_covered) && f.sectors_covered.length > 0) n += 1;
+  if (Array.isArray(f.agencies_worked_with) && f.agencies_worked_with.length > 0) n += 1;
+  if (Array.isArray(f.geographic_reach) && f.geographic_reach.length > 0) n += 1;
+  if (Array.isArray(f.key_capabilities) && f.key_capabilities.length > 0) n += 1;
+  return n;
+}
+
 export default function VaultPage() {
   const [docs, setDocs] = useState<VaultDoc[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +90,10 @@ export default function VaultPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [requestedGap, setRequestedGap] = useState<string | null>(null);
+  // Sprint 13. Mined profile facts (Sprint 8e free-text intake miner output)
+  // surfaced for user visibility — they can see what was inferred from their
+  // own typed answers, and (in a future sprint) correct anything wrong.
+  const [minedFacts, setMinedFacts] = useState<MinedFactsUi | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -74,6 +101,18 @@ export default function VaultPage() {
       if (res.ok) {
         const body = await res.json();
         setDocs(body.documents);
+      }
+      // Sprint 13. Fetch the profile in parallel — mined_profile_facts is
+      // surfaced as a small "What we inferred about you" card. Failure is
+      // non-fatal: the page just renders without the card.
+      try {
+        const pRes = await fetch("/api/dashboard/profile", { headers: authHeaders() });
+        if (pRes.ok) {
+          const profile = (await pRes.json()) as { mined_profile_facts?: MinedFactsUi | null };
+          if (profile.mined_profile_facts) setMinedFacts(profile.mined_profile_facts);
+        }
+      } catch {
+        // intentionally silent — the card is purely additive
       }
       setLoading(false);
     })();
@@ -249,6 +288,70 @@ export default function VaultPage() {
             <p className="mt-1.5 text-[13.5px] leading-relaxed text-red-900">
               {expiring.map((d) => d.name).join(" · ")}
             </p>
+          </div>
+        )}
+
+        {/* Sprint 13. Mined profile facts — Sprint 8e's free-text intake miner
+            output. Surfaces what TenderPath has inferred from the narrative
+            the user typed into Bid/No-Bid / Proposal-Draft intake forms so
+            they can audit it. CLAIMS, not evidence — labelled accordingly. */}
+        {minedFactsCount(minedFacts) > 0 && (
+          <div className="mt-5 rounded-md border border-stone-200 bg-stone-50/40 px-4 py-3.5">
+            <div className="flex items-baseline justify-between gap-3 mb-2">
+              <div
+                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-600"
+                style={{ fontFamily: MONO }}
+              >
+                What we inferred from your intake
+              </div>
+              <div
+                className="text-[10px] uppercase tracking-[0.15em] text-stone-400"
+                style={{ fontFamily: MONO }}
+              >
+                Claims · not evidence
+              </div>
+            </div>
+            <p className="text-[11.5px] leading-relaxed text-stone-500 mb-3">
+              Extracted from the narrative you typed into intake forms.
+              Carried forward across tenders so you don&rsquo;t retype.
+              The proposal engine uses these only to fill empty profile
+              fields — uploaded documents always win.
+            </p>
+            <dl
+              className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-[12.5px]"
+              style={{ fontFamily: MONO }}
+            >
+              {typeof minedFacts?.years_of_experience === "number" && (
+                <div className="flex items-baseline gap-2">
+                  <dt className="text-stone-500 min-w-[110px]">Years of experience</dt>
+                  <dd className="text-stone-800 font-medium">{minedFacts.years_of_experience}</dd>
+                </div>
+              )}
+              {Array.isArray(minedFacts?.sectors_covered) && minedFacts.sectors_covered.length > 0 && (
+                <div className="flex items-baseline gap-2 sm:col-span-2">
+                  <dt className="text-stone-500 min-w-[110px] shrink-0">Sectors</dt>
+                  <dd className="text-stone-800">{minedFacts.sectors_covered.join(", ")}</dd>
+                </div>
+              )}
+              {Array.isArray(minedFacts?.agencies_worked_with) && minedFacts.agencies_worked_with.length > 0 && (
+                <div className="flex items-baseline gap-2 sm:col-span-2">
+                  <dt className="text-stone-500 min-w-[110px] shrink-0">Agencies / donors</dt>
+                  <dd className="text-stone-800">{minedFacts.agencies_worked_with.join(", ")}</dd>
+                </div>
+              )}
+              {Array.isArray(minedFacts?.geographic_reach) && minedFacts.geographic_reach.length > 0 && (
+                <div className="flex items-baseline gap-2 sm:col-span-2">
+                  <dt className="text-stone-500 min-w-[110px] shrink-0">Geographic reach</dt>
+                  <dd className="text-stone-800">{minedFacts.geographic_reach.join(", ")}</dd>
+                </div>
+              )}
+              {Array.isArray(minedFacts?.key_capabilities) && minedFacts.key_capabilities.length > 0 && (
+                <div className="flex items-baseline gap-2 sm:col-span-2">
+                  <dt className="text-stone-500 min-w-[110px] shrink-0">Key capabilities</dt>
+                  <dd className="text-stone-800">{minedFacts.key_capabilities.join(", ")}</dd>
+                </div>
+              )}
+            </dl>
           </div>
         )}
 
