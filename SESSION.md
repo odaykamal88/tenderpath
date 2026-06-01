@@ -2996,3 +2996,68 @@ Whichever you pick: tsc + lint + build before push; commit message via /tmp file
 - What is now true: Sprint 25 shipped 4 PRs (PR-K, PR-L, PR-M merged; PR-N pushed and ready to merge). The dashboard now has a content-area trial banner on every page (3-color band, mobile + desktop), bid/no-bid eligibility chips no longer duplicate, Tender deadlines render as YY/MM/DD, Services intake for bid-no-bid is side-by-side URL+upload, the ScoreTab no longer shows stale `queued` status (LEFT JOIN on `proposal_packages.generation_status`), the AnnualAccessCard leads with the Founder's $49/yr rate + 77-of-100-seats scarcity, and a one-click export-to-proposal rail mints a fresh `proposal-draft` work_orders row with whitelisted intake snapshot. Five new dashboard patterns documented + 2 new launch-discipline rules + 1 new Sprint 25 learning doc.
 - What remains: open + merge PR-N; verify on Vercel preview (trial banner color bands at day > 7 / ≤ 7 / ≤ 3 / locked; export-to-proposal end-to-end; chip dedup; YY/MM/DD); extend LEFT JOIN pattern to work-orders list + digest emails; bump `FOUNDING_CLAIMED` as conversions land; Stripe test-clock verification of the day-27 reminder cron; audit other `react-hooks/set-state-in-effect` occurrences project-wide.
 - What the next agent must read first: `SESSION.md` (this Sprint 25 entry), `AGENTS.md`, `CLAUDE.md`, `docs/agents/launch-discipline.md` (rules 6 + 7 are new), `docs/agents/dashboard-architecture.md` (Sprint 25 section is new), `docs/learning/sprint-25-trial-flow-and-upsell-arc-2026-05-23.md` (full skill recipes + log-tag catalogue + follow-up list).
+
+---
+
+### Session Update — Sprint 26 — Roster/LTA coming-soon gate + live opportunity signal
+- Agent: Claude (Opus 4.8, 1M context)
+- Date: 2026-06-01
+- Task Completed: Two launch-readiness changes on one branch (PR #110): (1) gated the Roster/LTA product as "coming soon" **across the entire website**, and (2) added a live **"opportunity signal"** to the public assessment wizard that shows how big the user's live opportunity pool is (open tenders + grants for their sector × geography) before they finish — the AGENTS "wow moment".
+- Files Changed (branch `claude/roster-coming-soon-and-opportunity-signal`, code commit `9fea4e5` + this SESSION.md commit):
+  - **Gate source of truth:** `src/lib/pricing.ts` — `Tier` gained optional `comingSoon?: boolean`; `roster-fast-track` set `comingSoon: true`; **new export `isComingSoonTier(slug)`** (resolves the legacy `strategic-partnership` alias → canonical → flag). Every surface reads this one helper.
+  - **Server purchase gates (403 `PLAN_COMING_SOON`, defense-in-depth):** `src/app/api/pay/checkout/route.ts`, `src/app/api/proposals/checkout/route.ts`, `src/app/api/pay/verify-usdt/route.ts`.
+  - **UI coming-soon surfaces:** `src/components/landing/Services.tsx` (journey Stage 04 + rate-sheet row via `isComingSoonTier`), `HowItWorks.tsx`, `Footer.tsx` (roster → muted no-href span; `FooterColumn` link type now `href?`), `src/app/pay/page.tsx` (banner + `disabledReason` gates Card + USDT; Wire already hidden for one-time plans), `src/app/assessment/AssessmentResults.tsx` (both roster CTAs → "Coming soon"), `src/app/dashboard/services/[service]/page.tsx` (intake form → coming-soon notice), `src/app/dashboard/layout.tsx` (sidebar "Soon" badge), `src/app/assessment/WizardSteps.tsx` (intent chip "… / LTA (soon)").
+  - **Recommendation re-routing (stop recommending a gated product):** `src/lib/assessment/analyze.ts` (`availableTier()` helper, both `strategic-partnership` returns), `src/lib/ai.ts` (same inline), `src/app/api/dashboard/readiness/route.ts` (`paidActionForTier` falls through to the proposal action when roster is coming-soon).
+  - **Opportunity signal — new files:** `src/lib/assessment/opportunity-signal.ts` (corpus-count helper: stored-slug OR compact keyword ILIKE on `sector||title||description`, geo filter incl. global markers, grants sector-only, fails quiet), `src/app/api/assessment/opportunity-signal/route.ts` (public GET), `src/components/assessment/OpportunitySignal.tsx` (debounced live strip), wired into `src/app/assessment/page.tsx` (renders Step 2/3).
+  - `src/proxy.ts` — `/api/assessment/opportunity-signal` added to `PUBLIC_PATHS`.
+  - `src/lib/crawlers/sector-map.ts` — 2 additive `LABEL_TO_SLUG` keys: `"consulting & advisory" → consulting`, `"media & communications" → language_services` (improves real matching too; both wizard labels previously mapped to null).
+- Tests Run:
+  - `npx tsc --noEmit` — clean (after clearing a stale `.next/dev/types/validator.ts` that referenced a removed `proposal-worker` cron route — pre-existing dev artifact, unrelated).
+  - `npx eslint` on all 21 touched files — clean. `OpportunitySignal.tsx` keeps every `setState` inside the debounced callback (never synchronous in the effect body) to satisfy `react-hooks/set-state-in-effect` (launch-discipline rule 6).
+  - `npm run build` — clean; `/api/assessment/opportunity-signal` registered (ƒ dynamic).
+  - **Runtime (live DB present in this dev env):** signal returns real data — Logistics & Supply Chain @ Egypt → **26 tenders / 21 agencies / 17 closing-30d / 30 grants**; 11 sector×country combos verified incl. both new mappings; "Financial Services" → `signal: null` (graceful). Checkout gate: roster → 403, legacy `strategic-partnership` → 403, control `proposal-draft` → not gated (503 Stripe-config). Pay page `/pay?plan=roster-fast-track`: banner + Card disabled + USDT paused-notice (no wallet address) + Wire hidden. Landing: 6 "Coming soon", 0 `register-roster` purchase links. Drove the wizard to Step 2 → strip renders with correct copy + computed styles (`bg-paper-2` + accent left-border).
+- Result: **PR #110** — https://github.com/odaykamal88/tenderpath/pull/110 — code commit `9fea4e5` (21 files, +548/−64) + this SESSION.md commit. Branch based off `298b22d` (migrate-fix, already on `main`).
+- Blockers / Environment instability (**read this, next agent**):
+  - **The working tree rolled back TWICE between turns this session.** (1) All of session-1's work (3 new files + 6 edits) reverted to HEAD between the smoke-test turn and the next — re-applied from scratch. (2) After pushing PR #110, the checkout silently switched off my PR branch onto `session-md-sprint-10-13-update`. **Lesson: commit + push early/often; never trust the local working tree to persist across turns.** Everything is durable on origin now.
+  - No schema change, no migration this session.
+- Important Decisions:
+  - **Opportunity signal = honest CORPUS count ("we're tracking N"), never a personalized match promise.** The full assessment narrows the pond, so the teaser is always ≥ the personal match count — avoids a "teaser said 26, results showed 8" trust break. Fails quiet (renders nothing on zero/unmapped/DB-error) so it never flashes a discouraging "0".
+  - **The signal is a dedicated lightweight count, NOT a `matchTenders` call.** `tenders.sector` stores `sourceHint ?? slug` (unreliable as a clean slug), and the real matcher is a heavy per-slug keyword-pool + JS scoring pass — too costly for a debounced keystroke and would couple the public teaser to the protected matcher. The helper mirrors the matcher's keyword approach coarsely.
+  - **Gate NEW SALES, not the machinery.** Roster fulfillment (`generate-roster.ts`), admin tooling, work-order views, and `roster-package` route are untouched so already-purchased roster orders still complete. Flip `comingSoon` off in pricing.ts to relaunch everywhere at once.
+  - **Recommendation engine re-routes roster → proposal tier** rather than recommending a product the user can't buy.
+- Contracts or Interfaces Changed:
+  - `pricing.ts`: `Tier.comingSoon?: boolean` (additive); **new export `isComingSoonTier(slug)`**.
+  - **New public endpoint** `GET /api/assessment/opportunity-signal?sectors=&countries=` → `{ signal: { tenders, agencies, closingSoon, grants, mappedSectors } | null }`; added to proxy `PUBLIC_PATHS`.
+  - **New lib** `src/lib/assessment/opportunity-signal.ts` → `getOpportunitySignal(sectorLabels, countries)` + `OpportunitySignal` type.
+  - `FooterColumn` links type: `href` now optional.
+  - New 403 code `PLAN_COMING_SOON` on the three checkout routes.
+  - New stable log tags: `[tp:assessment:opportunity_signal_failed]`, `[tp:assessment:opportunity_signal_route_failed]`, `[pay:slug:coming_soon_blocked]`.
+  - **Unchanged:** `RawTender` / `CrawlResult` / `MatchedTender` / `AIAnalysis` ✓; `matchTenders` / `matchGrants` ✓ (not touched); `TierSlug` union ✓; all schemas ✓.
+- Docs Updated: `SESSION.md` — this entry. No new `docs/learning/` doc (patterns are reinforcements: corpus-vs-match honesty, gate-new-sales-not-machinery, single-source-of-truth flag).
+- Next Recommended Task:
+  1. **Vercel-preview verify + merge PR #110** — landing coming-soon, `/pay?plan=roster-fast-track` gated, run a fresh assessment to see the live signal in Step 2/3 and confirm results no longer CTA to roster.
+  2. **"Financial Services" is a dead sector** — maps to no slug, so a finance-only user gets no signal and poor matches. Add a `financial` slug to the vocabulary (touches `sector-map.ts` + crawler/matching coverage) OR drop the chip from `SECTOR_OPTIONS`. Decide direction.
+  3. **(Optional) Country-only progressive signal** at the end of Step 1 ("N live opportunities in Egypt"), refining once sector is added in Step 2 — endpoint must accept empty sectors; guard the "big number then drop" letdown.
+  4. Minor: the entry "Sample report" card lists 5 dimensions but results show the real 4 (`technical_capability`, `compliance_readiness`, `geographic_reach`, `experience_relevance`) — align labels.
+- Recommended Agent: Claude Code (Opus) for the Financial-Services taxonomy decision (touches matching); Sonnet for the progressive-signal + sample-card alignment.
+- Paste-Ready Next Prompt:
+
+```text
+Read SESSION.md (the Sprint 26 entry at the bottom), AGENTS.md, CLAUDE.md, docs/agents/assessment-architecture.md, docs/agents/dashboard-architecture.md, and src/lib/pricing.ts (isComingSoonTier is the gate's single source of truth).
+
+PR #110 (claude/roster-coming-soon-and-opportunity-signal) gated Roster/LTA "coming soon" across the product (isComingSoonTier() flag; server 403s on all checkout routes; coming-soon UI everywhere; recommendation engine re-routes to the proposal tier) and added a live opportunity signal to the wizard (new /api/assessment/opportunity-signal + src/lib/assessment/opportunity-signal.ts + OpportunitySignal.tsx). Verified (tsc/eslint/build + runtime) but may be unmerged — check.
+
+NOTE: the working tree rolled back twice mid-session last time — commit + push early; don't trust local persistence across turns.
+
+Pick ONE:
+  (A) Vercel-preview verify + merge PR #110 — landing coming-soon, /pay?plan=roster-fast-track gated (banner + disabled card/USDT), run a fresh assessment to see the live signal in Step 2/3 and confirm results no longer CTA to roster.
+  (B) Resolve the "Financial Services" dead sector — maps to no slug (no signal, poor matching). Add a `financial` slug to sector-map.ts's vocabulary (+ crawler/matching coverage) OR drop the chip from SECTOR_OPTIONS in WizardSteps.tsx.
+  (C) Build the country-only progressive signal at end of Step 1 (refines in Step 2). Endpoint must accept empty sectors; guard against the "big number then drop" letdown.
+
+Whichever: tsc + lint + build before push; commit message via /tmp file (NOT heredoc); branch from origin/main; outer try/catch + stable log tag for any new route; update SESSION.md at end.
+```
+
+### Short Resume State
+- What is now true: Roster/LTA is gated "coming soon" across the whole product via one `isComingSoonTier()` flag in `pricing.ts` — server 403s on `/api/pay/checkout`, `/api/proposals/checkout`, `/api/pay/verify-usdt`; coming-soon UI on landing, pay page, assessment results, dashboard service intake + sidebar, and the wizard intent chip; the recommendation engine (`analyze.ts`/`ai.ts`) + readiness upsell fall back to the proposal tier. Fulfillment/admin/existing-order views untouched. A live "opportunity signal" now renders in the wizard Step 2/3 (new public endpoint + `opportunity-signal.ts` + `OpportunitySignal.tsx`), framed as an honest corpus count; 2 missing sector-label mappings added. All verified (tsc/eslint/build + runtime against the live corpus). Shipped as PR #110.
+- What remains: merge PR #110 (Vercel-preview pass first); resolve the "Financial Services" dead sector; optional country-only progressive signal at Step 1; align the entry sample-card's 5 dimension labels to the real 4. **Watch for working-tree rollback — keep committing/pushing.**
+- What the next agent must read first: `SESSION.md` (this Sprint 26 entry), `AGENTS.md`, `CLAUDE.md`, `docs/agents/assessment-architecture.md`, `docs/agents/dashboard-architecture.md`, and `src/lib/pricing.ts` (`isComingSoonTier` is the gate's single source of truth).
