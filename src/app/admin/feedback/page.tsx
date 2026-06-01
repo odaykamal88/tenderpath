@@ -10,7 +10,7 @@
  * says to chase.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import styles from "../admin.module.css";
 
 type FeedbackState = "captured" | "promoted" | "rejected";
@@ -39,6 +39,18 @@ interface Stats {
   byState: Record<FeedbackState, number>;
   byKind: Record<FeedbackKind, number>;
   pendingReview: number;
+}
+
+interface CalibrationReport {
+  totalOutcomes: number;
+  sampleSize: number;
+  aligned: number;
+  optimistic: number;
+  pessimistic: number;
+  optimisticRate: number;
+  alignedRate: number;
+  calibrated: boolean;
+  note: string;
 }
 
 const TABS: { key: FeedbackState | "all"; label: string }[] = [
@@ -84,6 +96,7 @@ function stateTag(s: FeedbackState): string {
 export default function FeedbackQueuePage() {
   const [records, setRecords] = useState<FeedbackRow[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [calibration, setCalibration] = useState<CalibrationReport | null>(null);
   const [tab, setTab] = useState<FeedbackState | "all">("captured");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
@@ -96,9 +109,10 @@ export default function FeedbackQueuePage() {
       const qs = tab === "all" ? "" : `?state=${tab}`;
       const res = await fetch(`/api/admin/feedback${qs}`, { headers: authHeaders() });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const body = (await res.json()) as { records: FeedbackRow[]; stats: Stats };
+      const body = (await res.json()) as { records: FeedbackRow[]; stats: Stats; calibration: CalibrationReport | null };
       setRecords(body.records ?? []);
       setStats(body.stats ?? null);
+      setCalibration(body.calibration ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load feedback");
     } finally {
@@ -130,18 +144,6 @@ export default function FeedbackQueuePage() {
       setSavingId(null);
     }
   }
-
-  // Calibration breakdown over the currently-loaded outcome records (most
-  // meaningful on the Promoted tab — that's the curated, calibration-bound set).
-  const calib = useMemo(() => {
-    const c = { aligned: 0, optimistic: 0, pessimistic: 0 };
-    for (const r of records) {
-      if (r.calibration === "aligned") c.aligned += 1;
-      else if (r.calibration === "optimistic") c.optimistic += 1;
-      else if (r.calibration === "pessimistic") c.pessimistic += 1;
-    }
-    return c;
-  }, [records]);
 
   return (
     <>
@@ -182,15 +184,29 @@ export default function FeedbackQueuePage() {
             <div className={styles.heroStatMeta}>kept out</div>
           </div>
           <div className={styles.heroStat}>
-            <div className={styles.heroStatLabel}>Calibration (loaded)</div>
+            <div className={styles.heroStatLabel}>Score calibration</div>
             <div className={styles.heroStatValue}>
-              {calib.optimistic > 0 ? <span className={styles.negNum}>{calib.optimistic}</span> : 0}
+              {calibration && calibration.sampleSize > 0 ? (
+                <span className={calibration.calibrated ? styles.posNum : styles.warnNum}>
+                  {Math.round(calibration.optimisticRate * 100)}%
+                </span>
+              ) : (
+                "—"
+              )}
             </div>
             <div className={styles.heroStatMeta}>
-              optimistic misses · {calib.aligned} aligned · {calib.pessimistic} pessimistic
+              {calibration
+                ? `optimistic misses · ${calibration.sampleSize} outcome${calibration.sampleSize === 1 ? "" : "s"} · ${calibration.calibrated ? "calibrated" : "not yet"}`
+                : "no promoted outcomes yet"}
             </div>
           </div>
         </section>
+      )}
+
+      {calibration && calibration.totalOutcomes > 0 && (
+        <p className={styles.pageSub} style={{ marginTop: -2, marginBottom: 10 }}>
+          <b>Calibration (B2):</b> {calibration.note}
+        </p>
       )}
 
       <section className={styles.woControls}>

@@ -21,6 +21,7 @@ import { PROPOSAL_PLAN } from "@/lib/proposal-package/types";
 import {
   upsertOutcome,
   getOutcomeForPackage,
+  recordLossReason,
   isOutcomeValue,
   scoreBand,
 } from "@/lib/feedback/store";
@@ -181,6 +182,29 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       outcome: record.outcome,
       hasDetail: !!detail,
     });
+
+    // Loop 1 -> Loop 2: a reported loss WITH a note is also a loss-reason
+    // signal. Best-effort — a failure here must never fail the outcome capture.
+    if ((body.outcome === "lost" || body.outcome === "disqualified") && detail) {
+      try {
+        await recordLossReason({
+          detail,
+          proposalPackageId: pkg.id,
+          workOrderId: result.order.id,
+          userId: result.order.user_id,
+          tenderTitle: pkg.tender_title ?? result.order.tender_title,
+          agency: pkg.agency ?? result.order.agency,
+          lossKind: "user_reported",
+          capturedFrom: "user_prompt",
+        });
+      } catch (lossErr) {
+        console.warn("[feedback:loss_reason_from_outcome_failed]", {
+          workOrderId: result.order.id,
+          err: lossErr instanceof Error ? lossErr.message : String(lossErr),
+        });
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       outcome: { value: record.outcome, detail: record.detail, state: record.state, capturedAt: record.createdAt },

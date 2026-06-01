@@ -14,10 +14,12 @@ import {
   listFeedback,
   setFeedbackState,
   feedbackStats,
+  getPromotedOutcomes,
   calibrationVerdict,
   isFeedbackState,
   isFeedbackKind,
 } from "@/lib/feedback/store";
+import { computeCalibration } from "@/lib/feedback/calibration";
 import type { FeedbackRecord } from "@/lib/feedback/types";
 
 export const runtime = "nodejs";
@@ -40,14 +42,18 @@ export async function GET(request: Request) {
   const state = isFeedbackState(stateParam) ? stateParam : undefined;
   const kind = isFeedbackKind(kindParam) ? kindParam : undefined;
 
-  const [records, stats] = await Promise.all([
+  const [records, stats, promoted] = await Promise.all([
     listFeedback({ state, kind, limit: 200 }),
     feedbackStats(),
+    getPromotedOutcomes(),
   ]);
+  // B2: calibration is computed ONLY from promoted outcomes — the curated set.
+  const calibration = computeCalibration(promoted);
 
   return NextResponse.json({
     records: records.map(withCalibration),
     stats,
+    calibration,
     filter: { state: state ?? null, kind: kind ?? null },
   });
 }

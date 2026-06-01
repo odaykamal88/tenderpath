@@ -317,6 +317,40 @@ export async function upsertOutcome(input: UpsertOutcomeInput): Promise<Feedback
   return rec;
 }
 
+export interface LossReasonInput {
+  detail: string;
+  proposalPackageId?: number | null;
+  workOrderId?: number | null;
+  userId?: number | null;
+  tenderTitle?: string | null;
+  agency?: string | null;
+  criterionId?: string | null;
+  lossKind?: string | null;
+  capturedFrom?: CapturedFrom;
+}
+
+/**
+ * Loop 2 capture primitive: record WHERE a draft was weak. Safe to capture
+ * automatically (auto_score flags, reviewer edits, run failures, or a user's
+ * loss note) because it is the team's aggregate pattern data — NOT anyone's
+ * confidential content. Lands `captured`; the curation gate still applies, and
+ * aggregation across promoted loss-reasons (Loop 2's "fix it once") is the
+ * future read. Returns the new record id.
+ */
+export async function recordLossReason(input: LossReasonInput): Promise<number> {
+  return insertFeedback({
+    kind: "loss_reason",
+    capturedFrom: input.capturedFrom ?? "auto_score",
+    userId: input.userId ?? null,
+    workOrderId: input.workOrderId ?? null,
+    proposalPackageId: input.proposalPackageId ?? null,
+    tenderTitle: input.tenderTitle ?? null,
+    agency: input.agency ?? null,
+    detail: input.detail,
+    payload: { criterionId: input.criterionId ?? null, lossKind: input.lossKind ?? null },
+  });
+}
+
 export interface FeedbackStats {
   byState: Record<FeedbackState, number>;
   byKind: Record<FeedbackKind, number>;
