@@ -2996,3 +2996,103 @@ Whichever you pick: tsc + lint + build before push; commit message via /tmp file
 - What is now true: Sprint 25 shipped 4 PRs (PR-K, PR-L, PR-M merged; PR-N pushed and ready to merge). The dashboard now has a content-area trial banner on every page (3-color band, mobile + desktop), bid/no-bid eligibility chips no longer duplicate, Tender deadlines render as YY/MM/DD, Services intake for bid-no-bid is side-by-side URL+upload, the ScoreTab no longer shows stale `queued` status (LEFT JOIN on `proposal_packages.generation_status`), the AnnualAccessCard leads with the Founder's $49/yr rate + 77-of-100-seats scarcity, and a one-click export-to-proposal rail mints a fresh `proposal-draft` work_orders row with whitelisted intake snapshot. Five new dashboard patterns documented + 2 new launch-discipline rules + 1 new Sprint 25 learning doc.
 - What remains: open + merge PR-N; verify on Vercel preview (trial banner color bands at day > 7 / ≤ 7 / ≤ 3 / locked; export-to-proposal end-to-end; chip dedup; YY/MM/DD); extend LEFT JOIN pattern to work-orders list + digest emails; bump `FOUNDING_CLAIMED` as conversions land; Stripe test-clock verification of the day-27 reminder cron; audit other `react-hooks/set-state-in-effect` occurrences project-wide.
 - What the next agent must read first: `SESSION.md` (this Sprint 25 entry), `AGENTS.md`, `CLAUDE.md`, `docs/agents/launch-discipline.md` (rules 6 + 7 are new), `docs/agents/dashboard-architecture.md` (Sprint 25 section is new), `docs/learning/sprint-25-trial-flow-and-upsell-arc-2026-05-23.md` (full skill recipes + log-tag catalogue + follow-up list).
+
+### Session Update — Proposal Engine Sprints 10–13 + migrate-runner hardening
+- Agent: Claude Code (Opus 4.7, 1M context)
+- Date: 1 June 2026
+- Task Completed: Shipped four consecutive proposal-engine sprints (PRs #105–#108) plus a critical migrate-runner fix (PR #109). Sprint 10 activates Sprint 9's corrigendum/Q&A rail with intake-form upload widgets. Sprint 11 decouples the engine from the user's request lambda — originally designed as a Vercel cron worker, **revised mid-flight to use `after()` post-response** when Vercel rejected the cron schedule because the project's cron tier is Hobby (separate billing toggle from the Pro compute tier). Sprint 12 auto-promotes won pipeline_items into past_performance evidence rows so future engine runs cite them. Sprint 13 surfaces three trust indicators on the dashboard (rate-limit usage, corrigendum-read badge, mined-facts in Vault). The migrate.mjs fix unblocked production schema migration that was silently broken for weeks.
+- PRs Shipped (in merge order):
+  - **#105 — Sprint 10: corrigendum + Q&A upload UI (activates Sprint 9)**
+    - `src/app/dashboard/services/ServiceIntakeForm.tsx` — two new optional upload widgets gated by `service === "proposal"`. Amber-bordered card framed as "Corrigenda & clarifications (highly recommended)". Six new state vars + two handlers + two intake-spread keys (`amendment_url`/`amendment_filename` and `qa_url`/`qa_filename`). Matches Sprint 9's `extractSupplementaryDocRefs` intake shape exactly. No new acceptance script — Sprint 9's 12-test suite covers the parsing.
+  - **#106 — Sprint 11: background-job worker for proposal-draft generation (revised for Hobby)**
+    - Original design: Vercel cron job hits `/api/cron/proposal-worker` every minute, drains a `'pending'` queue. Implemented all helpers (queue.ts, worker route, vercel.json cron entry, 13-test acceptance) — deploy ERRORed with redirect to `/docs/cron-jobs/usage-and-pricing`.
+    - **Root cause:** Vercel has **separate billing toggles for compute (lambda) tier and cron-jobs tier.** Project is Pro for compute (`maxDuration=300` works) but Hobby for cron (daily-only schedules — `* * * * *` and `*/5 * * * *` both rejected). Two deploy attempts hit the same wall.
+    - **Revised design:** drop the cron entirely, swap to `next/server`'s `after()` to fire the engine post-response. Lambda stays alive until engine finishes OR `maxDuration` hits. `reapStaleGenerating()` at top of every enqueue replaces the cron worker's reaper.
+    - Files: `src/lib/proposal-package/queue.ts` (new — enqueue/claim/reap helpers, pure decision functions); `src/app/api/dashboard/work-orders/[id]/proposal-package/route.ts` + `src/app/api/proposals/generate/route.ts` (both POSTs now enqueue + `after(() => generateProposalPackageV2(...))`); `src/lib/proposal-package/persist.ts` (upsertPackage + markFailure write `updated_at = NOW()` on UPDATE/INSERT). `scripts/proposal-worker-acceptance.ts` 13 tests, all kept (queue policy unchanged, only the trigger architecture changed). Deleted: `src/app/api/cron/proposal-worker/route.ts`. Cron entry removed from `vercel.json`.
+    - Schema: `ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()` + partial index `proposal_packages_pending_idx` on `(generation_status, updated_at) WHERE generation_status IN ('pending','generating')`.
+  - **#107 — Sprint 12: won-tender → past_performance promotion**
+    - `src/lib/applicant-evidence/won-promotion.ts` (new) — pure helpers (`parseAmountUsd`, `parseYearFromDeadline`, `buildPromotedEvidence`, `inferSectorTag`, `wonFileUrlFor`) + DB writer (`promoteWonPipelineItem`). Idempotent via `(user_id, file_url)` UNIQUE constraint on both `vault_documents` and `document_extractions`. Synthetic URL scheme `tenderpath://won/pipeline-item/<id>` makes auto-promoted rows identifiable. `parseAmountUsd` documented as USD-only (no FX); comma always treated as thousands separator (European decimal lost — by design).
+    - Hook: `src/app/api/dashboard/pipeline/[id]/route.ts` PATCH calls `promoteWonPipelineItem` via `after()` when new stage is `'won'`.
+    - `scripts/won-promotion-acceptance.ts` — 10 pure-function tests.
+  - **#108 — Sprint 13: dashboard hints bundle (3 trust improvements)**
+    - **(1) Rate-limit indicator:** `/api/dashboard/work-orders/[id]/proposal-package` GET now returns `quota: {limit, window_hours, remaining, used, next_allowed_at}` from `checkRerunQuota` (non-recording read). `ProposalPackagePanel.tsx` renders "3 / 10 re-runs used in the last 24h — 7 left" near the Re-run button, disables the button when remaining ≤ 0.
+    - **(2) Corrigendum/Q&A indicator:** Same GET returns `supplementary_docs: {amendment_loaded, qa_loaded, count}` derived from `extractSupplementaryDocRefs(intake)`. Amber badge near the verdict: "Engine read 1 corrigendum + 1 Q&A round against the original TOR."
+    - **(3) Mined facts in Vault:** `/api/dashboard/profile` GET surfaces `users.mined_profile_facts`. Vault page renders a "What we inferred from your intake" card with explicit "Claims · not evidence" disclaimer.
+    - No new acceptance script — all three compose on top of helpers covered by existing suites (rate-limit, corrigendum-binding, profile-miner).
+  - **#109 — Fix migrate.mjs syntax: drop backticks + ambiguous comment block** (tail-of-session debugging)
+    - When running `node scripts/migrate.mjs` to apply Sprint 11's schema migration to production, hit TWO sequential failure modes in the runner's `tables` template literal:
+    - (a) Backticks inside the template literal closed the JS string early. Sprint 11 added a comment with backticks around a token; pre-existing Sprint 24 line referenced `g{gapIdx}-s{stepIdx}` with backticks. Combined, they made the parser see SQL `--` as the postfix-decrement operator on a string. `SyntaxError: Invalid left-hand side expression in postfix operation`. Fix: replace both backtick groups with double quotes.
+    - (b) After (a) was fixed, the migration ran but **silently dropped** the `ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS updated_at` statement. The 10-line `--` comment block above it defeated `stripLeadingComments` (likely the em-dashes or apostrophes inside). The next CREATE INDEX referencing `updated_at` errored with `column does not exist`. Fix: drop the comment block entirely — annotation lives in the commit message + memory entry instead.
+    - After both fixes, migration ran clean against production. Sprint 11's queue helpers now work end-to-end.
+- Tests Run:
+  - `npx tsc --noEmit` — clean (every sprint)
+  - `npx eslint <touched files>` — clean (every sprint)
+  - `npm run build` — clean (every sprint, including after rebases)
+  - `npx tsx scripts/proposal-worker-acceptance.ts` — 13/13
+  - `npx tsx scripts/won-promotion-acceptance.ts` — 10/10
+  - `npx tsx scripts/corrigendum-binding-acceptance.ts` — 12/12 (regression)
+  - `npx tsx scripts/profile-miner-acceptance.ts` — 11/11 (regression)
+  - `npx tsx scripts/proposal-rate-limit-acceptance.ts` — 7/7 (regression)
+  - `node -c scripts/migrate.mjs` — parses clean
+  - `node scripts/migrate.mjs` — applied to production Neon DB; `proposal_packages.updated_at` + `_pending_idx` confirmed live
+- Result:
+  - **5 PRs merged today (#105, #106, #107, #108, #109).** Production deploy from the chain is green.
+  - Sprint 11's queue infrastructure now functional in production (was silently broken from the moment #106 merged until #109 ran — about an hour gap; no customer impact because the only path that exercises it is the proposal-draft Re-run button, and no one clicked it in that window).
+  - The corrigendum + Q&A rail (Sprint 9 backend, Sprint 10 UI, Sprint 13 dashboard hint) is now user-visible end-to-end.
+  - The won-tender promotion (Sprint 12) closes the evidence-asset loop: AGENTS.md's "every review run should leave the applicant's evidence library richer than it found it" applied to outcomes, not just inputs.
+- Blockers: none open. PR #109 merged.
+- Important Decisions:
+  - **`after()` from `next/server` is the right primitive for "decouple engine from request" on Hobby cron tier.** It keeps the lambda alive until the work finishes OR maxDuration hits — same effective UX as a cron worker, no scheduler dependency. The trade-off is each enqueue burns one lambda budget, so >300s engine runs aren't actually uncapped — but that's the same situation we had pre-Sprint-11. The win is the instant ACK for the user.
+  - **Cron tier and compute tier are independent on Vercel.** Future cron additions must explicitly check the project's cron tier setting (existing crons all daily → Hobby tier; project may still be Pro for compute). The `vercel.link` redirect URL on a failed deploy points at the right docs page (`/docs/cron-jobs/usage-and-pricing` = cron tier; `/docs/functions/configuring-functions` = lambda config).
+  - **Synthetic-URL evidence rows** (Sprint 12's `tenderpath://won/pipeline-item/<id>` scheme) are the cleanest way to slot machine-generated evidence into the existing vault tables without adding a new schema or new join in the library query. The scheme prefix makes auto-promoted rows queryable + identifiable for future "auto-promoted" UI badges.
+  - **Backticks inside the migrate.mjs `tables` template literal are forbidden.** Any reference to a name that naturally takes backticks (memory entry titles, code identifiers) must use double quotes instead. `node -c scripts/migrate.mjs` is the syntax check — should be in any future migrate-touching session's pre-push gate.
+  - **`scripts/migrate.mjs` is manual; never auto-runs on deploy.** Any schema-adding PR must include "run migrate.mjs against production" in its merge checklist. Sprint 11 omitted this; the column was missing for an hour before anyone noticed.
+- Contracts or Interfaces Changed:
+  - **NEW schema column:** `proposal_packages.updated_at TIMESTAMPTZ DEFAULT NOW()` — UPDATEs and INSERTs go through `upsertPackage`/`markFailure`, both write `NOW()`. Reaper uses `WHERE updated_at < NOW() - INTERVAL ...`.
+  - **NEW schema index:** `proposal_packages_pending_idx` (partial, on `generation_status IN ('pending','generating')`) — keeps the reap-and-claim queries cheap.
+  - **NEW intake keys** (work_orders.intake JSONB): `amendment_url` / `amendment_filename` / `amendment_doc_id` and `qa_url` / `qa_filename` / `qa_doc_id`. Both parsed by `extractSupplementaryDocRefs` (Sprint 9) and produced by `ServiceIntakeForm`'s new widgets (Sprint 10).
+  - **NEW response fields** on `/api/dashboard/work-orders/[id]/proposal-package` GET: `quota` (rate-limit headroom) + `supplementary_docs` (amendment/qa loaded flags). Both optional; older clients fall back transparently.
+  - **NEW response field** on `/api/dashboard/profile` GET: `mined_profile_facts` from `users.mined_profile_facts` (Sprint 8e column).
+  - **NEW behavior** on `/api/dashboard/pipeline/[id]` PATCH: when new `stage === 'won'`, `after()` calls `promoteWonPipelineItem`. PATCH response shape unchanged.
+  - **NEW behavior** on both proposal-draft POST routes: response now `{ok: true, status: 'pending', package_id, attempts, message}` instead of full package row. Existing `ProposalPackagePanel.tsx` polling pattern handles this transparently.
+  - **DELETED:** `src/app/api/cron/proposal-worker/route.ts` (the original Sprint 11 worker) — replaced by `after()` inline in the two POST routes.
+  - **Unchanged:** `RawTender` / `CrawlResult` / `MatchedTender` / `AIAnalysis` ✓; `vault_documents` / `document_extractions` schemas ✓ (Sprint 12's synthetic rows fit the existing shape).
+- Docs Updated:
+  - User-memory updated:
+    - `feedback_vercel_build_stricter_than_local.md` — added Hobby cron-tier as the third failure mode (alongside maxDuration ceiling + dotenv transitive dep). Description now reflects three deploy-validation traps local checks can't see.
+    - `feedback_migrate_mjs_runner.md` — added the backtick trap (layer 1, JS parser) alongside the existing `--` comment trap (layer 2, SQL filter). Reinforced that `node -c scripts/migrate.mjs` is the pre-push syntax check.
+    - `MEMORY.md` index — both entries' descriptions refreshed.
+  - `SESSION.md` — this entry.
+  - **No new** `docs/learning/` doc this session. The patterns here are reinforcements of existing learnings (Vercel stricter than local, migrate runner traps), not brand-new patterns.
+- Next Recommended Task: pick from the post-Sprint-13 backlog. In priority order:
+  1. **Stage persistence for >300s engine runs.** Sprint 11's `after()` flow still caps at `maxDuration`. True uncap requires (a) upgrading Vercel cron tier on this project so a worker can drain in stages, OR (b) external scheduler (Inngest / QStash / GitHub Actions cron), OR (c) refactoring `runRevisionLoop` to persist between LLM calls so a fresh `after()` invocation can resume. (c) is the most ambitious — would let us survive lambda death mid-engine. ~2 days.
+  2. **Audit other PR branches for the inheritance trap.** Sprint 12 and 13 had to be rebased mid-session because they were branched off the original (broken) Sprint 11. Any other open branches that descend from a broken-but-merged parent need the same treatment. Quick scan: `git branch -r --contains <bad-commit>` after each fix-merge.
+  3. **Hobby cron tier upgrade decision.** $20/mo Pro cron unlocks per-minute crons (currently rejected) and would let us re-introduce the worker pattern. Today's `after()` workaround is fine for the dominant case; cron-tier upgrade is the proper unblock for the >300s engine future.
+  4. **Surface mined_profile_facts editing.** Sprint 13's Vault card is read-only. Inline editing (or "regenerate from latest intake" button) would let users correct wrong inferences. ~½ day.
+  5. **Multi-amendment support.** Sprint 9's `extractSupplementaryDocRefs` handles ONE corrigendum + ONE Q&A. Real tenders publish multiple corrigenda over the bid window — lift to arrays. ~½ day backend + ½ day UI.
+  6. **Won-tender unwind.** If a user accidentally marks 'won' then 'lost', the synthetic past_performance row stays in the library. A self-healing reverse trigger is doable but unnecessary unless real users hit it.
+- Recommended Agent: Claude Code (Opus 4.7, 1M context) for stage-persistence work (#1) — it's a refactor touching the engine core. Sonnet is fine for #4 (UI editing surface) and #6 (small DB fix).
+- Paste-Ready Next Prompt:
+
+```text
+Read SESSION.md (the Proposal Engine Sprints 10–13 entry at the bottom), AGENTS.md, CLAUDE.md, docs/agents/proposal-engine-build-plan.md, docs/agents/scoring-engine-spec.md, the two updated memory entries (feedback_vercel_build_stricter_than_local.md, feedback_migrate_mjs_runner.md).
+
+Sprint 11's after()-based queue is live in production but still capped at maxDuration. Pick ONE:
+  (A) STAGE PERSISTENCE — refactor runRevisionLoop to checkpoint between LLM calls into proposal_packages.gate_state (already JSONB). A fresh after() invocation should be able to resume from the last completed stage. Each user re-run still burns one lambda but the engine can survive lambda death mid-run. Requires reading scoring-engine.ts, revision-loop.ts, persist.ts. ~2 days. The cleanest path to "actually uncap" >300s engines on Hobby.
+  (B) AUDIT INHERITANCE — git branch -r --contains <pre-fix commits> to find any open branches that descend from broken parents. Rebase each onto current main. Quick housekeeping.
+  (C) MINED FACTS EDITING — make src/app/dashboard/vault/page.tsx mined-facts card editable. New PATCH /api/dashboard/profile/mined-facts endpoint OR a "regenerate from latest intake" button (re-runs profile-miner on the user's most-recent work_orders.intake). ~½ day.
+  (D) MULTI-AMENDMENT SUPPORT — Sprint 9's SupplementaryDocRef is singular. Lift to Array<SupplementaryDocRef> in extractSupplementaryDocRefs + buildIngestedDocFromExtraction. Intake keys become arrays (amendment_documents: [{url, filename}], qa_documents: [{...}]). Sprint 10's UI needs a multi-upload widget. ~½ day backend + ½ day UI.
+
+Whichever you pick:
+ - tsc + lint + build before push
+ - commit message via /tmp file (NOT HEREDOC — backticks in body will break bash eval, same trap as migrate.mjs)
+ - branch from origin/main with `git checkout -b NAME origin/main` (or `--no-track` if main is in a sibling worktree)
+ - `node -c scripts/migrate.mjs` BEFORE any commit that touches that file
+ - run `node scripts/migrate.mjs` after merging if you added schema (it's manual, not on deploy)
+ - update SESSION.md at end
+```
+
+### Short Resume State
+- What is now true: Sprints 10/11/12/13 merged (PRs #105–#108). Sprint 11's queue infrastructure shipped as `after()`-based (Hobby-compatible) — original cron worker was deleted mid-flight. Schema migration ran against production (PR #109 fixed the broken migrate.mjs that had been silently busted for weeks). Two memory entries updated with the new failure modes (Hobby cron-tier, migrate-runner backtick + comment-block traps). Production deploy green, all five PRs merged today.
+- What remains: stage persistence for >300s engine runs (the >300s uncap was Sprint 11's original goal — not delivered, deferred); upgrade Vercel cron tier OR migrate to external scheduler; surface editing for mined_profile_facts; multi-amendment support; won-tender unwind.
+- What the next agent must read first: `SESSION.md` (this entry), `AGENTS.md`, `CLAUDE.md`, `docs/agents/proposal-engine-build-plan.md`, `docs/agents/scoring-engine-spec.md`, and the two updated memory entries (`~/.claude/projects/*/memory/feedback_vercel_build_stricter_than_local.md` + `feedback_migrate_mjs_runner.md`) for the Vercel/migrate traps. Heads-up: `scripts/migrate.mjs` is MANUAL on production — every schema-adding PR must include "run migrate.mjs" in its merge checklist.
