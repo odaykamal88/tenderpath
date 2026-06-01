@@ -53,7 +53,7 @@ import { bundleAndUpload, safeFilenameStem } from "./bundle";
 import { loadEvidenceLibrary } from "@/lib/applicant-evidence/query";
 import { enrichApplicantContextFromLibrary, summarizeEnrichment } from "./library-enrichment";
 import { sql } from "@/lib/db";
-import { replaceAutoLossReasons } from "@/lib/feedback/store";
+import { replaceAutoLossReasons, getPromotedCorrections } from "@/lib/feedback/store";
 import type { MinedProfileFacts } from "@/lib/applicant-evidence/profile-miner";
 
 export interface GenerateProposalV2Result {
@@ -246,7 +246,23 @@ export async function generateProposalPackageV2({
   try {
     console.log("[proposal-v2:start]", { workOrderId, tenderTitle, agency, attempts });
 
-    const rubric = await extractRubricFromInput(tenderInput);
+    // Loop 4: load PROMOTED extraction corrections for this agency/format and
+    // feed them to the extractor as priors. Best-effort — a load failure must
+    // not block extraction (fall back to no corrections).
+    let corrections: string[] = [];
+    try {
+      corrections = await getPromotedCorrections(agency ?? null);
+      if (corrections.length > 0) {
+        console.log("[proposal:extraction_corrections_applied]", { workOrderId, agency, count: corrections.length });
+      }
+    } catch (corrErr) {
+      console.warn("[proposal-v2:corrections_load_failed]", {
+        workOrderId,
+        err: corrErr instanceof Error ? corrErr.message : String(corrErr),
+      });
+    }
+
+    const rubric = await extractRubricFromInput(tenderInput, undefined, corrections);
     console.log("[proposal-v2:rubric_extracted]", {
       workOrderId,
       lots: rubric.lots.length,

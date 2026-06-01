@@ -55,12 +55,17 @@ export async function extractRubricFromTender(tender: LoadedTender): Promise<Ten
 export async function extractRubricFromInput(
   input: TenderInput,
   docsForAssembly?: IngestedDoc[],
+  corrections?: string[],
 ): Promise<TenderRubric> {
   const docs = docsForAssembly ?? input.docs;
   const client = getClient();
 
   const docsBlock = formatDocsForPrompt(docs);
   const qaBlock = formatBindingQA(input.bindingClarifications ?? []);
+  // Loop 4: promoted, human-curated extraction corrections for this agency's
+  // tender format, injected as a prior so the extractor stops repeating known
+  // format-specific mistakes. Empty string when there are none.
+  const correctionsBlock = formatCorrectionsForPrompt(corrections ?? []);
   const lotMetaJson = JSON.stringify(input.lotMetadata, null, 2);
 
   const prompt = `You are a UN procurement rubric extractor. Read the document set below and return a structured rubric matching the schema. Do NOT invent criteria or weights — mirror exactly what the call publishes.
@@ -74,7 +79,7 @@ TENDER METADATA (authoritative prior — do not contradict):
 ${docsBlock}
 
 ${qaBlock}
-
+${correctionsBlock}
 Return a JSON object with EXACTLY these top-level keys:
 
 {
@@ -204,6 +209,20 @@ function formatBindingQA(
     (q) => `[${q.entryId}] touches: ${q.touches || "(unspecified)"}\n${q.content}`,
   );
   return `BINDING Q&A CLARIFICATIONS (pre-classified; treat as authoritative refinements to the base rubric):\n${blocks.join("\n\n---\n\n")}`;
+}
+
+/**
+ * Loop 4: format PROMOTED, human-curated extraction corrections for the
+ * tender's agency/format into a prompt prior. These encode recurring extraction
+ * mistakes a domain expert flagged (e.g. "UNICEF RFPs double-weight the
+ * methodology criterion"). Returns "" when there are none. Exported so the
+ * acceptance script can exercise the formatting.
+ */
+export function formatCorrectionsForPrompt(corrections: string[]): string {
+  const clean = corrections.map((c) => c.trim()).filter(Boolean);
+  if (clean.length === 0) return "";
+  const items = clean.map((c, i) => `${i + 1}. ${c}`).join("\n");
+  return `KNOWN FORMAT CORRECTIONS (human-curated priors for this agency's tender format — apply each when it fits the documents; they flag recurring extraction mistakes to avoid). Do NOT invent criteria from these; use them only to read the PUBLISHED rubric correctly:\n${items}\n`;
 }
 
 function assembleTenderRubric(

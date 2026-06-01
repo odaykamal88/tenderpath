@@ -399,6 +399,53 @@ export async function replaceAutoLossReasons(
   return inserted;
 }
 
+export interface ExtractionCorrectionInput {
+  /** Agency the correction applies to (e.g. "UNICEF"); null = global (all agencies). */
+  agency: string | null;
+  /** The correction, in plain language (becomes a prompt prior once promoted). */
+  detail: string;
+  category?: string | null;
+  userId?: number | null;
+  capturedFrom?: CapturedFrom;
+}
+
+/**
+ * Loop 4 capture: record a human extraction correction against an agency/format
+ * (e.g. "UNICEF RFPs double-weight the methodology criterion"). Lands `captured`
+ * — the curation gate still applies; only a PROMOTED correction reaches the
+ * extractor (getPromotedCorrections). Returns the new record id.
+ */
+export async function recordExtractionCorrection(input: ExtractionCorrectionInput): Promise<number> {
+  return insertFeedback({
+    kind: "extraction_correction",
+    capturedFrom: input.capturedFrom ?? "admin",
+    userId: input.userId ?? null,
+    agency: input.agency ?? null,
+    detail: input.detail,
+    payload: { category: input.category ?? null },
+  });
+}
+
+/**
+ * Loop 4 read path: PROMOTED extraction corrections that apply to a tender's
+ * agency — the agency-specific ones plus any global (agency IS NULL) ones.
+ * ONLY promoted corrections reach the extractor; nothing uncurated changes how
+ * tenders are parsed. Returns the correction detail strings.
+ */
+export async function getPromotedCorrections(agency: string | null): Promise<string[]> {
+  await ensureFeedbackStore();
+  const rows = (await sql`
+    SELECT detail FROM feedback_records
+    WHERE kind = 'extraction_correction' AND state = 'promoted'
+      AND (agency IS NULL OR lower(agency) = lower(${agency}))
+    ORDER BY created_at DESC
+    LIMIT 50
+  `) as Array<{ detail: string | null }>;
+  return rows
+    .map((r) => r.detail)
+    .filter((d): d is string => typeof d === "string" && d.trim().length > 0);
+}
+
 export interface FeedbackStats {
   byState: Record<FeedbackState, number>;
   byKind: Record<FeedbackKind, number>;

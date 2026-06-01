@@ -101,6 +101,11 @@ export default function FeedbackQueuePage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Loop 4 capture form.
+  const [corrAgency, setCorrAgency] = useState("");
+  const [corrDetail, setCorrDetail] = useState("");
+  const [corrBusy, setCorrBusy] = useState(false);
+  const [corrMsg, setCorrMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -142,6 +147,30 @@ export default function FeedbackQueuePage() {
       setError(err instanceof Error ? err.message : "Failed to update record");
     } finally {
       setSavingId(null);
+    }
+  }
+
+  async function submitCorrection() {
+    if (!corrDetail.trim()) return;
+    setCorrBusy(true);
+    setCorrMsg(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/feedback", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ agency: corrAgency.trim() || null, detail: corrDetail.trim() }),
+      });
+      const b = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; note?: string };
+      if (!res.ok || !b.ok) throw new Error(b.error ?? `${res.status} ${res.statusText}`);
+      setCorrAgency("");
+      setCorrDetail("");
+      setCorrMsg(b.note ?? "Recorded — promote it below to apply it.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to record correction");
+    } finally {
+      setCorrBusy(false);
     }
   }
 
@@ -208,6 +237,49 @@ export default function FeedbackQueuePage() {
           <b>Calibration (B2):</b> {calibration.note}
         </p>
       )}
+
+      <section className={styles.panel} style={{ marginBottom: 14 }}>
+        <div className={styles.panelHead}>
+          <div className={styles.panelTitle}>Add extraction correction (Loop 4)</div>
+        </div>
+        <div className={styles.panelBody}>
+          <p className={styles.panelSub} style={{ marginTop: 0, marginBottom: 8 }}>
+            Record a recurring extraction mistake for an agency/format (e.g. &ldquo;UNICEF RFPs
+            double-weight the methodology criterion&rdquo;). It lands as <b>captured</b>; promote it
+            below to feed it to the rubric extractor as a prior. Leave agency blank for a global rule.
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-start" }}>
+            <input
+              className={styles.adminSearchInput}
+              style={{ maxWidth: 170 }}
+              placeholder="Agency (e.g. UNICEF)"
+              value={corrAgency}
+              onChange={(e) => setCorrAgency(e.target.value)}
+            />
+            <textarea
+              className={styles.adminSearchInput}
+              style={{ flex: 1, minWidth: 240, minHeight: 56 }}
+              placeholder="The correction…"
+              value={corrDetail}
+              onChange={(e) => setCorrDetail(e.target.value)}
+              maxLength={2000}
+            />
+            <button
+              type="button"
+              className={styles.btnPrimary}
+              disabled={corrBusy || !corrDetail.trim()}
+              onClick={submitCorrection}
+            >
+              {corrBusy ? "Saving…" : "Record"}
+            </button>
+          </div>
+          {corrMsg && (
+            <p className={styles.panelSub} style={{ marginTop: 8, color: "#1f6a3c" }}>
+              {corrMsg}
+            </p>
+          )}
+        </div>
+      </section>
 
       <section className={styles.woControls}>
         <div className={styles.woTabs}>

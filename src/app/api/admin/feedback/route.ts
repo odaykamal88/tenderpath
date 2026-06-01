@@ -15,6 +15,7 @@ import {
   setFeedbackState,
   feedbackStats,
   getPromotedOutcomes,
+  recordExtractionCorrection,
   calibrationVerdict,
   isFeedbackState,
   isFeedbackKind,
@@ -93,5 +94,47 @@ export async function PATCH(request: Request) {
       err: err instanceof Error ? err.message : String(err),
     });
     return NextResponse.json({ error: "Could not update the record." }, { status: 500 });
+  }
+}
+
+/**
+ * POST — record a Loop 4 extraction correction against an agency/format. Lands
+ * `captured`; it only reaches the extractor once an admin promotes it (PATCH).
+ */
+export async function POST(request: Request) {
+  const guard = await requireAdmin(request);
+  if (!guard.authorized) return guard.response!;
+
+  let body: { agency?: unknown; detail?: unknown; category?: unknown };
+  try {
+    body = (await request.json()) as { agency?: unknown; detail?: unknown; category?: unknown };
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const detail = typeof body.detail === "string" ? body.detail.trim() : "";
+  if (!detail) {
+    return NextResponse.json({ error: "A correction (detail) is required" }, { status: 400 });
+  }
+  const agency = typeof body.agency === "string" && body.agency.trim() ? body.agency.trim() : null;
+  const category = typeof body.category === "string" && body.category.trim() ? body.category.trim() : null;
+
+  try {
+    const id = await recordExtractionCorrection({
+      agency,
+      detail: detail.slice(0, 2000),
+      category,
+      userId: guard.user!.id,
+      capturedFrom: "admin",
+    });
+    console.log("[admin:extraction_correction_recorded]", { id, agency, reviewer: guard.user!.id });
+    return NextResponse.json({
+      ok: true,
+      id,
+      note: "Recorded as captured — promote it (above) to apply it to extraction.",
+    });
+  } catch (err) {
+    console.error("[admin:extraction_correction_failed]", { err: err instanceof Error ? err.message : String(err) });
+    return NextResponse.json({ error: "Could not record the correction." }, { status: 500 });
   }
 }
