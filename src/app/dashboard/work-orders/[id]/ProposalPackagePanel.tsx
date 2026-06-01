@@ -66,12 +66,57 @@ interface PackageRow {
   created_at: string;
 }
 
+// Sprint 13. Optional payload fields surface the per-user rate-limit
+// headroom and which supplementary docs (corrigendum + Q&A) the engine
+// actually read for this work order. Both are optional so the UI degrades
+// gracefully when an older API response (pre-Sprint-13) is in flight.
+interface RateLimitQuotaPayload {
+  limit: number;
+  window_hours: number;
+  remaining: number;
+  used: number;
+  next_allowed_at: string | null;
+}
+
+interface SupplementaryDocsPayload {
+  amendment_loaded: boolean;
+  qa_loaded: boolean;
+  count: number;
+}
+
 interface ApiResponse {
   exists: boolean;
   package?: PackageRow;
   payment_status: string | null;
   max_attempts: number;
   remaining_regenerations?: number;
+  quota?: RateLimitQuotaPayload | null;
+  supplementary_docs?: SupplementaryDocsPayload | null;
+}
+
+// Sprint 13. Pretty-printer for the supplementary-doc badge. Returns null
+// when neither doc was loaded (panel renders nothing); otherwise a short
+// human-readable phrase like "Engine read 1 corrigendum + 1 Q&A round".
+function formatSupplementaryDocsLine(s: SupplementaryDocsPayload | null | undefined): string | null {
+  if (!s || s.count === 0) return null;
+  const parts: string[] = [];
+  if (s.amendment_loaded) parts.push("1 corrigendum");
+  if (s.qa_loaded) parts.push("1 Q&A round");
+  if (parts.length === 0) return null;
+  return `Engine read ${parts.join(" + ")} against the original TOR.`;
+}
+
+// Sprint 13. Pretty-printer for the rate-limit usage line near the Re-run
+// button. Returns null when quota is missing or fully refreshed; otherwise
+// "X / 10 re-runs used today — N left".
+function formatQuotaLine(q: RateLimitQuotaPayload | null | undefined): string | null {
+  if (!q) return null;
+  if (q.used <= 0) return null; // unused quota — no need to nag the user
+  if (q.remaining > 0) {
+    return `${q.used} / ${q.limit} re-runs used in the last ${q.window_hours}h — ${q.remaining} left.`;
+  }
+  const reset = q.next_allowed_at ? ` Next slot at ${new Date(q.next_allowed_at).toLocaleString()}.` : "";
+  return `${q.used} / ${q.limit} re-runs used in the last ${q.window_hours}h.${reset}`;
 }
 
 interface Props {
@@ -317,6 +362,21 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
           <p className="text-[13px] leading-relaxed text-stone-600">
             Compliance verdict, per-criterion rubric scoring, and applicant-action findings for every weakness. Full breakdown and draft body on the proposal page.
           </p>
+          {/* Sprint 13. Surface the supplementary docs the engine considered so
+              the user can see corrigendum/Q&A binding wasn't skipped — the
+              AGENTS.md "why this matters / why it matches" rule. Renders
+              nothing when no amendment/qa was uploaded. */}
+          {formatSupplementaryDocsLine(data?.supplementary_docs) && (
+            <p
+              className="mt-2 inline-flex items-center gap-1.5 rounded-sm border border-amber-200 bg-amber-50/60 px-2.5 py-1 text-[11px] text-amber-900"
+              style={{ fontFamily: MONO }}
+            >
+              <svg className="h-3 w-3 shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm.93 4.588l-.25 6.5h-1.36l-.25-6.5h1.86zM7 13a1 1 0 1 1 2 0 1 1 0 0 1-2 0z" />
+              </svg>
+              {formatSupplementaryDocsLine(data?.supplementary_docs)}
+            </p>
+          )}
         </div>
 
         {severityCounts.length > 0 && (
@@ -358,24 +418,39 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
         )}
 
         <div className="border-t border-stone-100 p-5 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <p className="text-[11px] text-stone-500" style={{ fontFamily: MONO }}>
-            {isUnlimited
-              ? `Generation ${pkg.generation_attempts ?? 1} · unlimited re-runs included`
-              : `Generation ${pkg.generation_attempts ?? 1} · ${remaining} regenerate${remaining === 1 ? "" : "s"} left`}
-          </p>
+          <div className="flex flex-col gap-0.5">
+            <p className="text-[11px] text-stone-500" style={{ fontFamily: MONO }}>
+              {isUnlimited
+                ? `Generation ${pkg.generation_attempts ?? 1} · unlimited re-runs included`
+                : `Generation ${pkg.generation_attempts ?? 1} · ${remaining} regenerate${remaining === 1 ? "" : "s"} left`}
+            </p>
+            {/* Sprint 13. Per-user 10/24h rate-limit usage. Only renders when
+                the user has actually consumed at least one re-run today —
+                otherwise it would be cap-shaming an unused account. */}
+            {formatQuotaLine(data?.quota) && (
+              <p
+                className="text-[10.5px] text-stone-400"
+                style={{ fontFamily: MONO }}
+              >
+                {formatQuotaLine(data?.quota)}
+              </p>
+            )}
+          </div>
           {error && <p className="text-[11.5px] text-red-700">{error}</p>}
           <button
             type="button"
             onClick={handleRegenerate}
-            disabled={regenBusy || (!isUnlimited && (remaining ?? 0) <= 0)}
+            disabled={regenBusy || (!isUnlimited && (remaining ?? 0) <= 0) || (data?.quota != null && data.quota.remaining <= 0)}
             className="rounded-sm border border-stone-300 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ fontFamily: MONO }}
           >
             {regenBusy
               ? "Regenerating…"
-              : (!isUnlimited && (remaining ?? 0) <= 0)
-                ? "Regenerate limit reached"
-                : "Regenerate →"}
+              : (data?.quota != null && data.quota.remaining <= 0)
+                ? "Daily re-run limit reached"
+                : (!isUnlimited && (remaining ?? 0) <= 0)
+                  ? "Regenerate limit reached"
+                  : "Regenerate →"}
           </button>
         </div>
       </section>
@@ -442,24 +517,36 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
       )}
 
       <div className="border-t border-stone-100 p-5 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <p className="text-[11px] text-stone-500" style={{ fontFamily: MONO }}>
-          {isUnlimited
-            ? `Generation ${pkg.generation_attempts ?? 1} · unlimited re-runs included`
-            : `Generation ${pkg.generation_attempts ?? 1} · ${remaining} regenerate${remaining === 1 ? "" : "s"} left`}
-        </p>
+        <div className="flex flex-col gap-0.5">
+          <p className="text-[11px] text-stone-500" style={{ fontFamily: MONO }}>
+            {isUnlimited
+              ? `Generation ${pkg.generation_attempts ?? 1} · unlimited re-runs included`
+              : `Generation ${pkg.generation_attempts ?? 1} · ${remaining} regenerate${remaining === 1 ? "" : "s"} left`}
+          </p>
+          {/* Sprint 13 (legacy panel parity): mirror the same quota line the
+              scored panel renders, so the rate-limit headroom is visible on
+              both old and new package shapes. */}
+          {formatQuotaLine(data?.quota) && (
+            <p className="text-[10.5px] text-stone-400" style={{ fontFamily: MONO }}>
+              {formatQuotaLine(data?.quota)}
+            </p>
+          )}
+        </div>
         {error && <p className="text-[11.5px] text-red-700">{error}</p>}
         <button
           type="button"
           onClick={handleRegenerate}
-          disabled={regenBusy || (!isUnlimited && (remaining ?? 0) <= 0)}
+          disabled={regenBusy || (!isUnlimited && (remaining ?? 0) <= 0) || (data?.quota != null && data.quota.remaining <= 0)}
           className="rounded-sm border border-stone-300 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ fontFamily: MONO }}
         >
           {regenBusy
             ? "Regenerating…"
-            : (!isUnlimited && (remaining ?? 0) <= 0)
-              ? "Regenerate limit reached"
-              : "Regenerate package →"}
+            : (data?.quota != null && data.quota.remaining <= 0)
+              ? "Daily re-run limit reached"
+              : (!isUnlimited && (remaining ?? 0) <= 0)
+                ? "Regenerate limit reached"
+                : "Regenerate package →"}
         </button>
       </div>
     </section>

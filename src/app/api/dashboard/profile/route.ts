@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireAuth } from "@/lib/subscription-guard";
+import type { MinedProfileFacts } from "@/lib/applicant-evidence/profile-miner";
 
 interface ProfileRow {
   business_name: string | null;
@@ -16,6 +17,12 @@ interface ProfileRow {
   profile_description: string | null;
   profile_source: string | null;
   contact_phone: string | null;
+  // Sprint 13. Surface the JSONB column Sprint 8e populates from
+  // free-text intake (years_of_experience, sectors_covered,
+  // agencies_worked_with, geographic_reach, key_capabilities). The Vault
+  // page renders these so the user can see what was inferred from their
+  // own typed answers — an evidence-adjacent trust signal.
+  mined_profile_facts: MinedProfileFacts | null;
 }
 
 interface AssessmentRow {
@@ -49,13 +56,21 @@ export async function GET(request: Request) {
 
   const rows = await sql`
     SELECT business_name, website, sector, country_focus,
-           org_type, profile_description, profile_source, contact_phone
+           org_type, profile_description, profile_source, contact_phone,
+           mined_profile_facts
     FROM users WHERE id = ${user.id}
   `;
   const profile = rows[0] as ProfileRow | undefined;
 
   const source = profile?.profile_source ?? "unset";
   const hasProfile = source !== "unset" && profile?.business_name;
+  // Sprint 13. Pre-Sprint-8e accounts have NULL here; empty-object JSONB
+  // ({}) collapses to null for the UI so the Vault badge doesn't render
+  // an empty card.
+  const minedFacts =
+    profile?.mined_profile_facts && Object.keys(profile.mined_profile_facts).length > 0
+      ? profile.mined_profile_facts
+      : null;
 
   if (hasProfile) {
     return NextResponse.json({
@@ -68,6 +83,7 @@ export async function GET(request: Request) {
       org_type: profile!.org_type,
       profile_description: profile!.profile_description,
       profile_source: source,
+      mined_profile_facts: minedFacts,
     });
   }
 
@@ -92,6 +108,7 @@ export async function GET(request: Request) {
       org_type: null,
       profile_description: null,
       profile_source: "unset",
+      mined_profile_facts: minedFacts,
     });
   }
 
@@ -123,6 +140,7 @@ export async function GET(request: Request) {
     org_type: a.org_type ?? null,
     profile_description: inferredDescription ?? null,
     profile_source: "assessment",
+    mined_profile_facts: minedFacts,
   });
 }
 
