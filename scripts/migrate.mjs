@@ -358,18 +358,8 @@ ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS error_message TEXT;
 ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS parsed_requirements JSONB;
 ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS gate_state JSONB;
 ALTER TABLE proposal_packages ALTER COLUMN user_id DROP NOT NULL;
--- Sprint 11 (background-job migration). updated_at = "last status change" so
--- the worker's stale-row reaper can detect a 'generating' row that's been
--- stuck >10min and reset it to 'pending' for retry. Existing rows backfill to
--- ADD-COLUMN time (Postgres fills DEFAULT NOW() at column-add); that's safe
--- because all of them are in terminal states by now, so the partial index
--- below won't include them. (NOTE: do not insert a UPDATE statement here —
--- scripts/migrate.mjs only runs CREATE/ALTER statements, see memory entry
--- "scripts/migrate.mjs silently drops `--` comments" for the trap.)
 ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 CREATE INDEX IF NOT EXISTS proposal_packages_work_order_plan ON proposal_packages (work_order_id, plan, created_at DESC);
--- Sprint 11. Worker pickup query: ORDER BY updated_at ASC WHERE status='pending'.
--- The partial index keeps it tiny (only non-terminal rows live in the queue).
 CREATE INDEX IF NOT EXISTS proposal_packages_pending_idx ON proposal_packages (generation_status, updated_at)
   WHERE generation_status IN ('pending','generating');
 
@@ -418,7 +408,7 @@ CREATE INDEX IF NOT EXISTS email_suppressions_unsubscribed_at ON email_suppressi
 
 -- Sprint 24 (audit 2026-05-20 UX): per-assessment to-do completion log for the
 -- Next Steps tab. step_key is opaque to the DB but currently shaped as
--- `g{gapIdx}-s{stepIdx}` against the assessment's gaps[i].action_steps[j].
+-- "g{gapIdx}-s{stepIdx}" against the assessment's gaps[i].action_steps[j].
 -- ON DELETE CASCADE keeps the table tidy when an assessment row is reset
 -- (demo reset, GDPR purge). Score impact stays projected-only — we never
 -- recompute readiness_score from completion state, just surface progress.
