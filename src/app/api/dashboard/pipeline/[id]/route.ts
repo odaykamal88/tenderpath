@@ -1,6 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { sql } from "@/lib/db";
 import { requireDashboardAccess } from "@/lib/access";
+import {
+  promoteWonPipelineItem,
+  type WonPipelineRow,
+} from "@/lib/applicant-evidence/won-promotion";
 
 const STAGES = ["matched", "evaluating", "preparing", "submitted", "won", "lost"] as const;
 type Stage = (typeof STAGES)[number];
@@ -83,6 +87,20 @@ export async function PATCH(
 
   if (rows.length === 0) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+
+  // Sprint 12. Auto-promote a won pipeline_item into the user's evidence
+  // library as a past_performance entry. Fires only when the new stage is
+  // 'won' (re-saving an already-won row is harmless — the promotion is
+  // idempotent via the (user_id, file_url) unique constraint on
+  // document_extractions / vault_documents). Wrapped in after() so the
+  // PATCH returns immediately; the two INSERTs run post-response and are
+  // non-fatal on failure (the user's stage update succeeded regardless).
+  if (stage === "won") {
+    const updatedRow = rows[0] as WonPipelineRow;
+    after(async () => {
+      await promoteWonPipelineItem(updatedRow);
+    });
   }
 
   return NextResponse.json({ item: rows[0] });
