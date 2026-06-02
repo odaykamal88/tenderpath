@@ -22,6 +22,16 @@ const turboRoot = findModulesRoot(projectRoot);
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: turboRoot,
+  // These routes read operator-curated CSVs from data/ at runtime via fs. The
+  // tracer can't follow the dynamic process.cwd() paths, so without an explicit
+  // include the files are omitted from the serverless bundle and the cron reads
+  // an empty dir — a silent no-op in production. Keys are route globs; values are
+  // globs resolved from the project root (Next 16 outputFileTracingIncludes).
+  outputFileTracingIncludes: {
+    "/api/cron/grants": ["./data/mena-grants/**/*"],
+    "/api/cron/crawl": ["./data/developmentaid/**/*"],
+    "/api/admin/sync-tenders": ["./data/developmentaid/**/*"],
+  },
   turbopack: {
     root: turboRoot,
   },
