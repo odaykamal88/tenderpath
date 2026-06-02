@@ -135,6 +135,12 @@ export const SOURCE_COVERAGE: SourceCoverageEntry[] = [
     notes: "ECEPP public notice list currently redirects to CAS login.",
   },
   {
+    label: "IsDB",
+    canonicalPlatform: "IsDB",
+    status: "direct-crawler",
+    notes: "Islamic Development Bank project-procurement tenders (server-rendered Drupal listing); distinct from the Inter-American IDB crawler. Open rows are filtered by future close date since the status filter is JS-only.",
+  },
+  {
     label: "KfW",
     canonicalPlatform: "KfW",
     status: "direct-crawler",

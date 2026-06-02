@@ -17,6 +17,7 @@ import { crawlADB } from "./adb";
 import { crawlEBRD } from "./ebrd";
 import { crawlAfDB } from "./afdb";
 import { crawlIDB } from "./idb";
+import { crawlISDB } from "./isdb";
 import { crawlNRC } from "./nrc";
 import { crawlKfW } from "./kfw";
 import { crawlAFD } from "./afd";
@@ -60,6 +61,7 @@ const SOURCE_PRIORITY: Record<string, number> = {
   ADB: 75,
   AfDB: 75,
   IDB: 75,
+  IsDB: 75,
   EBRD: 75,
   UNRWA: 72,
   ReliefWeb: 70,
@@ -302,6 +304,7 @@ export async function syncAllTenders(): Promise<SyncSummary> {
     crawlUNDP(),
     crawlUNDPAtlas(),
     crawlIDB(),
+    crawlISDB(),
     crawlDevelopmentAidNPO(),
     crawlNRC(),
     crawlKfW(),

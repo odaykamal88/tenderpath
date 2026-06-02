@@ -25,6 +25,7 @@ Use direct procurement sources as canonical whenever available:
 - World Bank / MDB portals
 - GIZ
 - ADB
+- IsDB (Islamic Development Bank project procurement — MENA / Muslim-majority coverage; distinct from the Inter-American IDB)
 - EBRD
 - UNRWA
 - NRC, AFD, KfW, JICA, ADA (recommended additions)
