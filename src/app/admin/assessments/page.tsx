@@ -72,7 +72,7 @@ interface AssessmentSessionDetail {
   top_tenders: Array<{ title: string; agency?: string; score?: number; fit_score?: number; match_reason?: string | null; source_url?: string | null }>;
   top_grants: Array<{ title: string; agency?: string; score?: number; match_reason?: string | null; source_url?: string | null }>;
   gaps: Array<{ gap?: string; severity?: string; fix?: string }>;
-  emails: Array<{ id: number; status: string | null; sent_at: string | null; error: string | null; updated_at: string | null }>;
+  emails: Array<{ id: number; status: string | null; sent_at: string | null; error: string | null; created_at: string | null }>;
   pipeline_items: Array<{ id: number; tender_title: string; tender_agency: string | null; fit_score: number; stage: string; updated_at: string | null }>;
 }
 
@@ -510,7 +510,7 @@ function AssessmentDetailPanel({ detail, onClose }: { detail: AssessmentSessionD
           rows={[
             ...detail.emails.map((e) => ({
               title: `Email ${label(e.status)}`,
-              meta: fmtDate(e.updated_at ?? e.sent_at),
+              meta: fmtDate(e.sent_at ?? e.created_at),
               href: null,
               note: e.error,
             })),

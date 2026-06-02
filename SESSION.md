@@ -86,6 +86,31 @@ Additional work done outside the prompt sequence:
 
 ## Current Status
 
+## Latest Session Update — 2026-06-02 (Admin cleanup + Network/Bizdev auto-matching)
+
+- **Agent**: Claude Code
+- **Date**: 2026-06-02
+- **Task Completed**: Admin dashboard audit + two requested features — type-in Matching filters (EASY) and an automated network/bizdev matching subsystem (HARDER). Committed and deployed to `main`.
+- **What shipped**:
+  - **Part A — verified audit fixes** (the broad audit over-stated severity; the flagged "null-agency crash" can't fire — the feeding query filters `agency IS NOT NULL` at `stats/route.ts`):
+    - `payment_status ?? "paid"` → `"unknown"` so NULL/pre-column work-orders don't masquerade as paid (`src/app/admin/work-orders/page.tsx`).
+    - `loadDemo` silent catch now logs `[admin:demo-usage:load_failed]` (`src/app/admin/page.tsx`).
+    - Defensive `row.agency ?? ""` in `buildUngmFamilyHealth` (`src/app/api/admin/stats/route.ts`).
+    - Dropped misleading `created_at AS updated_at` email_queue alias; activation trail shows real `sent_at ?? created_at` (`assessment-sessions/[id]/route.ts` + `assessments/page.tsx`).
+  - **Part B — type-in + harmonized Matching filters**: country/agency/sector are now `<input list>` + `<datalist>` (type-in with autocomplete); backend switched from exact `=` to case-insensitive partial `ILIKE`; suggestion lists de-duped case-insensitively and coded/JSON sector blobs dropped from suggestions (`src/app/admin/matching/page.tsx`, `src/app/api/admin/matching/tenders/route.ts`).
+  - **Part C — Network/Bizdev auto-matching subsystem** (fully isolated from customer assessments — NO email/funnel/`assessments` writes; see memory `project_network_bizdev_matching`):
+    - Tables `network_companies` + `network_company_matches` in `scripts/migrate.mjs` + runtime self-heal `ensureNetworkMatchingColumns()` (`src/lib/network/schema.ts`).
+    - Profile builder reusing `crawlWebsite` + `classifyIndustry` + `fullAnalysis` (NOT `runAssessmentPipeline`) — `src/lib/network/profile.ts`.
+    - Matcher reusing `matchTenders` (LLM-free, `skipEnrichment:true`); status-preserving upsert (`new` on insert, operator status kept on conflict) — `src/lib/network/match.ts`.
+    - Cron `/api/cron/network-match` (`0 9 */2 * *`, Bearer `CRON_SECRET`) + `vercel.json` (6th cron; Pro plan).
+    - Admin APIs: `network-companies` (list+create), `[id]` (detail/edit/delete), `[id]/rematch`, `matches/[matchId]` (status), `fresh-count` (badge).
+    - New **Network** admin tab: fresh-match outreach worklist + companies list/add + detail/edit/re-match; nav badge of fresh matches (`src/app/admin/network/**`, nav in `src/app/admin/layout.tsx`).
+- **Verified**: `tsc --noEmit` clean; `npm run build` clean (all 8 new routes compiled); ESLint clean on all touched files; `migrate.mjs` parses (no backtick footgun); isolation grep = zero `sendAssessmentEmail`/`email_queue`/`track()` in network paths.
+- **Deferred**: migration NOT run against prod — self-heal `ensureNetworkMatchingColumns()` creates the tables on the first admin request post-deploy (the layout's `fresh-count` fetch triggers it), or run `node scripts/migrate.mjs` manually. Full UI/e2e runtime check (add company → profile builds → matches → re-match idempotent → badge) happens on the live deploy since local admin routes are auth-gated.
+- **Threshold/cadence**: high-fit cutoff 70 (engine strong-fit band); cron every 2 days at 09:00 — both tunable.
+- **Heads-up**: an unrelated in-progress Grants.gov importer (`src/lib/grants/grants-gov.ts`, `src/lib/grants/sync.ts`, `src/app/api/cron/grants/route.ts`) was present uncommitted in the working tree and was deliberately LEFT OUT of this commit.
+- **Audit hand-over (not fixed, lower priority)**: worker-health timeout log tag; bid-no-bid email-failure surfaced in response; UK FTS/FCDO platform-name mapping consistency; proposal-health `noVerdict` visibility.
+
 ## Latest Session Update — 2026-05-18 (Sprint 23, post-Sprint-22)
 
 - **Agent**: Claude Code
@@ -3251,3 +3276,18 @@ Whichever: tsc + lint + build before push; commit message via /tmp file (NOT her
 - FOUNDER providing next session: prod walkthrough of the admin surfaces; UN-modeling gut-check (disqualifier buckets, band semantics, the seeded correction hypotheses).
 - REMAINING: Phase 4 GATED (Stage E LTA on real demand; Loop 3 consented exemplars, consent-model-first); 1e graduate the score once `calibrated===true`.
 - GIT: branch from `origin/main` (local `main` is stale in a sibling worktree); land via `git push origin <branch>:main`.
+
+### Session Update — Grants.gov live crawler (grant-source expansion)
+- Agent: Claude (Opus 4.8, 1M context) · Date: 2026-06-02
+- Task: founder asked to engage new crawler tiers (UN procurement) + improve the grants crawler. Paused to map current coverage vs the requested 34-source list, verified feasibility with live probes, and built the one confirmed low-hanging fruit.
+- **Key finding — procurement tiers are mostly already covered.** Coupa/WFP, UNICEF Supply, UNOPS, Quantum/UNDP-family, SAP-Ariba/UN-Secretariat all post to UNGM (already consolidated via residential proxy); World Bank STEP = `world-bank.ts` procnotices API; EuropeAid procurement = TED EU. The only genuinely-new procurement source is IsDB (hard — same as grants).
+- **Key finding — grants pipeline already has EU F&T + UNDP CFP + UN Women CFP in the daily cron, but Grants.gov (652 rows) was a one-time script import NOT wired into the cron — it only expired, never refreshed (silent decay).** Fixed that.
+- Shipped (branch `claude/phase3-polish`, NOT yet committed):
+  - `src/lib/grants/grants-gov.ts` — new `fetchGrantsGovGrants()`: live `search2` API, State-Dept + international-keyword targeted passes (USAID dissolved → State/USDA/DoD absorbers), reuses existing `grantsGovDetailPatch` enrichment, two-tier geo resolution (title+agency authoritative; synopsis drops the US funder), `ON CONFLICT` refreshes legacy rows, bounded concurrency (6), graceful degradation.
+  - `src/lib/grants/sync.ts` — added `GrantsGovGrant` to union, `grantsGovLimit` option (default 120, clamp 1–250), wired into `refreshGrantInventory` Promise.all.
+  - `src/app/api/cron/grants/route.ts` — added `grants_gov_limit` param.
+  - `docs/tender-grant-improvement-waves.md` — "Grants.gov live source — 2026-06-02" addendum + source-feasibility note.
+- Verified: `npx tsc --noEmit` clean; eslint clean on the 3 files; live fetcher smoke (no DB) scanned 836, mapped 14 open grants in ~5s, 14/14 rich desc+themes, geo correct (UAE→MENA, Brazil/Mexico/DR correct, domestic→US/Global demoted). Full upsert+match+benchmark verify on Vercel after next cron (local has no DATABASE_URL).
+- Contracts: additive only. `RawTender`/`CrawlResult`/`grants` table unchanged; new optional `GrantRefreshOptions.grantsGovLimit`; new grant source row type in the union.
+- Source-feasibility verdicts (live-probed) for the differentiation tier: GCF ~1 open RFP (skip/low), GEF/SGP decentralized no-API (large), OCHA CBPF not-open-calls (skip), AFESD/AGFUND/OFID awarded-only or ad-hoc (skip), IsDB geo-blocked/Arabic (large). **IFAD = strongest next pick** (7–10 live agri/rural/food calls, high MENA) but Cloudflare-gated → needs the browser worker (`workers/crawler-browser/`), medium build.
+- Blockers: none. Not committed (founder to review); deploy verification pending next grants-cron run.

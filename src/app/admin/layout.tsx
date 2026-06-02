@@ -18,8 +18,9 @@ const NAV = [
   { href: "/admin/work-orders",  label: "Work Orders",   hint: "03" },
   { href: "/admin/bid-analysis", label: "Bid Analysis",  hint: "04" },
   { href: "/admin/matching",     label: "Matching",      hint: "05" },
-  { href: "/admin/feedback",     label: "Feedback",      hint: "06" },
-  { href: "/admin/proposal-health", label: "Health",     hint: "07" },
+  { href: "/admin/network",      label: "Network",       hint: "06" },
+  { href: "/admin/feedback",     label: "Feedback",      hint: "07" },
+  { href: "/admin/proposal-health", label: "Health",     hint: "08" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -27,6 +28,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [user, setUser] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
+  const [freshCount, setFreshCount] = useState(0);
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
@@ -51,6 +53,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       }
       setUser(me);
       setLoading(false);
+
+      // Best-effort: fresh network-match count for the nav badge. Never blocks
+      // render and stays hidden on any failure.
+      try {
+        const fc = await fetch("/api/admin/network-companies/fresh-count", {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        if (fc.ok) setFreshCount(Number((await fc.json()).count) || 0);
+      } catch {
+        // non-fatal; badge stays hidden
+      }
     })();
   }, [router]);
 
@@ -90,6 +103,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               >
                 <span className={`${styles.navHint} ${styles.mono}`}>{item.hint}</span>
                 <span className={styles.navLabel}>{item.label}</span>
+                {item.href === "/admin/network" && freshCount > 0 && (
+                  <span
+                    aria-label={`${freshCount} fresh matches`}
+                    style={{
+                      marginLeft: "auto",
+                      background: "var(--color-accent)",
+                      color: "#fff",
+                      borderRadius: 999,
+                      fontSize: 10,
+                      fontWeight: 600,
+                      lineHeight: 1,
+                      padding: "3px 6px",
+                      minWidth: 16,
+                      textAlign: "center",
+                    }}
+                  >
+                    {freshCount}
+                  </span>
+                )}
               </Link>
             );
           })}

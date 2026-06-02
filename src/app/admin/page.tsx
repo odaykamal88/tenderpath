@@ -257,8 +257,10 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/demo-usage", { headers: { authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       setDemoUsage(await res.json());
-    } catch {
-      // non-fatal; tab shows empty state
+    } catch (e) {
+      // non-fatal; tab still shows empty state — but log so a dead demo-usage
+      // endpoint is diagnosable instead of silently blank.
+      console.warn("[admin:demo-usage:load_failed]", e);
     }
   }, []);
 

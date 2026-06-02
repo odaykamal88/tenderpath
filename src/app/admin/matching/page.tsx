@@ -165,7 +165,7 @@ export default function AdminMatchingPage() {
         <header className={styles.panelHead}>
           <div>
             <h2 className={styles.panelTitle}>Filters</h2>
-            <p className={styles.panelSub}>Country, agency, sector, deadline-before. Search hits title, agency, and reference.</p>
+            <p className={styles.panelSub}>Type any country, agency, or sector — partial and case-insensitive. Search hits title, agency, and reference.</p>
           </div>
           {hasFilters && (
             <Link href="/admin/matching" className={styles.btnGhost}>Clear all</Link>
@@ -188,39 +188,42 @@ export default function AdminMatchingPage() {
             placeholder="Search title / agency / ref"
             className={styles.adminSearchInput}
           />
-          <select
+          <input
             name="country"
             value={country}
             onChange={(e) => setCountry(e.target.value)}
+            placeholder="Country — type or pick"
+            list="match-countries"
+            autoComplete="off"
             className={styles.adminSearchInput}
-          >
-            <option value="">All countries</option>
-            {data?.filters.countries.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-          <select
+          />
+          <datalist id="match-countries">
+            {data?.filters.countries.map((c) => <option key={c} value={c} />)}
+          </datalist>
+          <input
             name="agency"
             value={agency}
             onChange={(e) => setAgency(e.target.value)}
+            placeholder="Agency — type or pick"
+            list="match-agencies"
+            autoComplete="off"
             className={styles.adminSearchInput}
-          >
-            <option value="">All agencies</option>
-            {data?.filters.agencies.map((a) => (
-              <option key={a} value={a}>{a}</option>
-            ))}
-          </select>
-          <select
+          />
+          <datalist id="match-agencies">
+            {data?.filters.agencies.map((a) => <option key={a} value={a} />)}
+          </datalist>
+          <input
             name="sector"
             value={sector}
             onChange={(e) => setSector(e.target.value)}
+            placeholder="Sector — type or pick"
+            list="match-sectors"
+            autoComplete="off"
             className={styles.adminSearchInput}
-          >
-            <option value="">All sectors</option>
-            {data?.filters.sectors.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
+          />
+          <datalist id="match-sectors">
+            {data?.filters.sectors.map((s) => <option key={s} value={s} />)}
+          </datalist>
           <input
             type="date"
             name="deadline_before"

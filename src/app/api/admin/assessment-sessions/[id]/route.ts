@@ -36,7 +36,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       LIMIT 1
     `,
     sql`
-      SELECT id, status, sent_at, error, created_at, created_at AS updated_at
+      SELECT id, status, sent_at, error, created_at
       FROM email_queue
       WHERE assessment_id = ${id}
       ORDER BY id DESC

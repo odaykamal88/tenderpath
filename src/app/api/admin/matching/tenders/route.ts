@@ -23,6 +23,29 @@ function toInt(v: number | string | null | undefined): number {
   return Number(v ?? 0);
 }
 
+// Harmonize a raw DISTINCT column into a clean datalist-suggestion set:
+// trim, de-duplicate case-insensitively (keeping the first-seen casing), and
+// sort. For `sector`, dropCoded removes JSON-blob / numeric-code values that
+// are unreadable as type-in suggestions — those rows are still reachable via
+// the partial ILIKE filter (e.g. typing "education" hits a coded blob that
+// contains the word). The filter VALUE stays the raw text so ILIKE matches.
+function harmonizeFilterValues(
+  values: Array<string | null>,
+  opts: { dropCoded?: boolean } = {},
+): string[] {
+  const seen = new Map<string, string>();
+  for (const raw of values) {
+    const v = (raw ?? "").trim();
+    if (!v) continue;
+    if (opts.dropCoded && (/^[[{]/.test(v) || /sector_(code|description)/i.test(v) || /^[\d\s,.\-]+$/.test(v))) {
+      continue;
+    }
+    const key = v.toLowerCase();
+    if (!seen.has(key)) seen.set(key, v);
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+
 export async function GET(request: Request) {
   const guard = await requireAdmin(request);
   if (!guard.authorized) return guard.response!;
@@ -52,9 +75,9 @@ export async function GET(request: Request) {
         OR t.agency ILIKE ${`%${q}%`}
         OR t.reference_id ILIKE ${`%${q}%`}
       )
-      AND (${country} = '' OR t.country = ${country})
-      AND (${agency} = '' OR t.agency = ${agency})
-      AND (${sector} = '' OR t.sector = ${sector})
+      AND (${country} = '' OR t.country ILIKE ${`%${country}%`})
+      AND (${agency} = '' OR t.agency ILIKE ${`%${agency}%`})
+      AND (${sector} = '' OR t.sector ILIKE ${`%${sector}%`})
       AND (
         NULLIF(${deadlineBefore}, '') IS NULL
         OR (t.deadline IS NOT NULL AND t.deadline <= NULLIF(${deadlineBefore}, '')::date)
@@ -100,9 +123,9 @@ export async function GET(request: Request) {
     })),
     total: rows.length,
     filters: {
-      countries: countriesRows.map((r) => r.country as string),
-      agencies: agenciesRows.map((r) => r.agency as string),
-      sectors: sectorsRows.map((r) => r.sector as string),
+      countries: harmonizeFilterValues(countriesRows.map((r) => r.country as string | null)),
+      agencies: harmonizeFilterValues(agenciesRows.map((r) => r.agency as string | null)),
+      sectors: harmonizeFilterValues(sectorsRows.map((r) => r.sector as string | null), { dropCoded: true }),
     },
     applied: { q, country, agency, sector, deadlineBefore, limit },
   });

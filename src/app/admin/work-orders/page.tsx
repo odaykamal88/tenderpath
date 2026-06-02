@@ -307,7 +307,7 @@ export default function WorkOrdersPage() {
                     </div>
                     <div className={styles.woMoney}>
                       <div className={styles.woAmount}>{money(o.amount_cents, o.currency)}</div>
-                      <div className={styles.woPayment}>{o.payment_status ?? "paid"}</div>
+                      <div className={styles.woPayment}>{o.payment_status ?? "unknown"}</div>
                     </div>
                   </header>
 

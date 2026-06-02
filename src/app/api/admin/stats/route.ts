@@ -323,7 +323,7 @@ function buildUngmFamilyHealth(
 ): UngmFamilyHealth {
   const agencies = UNGM_FAMILY_AGENCIES.map(({ agency, patterns }) => {
     const openTenders = rows.reduce((sum, row) => {
-      const rowAgency = row.agency.toLowerCase();
+      const rowAgency = (row.agency ?? "").toLowerCase();
       const matched = patterns.some((pattern) => rowAgency.includes(pattern.toLowerCase()));
       return matched ? sum + Number(row.open_tenders ?? 0) : sum;
     }, 0);
