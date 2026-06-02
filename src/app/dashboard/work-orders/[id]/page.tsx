@@ -180,7 +180,12 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
       {/* Auto-fulfilled deliverable panel — routed by plan */}
       {isBidNoBidOrder(order) && (
         <div className="mt-6">
-          <BidNoBidPanel workOrderId={order.id} paymentStatus={order.payment_status} />
+          <BidNoBidPanel
+            workOrderId={order.id}
+            paymentStatus={order.payment_status}
+            agency={order.agency}
+            tenderDeadline={order.tender_deadline}
+          />
         </div>
       )}
 

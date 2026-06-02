@@ -4,6 +4,7 @@ import { verifyToken } from "@/lib/auth";
 import { authorizeAssessmentRead } from "./authz";
 import { decodeHtmlEntities } from "@/lib/text/entities";
 import { safeUrl } from "@/lib/url";
+import { resolveSubmissionPortal, assessRegistrationTiming } from "@/lib/tenders/submission-portals";
 import type { Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
 import type { Gap as D2Gap } from "@/components/assessment/GapsTab";
 import type { Tender } from "@/components/assessment/TendersTab";
@@ -234,7 +235,14 @@ function confidenceFrom(t: MatchedTender): "high" | "medium" | "low" | null {
 }
 
 function mapTendersForUI(tenders: MatchedTender[]): Tender[] {
-  return tenders.map((t) => ({
+  return tenders.map((t) => {
+    // Registration awareness: resolve the buyer's supplier portal (keyed off
+    // `agency`, not the crawler source) and judge deadline risk here in the
+    // data layer — the same request-time Date.now() pattern as `urgent` below,
+    // so the feed renders a stable, SSR-safe value with no hydration drift.
+    const portal = resolveSubmissionPortal(t.agency);
+    const timing = assessRegistrationTiming(t.deadline, portal);
+    return {
     code: t.reference_id ?? `T-${t.id}`,
     // Decode at render: a crawler-stored "&amp;" or "&#x27;" otherwise renders
     // literally in the dashboard. Audit 2026-05-19 P2 #13.
@@ -253,7 +261,16 @@ function mapTendersForUI(tenders: MatchedTender[]): Tender[] {
     matchReasons: pickReasons(t),
     caveats: t.structured_reasons?.caveats ?? [],
     decisionHeadline: t.decision_brief?.headline ?? t.opportunity_bucket_reason ?? null,
-  }));
+    registration: portal.isFallback
+      ? null
+      : {
+          portalName: portal.portalName,
+          url: portal.registrationUrl,
+          leadLabel: portal.leadTimeLabel,
+          risk: timing.firstTimeRisk,
+        },
+    };
+  });
 }
 
 function mapGrantsForUI(grants: MatchedGrant[]): Grant[] {

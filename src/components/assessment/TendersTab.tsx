@@ -32,6 +32,17 @@ export type Tender = {
   matchReasons?: string[];
   caveats?: string[];
   decisionHeadline?: string | null;
+  // Supplier-portal registration the bidder must complete before submitting.
+  // Resolved server-side in mapTendersForUI (keyed off `agency`) so the
+  // deadline-risk flag is computed once at request time — no Date.now() in
+  // render, no SSR/hydration drift. Null when the agency has no verified
+  // portal mapping (we don't surface guesses in the dense feed).
+  registration?: {
+    portalName: string;
+    url: string;
+    leadLabel: string;
+    risk: "none" | "tight" | "very-tight";
+  } | null;
 };
 
 function confidenceDot(confidence: Tender["confidence"]): string {
@@ -199,6 +210,63 @@ export function TendersTab({
                 {t.value && t.value !== "—" && <span>· {t.value}</span>}
                 {t.bucketLabel && <span>· {t.bucketLabel}</span>}
               </div>
+              {t.registration && (
+                <div
+                  className="tp-mono"
+                  style={{
+                    display: "flex",
+                    gap: 6,
+                    flexWrap: "wrap",
+                    alignItems: "baseline",
+                    marginTop: 5,
+                    fontSize: 11,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 9,
+                      letterSpacing: "0.12em",
+                      textTransform: "uppercase",
+                      fontWeight: 600,
+                      color: "var(--tp2-ink-3, #8a826f)",
+                    }}
+                  >
+                    Register first
+                  </span>
+                  <a
+                    href={t.registration.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: "var(--tp2-ink-2, #4a443a)",
+                      textDecoration: "underline",
+                      textUnderlineOffset: 2,
+                    }}
+                  >
+                    {t.registration.portalName}
+                  </a>
+                  <span style={{ color: "var(--tp2-ink-3, #8a826f)" }}>
+                    · {t.registration.leadLabel}
+                  </span>
+                  {t.registration.risk !== "none" && (
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        color:
+                          t.registration.risk === "very-tight"
+                            ? "var(--tp2-neg, #b03030)"
+                            : "var(--tp2-warn, #b08530)",
+                      }}
+                    >
+                      ⚑{" "}
+                      {t.registration.risk === "very-tight"
+                        ? "may not finish before the deadline"
+                        : "register now — little time left"}
+                    </span>
+                  )}
+                </div>
+              )}
               {hasDetail && (
                 <details
                   style={{

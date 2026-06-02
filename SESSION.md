@@ -86,6 +86,19 @@ Additional work done outside the prompt sequence:
 
 ## Current Status
 
+## Latest Session Update — 2026-06-02 (Submission-portal registration awareness)
+
+- **Agent**: Claude Code
+- **Date**: 2026-06-02
+- **Task**: Surface the supplier-portal registration a bidder must complete *before* they can submit, with a deadline-vs-lead-time risk flag. Triggered by a real UNHCR ITB (UNGM notice 301810) closing the next day where first-time portal registration could not realistically finish in time.
+- **What shipped** (see memory `project_submission_portal_registry`):
+  - New deterministic registry `src/lib/tenders/submission-portals.ts` keyed off the buyer **agency** (not the crawler `source_name`). `resolveSubmissionPortal(agency)` + `assessRegistrationTiming(deadline, portal)`. **Verified portals only**: UNHCR (Oracle Cloud supplier portal), UNDP "Quantum" family (UNDP/UNFPA/UN Women/UNCDF/UNV) + an honest generic UNGM fallback. **Guardrail: never seed an unverified portal URL** (AGENTS.md no-overstated-claims rule). UNICEF/WFP/UNOPS/World Bank/EU deliberately NOT seeded.
+  - **Matched feed** (`TendersTab.tsx`): a `registration` field on the `Tender` type, computed server-side in `mapTendersForUI` (`src/lib/assessment/data.ts`) using the same request-time `Date.now()` pattern as `urgent` → SSR-safe, no hydration drift. Feed shows verified portals only (fallback → null) to keep the dense table clean.
+  - **Bid/no-bid report** (`work-orders/[id]/BidNoBidPanel.tsx`): a `RegistrationBlock` (client, renders post-fetch) with portal, deadline-risk banner, ordered steps, Register/Sign-in/Guide links, and the "also register on UNGM" nudge; fed `agency` + `tenderDeadline` props from `work-orders/[id]/page.tsx`. Always renders, incl. fallback.
+- **Verified**: `tsc --noEmit` clean; `eslint` clean on all 5 touched files; `npm run build` clean (all routes compiled, client/server boundary on the new module OK).
+- **Deployed**: pushed to `origin/main` → Vercel production.
+- **Not covered**: the legacy `/dashboard/analysis/[tenderId]` Decision report (separate older surface, no agency on hand) — left untouched to avoid scope creep.
+
 ## Latest Session Update — 2026-06-02 (Admin cleanup + Network/Bizdev auto-matching)
 
 - **Agent**: Claude Code

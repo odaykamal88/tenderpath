@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { resolveSubmissionPortal, assessRegistrationTiming } from "@/lib/tenders/submission-portals";
 
 type EvidenceLabel = "evidence" | "inference" | "gap" | "unverified";
 type DocumentPriority = "mandatory" | "recommended";
@@ -258,6 +259,10 @@ interface ApiResponse {
 interface BidNoBidPanelProps {
   workOrderId: number;
   paymentStatus: string | null;
+  /** Buying agency (drives the supplier-portal registration block). */
+  agency?: string | null;
+  /** Tender deadline ISO string (drives the registration deadline-risk flag). */
+  tenderDeadline?: string | null;
 }
 
 const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
@@ -288,7 +293,7 @@ function sevTint(sev: BidGap["severity"]): string {
   return "text-stone-500";
 }
 
-export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPanelProps) {
+export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tenderDeadline }: BidNoBidPanelProps) {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [regenBusy, setRegenBusy] = useState(false);
@@ -918,6 +923,13 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus }: BidNoBidPa
         </div>
       )}
 
+      {/* Deterministic "how to actually submit" block — keyed off the buying
+          agency, independent of the LLM output. Surfaces the supplier-portal
+          registration the bidder must complete first, with a deadline-risk
+          flag. Renders client-side post-fetch, so the Date.now() in
+          assessRegistrationTiming is safe (no SSR/hydration concern). */}
+      <RegistrationBlock agency={agency} deadline={tenderDeadline} />
+
       {out.next_steps.length > 0 && (
         <div className="border-t border-stone-100 p-5">
           <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-2" style={{ fontFamily: MONO }}>
@@ -1014,6 +1026,120 @@ function ExportToProposalButton({ workOrderId }: { workOrderId: number }) {
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+// Deterministic supplier-portal registration block. Resolves the portal from
+// the buying agency (UNGM and other aggregators only advertise — the bid is
+// submitted on the agency's own portal, which needs a one-time registration
+// with real lead time). Always renders, including the honest generic fallback
+// for agencies without a verified mapping, so a paying user always gets a
+// "how to actually submit" answer.
+function RegistrationBlock({
+  agency,
+  deadline,
+}: {
+  agency?: string | null;
+  deadline?: string | null;
+}) {
+  const portal = resolveSubmissionPortal(agency);
+  const timing = assessRegistrationTiming(deadline, portal);
+  const risk = timing.firstTimeRisk;
+
+  const riskStyles =
+    risk === "very-tight"
+      ? { border: "border-red-600", bg: "bg-red-50/40", text: "text-red-800", label: "text-red-700" }
+      : risk === "tight"
+        ? { border: "border-amber-600", bg: "bg-amber-50/40", text: "text-amber-900", label: "text-amber-700" }
+        : { border: "border-stone-300", bg: "bg-stone-50/40", text: "text-stone-700", label: "text-stone-500" };
+
+  const days = timing.daysUntilDeadline;
+  const deadlinePhrase =
+    days != null && days >= 0 ? `Deadline in ${days} day${days === 1 ? "" : "s"}. ` : "";
+
+  return (
+    <div className="border-t border-stone-100 p-5">
+      <div
+        className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-2"
+        style={{ fontFamily: MONO }}
+      >
+        Before you can submit · registration
+      </div>
+      <div className={`rounded-sm border-l-2 ${riskStyles.border} ${riskStyles.bg} px-4 py-3`}>
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <div className="text-[14px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+            {portal.portalName}
+          </div>
+          <div
+            className={`text-[10px] uppercase tracking-[0.14em] ${riskStyles.label}`}
+            style={{ fontFamily: MONO }}
+          >
+            {portal.leadTimeLabel}
+          </div>
+        </div>
+
+        {risk !== "none" && (
+          <p className={`mt-2 text-[12.5px] font-semibold leading-snug ${riskStyles.text}`}>
+            ⚑ {deadlinePhrase}
+            {risk === "very-tight"
+              ? "First-time registration likely can't complete in time. Contact the procurement focal point about an extension — and register anyway so you're ready for the next call."
+              : "Start registration immediately — first-time approval can eat most of the time you have left."}
+          </p>
+        )}
+
+        <ol className="mt-3 space-y-1.5 text-[13px] text-stone-800">
+          {portal.steps.map((s, i) => (
+            <li key={i} className="flex gap-2.5">
+              <span className="text-amber-700 tabular-nums shrink-0" style={{ fontFamily: MONO }}>
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <span>{s}</span>
+            </li>
+          ))}
+        </ol>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <a
+            href={portal.registrationUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-sm bg-stone-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors"
+            style={{ fontFamily: MONO }}
+          >
+            Register →
+          </a>
+          {portal.signInUrl && portal.signInUrl !== portal.registrationUrl && (
+            <a
+              href={portal.signInUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-sm border border-stone-300 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
+              style={{ fontFamily: MONO }}
+            >
+              Sign in
+            </a>
+          )}
+          {portal.guideUrl && (
+            <a
+              href={portal.guideUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-500 hover:text-stone-900 underline underline-offset-2"
+              style={{ fontFamily: MONO }}
+            >
+              Official guide ↗
+            </a>
+          )}
+          {portal.alsoRegisterUngm && (
+            <span className="text-[11px] text-stone-500" style={{ fontFamily: MONO }}>
+              · also register free on UNGM for a vendor ID + alerts
+            </span>
+          )}
+        </div>
+
+        <p className="mt-2.5 text-[11.5px] leading-snug text-stone-500">{portal.note}</p>
+      </div>
     </div>
   );
 }
