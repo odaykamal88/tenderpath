@@ -240,7 +240,7 @@ export default function AdminNetworkPage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
               <input className={styles.adminSearchInput} placeholder="Company name *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               <input className={styles.adminSearchInput} placeholder="Website (https://…)" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
-              <input className={styles.adminSearchInput} placeholder="Countries they deliver in (comma-separated)" value={form.countries} onChange={(e) => setForm({ ...form, countries: e.target.value })} />
+              <input className={styles.adminSearchInput} placeholder="Countries they deliver in — strongly improves matching (comma-separated)" value={form.countries} onChange={(e) => setForm({ ...form, countries: e.target.value })} />
               <input className={styles.adminSearchInput} placeholder="Contact name" value={form.contact_name} onChange={(e) => setForm({ ...form, contact_name: e.target.value })} />
               <input className={styles.adminSearchInput} placeholder="Contact email" value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} />
             </div>
@@ -273,8 +273,8 @@ export default function AdminNetworkPage() {
       <section className={styles.panel}>
         <header className={styles.panelHead}>
           <div>
-            <h2 className={styles.panelTitle}>Fresh high matches</h2>
-            <p className={styles.panelSub}>New since the last match run, highest fit first. Mark contacted or dismissed to clear them.</p>
+            <h2 className={styles.panelTitle}>Fresh matches</h2>
+            <p className={styles.panelSub}>New since the last match run, strongest fit first — reach out from the top. Mark contacted or dismissed to clear them.</p>
           </div>
           <span className={styles.panelMeta}>{fresh.length} fresh</span>
         </header>
@@ -364,7 +364,12 @@ export default function AdminNetworkPage() {
                   <tr key={c.id} style={{ opacity: c.is_active ? 1 : 0.55 }}>
                     <td>
                       <Link href={`/admin/network/${c.id}`} className={styles.tableLink}>{c.name}</Link>
-                      <div className={styles.sessionSubtle}>{c.website ?? "no website"}{c.is_active ? "" : " · paused"}</div>
+                      <div className={styles.sessionSubtle}>
+                        {c.website ?? "no website"}{c.is_active ? "" : " · paused"}
+                        {(!c.countries || c.countries.length === 0) && (
+                          <span style={{ color: "var(--color-warn, #c8973e)" }}> · ⚠ no countries — add to improve matches</span>
+                        )}
+                      </div>
                     </td>
                     <td>{c.detected_industry ?? "—"}</td>
                     <td>

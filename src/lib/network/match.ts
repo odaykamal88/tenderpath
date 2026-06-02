@@ -3,10 +3,13 @@ import { matchTenders } from "@/lib/assessment/match";
 import type { AIAnalysis } from "@/lib/types";
 import { ensureNetworkMatchingColumns } from "./schema";
 
-// Default high-fit cutoff. 70 is the engine's strong-fit band (see
-// opportunityBucketForTender in src/lib/assessment/match.ts) — at/above this a
-// tender is worth a bizdev outreach. Tunable per call.
-export const NETWORK_MATCH_THRESHOLD = 70;
+// Match cutoff. 55 mirrors the assessment's "strategic" floor
+// (opportunityBucketForTender in src/lib/assessment/match.ts) — high enough to
+// be worth a bizdev outreach, low enough to surface the strategic tier the
+// assessment shows. NB: geography is ~30 of ~100 points, so companies added
+// WITHOUT countries score much lower and surface far fewer matches — set the
+// company's countries for assessment-parity results. Tunable.
+export const NETWORK_MATCH_THRESHOLD = 55;
 
 export interface NetworkMatchRunResult {
   companyId: number;
@@ -47,6 +50,10 @@ export async function matchNetworkCompany(
 
   const matched = await matchTenders(analysis, countries, {
     orgType: (company.org_type as string | null) ?? null,
+    // Mirror the assessment's generosity: admit firm-scope consultancy RFPs
+    // (individual-contractor jobs stay excluded via orgType). skipEnrichment
+    // keeps the batch LLM-free.
+    includeConsultancies: true,
     skipEnrichment: true,
   });
 
