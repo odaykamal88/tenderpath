@@ -2,10 +2,11 @@ import { sql } from "@/lib/db";
 import { fetchEuFundingGrants, type EuFundingGrant } from "@/lib/grants/eu-funding-tenders";
 import { fetchGrantsGovGrants, type GrantsGovGrant } from "@/lib/grants/grants-gov";
 import { fetchIfadGrants, type IfadGrant } from "@/lib/grants/ifad";
+import { fetchMenaFunderGrants, type MenaFunderGrant } from "@/lib/grants/mena-funders";
 import { fetchUndpCfpGrants, type UndpCfpGrant } from "@/lib/grants/undp-cfp";
 import { fetchUnWomenCfpGrants, type UnWomenCfpGrant } from "@/lib/grants/unwomen-cfp";
 
-type GrantSourceRow = EuFundingGrant | UndpCfpGrant | UnWomenCfpGrant | IfadGrant | GrantsGovGrant;
+type GrantSourceRow = EuFundingGrant | UndpCfpGrant | UnWomenCfpGrant | IfadGrant | GrantsGovGrant | MenaFunderGrant;
 
 export type GrantRefreshOptions = {
   dryRun?: boolean;
@@ -133,6 +134,17 @@ async function importGrantSource(
   }
 }
 
+// MENA/Africa-targeted EU text queries. The default deadline-sorted `*` pull tags
+// most EU calls "Global" (generic pan-EU programmes); these surface the geo-specific
+// EuropeAid / neighbourhood calls (e.g. "Support to Human Rights ... in Jordan",
+// "Civil Society ... South Africa") that are the real MENA/Africa ICP value.
+const EU_TARGETED_TEXT = [
+  "Syria Lebanon Jordan Iraq Yemen Palestine",
+  "Egypt Tunisia Morocco Libya Algeria Mauritania",
+  "Africa Sahel",
+  "Southern Neighbourhood Mediterranean",
+];
+
 async function loadEuGrants(options: Required<Pick<GrantRefreshOptions, "euLimit" | "euPages" | "euPageSize">>) {
   const byRef = new Map<string, EuFundingGrant>();
   let scanned = 0;
@@ -146,9 +158,21 @@ async function loadEuGrants(options: Required<Pick<GrantRefreshOptions, "euLimit
     if (page * options.euPageSize >= batch.totalResults) break;
   }
 
+  for (const text of EU_TARGETED_TEXT) {
+    try {
+      const batch = await fetchEuFundingGrants(40, 1, text);
+      for (const grant of batch.grants) byRef.set(grant.reference_id, grant);
+    } catch (err) {
+      console.warn("[tp:grants:eu:targeted_pass_failed]", { text, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  // Keep geo-specific (non-Global) rows ahead of generic Global programmes so the
+  // limit can't clip the MENA/Africa calls in favour of pan-EU ones.
+  const isGlobal = (g: EuFundingGrant) => !g.region || g.region === "Global";
   return {
     grants: [...byRef.values()]
-      .sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? ""))
+      .sort((a, b) => (Number(isGlobal(a)) - Number(isGlobal(b))) || (a.deadline ?? "").localeCompare(b.deadline ?? ""))
       .slice(0, options.euLimit),
     scanned,
   };
@@ -181,8 +205,8 @@ async function grantQualitySummary(): Promise<GrantRefreshResult["quality"]> {
 export async function refreshGrantInventory(options: GrantRefreshOptions = {}): Promise<GrantRefreshResult> {
   const startedAt = Date.now();
   const dryRun = options.dryRun ?? false;
-  const euLimit = Math.min(250, Math.max(1, options.euLimit ?? 120));
-  const euPages = Math.min(5, Math.max(1, options.euPages ?? 3));
+  const euLimit = Math.min(250, Math.max(1, options.euLimit ?? 200));
+  const euPages = Math.min(5, Math.max(1, options.euPages ?? 5));
   const euPageSize = Math.min(100, Math.max(10, options.euPageSize ?? 100));
   const undpLimit = Math.min(75, Math.max(1, options.undpLimit ?? 25));
   const unWomenLimit = Math.min(50, Math.max(1, options.unWomenLimit ?? 25));
@@ -209,6 +233,10 @@ export async function refreshGrantInventory(options: GrantRefreshOptions = {}): 
     }),
     importGrantSource("Grants.gov", dryRun, async () => {
       const result = await fetchGrantsGovGrants(grantsGovLimit);
+      return { grants: result.grants, scanned: result.totalScanned };
+    }),
+    importGrantSource("MENA Funders", dryRun, async () => {
+      const result = await fetchMenaFunderGrants();
       return { grants: result.grants, scanned: result.totalScanned };
     }),
   ]);

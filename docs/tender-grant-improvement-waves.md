@@ -326,6 +326,39 @@ Validation:
   IFAD detail pages or the deadline phrasing differs — paste one rendered detail page and the
   `extractIfadDeadline` regex can be finalized. The listing parse and mapping are already verified.
 
+### EU/EuropeAid MENA targeting + MENA Arab/Islamic funders — 2026-06-02
+
+Two more grant-coverage moves landed together.
+
+**EU/EuropeAid — MENA/Africa targeting (not just bigger).** A probe showed the EU SEDIA `*`
+pull tags almost every call `Global` (generic pan-EU programmes), so simply raising the limit
+adds noise, not ICP value. The geo-specific EuropeAid/neighbourhood calls are reachable via the
+API's `text` search (`text="Syria Lebanon Jordan"` → "Support to Human Rights … in Jordan").
+Changes: `fetchEuFundingGrants` now takes an optional `text` arg (default `*`); `loadEuGrants`
+runs the default pull **plus** MENA/Africa-targeted passes (Levant, North Africa, Africa/Sahel,
+Southern Neighbourhood/Mediterranean), merges by reference, and **sorts geo-specific rows ahead
+of Global ones** so the limit can't clip them. Pool defaults raised (euLimit 120→200, euPages
+3→5). Smoke: the merged set surfaced 30 geo-specific rows at the top — Yemen women's economic
+empowerment, Jordan human rights/civil society, Uganda, Sri Lanka, etc. — calls that were
+previously buried as Global.
+
+**MENA Arab/Islamic funders (IsDB / AFESD / AGFUND / OPEC Fund) — operator-CSV ingest.** These
+are the genuine "unfair advantage" (almost nobody aggregates them in English) and the hardest to
+automate: probes confirmed IsDB's call portal is geo-blocked + Arabic, AFESD is Cloudflare-gated
+and awarded-only, AGFUND/OFID are ad-hoc rolling with no machine-readable open-calls listing —
+no honest scrape path. So `src/lib/grants/mena-funders.ts` (`fetchMenaFunderGrants`) ingests an
+operator-curated CSV from `data/mena-grants/` (same proven pattern as `developmentaid-npo.ts`),
+making the coverage a maintained asset instead of a brittle scraper that returns zero. Schema:
+`funder,title,url,deadline,country,region,sector,themes,eligibility,value,description`
+(funder/title/url/deadline required; rows without a parseable **future** deadline are dropped —
+the matcher's contract). `data/mena-grants/TEMPLATE.csv` documents the schema; `TEMPLATE*` files
+are ignored; no CSV present = benign no-op. `source_name` is the specific funder so the matcher's
+per-agency cap treats IsDB/AFESD/etc. independently. Smoke: parser keeps a future IsDB row, drops
+past/no-deadline rows; template no-ops.
+
+Validation: `tsc --noEmit` + eslint clean; EU merge/prioritization and MENA CSV parser smoked
+locally (no DB / no worker needed for either). Both wired into `refreshGrantInventory`.
+
 ## Sprint 3 — Prospect Outreach Readiness
 
 Goal: make sure real vendors see credible first-dashboard value before outreach.

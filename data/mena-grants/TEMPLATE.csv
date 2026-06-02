@@ -1,0 +1,2 @@
+funder,title,url,deadline,country,region,sector,themes,eligibility,value,description
+"Islamic Development Bank (IsDB)","EXAMPLE — delete this row; copy this file to e.g. isdb-2026.csv and add real open calls","https://www.isdb.org/","2099-12-31","","Middle East & North Africa","","climate;agriculture","NGO;company","","Template row: funder/title/url/deadline are required; deadline must be a real future date (YYYY-MM-DD, DD/MM/YYYY, or DD-Mon-YYYY) or the row is dropped. Files named TEMPLATE* are ignored by the importer."

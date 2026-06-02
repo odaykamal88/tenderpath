@@ -263,13 +263,13 @@ function appendJson(form: FormData, name: string, value: unknown) {
   form.set(name, new Blob([JSON.stringify(value)], { type: "application/json" }));
 }
 
-export async function fetchEuFundingGrants(pageSize = 100, pageNumber = 1): Promise<{
+export async function fetchEuFundingGrants(pageSize = 100, pageNumber = 1, text = "*"): Promise<{
   grants: EuFundingGrant[];
   totalResults: number;
 }> {
   const url = new URL(SEARCH_URL);
   url.searchParams.set("apiKey", "SEDIA");
-  url.searchParams.set("text", "*");
+  url.searchParams.set("text", text || "*");
   url.searchParams.set("pageSize", String(pageSize));
   url.searchParams.set("pageNumber", String(pageNumber));
 
