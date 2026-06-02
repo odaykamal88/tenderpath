@@ -145,6 +145,23 @@ export default function AdminNetworkPage() {
     }
   }
 
+  async function deleteCompany(companyId: number, name: string) {
+    if (typeof window !== "undefined" && !window.confirm(`Delete "${name}" and all its matches? This cannot be undone.`)) return;
+    setBusy(companyId);
+    setToast(null);
+    try {
+      const res = await fetch(`/api/admin/network-companies/${companyId}`, { method: "DELETE", headers: authHeaders() });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+      setToast({ ok: true, msg: `Deleted ${name}.` });
+      await load();
+    } catch (err) {
+      setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to delete company" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function submitCompany(e: FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) {
@@ -402,7 +419,10 @@ export default function AdminNetworkPage() {
                     <td className={`${styles.num} ${c.fresh_count > 0 ? styles.posNum : styles.muteNum}`}>{c.fresh_count}</td>
                     <td className={styles.sessionSubtle}>{fmtDate(c.last_matched_at)}</td>
                     <td className={styles.num}>
-                      <Link href={`/admin/network/${c.id}`} className={styles.btnGhost} style={{ padding: "5px 9px", fontSize: 11 }}>Open</Link>
+                      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                        <Link href={`/admin/network/${c.id}`} className={styles.btnGhost} style={{ padding: "5px 9px", fontSize: 11 }}>Open</Link>
+                        <button type="button" className={styles.btnGhost} disabled={busy === c.id} onClick={() => deleteCompany(c.id, c.name)} style={{ padding: "5px 9px", fontSize: 11, color: "var(--color-red)" }}>Delete</button>
+                      </div>
                     </td>
                   </tr>
                 ))}

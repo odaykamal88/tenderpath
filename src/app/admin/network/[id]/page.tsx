@@ -134,6 +134,23 @@ export default function AdminNetworkCompanyPage() {
     }
   }
 
+  async function deleteCompany() {
+    if (typeof window !== "undefined" && !window.confirm(`Delete "${c?.name ?? "this company"}" and all its matches? This cannot be undone.`)) return;
+    setBusy(true);
+    setToast(null);
+    try {
+      const res = await fetch(`/api/admin/network-companies/${id}`, { method: "DELETE", headers: authHeaders() });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+      }
+      window.location.href = "/admin/network";
+    } catch (err) {
+      setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to delete company" });
+      setBusy(false);
+    }
+  }
+
   async function setMatchStatus(matchId: number, status: string, reason?: string) {
     setBusy(true);
     setToast(null);
@@ -189,6 +206,7 @@ export default function AdminNetworkCompanyPage() {
           {c?.website && <a href={c.website} target="_blank" rel="noreferrer" className={styles.btnGhost}>Website ↗</a>}
           <button type="button" className={styles.btnGhost} onClick={() => setEditing((s) => !s)}>{editing ? "Close edit" : "Edit"}</button>
           <button type="button" className={styles.btnPrimary} onClick={rematch} disabled={busy}>{busy ? "Working…" : "Re-match now"}</button>
+          <button type="button" className={styles.btnGhost} onClick={deleteCompany} disabled={busy} style={{ color: "var(--color-red)" }}>Delete</button>
         </div>
       </header>
 
