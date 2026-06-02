@@ -243,6 +243,79 @@ Dry-run observation:
 - Found 72 stale-open grant rows ready to expire on the next write-mode cron run.
 - EU Funding & Tenders, UNDP CFP, and UN Women CFP all returned mapped rows.
 
+### Grant-source expansion — feasibility pass — 2026-06-02
+
+Context: founder asked to engage new crawler tiers (UN procurement) and improve the grants
+crawler. Mapping the request against current coverage:
+
+- **UN procurement tiers are ~80% already covered.** Coupa/WFP, UNICEF Supply, UNOPS,
+  Quantum/UNDP-family, and SAP-Ariba/UN-Secretariat all post to UNGM (consolidated via the
+  residential-proxy crawler); World Bank STEP = `world-bank.ts` procnotices; EuropeAid
+  procurement = TED EU. The only genuinely-new procurement source is IsDB (hard).
+- **Grants pipeline** already runs EU Funding & Tenders + UNDP CFP + UN Women CFP in the
+  daily cron. Grants.gov (652 rows) was a one-time script import never wired into the cron
+  (it only expired).
+
+Grants.gov outcome: a live `search2` importer was built and validated (`tsc`/`eslint` clean;
+fetcher smoke scanned 836 internationally-leaning hits → 14 open grants, 14/14 rich
+desc+themes, geography resolved e.g. U.S. Mission to UAE → MENA), then **deprioritized by the
+founder and reverted** — U.S. federal grants are not aligned with TenderPath's MENA/Africa
+ICP, and importing them daily would add domestic noise the matcher's guard already fights.
+The reusable learning is the `search2` + `grantsGovDetailPatch` flow if this is ever revisited.
+
+Source-feasibility note (for the differentiation backlog): live probes of the requested
+Tier-2 funders show most are NOT low-hanging — GCF has ~1 open RFP at a time (awarded-project
+API only); GEF/SGP is decentralized across 50–80 UNDP country pages with no API; OCHA CBPF is
+HC-allocated to pre-vetted partners (not open calls); AFESD/AGFUND/OFID publish only awarded
+projects or ad-hoc rolling requests; IsDB's call portal is geo-blocked/Arabic. **IFAD is the
+strongest next pick** (7–10 live agriculture/rural/food-security calls, high MENA relevance —
+fills the documented SME-MENA-agriculture gap) but is Cloudflare-gated and needs the browser
+worker, so it is a medium build, not a quick one.
+
+### IFAD calls-for-proposals source — built — 2026-06-02
+
+Picked IFAD as the differentiation source to build (GCF turned out to be a single open RFP —
+not worth a crawler; the rest stay backlog). The IFAD calls listing is richer than the probe
+suggested: `Showing 1 to 12 of 47`, and page 1 is overwhelmingly TenderPath's ICP — digital
+remittances in rural Morocco, FO4IMPACT Near East/North Africa, macadamia value chain Rwanda,
+sesame value chain Bangladesh, Somalia women's market access, irrigation in East/Southern Africa.
+
+Implemented:
+
+- Added `src/lib/grants/ifad.ts` (`fetchIfadGrants`) and wired it into `refreshGrantInventory`'s
+  `Promise.all` + an `ifad_limit` cron param (default 12, clamp 1–25).
+- The listing page (`/en/call-for-proposals`) is server-rendered Liferay and fetches with a plain
+  browser UA; each `general-feature-card` yields title, a real description, posted date, and the
+  call URL. `parseIfadListing` extracts these (the card's bare "Call for proposals" *category*
+  label is skipped so the real, longer title is used).
+- Geography comes from the title/description with a `DONOR_EXCLUDE` set so diaspora/donor
+  countries (e.g. Italy in a Senegal remittances call) don't mask the beneficiary country; region
+  phrases ("Near East, North Africa", "Latin America and the Caribbean", "East and Southern
+  Africa") map to the matcher's region groups.
+- **Deadlines live only on Akamai-protected detail pages (403 to a plain fetch).** Enrichment
+  routes through the shared browser worker (`fetchViaBrowser`, navigate mode) — the UNGM/IOM/ADB
+  pattern. `extractIfadDeadline` is a resilient text parser (handles "25 May 2026", "16th August",
+  "31/12/2026", ISO, "August 30, 2026"; future-only; cue-proximity primary, soonest-future
+  fallback so a 2028 project date isn't mistaken for the closing date). Grounded on real IFAD
+  phrasings ("the deadline for submission of proposals is …").
+- Fail safe: the grant matcher requires `deadline >= CURRENT_DATE`, so a row whose deadline can't
+  be resolved is dropped. With no worker configured (local dev) the source yields **0** rows; in
+  production the worker resolves deadlines and rows flow.
+
+Validation:
+
+- `npx tsc --noEmit` — clean. `npx eslint src/lib/grants/ifad.ts src/lib/grants/sync.ts src/app/api/cron/grants/route.ts` — clean.
+- `parseIfadListing` against the live listing HTML: 12 cards, real titles, geography resolved
+  (Rwanda, Bangladesh, Near East/North Africa → MENA, FO4IMPACT LAC → Latin America & Caribbean,
+  Morocco), agriculture/food/value-chain themes.
+- `extractIfadDeadline` unit cases (incl. multi-date page with a 2028 project date present): the
+  submission deadline is selected via cue-proximity; past dates rejected; no-cue fallback picks soonest.
+- `fetchIfadGrants(5)` locally: scanned 12, 0 grants (expected — deadlines need the prod worker).
+- **Prod validation (founder):** after deploy, run `/api/cron/grants?dry_run=1` (or with `ifad_limit=5`)
+  and confirm the `IFAD` source reports `mapped > 0`. If `mapped = 0`, the worker either can't reach
+  IFAD detail pages or the deadline phrasing differs — paste one rendered detail page and the
+  `extractIfadDeadline` regex can be finalized. The listing parse and mapping are already verified.
+
 ## Sprint 3 — Prospect Outreach Readiness
 
 Goal: make sure real vendors see credible first-dashboard value before outreach.

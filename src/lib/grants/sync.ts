@@ -1,9 +1,10 @@
 import { sql } from "@/lib/db";
 import { fetchEuFundingGrants, type EuFundingGrant } from "@/lib/grants/eu-funding-tenders";
+import { fetchIfadGrants, type IfadGrant } from "@/lib/grants/ifad";
 import { fetchUndpCfpGrants, type UndpCfpGrant } from "@/lib/grants/undp-cfp";
 import { fetchUnWomenCfpGrants, type UnWomenCfpGrant } from "@/lib/grants/unwomen-cfp";
 
-type GrantSourceRow = EuFundingGrant | UndpCfpGrant | UnWomenCfpGrant;
+type GrantSourceRow = EuFundingGrant | UndpCfpGrant | UnWomenCfpGrant | IfadGrant;
 
 export type GrantRefreshOptions = {
   dryRun?: boolean;
@@ -12,6 +13,7 @@ export type GrantRefreshOptions = {
   euPageSize?: number;
   undpLimit?: number;
   unWomenLimit?: number;
+  ifadLimit?: number;
   graceDays?: number;
 };
 
@@ -182,6 +184,7 @@ export async function refreshGrantInventory(options: GrantRefreshOptions = {}): 
   const euPageSize = Math.min(100, Math.max(10, options.euPageSize ?? 100));
   const undpLimit = Math.min(75, Math.max(1, options.undpLimit ?? 25));
   const unWomenLimit = Math.min(50, Math.max(1, options.unWomenLimit ?? 25));
+  const ifadLimit = Math.min(25, Math.max(1, options.ifadLimit ?? 12));
   const graceDays = Math.max(0, options.graceDays ?? 0);
 
   await ensureGrantReferenceIndex();
@@ -195,6 +198,10 @@ export async function refreshGrantInventory(options: GrantRefreshOptions = {}): 
     }),
     importGrantSource("UN Women CFP", dryRun, async () => {
       const result = await fetchUnWomenCfpGrants(unWomenLimit);
+      return { grants: result.grants, scanned: result.totalScanned };
+    }),
+    importGrantSource("IFAD", dryRun, async () => {
+      const result = await fetchIfadGrants(ifadLimit);
       return { grants: result.grants, scanned: result.totalScanned };
     }),
   ]);
