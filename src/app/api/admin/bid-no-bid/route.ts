@@ -121,6 +121,7 @@ export async function POST(request: Request) {
     );
 
     let emailSent = false;
+    let emailError: string | null = null;
     if (body.send_to) {
       try {
         const pdfBuffer = await renderBidNoBidPdf({
@@ -143,11 +144,12 @@ export async function POST(request: Request) {
         });
         emailSent = true;
       } catch (emailErr) {
+        emailError = emailErr instanceof Error ? emailErr.message : String(emailErr);
         console.error("[admin:bid-no-bid:email-failed]", emailErr);
       }
     }
 
-    return NextResponse.json({ output, requirements, emailSent });
+    return NextResponse.json({ output, requirements, emailSent, emailError });
   } catch (err) {
     console.error("[admin:bid-no-bid:failed]", err);
     const message = err instanceof Error ? err.message : String(err);

@@ -195,13 +195,20 @@ async function checkWorkerHealth(): Promise<WorkerHealth> {
       error: res.ok ? body.error : `Worker health HTTP ${res.status}`,
     };
   } catch (err) {
+    const aborted = err instanceof Error && err.name === "AbortError";
+    const message = aborted
+      ? "Worker health check timed out after 20s"
+      : err instanceof Error ? err.message : String(err);
+    // No silent failures: a dead/slow render worker must be diagnosable from
+    // logs, not only inferable from a UI "unreachable" badge.
+    console.error(`[admin:worker_health:${aborted ? "timeout" : "unreachable"}]`, { endpoint, error: message });
     return {
       configured: true,
       ok: false,
       status: "unreachable",
       endpoint,
       checkedAt,
-      error: err instanceof Error ? err.message : String(err),
+      error: message,
     };
   }
 }
