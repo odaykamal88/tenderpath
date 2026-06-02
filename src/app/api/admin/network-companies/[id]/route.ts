@@ -57,7 +57,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     JOIN tenders t ON t.id = m.tender_id
     WHERE m.network_company_id = ${id}
       AND t.status = 'open' AND COALESCE(t.has_broken_link, false) = false
-    ORDER BY (m.status = 'new') DESC, m.score DESC, t.deadline ASC NULLS LAST
+    ORDER BY t.deadline ASC NULLS LAST, m.score DESC
   `;
 
   return NextResponse.json({ company: companyRows[0], matches });

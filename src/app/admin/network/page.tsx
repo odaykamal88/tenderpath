@@ -278,7 +278,7 @@ export default function AdminNetworkPage() {
         <header className={styles.panelHead}>
           <div>
             <h2 className={styles.panelTitle}>Fresh matches</h2>
-            <p className={styles.panelSub}>New since the last match run, strongest fit first — reach out from the top. Mark contacted or dismissed to clear them.</p>
+            <p className={styles.panelSub}>New since the last match run, soonest deadline first — act before they close. Mark contacted or dismissed to clear them.</p>
           </div>
           <span className={styles.panelMeta}>{fresh.length} fresh</span>
         </header>

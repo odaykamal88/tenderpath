@@ -64,7 +64,7 @@ export async function GET(request: Request) {
       JOIN tenders t ON t.id = m.tender_id
       WHERE m.status = 'new' AND c.is_active = TRUE
         AND t.status = 'open' AND COALESCE(t.has_broken_link, false) = false
-      ORDER BY m.score DESC, t.deadline ASC NULLS LAST
+      ORDER BY t.deadline ASC NULLS LAST, m.score DESC
       LIMIT 100
     `,
   ]);

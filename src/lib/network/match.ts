@@ -52,10 +52,10 @@ export async function matchNetworkCompany(
 
   const matched = await matchTenders(analysis, countries, {
     orgType: (company.org_type as string | null) ?? null,
-    // Mirror the assessment's generosity: admit firm-scope consultancy RFPs
-    // (individual-contractor jobs stay excluded via orgType). skipEnrichment
-    // keeps the batch LLM-free.
-    includeConsultancies: true,
+    // Consultancy / M&E RFPs are admitted ONLY when the company's own industry is
+    // consulting — matchTenders gates that on detected_industry, exactly like the
+    // assessment. Do NOT force includeConsultancies on: it floods logistics / IT /
+    // construction companies with M&E consultancy tenders that aren't their trade.
     skipEnrichment: true,
   });
 
@@ -98,6 +98,19 @@ export async function matchNetworkCompany(
     `;
     if (isNew) newMatches += 1;
   }
+
+  // Keep the worklist honest: drop any 'new' match this run did NOT re-affirm
+  // (now below threshold, filtered as a consultancy for a non-consulting company,
+  // or suppressed by dismissal feedback). Only 'new' — never remove a match the
+  // operator acted on (seen/contacted/dismissed/won/lost). Safe because a network
+  // company's relevant-tender pool is far smaller than matchTenders' candidate caps.
+  const keepArr = toUpsert.map((t) => t.id);
+  await sql`
+    DELETE FROM network_company_matches
+    WHERE network_company_id = ${companyId}
+      AND status = 'new'
+      AND tender_id <> ALL(${keepArr.length ? keepArr : [-1]}::int[])
+  `;
 
   await sql`
     UPDATE network_companies SET last_matched_at = NOW(), updated_at = NOW() WHERE id = ${companyId}

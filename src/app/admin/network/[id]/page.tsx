@@ -227,7 +227,7 @@ export default function AdminNetworkCompanyPage() {
         <header className={styles.panelHead}>
           <div>
             <h2 className={styles.panelTitle}>Matches ({data?.matches.length ?? 0})</h2>
-            <p className={styles.panelSub}>Open tenders this company fits, highest first. Fresh ones are flagged &lsquo;new&rsquo;.</p>
+            <p className={styles.panelSub}>Open tenders this company fits, soonest deadline first. Fresh ones are flagged &lsquo;new&rsquo;.</p>
           </div>
         </header>
         {loading ? (
