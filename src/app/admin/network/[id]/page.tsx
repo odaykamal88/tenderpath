@@ -42,6 +42,7 @@ interface Match {
   score: number;
   match_reasons: string[] | null;
   status: string;
+  dismiss_reason: string | null;
   first_seen_at: string;
   last_scored_at: string;
   tender_title: string;
@@ -88,6 +89,8 @@ export default function AdminNetworkCompanyPage() {
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [editReasonId, setEditReasonId] = useState<number | null>(null);
+  const [reasonDraft, setReasonDraft] = useState("");
 
   const load = useCallback(async () => {
     if (!Number.isInteger(id) || id <= 0) {
@@ -131,17 +134,19 @@ export default function AdminNetworkCompanyPage() {
     }
   }
 
-  async function setMatchStatus(matchId: number, status: string) {
+  async function setMatchStatus(matchId: number, status: string, reason?: string) {
     setBusy(true);
     setToast(null);
     try {
       const res = await fetch(`/api/admin/network-companies/matches/${matchId}`, {
         method: "PATCH",
         headers: jsonHeaders(),
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(reason !== undefined ? { status, reason } : { status }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+      setEditReasonId(null);
+      setReasonDraft("");
       await load();
     } catch (err) {
       setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to update match" });
@@ -268,6 +273,35 @@ export default function AdminNetworkCompanyPage() {
                       >
                         {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
+                      {m.status === "dismissed" && (
+                        editReasonId === m.id ? (
+                          <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                            <textarea
+                              className={styles.adminSearchInput}
+                              value={reasonDraft}
+                              onChange={(e) => setReasonDraft(e.target.value)}
+                              placeholder="Why isn't this a fit? (the AI uses this to filter future matches)"
+                              rows={2}
+                              style={{ padding: 6, fontFamily: "inherit", fontSize: 11 }}
+                            />
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button type="button" className={styles.btnPrimary} disabled={busy} onClick={() => setMatchStatus(m.id, "dismissed", reasonDraft)} style={{ padding: "3px 7px", fontSize: 11 }}>Save</button>
+                              <button type="button" className={styles.btnGhost} onClick={() => setEditReasonId(null)} style={{ padding: "3px 7px", fontSize: 11 }}>Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className={styles.sessionSubtle} style={{ marginTop: 4, fontSize: 11 }}>
+                            {m.dismiss_reason ? `"${m.dismiss_reason}" ` : "no reason "}
+                            <button
+                              type="button"
+                              onClick={() => { setEditReasonId(m.id); setReasonDraft(m.dismiss_reason ?? ""); }}
+                              style={{ background: "none", border: "none", color: "var(--color-accent)", cursor: "pointer", fontSize: 11, padding: 0 }}
+                            >
+                              {m.dismiss_reason ? "edit" : "+ add reason"}
+                            </button>
+                          </div>
+                        )
+                      )}
                     </td>
                   </tr>
                 ))}

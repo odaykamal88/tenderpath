@@ -22,16 +22,23 @@ export async function PATCH(request: Request, context: { params: Promise<{ match
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const status = String((body as Record<string, unknown>)?.status ?? "").trim();
+  const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  const status = String(b.status ?? "").trim();
   if (!STATUSES.has(status)) {
     return NextResponse.json({ error: `status must be one of: ${[...STATUSES].join(", ")}` }, { status: 400 });
   }
+  // Optional free-text reason (mainly for dismissals) — only overwrites when
+  // a `reason` key is present, so a plain status change preserves any prior note.
+  const hasReason = Object.prototype.hasOwnProperty.call(b, "reason");
+  const reason = hasReason ? (b.reason == null ? null : (String(b.reason).trim().slice(0, 2000) || null)) : undefined;
 
   const updated = await sql`
     UPDATE network_company_matches
-    SET status = ${status}, updated_at = NOW()
+    SET status = ${status},
+        dismiss_reason = CASE WHEN ${hasReason} THEN ${reason ?? null} ELSE dismiss_reason END,
+        updated_at = NOW()
     WHERE id = ${matchId}
-    RETURNING id, network_company_id, tender_id, status, score
+    RETURNING id, network_company_id, tender_id, status, score, dismiss_reason
   `;
   if (!updated.length) return NextResponse.json({ error: "Match not found" }, { status: 404 });
   return NextResponse.json({ match: updated[0] });

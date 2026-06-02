@@ -2,6 +2,7 @@ import { sql } from "@/lib/db";
 import { matchTenders } from "@/lib/assessment/match";
 import type { AIAnalysis } from "@/lib/types";
 import { ensureNetworkMatchingColumns } from "./schema";
+import { suppressByDismissalFeedback } from "./feedback";
 
 // Match cutoff. 55 mirrors the assessment's "strategic" floor
 // (opportunityBucketForTender in src/lib/assessment/match.ts) — high enough to
@@ -16,6 +17,7 @@ export interface NetworkMatchRunResult {
   scored: number; // tenders the engine returned
   qualified: number; // >= threshold
   newMatches: number; // freshly inserted rows (status defaults to 'new')
+  suppressed?: number; // new candidates dropped by the dismissal-feedback AI pass
   skipped?: string; // reason, if the company was skipped
 }
 
@@ -66,8 +68,16 @@ export async function matchNetworkCompany(
   `;
   const existingIds = new Set(existingRows.map((r) => Number(r.tender_id)));
 
+  // Incorporate the operator's dismissal reasons: only the genuinely-new
+  // candidates go past the AI feedback suppressor; already-stored matches keep
+  // the operator's status untouched. No-op (and no LLM call) without feedback.
+  const newCandidates = qualified.filter((t) => !existingIds.has(t.id));
+  const existingCandidates = qualified.filter((t) => existingIds.has(t.id));
+  const { kept, suppressed } = await suppressByDismissalFeedback(companyId, analysis, newCandidates);
+  const toUpsert = [...existingCandidates, ...kept];
+
   let newMatches = 0;
-  for (const t of qualified) {
+  for (const t of toUpsert) {
     const isNew = !existingIds.has(t.id);
     const reasons = Array.isArray(t.match_reasons) ? t.match_reasons : [];
     await sql`
@@ -93,7 +103,7 @@ export async function matchNetworkCompany(
     UPDATE network_companies SET last_matched_at = NOW(), updated_at = NOW() WHERE id = ${companyId}
   `;
 
-  return { companyId, scored: matched.length, qualified: qualified.length, newMatches };
+  return { companyId, scored: matched.length, qualified: qualified.length, newMatches, suppressed };
 }
 
 /**
@@ -102,7 +112,7 @@ export async function matchNetworkCompany(
  */
 export async function matchAllActiveNetworkCompanies(
   opts: { threshold?: number } = {},
-): Promise<{ companies: number; newMatches: number; errors: number; results: NetworkMatchRunResult[] }> {
+): Promise<{ companies: number; newMatches: number; suppressed: number; errors: number; results: NetworkMatchRunResult[] }> {
   await ensureNetworkMatchingColumns();
   const companies = await sql`
     SELECT id FROM network_companies
@@ -122,5 +132,6 @@ export async function matchAllActiveNetworkCompanies(
   }
 
   const newMatches = results.reduce((sum, r) => sum + r.newMatches, 0);
-  return { companies: companies.length, newMatches, errors, results };
+  const suppressed = results.reduce((sum, r) => sum + (r.suppressed ?? 0), 0);
+  return { companies: companies.length, newMatches, suppressed, errors, results };
 }

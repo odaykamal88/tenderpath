@@ -534,6 +534,7 @@ CREATE TABLE IF NOT EXISTS network_company_matches (
 CREATE INDEX IF NOT EXISTS network_company_matches_company_idx ON network_company_matches (network_company_id);
 CREATE INDEX IF NOT EXISTS network_company_matches_status_idx ON network_company_matches (status, score DESC);
 CREATE INDEX IF NOT EXISTS network_company_matches_tender_idx ON network_company_matches (tender_id);
+ALTER TABLE network_company_matches ADD COLUMN IF NOT EXISTS dismiss_reason TEXT;
 `;
 
 async function migrate() {

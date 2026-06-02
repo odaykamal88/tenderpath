@@ -47,7 +47,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
   const matches = await sql`
     SELECT
-      m.id, m.tender_id, m.score, m.structured_reasons, m.match_reasons, m.status,
+      m.id, m.tender_id, m.score, m.structured_reasons, m.match_reasons, m.status, m.dismiss_reason,
       m.first_seen_at, m.last_scored_at, m.updated_at,
       t.title AS tender_title, t.agency AS tender_agency, t.country AS tender_country,
       t.sector AS tender_sector, t.deadline AS tender_deadline,

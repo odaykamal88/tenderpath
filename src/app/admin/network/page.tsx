@@ -91,6 +91,8 @@ export default function AdminNetworkPage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
+  const [dismissingId, setDismissingId] = useState<number | null>(null);
+  const [dismissReason, setDismissReason] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [submitting, setSubmitting] = useState(false);
@@ -121,18 +123,20 @@ export default function AdminNetworkPage() {
     };
   }, [data]);
 
-  async function setMatchStatus(matchId: number, status: string) {
+  async function setMatchStatus(matchId: number, status: string, reason?: string) {
     setBusy(matchId);
     setToast(null);
     try {
       const res = await fetch(`/api/admin/network-companies/matches/${matchId}`, {
         method: "PATCH",
         headers: jsonHeaders(),
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(reason !== undefined ? { status, reason } : { status }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
       setToast({ ok: true, msg: `Marked ${status}.` });
+      setDismissingId(null);
+      setDismissReason("");
       await load();
     } catch (err) {
       setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to update match" });
@@ -320,10 +324,27 @@ export default function AdminNetworkPage() {
                     </td>
                     <td className={`${styles.num} ${m.score >= 70 ? styles.posNum : styles.muteNum}`}>{m.score}</td>
                     <td className={styles.num}>
-                      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                        <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => setMatchStatus(m.id, "contacted")} style={{ padding: "4px 8px", fontSize: 11 }}>Contacted</button>
-                        <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => setMatchStatus(m.id, "dismissed")} style={{ padding: "4px 8px", fontSize: 11 }}>Dismiss</button>
-                      </div>
+                      {dismissingId === m.id ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 230 }}>
+                          <textarea
+                            className={styles.adminSearchInput}
+                            placeholder="Why isn't this a fit? (the AI uses this to filter future matches)"
+                            value={dismissReason}
+                            onChange={(e) => setDismissReason(e.target.value)}
+                            rows={2}
+                            style={{ padding: 6, fontFamily: "inherit", fontSize: 11 }}
+                          />
+                          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                            <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => { setDismissingId(null); setDismissReason(""); }} style={{ padding: "4px 8px", fontSize: 11 }}>Cancel</button>
+                            <button type="button" className={styles.btnPrimary} disabled={busy === m.id} onClick={() => setMatchStatus(m.id, "dismissed", dismissReason)} style={{ padding: "4px 8px", fontSize: 11 }}>Confirm dismiss</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                          <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => setMatchStatus(m.id, "contacted")} style={{ padding: "4px 8px", fontSize: 11 }}>Contacted</button>
+                          <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => { setDismissingId(m.id); setDismissReason(""); }} style={{ padding: "4px 8px", fontSize: 11 }}>Dismiss</button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

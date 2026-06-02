@@ -23,7 +23,7 @@
     },
     {
       "path": "/api/cron/network-match",
-      "schedule": "0 9 */2 * *"
+      "schedule": "0 9 * * *"
     }
   ]
 }

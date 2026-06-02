@@ -47,6 +47,7 @@ export interface NetworkCompanyMatch {
   structured_reasons: MatchReason | null;
   match_reasons: string[];
   status: NetworkMatchStatus;
+  dismiss_reason: string | null;
   first_seen_at: string;
   last_scored_at: string;
   created_at: string;

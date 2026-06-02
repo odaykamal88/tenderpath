@@ -57,6 +57,8 @@ export async function ensureNetworkMatchingColumns(): Promise<void> {
   await sql`CREATE INDEX IF NOT EXISTS network_company_matches_company_idx ON network_company_matches (network_company_id)`;
   await sql`CREATE INDEX IF NOT EXISTS network_company_matches_status_idx ON network_company_matches (status, score DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS network_company_matches_tender_idx ON network_company_matches (tender_id)`;
+  // Operator's free-text reason for a dismissal — fuels the AI feedback pass.
+  await sql`ALTER TABLE network_company_matches ADD COLUMN IF NOT EXISTS dismiss_reason TEXT`;
 
   ensured = true;
 }
