@@ -109,7 +109,7 @@ Additional work done outside the prompt sequence:
 - **Deferred**: migration NOT run against prod — self-heal `ensureNetworkMatchingColumns()` creates the tables on the first admin request post-deploy (the layout's `fresh-count` fetch triggers it), or run `node scripts/migrate.mjs` manually. Full UI/e2e runtime check (add company → profile builds → matches → re-match idempotent → badge) happens on the live deploy since local admin routes are auth-gated.
 - **Threshold/cadence**: high-fit cutoff 70 (engine strong-fit band); cron every 2 days at 09:00 — both tunable.
 - **Heads-up**: an unrelated in-progress Grants.gov importer (`src/lib/grants/grants-gov.ts`, `src/lib/grants/sync.ts`, `src/app/api/cron/grants/route.ts`) was present uncommitted in the working tree and was deliberately LEFT OUT of this commit.
-- **Audit hand-over (not fixed, lower priority)**: worker-health timeout log tag; bid-no-bid email-failure surfaced in response; UK FTS/FCDO platform-name mapping consistency; proposal-health `noVerdict` visibility.
+- **Audit hand-over — RESOLVED 2026-06-02** (commit `e178c39`): worker-health catch now logs `[admin:worker_health:timeout|unreachable]` + clearer 20s-timeout message; bid-no-bid returns `emailError` alongside `emailSent`. The other two were verified already-correct (no change): UK FTS / FCDO source names both normalize to "UK Find a Tender"; proposal-health already renders the `noVerdict` row.
 
 ## Latest Session Update — 2026-05-18 (Sprint 23, post-Sprint-22)
 
