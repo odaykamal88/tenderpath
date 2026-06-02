@@ -23,6 +23,7 @@ async function handle(request: Request) {
   const undpLimit = Number(url.searchParams.get("undp_limit") ?? "");
   const unWomenLimit = Number(url.searchParams.get("unwomen_limit") ?? "");
   const ifadLimit = Number(url.searchParams.get("ifad_limit") ?? "");
+  const grantsGovLimit = Number(url.searchParams.get("grants_gov_limit") ?? "");
 
   try {
     const result = await refreshGrantInventory({
@@ -31,6 +32,7 @@ async function handle(request: Request) {
       undpLimit: Number.isFinite(undpLimit) && undpLimit > 0 ? undpLimit : undefined,
       unWomenLimit: Number.isFinite(unWomenLimit) && unWomenLimit > 0 ? unWomenLimit : undefined,
       ifadLimit: Number.isFinite(ifadLimit) && ifadLimit > 0 ? ifadLimit : undefined,
+      grantsGovLimit: Number.isFinite(grantsGovLimit) && grantsGovLimit > 0 ? grantsGovLimit : undefined,
     });
     const status = result.ok ? 200 : 502;
     return NextResponse.json(result, { status });

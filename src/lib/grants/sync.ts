@@ -1,10 +1,11 @@
 import { sql } from "@/lib/db";
 import { fetchEuFundingGrants, type EuFundingGrant } from "@/lib/grants/eu-funding-tenders";
+import { fetchGrantsGovGrants, type GrantsGovGrant } from "@/lib/grants/grants-gov";
 import { fetchIfadGrants, type IfadGrant } from "@/lib/grants/ifad";
 import { fetchUndpCfpGrants, type UndpCfpGrant } from "@/lib/grants/undp-cfp";
 import { fetchUnWomenCfpGrants, type UnWomenCfpGrant } from "@/lib/grants/unwomen-cfp";
 
-type GrantSourceRow = EuFundingGrant | UndpCfpGrant | UnWomenCfpGrant | IfadGrant;
+type GrantSourceRow = EuFundingGrant | UndpCfpGrant | UnWomenCfpGrant | IfadGrant | GrantsGovGrant;
 
 export type GrantRefreshOptions = {
   dryRun?: boolean;
@@ -14,6 +15,7 @@ export type GrantRefreshOptions = {
   undpLimit?: number;
   unWomenLimit?: number;
   ifadLimit?: number;
+  grantsGovLimit?: number;
   graceDays?: number;
 };
 
@@ -185,6 +187,7 @@ export async function refreshGrantInventory(options: GrantRefreshOptions = {}): 
   const undpLimit = Math.min(75, Math.max(1, options.undpLimit ?? 25));
   const unWomenLimit = Math.min(50, Math.max(1, options.unWomenLimit ?? 25));
   const ifadLimit = Math.min(25, Math.max(1, options.ifadLimit ?? 12));
+  const grantsGovLimit = Math.min(250, Math.max(1, options.grantsGovLimit ?? 100));
   const graceDays = Math.max(0, options.graceDays ?? 0);
 
   await ensureGrantReferenceIndex();
@@ -202,6 +205,10 @@ export async function refreshGrantInventory(options: GrantRefreshOptions = {}): 
     }),
     importGrantSource("IFAD", dryRun, async () => {
       const result = await fetchIfadGrants(ifadLimit);
+      return { grants: result.grants, scanned: result.totalScanned };
+    }),
+    importGrantSource("Grants.gov", dryRun, async () => {
+      const result = await fetchGrantsGovGrants(grantsGovLimit);
       return { grants: result.grants, scanned: result.totalScanned };
     }),
   ]);

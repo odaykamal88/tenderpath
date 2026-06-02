@@ -256,12 +256,22 @@ crawler. Mapping the request against current coverage:
   daily cron. Grants.gov (652 rows) was a one-time script import never wired into the cron
   (it only expired).
 
-Grants.gov outcome: a live `search2` importer was built and validated (`tsc`/`eslint` clean;
-fetcher smoke scanned 836 internationally-leaning hits → 14 open grants, 14/14 rich
-desc+themes, geography resolved e.g. U.S. Mission to UAE → MENA), then **deprioritized by the
-founder and reverted** — U.S. federal grants are not aligned with TenderPath's MENA/Africa
-ICP, and importing them daily would add domestic noise the matcher's guard already fights.
-The reusable learning is the `search2` + `grantsGovDetailPatch` flow if this is ever revisited.
+Grants.gov outcome (built → reverted → re-added geo-gated): the first `search2` importer
+imported broadly and relied on the *matcher* to demote U.S.-domestic rows, which still leaked
+them onto the dashboard, so it was reverted. It was then reconsidered with the right fix — a
+**hard geography gate at ingestion**: keep a row only if it targets a specific developing-world
+country or a developing region; drop U.S.-domestic / donor-country / unknown-geography before it
+reaches the `grants` table. The gate runs on the cheap title+agency signal *before* per-row
+detail enrichment, so detail calls aren't spent on rows that will be dropped. Measured: of ~626
+candidates from the targeted passes, the gate keeps ~119 internationally-targeted rows (≈14 MENA,
+≈33 Africa) — U.S. embassy public-diplomacy, DRL democracy/human-rights, PRM refugee,
+religious-freedom, and CDC global-health-security grants for in-country partners — and drops ~507
+U.S.-domestic ones. `src/lib/grants/grants-gov.ts` (`fetchGrantsGovGrants`) is wired into the cron
+with a `grants_gov_limit` param (default 100). Validated: `tsc`/`eslint` clean; a live smoke of
+`fetchGrantsGovGrants(40)` kept 39 rows with **zero** U.S.-domestic/Global leaks, all developing
+regions, 39/39 rich descriptions. Reference id (`GRANTS_GOV:<id>`) and source url match the legacy
+rows, so the cron refreshes them via `ON CONFLICT`; the matcher's `deadline >= CURRENT_DATE` filter
+drops anything past.
 
 Source-feasibility note (for the differentiation backlog): live probes of the requested
 Tier-2 funders show most are NOT low-hanging — GCF has ~1 open RFP at a time (awarded-project
