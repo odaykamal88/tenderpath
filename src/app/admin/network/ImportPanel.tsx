@@ -27,7 +27,6 @@ export default function ImportPanel({ existingNames, onClose, onImported }: Prop
   const [progress, setProgress] = useState<Progress>({ done: 0, ok: 0, failed: 0, total: 0 });
   const [log, setLog] = useState<string[]>([]);
   const [parseError, setParseError] = useState<string | null>(null);
-  const [attempts, setAttempts] = useState(0);
 
   const existing = useMemo(
     () => new Set(existingNames.map((n) => n.trim().toLowerCase())),
@@ -40,7 +39,6 @@ export default function ImportPanel({ existingNames, onClose, onImported }: Prop
   const dupes = (parsed?.rows.length ?? 0) - toImport.length;
 
   function doParse(t: string) {
-    setAttempts((n) => n + 1);
     try {
       const result = parseProspects(t);
       setParsed(result);
@@ -50,7 +48,6 @@ export default function ImportPanel({ existingNames, onClose, onImported }: Prop
     } catch (err) {
       setParsed(null);
       setParseError(err instanceof Error ? `${err.name}: ${err.message}` : String(err));
-      // eslint-disable-next-line no-console
       console.error("[network:import:parse_failed]", err);
     }
   }
@@ -162,7 +159,6 @@ export default function ImportPanel({ existingNames, onClose, onImported }: Prop
           {!running && progress.total > 0 && (
             <span className={styles.sessionSubtle}>Done — {progress.ok} added, {progress.failed} failed.</span>
           )}
-          {attempts > 0 && <span className={styles.sessionSubtle}>checked {attempts}×</span>}
         </div>
 
         {log.length > 0 && (
