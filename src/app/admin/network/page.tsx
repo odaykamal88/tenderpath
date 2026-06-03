@@ -97,17 +97,17 @@ export default function AdminNetworkPage() {
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [submitting, setSubmitting] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/admin/network-companies", { headers: authHeaders() });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       setData(await res.json());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load network companies");
+      if (!opts?.silent) setError(err instanceof Error ? err.message : "Failed to load network companies");
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, []);
 
@@ -124,6 +124,19 @@ export default function AdminNetworkPage() {
   }, [data]);
 
   async function setMatchStatus(matchId: number, status: string, reason?: string) {
+    // Optimistic + background: the change applies in place and the PATCH fires
+    // without reloading the page. A status change drops the match out of the
+    // 'new' worklist immediately and decrements its company's fresh count.
+    const match = data?.fresh.find((m) => m.id === matchId);
+    setData((d) => (d ? {
+      ...d,
+      fresh: d.fresh.filter((m) => m.id !== matchId),
+      companies: match
+        ? d.companies.map((c) => (c.id === match.company_id ? { ...c, fresh_count: Math.max(0, c.fresh_count - 1) } : c))
+        : d.companies,
+    } : d));
+    setDismissingId(null);
+    setDismissReason("");
     setBusy(matchId);
     setToast(null);
     try {
@@ -135,11 +148,9 @@ export default function AdminNetworkPage() {
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
       setToast({ ok: true, msg: `Marked ${status}.` });
-      setDismissingId(null);
-      setDismissReason("");
-      await load();
     } catch (err) {
       setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to update match" });
+      await load({ silent: true }); // reconcile silently on failure
     } finally {
       setBusy(null);
     }
@@ -147,16 +158,21 @@ export default function AdminNetworkPage() {
 
   async function deleteCompany(companyId: number, name: string) {
     if (typeof window !== "undefined" && !window.confirm(`Delete "${name}" and all its matches? This cannot be undone.`)) return;
+    // Optimistic + background: drop the company and its fresh matches in place.
+    setData((d) => (d ? {
+      ...d,
+      companies: d.companies.filter((c) => c.id !== companyId),
+      fresh: d.fresh.filter((m) => m.company_id !== companyId),
+    } : d));
     setBusy(companyId);
-    setToast(null);
+    setToast({ ok: true, msg: `Deleted ${name}.` });
     try {
       const res = await fetch(`/api/admin/network-companies/${companyId}`, { method: "DELETE", headers: authHeaders() });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
-      setToast({ ok: true, msg: `Deleted ${name}.` });
-      await load();
     } catch (err) {
       setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to delete company" });
+      await load({ silent: true }); // restore on failure
     } finally {
       setBusy(null);
     }
@@ -196,7 +212,7 @@ export default function AdminNetworkPage() {
       });
       setForm({ ...EMPTY_FORM });
       setShowForm(false);
-      await load();
+      await load({ silent: true });
     } catch (err) {
       setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to add company" });
     } finally {
@@ -221,7 +237,7 @@ export default function AdminNetworkPage() {
           <button type="button" className={styles.btnPrimary} onClick={() => setShowForm((s) => !s)}>
             {showForm ? "Close" : "Add company"}
           </button>
-          <button type="button" className={styles.btnGhost} onClick={load} disabled={loading}>
+          <button type="button" className={styles.btnGhost} onClick={() => load()} disabled={loading}>
             {loading ? "Loading…" : "Refresh"}
           </button>
         </div>
@@ -291,6 +307,7 @@ export default function AdminNetworkPage() {
         </section>
       )}
 
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
       <section className={styles.panel}>
         <header className={styles.panelHead}>
           <div>
@@ -304,13 +321,12 @@ export default function AdminNetworkPage() {
         ) : fresh.length === 0 ? (
           <div className={styles.woEmpty}>No fresh matches. Add companies, or wait for the next match run.</div>
         ) : (
-          <div className={styles.tableWrap}>
+          <div className={styles.tableWrap} style={{ maxHeight: "72vh", overflow: "auto" }}>
             <table className={styles.dossierTable}>
               <thead>
                 <tr>
                   <th>Company</th>
                   <th>Tender</th>
-                  <th>Country</th>
                   <th>Deadline</th>
                   <th className={styles.num}>Fit</th>
                   <th></th>
@@ -323,18 +339,17 @@ export default function AdminNetworkPage() {
                       <Link href={`/admin/network/${m.company_id}`} className={styles.tableLink}>{m.company_name}</Link>
                       <div className={styles.sessionSubtle}>{m.contact_email ?? m.contact_name ?? "no contact on file"}</div>
                     </td>
-                    <td style={{ maxWidth: 320 }}>
+                    <td style={{ maxWidth: 260 }}>
                       {m.tender_source_url ? (
                         <a className={styles.tableLink} href={m.tender_source_url} target="_blank" rel="noreferrer">{m.tender_title}</a>
                       ) : (
                         <span className={styles.cellName}>{m.tender_title}</span>
                       )}
                       <div className={styles.sessionSubtle}>
-                        {[m.tender_agency, m.tender_sector].filter(Boolean).join(" · ") || "—"}
+                        {[m.tender_agency, m.tender_sector, m.tender_country].filter(Boolean).join(" · ") || "—"}
                         {Array.isArray(m.match_reasons) && m.match_reasons.length > 0 && ` · ${m.match_reasons.slice(0, 2).join("; ")}`}
                       </div>
                     </td>
-                    <td>{m.tender_country || "—"}</td>
                     <td>
                       <div className={styles.mono}>{fmtDate(m.tender_deadline)}</div>
                       <div className={styles.sessionSubtle}>{relDeadline(m.tender_deadline)}</div>
@@ -384,7 +399,7 @@ export default function AdminNetworkPage() {
         ) : !data || data.companies.length === 0 ? (
           <div className={styles.woEmpty}>No companies yet — add one above.</div>
         ) : (
-          <div className={styles.tableWrap}>
+          <div className={styles.tableWrap} style={{ maxHeight: "72vh", overflow: "auto" }}>
             <table className={styles.dossierTable}>
               <thead>
                 <tr>
@@ -431,6 +446,7 @@ export default function AdminNetworkPage() {
           </div>
         )}
       </section>
+      </div>
     </>
   );
 }
