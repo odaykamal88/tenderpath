@@ -59,6 +59,9 @@ export async function ensureNetworkMatchingColumns(): Promise<void> {
   await sql`CREATE INDEX IF NOT EXISTS network_company_matches_tender_idx ON network_company_matches (tender_id)`;
   // Operator's free-text reason for a dismissal — fuels the AI feedback pass.
   await sql`ALTER TABLE network_company_matches ADD COLUMN IF NOT EXISTS dismiss_reason TEXT`;
+  // LinkedIn URL of the prospect's contact — powers the LinkedIn outreach motion
+  // for prospects with no email on file (the majority of bizdev imports).
+  await sql`ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS contact_linkedin TEXT`;
 
   ensured = true;
 }

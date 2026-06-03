@@ -3,27 +3,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import styles from "../admin.module.css";
-
-interface FreshMatch {
-  id: number;
-  score: number;
-  match_reasons: string[] | null;
-  status: string;
-  first_seen_at: string;
-  company_id: number;
-  company_name: string;
-  contact_name: string | null;
-  contact_email: string | null;
-  tender_id: number;
-  tender_title: string;
-  tender_agency: string | null;
-  tender_country: string | null;
-  tender_sector: string | null;
-  tender_deadline: string | null;
-  tender_value: string | null;
-  tender_source_url: string | null;
-  tender_reference: string | null;
-}
+import OutreachTable from "./OutreachTable";
+import ImportPanel from "./ImportPanel";
+import { type OutreachMatch } from "@/lib/network/outreach";
 
 interface CompanyRow {
   id: number;
@@ -47,7 +29,7 @@ interface CompanyRow {
 
 interface ListResponse {
   companies: CompanyRow[];
-  fresh: FreshMatch[];
+  fresh: OutreachMatch[];
   total: number;
 }
 
@@ -64,17 +46,6 @@ function fmtDate(value: string | null): string {
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
-function relDeadline(value: string | null): string {
-  if (!value) return "no deadline";
-  const d = new Date(value).getTime();
-  if (Number.isNaN(d)) return "—";
-  const days = Math.round((d - Date.now()) / 86_400_000);
-  if (days < 0) return `${Math.abs(days)}d ago`;
-  if (days === 0) return "today";
-  if (days === 1) return "tomorrow";
-  return `in ${days}d`;
-}
-
 const EMPTY_FORM = {
   name: "",
   website: "",
@@ -91,9 +62,8 @@ export default function AdminNetworkPage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
-  const [dismissingId, setDismissingId] = useState<number | null>(null);
-  const [dismissReason, setDismissReason] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [submitting, setSubmitting] = useState(false);
 
@@ -135,8 +105,6 @@ export default function AdminNetworkPage() {
         ? d.companies.map((c) => (c.id === match.company_id ? { ...c, fresh_count: Math.max(0, c.fresh_count - 1) } : c))
         : d.companies,
     } : d));
-    setDismissingId(null);
-    setDismissReason("");
     setBusy(matchId);
     setToast(null);
     try {
@@ -237,6 +205,9 @@ export default function AdminNetworkPage() {
           <button type="button" className={styles.btnPrimary} onClick={() => setShowForm((s) => !s)}>
             {showForm ? "Close" : "Add company"}
           </button>
+          <button type="button" className={styles.btnGhost} onClick={() => setShowImport((s) => !s)}>
+            {showImport ? "Close import" : "Import CSV"}
+          </button>
           <button type="button" className={styles.btnGhost} onClick={() => load()} disabled={loading}>
             {loading ? "Loading…" : "Refresh"}
           </button>
@@ -307,84 +278,21 @@ export default function AdminNetworkPage() {
         </section>
       )}
 
+      {showImport && (
+        <ImportPanel
+          existingNames={data?.companies.map((c) => c.name) ?? []}
+          onClose={() => setShowImport(false)}
+          onImported={() => { setShowImport(false); load({ silent: true }); }}
+        />
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
-      <section className={styles.panel}>
-        <header className={styles.panelHead}>
-          <div>
-            <h2 className={styles.panelTitle}>Fresh matches</h2>
-            <p className={styles.panelSub}>New since the last match run, soonest deadline first — act before they close. Mark contacted or dismissed to clear them.</p>
-          </div>
-          <span className={styles.panelMeta}>{fresh.length} fresh</span>
-        </header>
-        {loading ? (
-          <div className={styles.woEmpty}>Loading…</div>
-        ) : fresh.length === 0 ? (
-          <div className={styles.woEmpty}>No fresh matches. Add companies, or wait for the next match run.</div>
-        ) : (
-          <div className={styles.tableWrap} style={{ maxHeight: "72vh", overflow: "auto" }}>
-            <table className={styles.dossierTable}>
-              <thead>
-                <tr>
-                  <th>Company</th>
-                  <th>Tender</th>
-                  <th>Deadline</th>
-                  <th className={styles.num}>Fit</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {fresh.map((m) => (
-                  <tr key={m.id}>
-                    <td>
-                      <Link href={`/admin/network/${m.company_id}`} className={styles.tableLink}>{m.company_name}</Link>
-                      <div className={styles.sessionSubtle}>{m.contact_email ?? m.contact_name ?? "no contact on file"}</div>
-                    </td>
-                    <td style={{ maxWidth: 260 }}>
-                      {m.tender_source_url ? (
-                        <a className={styles.tableLink} href={m.tender_source_url} target="_blank" rel="noreferrer">{m.tender_title}</a>
-                      ) : (
-                        <span className={styles.cellName}>{m.tender_title}</span>
-                      )}
-                      <div className={styles.sessionSubtle}>
-                        {[m.tender_agency, m.tender_sector, m.tender_country].filter(Boolean).join(" · ") || "—"}
-                        {Array.isArray(m.match_reasons) && m.match_reasons.length > 0 && ` · ${m.match_reasons.slice(0, 2).join("; ")}`}
-                      </div>
-                    </td>
-                    <td>
-                      <div className={styles.mono}>{fmtDate(m.tender_deadline)}</div>
-                      <div className={styles.sessionSubtle}>{relDeadline(m.tender_deadline)}</div>
-                    </td>
-                    <td className={`${styles.num} ${m.score >= 70 ? styles.posNum : styles.muteNum}`}>{m.score}</td>
-                    <td className={styles.num}>
-                      {dismissingId === m.id ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 230 }}>
-                          <textarea
-                            className={styles.adminSearchInput}
-                            placeholder="Why isn't this a fit? (the AI uses this to filter future matches)"
-                            value={dismissReason}
-                            onChange={(e) => setDismissReason(e.target.value)}
-                            rows={2}
-                            style={{ padding: 6, fontFamily: "inherit", fontSize: 11 }}
-                          />
-                          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                            <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => { setDismissingId(null); setDismissReason(""); }} style={{ padding: "4px 8px", fontSize: 11 }}>Cancel</button>
-                            <button type="button" className={styles.btnPrimary} disabled={busy === m.id} onClick={() => setMatchStatus(m.id, "dismissed", dismissReason)} style={{ padding: "4px 8px", fontSize: 11 }}>Confirm dismiss</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                          <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => setMatchStatus(m.id, "contacted")} style={{ padding: "4px 8px", fontSize: 11 }}>Contacted</button>
-                          <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => { setDismissingId(m.id); setDismissReason(""); }} style={{ padding: "4px 8px", fontSize: 11 }}>Dismiss</button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <OutreachTable
+        matches={fresh}
+        loading={loading}
+        busy={busy}
+        onSetStatus={setMatchStatus}
+      />
 
       <section className={styles.panel}>
         <header className={styles.panelHead}>

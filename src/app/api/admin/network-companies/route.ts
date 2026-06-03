@@ -55,7 +55,7 @@ export async function GET(request: Request) {
     sql`
       SELECT
         m.id, m.score, m.match_reasons, m.status, m.first_seen_at,
-        c.id AS company_id, c.name AS company_name, c.contact_name, c.contact_email,
+        c.id AS company_id, c.name AS company_name, c.contact_name, c.contact_email, c.contact_linkedin,
         t.id AS tender_id, t.title AS tender_title, t.agency AS tender_agency,
         t.country AS tender_country, t.sector AS tender_sector, t.deadline AS tender_deadline,
         t.estimated_value AS tender_value, t.source_url AS tender_source_url, t.reference_id AS tender_reference
@@ -99,6 +99,7 @@ export async function POST(request: Request) {
   const contactName = cleanStr(b.contact_name, 200);
   const contactEmail = cleanStr(b.contact_email, 320);
   const contactPhone = cleanStr(b.contact_phone, 50);
+  const contactLinkedin = cleanStr(b.contact_linkedin, 500);
   const notes = cleanStr(b.notes, 4000);
 
   if (!website && !servicesText) {
@@ -111,11 +112,11 @@ export async function POST(request: Request) {
   const inserted = await sql`
     INSERT INTO network_companies (
       name, website, services_text, countries, sectors, org_type,
-      contact_name, contact_email, contact_phone, notes, created_by, profile_status
+      contact_name, contact_email, contact_phone, contact_linkedin, notes, created_by, profile_status
     ) VALUES (
       ${name}, ${website}, ${servicesText},
       ${JSON.stringify(countries)}::jsonb, ${JSON.stringify(sectors)}::jsonb, ${orgType},
-      ${contactName}, ${contactEmail}, ${contactPhone}, ${notes},
+      ${contactName}, ${contactEmail}, ${contactPhone}, ${contactLinkedin}, ${notes},
       ${guard.user?.id ?? null}, 'pending'
     )
     RETURNING id
