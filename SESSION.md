@@ -86,6 +86,20 @@ Additional work done outside the prompt sequence:
 
 ## Current Status
 
+## Latest Session Update — 2026-06-03 (Esdaar additions — built the defensible slice)
+
+- **Agent**: Claude Code
+- **Date**: 2026-06-03
+- **Task**: Reviewed the designers' "Esdaar Additions" package (`~/Downloads/rollout` + `rollout 2`) benchmarking against esdaar.com; decided incorporate-vs-discard, then built the keepers. Full verdict in memory `project_esdaar_rollout_verdict`.
+- **Built (3)**:
+  - **§7 Accountability ledger** — new `src/components/landing/Accountability.tsx` ("We draft and check. You decide and sign." + "we don't submit bids for you — on purpose" + 9-step RACI ledger, 5 Yours / 4 Ours). Wired into `src/app/page.tsx` between `<Services/>` and `<WhyUs/>`. Copy de-Saudized (no GOSI/CR); steps map to real capabilities. Verified visually (desktop two-column + mobile stacked).
+  - **§2 In-context sign-up** — new `src/app/assessment/SignupSheet.tsx`; `AssessmentResults.tsx` "Save report → sign up" now opens a sheet over the report (score stays on screen) instead of navigating to /login. Reuses live auth verbatim (`POST /api/auth/signup`, `GET /api/auth/google`); no new password path.
+  - **§5b In-app notifications** — new `src/components/dashboard/NotificationBell.tsx`, mounted in `dashboard/layout.tsx` (mobile header + desktop sidebar). Fed by the layout's existing `/api/dashboard/pipeline` items (no extra fetch). Real events only (deadline + recency); read-state in `localStorage`, **no migration**.
+- **Discarded (4)**: §6 proof strip (composite/illustrative outcomes → no-overstated-claims), §4 compliance tile ("48" fabricated; `ProposalPackagePanel` already shows real per-WO counts), §3 services pricing strip (invented $199/Enterprise; `Services.tsx` already journey-led), §5a digest email (already ships, cron-wired). §1 tour = optional polish.
+- **Verified**: `tsc --noEmit` clean; `eslint` clean on all 6 touched files (fixed a `Date.now()`-in-render purity error in NotificationBell → effect snapshot); `npm run build` clean (all routes). §7 visually confirmed in preview.
+- **Not yet verified / handoff**: §2 + §5b need auth + DATABASE_URL → walk on Vercel preview (assessment reveal → "Save report" sheet; dashboard bell on mobile + desktop). Per `project_launch_flows`, re-verify the auth/assessment gateway flows.
+- **Not committed**: changes sit in the working tree on branch `claude/network-outreach-importer` (an unrelated branch) — wants its own branch before commit/PR.
+
 ## Latest Session Update — 2026-06-02 (Submission-portal registration awareness)
 
 - **Agent**: Claude Code

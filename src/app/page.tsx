@@ -3,6 +3,7 @@ import Hero from "@/components/landing/Hero";
 import Challenge from "@/components/landing/Challenge";
 import HowItWorks from "@/components/landing/HowItWorks";
 import Services from "@/components/landing/Services";
+import Accountability from "@/components/landing/Accountability";
 import WhyUs from "@/components/landing/WhyUs";
 import MENACoverage from "@/components/landing/MENACoverage";
 import CTA from "@/components/landing/CTA";
@@ -54,6 +55,7 @@ export default async function Home() {
       <Challenge />
       <HowItWorks />
       <Services />
+      <Accountability />
       <WhyUs />
       <MENACoverage />
       <CTA />
