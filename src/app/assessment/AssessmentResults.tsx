@@ -30,6 +30,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import SignupSheet from "./SignupSheet";
 import type { Gap, MatchedTender, MatchedGrant, ReadinessDimensions, TierSlug } from "@/lib/types";
 import { isComingSoonTier } from "@/lib/pricing";
 import { decodeHtmlEntities } from "@/lib/text/entities";
@@ -142,6 +143,10 @@ export default function AssessmentResults({
   // The fetch is best-effort; failure leaves libraryContext null and the
   // page degrades to Sprint 7 behaviour silently.
   const [libraryContext, setLibraryContext] = useState<LibraryContextResponse | null>(null);
+
+  // §2 — in-context sign-up. The "Save report" CTA opens a sheet over the
+  // report instead of navigating to /login, so the score stays on screen.
+  const [signupOpen, setSignupOpen] = useState(false);
 
   useEffect(() => {
     if (!data.email) return;
@@ -480,18 +485,24 @@ export default function AssessmentResults({
               Start {primaryMeta.label} →
             </Link>
           )}
-          <Link
-            href="/login"
+          <button
+            onClick={() => setSignupOpen(true)}
             className="font-mono text-[11px] tracking-[0.12em] uppercase text-paper-2/70 hover:text-paper border-b border-paper-2/30 hover:border-paper pb-0.5"
           >
             Save report → sign up
-          </Link>
+          </button>
         </div>
       </section>
 
       <p className="font-mono text-[10px] tracking-[0.06em] text-mute mt-10 text-center">
         A full PDF copy of this report has been emailed to {data.email}.
       </p>
+
+      <SignupSheet
+        open={signupOpen}
+        onClose={() => setSignupOpen(false)}
+        defaultEmail={data.email}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import NotificationBell, { type NotifPipelineItem } from "@/components/dashboard/NotificationBell";
 
 interface Me {
   id: number;
@@ -62,6 +63,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // null = use the default (open when on a services route OR for non-paid users
   // so the upsell menu stays visible); true/false = user has explicitly toggled.
   const [servicesOpen, setServicesOpen] = useState<boolean | null>(null);
+  // §5b — matched-pipeline items, reused from the access probe below to feed
+  // the in-app notification bell (no extra request).
+  const [pipelineItems, setPipelineItems] = useState<NotifPipelineItem[]>([]);
 
   // Close drawer on route change. This is the textbook case for syncing
   // ephemeral UI state with an external system (the router) — the new
@@ -107,6 +111,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       });
       const body = probe.ok ? await probe.json() : null;
       const access = body?.access;
+      setPipelineItems(body && Array.isArray(body.items) ? (body.items as NotifPipelineItem[]) : []);
 
       setState({
         user,
@@ -308,15 +313,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Sidebar contents — shared between desktop aside and mobile drawer
   const sidebarBody = (
     <>
-      {/* Logo */}
-      <Link href="/" className="flex items-baseline gap-1 mb-1.5 px-1 group">
-        <span
-          className="text-[24px] leading-none font-medium text-stone-900 group-hover:text-stone-700 transition-colors tracking-tight"
-          style={{ fontFamily: SERIF }}
-        >
-          Tender<span className="text-orange-500">·</span>Path
-        </span>
-      </Link>
+      {/* Logo + notifications. The bell is desktop-only here — the mobile top
+          bar carries its own — so it stays hidden in the mobile drawer. */}
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <Link href="/" className="flex items-baseline gap-1 px-1 group">
+          <span
+            className="text-[24px] leading-none font-medium text-stone-900 group-hover:text-stone-700 transition-colors tracking-tight"
+            style={{ fontFamily: SERIF }}
+          >
+            Tender<span className="text-orange-500">·</span>Path
+          </span>
+        </Link>
+        <div className="hidden lg:block">
+          <NotificationBell items={pipelineItems} align="left" />
+        </div>
+      </div>
       <div
         className="px-1 mb-6 lg:mb-7 text-[9px] font-semibold uppercase tracking-[0.22em] text-stone-400"
         style={{ fontFamily: MONO }}
@@ -495,6 +506,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </Link>
         <div className="flex items-center gap-2 shrink-0">
           {trialBadge}
+          <NotificationBell items={pipelineItems} align="right" />
           <button
             onClick={() => setDrawerOpen(true)}
             aria-label="Open menu"
