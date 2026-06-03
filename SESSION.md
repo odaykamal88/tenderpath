@@ -3326,3 +3326,13 @@ Whichever: tsc + lint + build before push; commit message via /tmp file (NOT her
 - Verified: `tsc` + eslint clean; `npm run build` clean — `/admin/grant-health` + `/api/admin/grant-health` register. SQL mirrors the proven `grantQualitySummary` FILTER pattern; real data shows in prod (local has no DB).
 - This is the capstone: the 6 grant sources + IsDB tenders are now observable, so the next silent decay is visible instead of invisible.
 - Contracts: additive only (read-only admin route + page + 1 nav entry). Committed + pushed to main.
+
+### Session Update — TED EU: MENA/Turkey/Gulf/Africa targeting + region-tagging fix
+- Agent: Claude (Opus 4.8, 1M context) · Date: 2026-06-02
+- Founder asked if TED is worth adding. It was already crawled (`crawlTED`), BUT the pull was 300 newest-of-42k/month, untargeted (~all EU-domestic), and — the real bug — **every row was hardcoded `region: "Europe"` with `country` set to the raw place-of-performance code, so MENA/Africa TED tenders matched neither a country profile nor a region.** Verified TED has ~146 cn-* (last 90d) and ~58 currently-open contract notices performed in MENA+Turkey+Gulf+Africa (GIZ/Enabel/Expertise France/EU Delegations in Guinea/DRC/Egypt/Jordan/Turkey) — prime ICP, almost none caught by the breadth pass.
+- Built in `src/lib/crawlers/ted-eu.ts`:
+  - **Targeted 2nd pass**: `notice-type IN (cn-standard cn-social cn-desg) AND deadline-receipt-tender-date-lot>=<today> AND place-of-performance IN (<~65 ISO3 codes: MENA+Gulf+Turkey+Sub-Saharan Africa>)`, merged with the existing breadth pass by reference_id.
+  - **Region/country fix**: `geoFor()` resolves the place-of-performance — KEY GOTCHA: TED's BT-5141 returns ISO-3166 **alpha-3** (BEN/TUR/MOZ), not alpha-2; and a contract can be **multi-country** (`['LUX','ROU','TUR',...]`) → prefer a target country. `TARGET` (alpha-3 → name+region) covers the ICP; EU/EEA alpha-3→alpha-2 + `Intl.DisplayNames` + the region map name the rest; unknown → "Europe" (demoted).
+- Verified: `tsc` + eslint clean; live two-pass `crawlTED()` → 358 tenders, region split now real (MENA 15, Sub-Saharan Africa 23, Eastern Europe & C. Asia 32 incl. Turkey, W. Europe 187, Europe 101) — was previously 100% "Europe" with ISO-code countries. ~3.7s (transient TED 84s latency seen once). No key needed; fully local-verified.
+- Honest magnitude: ~58 currently-open ICP tenders + ~60/month inflow — relevance over volume (the website's 2k+ is mostly awards/PINs/closed history). Also fixes geo-tagging for ALL TED rows.
+- Contracts: additive only (`RawTender`/`CrawlResult` unchanged). Committed + pushed to main.
