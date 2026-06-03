@@ -26,6 +26,8 @@ export default function ImportPanel({ existingNames, onClose, onImported }: Prop
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<Progress>({ done: 0, ok: 0, failed: 0, total: 0 });
   const [log, setLog] = useState<string[]>([]);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [attempts, setAttempts] = useState(0);
 
   const existing = useMemo(
     () => new Set(existingNames.map((n) => n.trim().toLowerCase())),
@@ -38,9 +40,19 @@ export default function ImportPanel({ existingNames, onClose, onImported }: Prop
   const dupes = (parsed?.rows.length ?? 0) - toImport.length;
 
   function doParse(t: string) {
-    setParsed(parseProspects(t));
-    setLog([]);
-    setProgress({ done: 0, ok: 0, failed: 0, total: 0 });
+    setAttempts((n) => n + 1);
+    try {
+      const result = parseProspects(t);
+      setParsed(result);
+      setParseError(null);
+      setLog([]);
+      setProgress({ done: 0, ok: 0, failed: 0, total: 0 });
+    } catch (err) {
+      setParsed(null);
+      setParseError(err instanceof Error ? `${err.name}: ${err.message}` : String(err));
+      // eslint-disable-next-line no-console
+      console.error("[network:import:parse_failed]", err);
+    }
   }
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -119,6 +131,12 @@ export default function ImportPanel({ existingNames, onClose, onImported }: Prop
           style={{ width: "100%", padding: 8, fontFamily: "monospace", fontSize: 11 }}
         />
 
+        {parseError && (
+          <div className={styles.sessionSubtle} style={{ color: "#d04545", fontWeight: 600 }}>
+            Parse error — {parseError}
+          </div>
+        )}
+
         {parsed && parsed.rows.length === 0 ? (
           <div className={styles.sessionSubtle} style={{ color: "var(--color-warn, #c8973e)" }}>
             Couldn&apos;t read any companies. Make sure the first row has column headers including <strong>Company Name</strong>.
@@ -144,6 +162,7 @@ export default function ImportPanel({ existingNames, onClose, onImported }: Prop
           {!running && progress.total > 0 && (
             <span className={styles.sessionSubtle}>Done — {progress.ok} added, {progress.failed} failed.</span>
           )}
+          {attempts > 0 && <span className={styles.sessionSubtle}>checked {attempts}×</span>}
         </div>
 
         {log.length > 0 && (
