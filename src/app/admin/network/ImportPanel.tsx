@@ -119,14 +119,19 @@ export default function ImportPanel({ existingNames, onClose, onImported }: Prop
           style={{ width: "100%", padding: 8, fontFamily: "monospace", fontSize: 11 }}
         />
 
-        {parsed && (
+        {parsed && parsed.rows.length === 0 ? (
+          <div className={styles.sessionSubtle} style={{ color: "var(--color-warn, #c8973e)" }}>
+            Couldn&apos;t read any companies. Make sure the first row has column headers including <strong>Company Name</strong>.
+            Pasting cells straight from Google Sheets (tab-separated) now works — or use the file picker above with <code>wave1_personal_37.csv</code>.
+          </div>
+        ) : parsed ? (
           <div className={styles.sessionSubtle}>
             Parsed <strong>{parsed.rows.length}</strong> companies
             {parsed.skippedNoName > 0 && <> · {parsed.skippedNoName} skipped (no name)</>}
             {dupes > 0 && <> · {dupes} already in your list (will skip)</>}
             {" · "}<strong>{toImport.length}</strong> new to import
           </div>
-        )}
+        ) : null}
 
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <button type="button" className={styles.btnGhost} onClick={() => doParse(text)} disabled={running || !text.trim()} style={{ padding: "6px 12px", fontSize: 12 }}>

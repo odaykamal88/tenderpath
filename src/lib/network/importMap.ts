@@ -27,8 +27,25 @@ export interface ParseResult {
   headers: string[];
 }
 
-/** RFC4180-ish CSV parser: handles quoted fields, embedded commas, escaped quotes and newlines. */
-export function parseCsv(text: string): string[][] {
+/**
+ * Pick the most likely delimiter from the header line. Lets the importer accept
+ * a file/CSV export (comma), a paste copied straight from Google Sheets / Excel
+ * (TAB), or a European-locale CSV (semicolon) without the user converting first.
+ */
+export function detectDelimiter(text: string): string {
+  const firstLine = text.replace(/\r\n/g, "\n").split("\n")[0] ?? "";
+  const candidates = [",", "\t", ";"];
+  let best = ",";
+  let bestCount = -1;
+  for (const d of candidates) {
+    const count = firstLine.split(d).length - 1;
+    if (count > bestCount) { bestCount = count; best = d; }
+  }
+  return best;
+}
+
+/** RFC4180-ish CSV/TSV parser: handles quoted fields, embedded delimiters, escaped quotes and newlines. */
+export function parseCsv(text: string, delimiter = ","): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
@@ -43,7 +60,7 @@ export function parseCsv(text: string): string[][] {
       } else field += c;
     } else if (c === '"') {
       inQuotes = true;
-    } else if (c === ",") {
+    } else if (c === delimiter) {
       row.push(field); field = "";
     } else if (c === "\n") {
       row.push(field); rows.push(row); row = []; field = "";
@@ -74,7 +91,8 @@ function indexOf(headers: string[], key: string): number {
 }
 
 export function parseProspects(text: string): ParseResult {
-  const table = parseCsv(text).filter((r) => r.some((c) => (c ?? "").trim()));
+  const delimiter = detectDelimiter(text);
+  const table = parseCsv(text, delimiter).filter((r) => r.some((c) => (c ?? "").trim()));
   if (table.length === 0) return { rows: [], total: 0, skippedNoName: 0, headers: [] };
 
   const headers = table[0].map((h) => (h ?? "").trim());
