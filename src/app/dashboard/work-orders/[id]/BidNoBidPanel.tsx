@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { resolveSubmissionPortal, assessRegistrationTiming } from "@/lib/tenders/submission-portals";
+import {
+  resolveSubmissionPortal,
+  assessRegistrationTiming,
+  resolveUngmRequirement,
+  assessUngmTiming,
+  UNGM_LEVELS,
+  UNGM_URL,
+} from "@/lib/tenders/submission-portals";
 
 type EvidenceLabel = "evidence" | "inference" | "gap" | "unverified";
 type DocumentPriority = "mandatory" | "recommended";
@@ -923,11 +930,12 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
         </div>
       )}
 
-      {/* Deterministic "how to actually submit" block — keyed off the buying
-          agency, independent of the LLM output. Surfaces the supplier-portal
-          registration the bidder must complete first, with a deadline-risk
-          flag. Renders client-side post-fetch, so the Date.now() in
-          assessRegistrationTiming is safe (no SSR/hydration concern). */}
+      {/* Deterministic registration blocks — keyed off the buying agency,
+          independent of the LLM output. UNGM vendor registration (the UN-wide
+          supplier identity + level) comes first, then the agency portal where
+          the bid is actually uploaded. Both render client-side post-fetch, so
+          the Date.now() in the timing helpers is safe (no SSR/hydration). */}
+      <UngmRegistrationBlock agency={agency} deadline={tenderDeadline} />
       <RegistrationBlock agency={agency} deadline={tenderDeadline} />
 
       {out.next_steps.length > 0 && (
@@ -1026,6 +1034,143 @@ function ExportToProposalButton({ workOrderId }: { workOrderId: number }) {
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+// One rung of the UNGM level ladder (Basic / Level 1). Shows what the level
+// unlocks, what the supplier must provide, and the hedged lead-time label.
+function LadderRow({
+  label,
+  tag,
+  tagClass,
+  purpose,
+  requirements,
+  leadLabel,
+}: {
+  label: string;
+  tag: string;
+  tagClass: string;
+  purpose: string;
+  requirements: string[];
+  leadLabel: string;
+}) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <div className="text-[13.5px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+          {label}
+        </div>
+        <div className={`text-[10px] uppercase tracking-[0.14em] ${tagClass}`} style={{ fontFamily: MONO }}>
+          {tag}
+        </div>
+      </div>
+      <p className="mt-1 text-[12.5px] leading-snug text-stone-700">{purpose}</p>
+      <ul className="mt-1.5 space-y-0.5 text-[12px] text-stone-600">
+        {requirements.map((r, i) => (
+          <li key={i} className="flex gap-2">
+            <span className="text-stone-400 shrink-0">·</span>
+            <span>{r}</span>
+          </li>
+        ))}
+      </ul>
+      <div
+        className="mt-1.5 text-[10.5px] uppercase tracking-[0.12em] text-stone-400"
+        style={{ fontFamily: MONO }}
+      >
+        {leadLabel}
+      </div>
+    </div>
+  );
+}
+
+// Deterministic UNGM vendor-registration ladder. UNGM is the UN-wide supplier
+// identity layer (vendor number + registration LEVEL), separate from the agency
+// submission portal below. Basic is the free, near-instant baseline most UN
+// orgs require to access docs + submit; Level 1 adds documents + UN evaluation
+// and is required by some calls before award (the notice states which). We only
+// assert Basic as universal — UNGM says higher minimums vary by agency and
+// opportunity — so Level 1 is shown as a "start early if required" ladder step,
+// with the deadline-risk flag driven by Level 1's evaluation lead time.
+function UngmRegistrationBlock({
+  agency,
+  deadline,
+}: {
+  agency?: string | null;
+  deadline?: string | null;
+}) {
+  const req = resolveUngmRequirement(agency);
+  const basic = UNGM_LEVELS.basic;
+  const level1 = UNGM_LEVELS["level-1"];
+  const timing = assessUngmTiming(deadline, "level-1");
+  const risk = timing.firstTimeRisk;
+
+  const riskStyles =
+    risk === "very-tight"
+      ? { border: "border-red-600", bg: "bg-red-50/40", text: "text-red-800" }
+      : risk === "tight"
+        ? { border: "border-amber-600", bg: "bg-amber-50/40", text: "text-amber-900" }
+        : { border: "border-stone-300", bg: "bg-stone-50/40", text: "text-stone-700" };
+
+  const days = timing.daysUntilDeadline;
+  const deadlinePhrase =
+    days != null && days >= 0 ? `Deadline in ${days} day${days === 1 ? "" : "s"}. ` : "";
+
+  return (
+    <div className="border-t border-stone-100 p-5">
+      <div
+        className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-2"
+        style={{ fontFamily: MONO }}
+      >
+        Before you can submit · UNGM vendor registration
+      </div>
+      <div className={`rounded-sm border-l-2 ${riskStyles.border} ${riskStyles.bg} px-4 py-3`}>
+        <LadderRow
+          label={basic.label}
+          tag="Required · free"
+          tagClass="text-emerald-700"
+          purpose={basic.purpose}
+          requirements={basic.requirements}
+          leadLabel={basic.leadTimeLabel}
+        />
+
+        <div className="mt-3 pt-3 border-t border-stone-200/70">
+          <LadderRow
+            label={level1.label}
+            tag="May be required before award"
+            tagClass="text-stone-500"
+            purpose={level1.purpose}
+            requirements={level1.requirements}
+            leadLabel={level1.leadTimeLabel}
+          />
+        </div>
+
+        {risk !== "none" && (
+          <p className={`mt-3 text-[12.5px] font-semibold leading-snug ${riskStyles.text}`}>
+            ⚑ {deadlinePhrase}If this call requires Level 1, it needs documents and UN evaluation —
+            {risk === "very-tight"
+              ? " it likely can't be approved in time. Register Basic now and ask the procurement focal point whether Level 1 is required for this award."
+              : " start it immediately so the evaluation can finish before the deadline."}
+          </p>
+        )}
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <a
+            href={UNGM_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-sm bg-stone-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors"
+            style={{ fontFamily: MONO }}
+          >
+            Register on UNGM →
+          </a>
+          <span className="text-[11px] text-stone-500" style={{ fontFamily: MONO }}>
+            · free vendor number + tender alerts
+          </span>
+        </div>
+
+        <p className="mt-2.5 text-[11.5px] leading-snug text-stone-500">{req.note}</p>
+      </div>
     </div>
   );
 }
