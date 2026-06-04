@@ -286,7 +286,6 @@ export default function AdminNetworkPage() {
         />
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
       <OutreachTable
         matches={fresh}
         loading={loading}
@@ -307,7 +306,7 @@ export default function AdminNetworkPage() {
         ) : !data || data.companies.length === 0 ? (
           <div className={styles.woEmpty}>No companies yet — add one above.</div>
         ) : (
-          <div className={styles.tableWrap} style={{ maxHeight: "72vh", overflow: "auto" }}>
+          <div className={styles.tableWrap} style={{ maxHeight: "44vh", overflow: "auto" }}>
             <table className={styles.dossierTable}>
               <thead>
                 <tr>
@@ -354,7 +353,6 @@ export default function AdminNetworkPage() {
           </div>
         )}
       </section>
-      </div>
     </>
   );
 }

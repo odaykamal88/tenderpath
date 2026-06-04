@@ -151,7 +151,7 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus }: P
             : "Nothing in the shortlist with these filters — try unchecking the toggles above."}
         </div>
       ) : (
-        <div className={styles.tableWrap} style={{ maxHeight: "72vh", overflow: "auto" }}>
+        <div className={styles.tableWrap} style={{ maxHeight: "44vh", overflow: "auto" }}>
           <table className={styles.dossierTable}>
             <thead>
               <tr>
