@@ -8,7 +8,20 @@ import { normalizeSector } from "./sector-map";
 
 const WB_API = "https://search.worldbank.org/api/v2/procnotices";
 const PAGE_SIZE = 200;
-const MAX_PAGES = 3;
+const MAX_PAGES = 5;
+
+// Pull only live, biddable notice types. The raw procnotices feed is ~74% historical
+// "Contract Award" records (~300k of 406k), which are not actionable opportunities.
+// Filtering server-side via notice_type_exact (caret-delimited OR) spends the whole
+// fetch budget on the ~107k live notices instead of diluting it with awards; the
+// `/award/i` guard in mapNotice() is a backstop in case this API filter ever regresses.
+// Verified against the live API 2026-06.
+const LIVE_NOTICE_TYPES = [
+  "Invitation for Bids",
+  "Request for Expression of Interest",
+  "General Procurement Notice",
+  "Invitation for Prequalification",
+].join("^");
 
 interface WBNotice {
   id?: string;
@@ -54,6 +67,7 @@ async function fetchPage(offset: number): Promise<WBNotice[]> {
     os: String(offset),
     fl: "id,bid_reference_no,notice_no,project_name,project_id,bid_description,notice_type,procurement_method,procurement_method_name,country_name,project_ctry_name,country_code,region,sector,major_sector,borrower,agency,notice_status,publication_date,noticedate,submission_deadline_date,url,totalcontractamount,estimatedamount,contract_amount,currency",
     srt: "noticedate desc",
+    notice_type_exact: LIVE_NOTICE_TYPES,
   });
   const resp = await fetchWithTimeout(`${WB_API}?${params}`, {
     headers: { Accept: "application/json", "User-Agent": "TenderPath/1.0" },
@@ -76,6 +90,9 @@ function mapNotice(n: WBNotice): RawTender | null {
   const refRaw = n.bid_reference_no || n.notice_no || n.id;
   const title = n.project_name || n.bid_description;
   if (!refRaw || !title) return null;
+  // Backstop: never ingest already-awarded contracts even if the server-side
+  // notice_type filter regresses. Awards are historical records, not biddable.
+  if (/award/i.test(n.notice_type ?? "")) return null;
   const description = [
     n.bid_description ?? null,
     n.project_id ? `Project ID: ${n.project_id}.` : null,
