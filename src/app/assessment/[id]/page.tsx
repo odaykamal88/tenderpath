@@ -6,6 +6,7 @@ import { TendersTab } from "@/components/assessment/TendersTab";
 import { GrantsTab } from "@/components/assessment/GrantsTab";
 import { NextStepsTab } from "@/components/assessment/NextStepsTab";
 import { ThisWeekStrip } from "@/components/assessment/ThisWeekStrip";
+import { ReportNextStepCTA } from "@/components/assessment/ReportNextStepCTA";
 import { LoadingState } from "@/components/assessment/states/LoadingState";
 import { ErrorState } from "@/components/assessment/states/ErrorState";
 import { getAssessment, getThisWeek, getViewerActivity } from "@/lib/assessment";
@@ -85,6 +86,11 @@ export default async function AssessmentPage({ params, searchParams }: Props) {
             // "Open dashboard →" vs "Sign in →" on the next-step CTA.
             viewerSignedIn={activity !== null}
           />
+          {/* Anonymous viewers (no tp_session → activity === null) get the
+              conversion slab the post-wizard page used to show: recommended
+              paid SKU + save-report sign-up. Signed-in viewers already have
+              access, so it's hidden for them. */}
+          {activity === null && <ReportNextStepCTA nextStep={data.nextStep} />}
         </>
       )}
       {activeTab === "gaps" && (

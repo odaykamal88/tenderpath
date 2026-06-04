@@ -43,51 +43,39 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(fallbackUrl, 307);
   }
 
-  const { renderToStaticMarkup } = await import("react-dom/server");
-  const { ReportDocument } = await import("@/components/assessment/pdf/ReportDocument");
-
-  const reportData = {
-    reportId: data.reportId,
-    displayNumber: data.displayNumber,
-    preparedAt: data.preparedAt,
-    companyName: data.companyName,
-    sector: data.sector,
-    score: data.score,
-    scoreDelta: data.scoreDelta,
-    tier: data.tier,
-    dimensions: data.dimensions,
-    gaps: data.pdfGaps,
-    tenders: data.pdfTenders,
-    grants: data.pdfGrants,
-    plan: data.plan,
-    citations: data.citations,
-  };
-
-  const bodyHtml = renderToStaticMarkup(<ReportDocument data={reportData} />);
-
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<title>TenderPath Report — ${data.companyName}</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
-  :root {
-    --tp2-ink:#0f1620;--tp2-ink-2:#2b3543;--tp2-paper:#f6f3ec;
-    --tp2-paper-2:#ece6d5;--tp2-rule:#d8d1bf;--tp2-mute:#6b6557;
-    --tp2-accent:#9c6b1f;--tp2-pos:#1f6b3d;--tp2-neg:#9c2a2a;
-    --tp2-display:"Fraunces",Georgia,serif;
-    --tp2-sans:"Inter",sans-serif;
-    --tp2-mono:"JetBrains Mono",monospace;
+  // Render the SAME fully-inline-styled HTML the print fallback serves, then
+  // turn it into a real downloadable PDF. The previous ReportDocument variant
+  // relied on CSS-module class names that never make it into setContent's HTML
+  // (modules are extracted to a separate bundle), so it rendered unstyled AND
+  // edge-to-edge. The fallback markup carries every style inline; page margins
+  // come from its print `.page` padding (the route below keeps puppeteer's own
+  // margins at 0 so they don't stack).
+  let html: string;
+  try {
+    const htmlRes = await fetch(fallbackUrl.toString(), { cache: "no-store" });
+    if (!htmlRes.ok) {
+      console.warn("[report:pdf:fallback_html_unavailable]", {
+        reportId: data.reportId,
+        status: htmlRes.status,
+      });
+      return NextResponse.redirect(fallbackUrl, 307);
+    }
+    html = await htmlRes.text();
+    // Guard against a 200 that isn't our report — e.g. a Vercel deployment-
+    // protection interstitial intercepting the self-fetch. Rendering that into
+    // a PDF would ship a broken file; instead hand the user the printable page
+    // directly (their browser session is already authorized).
+    if (!html.toLowerCase().includes("readiness report")) {
+      console.warn("[report:pdf:fallback_html_unexpected]", { reportId: data.reportId });
+      return NextResponse.redirect(fallbackUrl, 307);
+    }
+  } catch (err) {
+    console.warn("[report:pdf:fallback_html_fetch_failed]", {
+      reportId: data.reportId,
+      errorMessage: err instanceof Error ? err.message : String(err),
+    });
+    return NextResponse.redirect(fallbackUrl, 307);
   }
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:var(--tp2-sans);background:var(--tp2-paper);color:var(--tp2-ink);font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .tp2-pdf-doc{width:100%}
-  @page{size:A4;margin:0}
-</style>
-</head>
-<body>${bodyHtml}</body>
-</html>`;
 
   // Track which phase failed so the log line names the failing stage. A flat
   // `try { ... } catch (err) { log(err) }` only tells us "something inside the
@@ -108,7 +96,14 @@ export async function GET(req: NextRequest) {
     stage = "set_content";
     await page.setContent(html, { waitUntil: "networkidle0" });
     stage = "render_pdf";
-    const pdfBytes = await page.pdf({ format: "A4", printBackground: true });
+    // margin:0 — the report HTML supplies its own page padding (14mm via the
+    // print `.page` rule), so content stays inset while the background still
+    // fills the sheet. Setting margins here too would double the gutter.
+    const pdfBytes = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: { top: "0", right: "0", bottom: "0", left: "0" },
+    });
     stage = "close";
     await browser.close();
 

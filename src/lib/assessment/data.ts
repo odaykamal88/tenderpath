@@ -5,6 +5,7 @@ import { authorizeAssessmentRead } from "./authz";
 import { decodeHtmlEntities } from "@/lib/text/entities";
 import { safeUrl } from "@/lib/url";
 import { resolveSubmissionPortal, assessRegistrationTiming } from "@/lib/tenders/submission-portals";
+import { deriveReportNextStep, type ReportNextStep } from "./next-step";
 import type { Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
 import type { Gap as D2Gap } from "@/components/assessment/GapsTab";
 import type { Tender } from "@/components/assessment/TendersTab";
@@ -281,6 +282,9 @@ function mapGrantsForUI(grants: MatchedGrant[]): Grant[] {
     eligibility: g.sector,
     effort: "Medium",
     fit: g.score,
+    // Funding geography for the country filter pills. Many grants are global
+    // (null) — those always show; the pills only filter the country-bound ones.
+    country: g.country ?? g.geography_alignment?.grantCountry ?? null,
     sourceUrl: g.source_url ?? null,
   }));
 }
@@ -353,6 +357,11 @@ export type AssessmentReport = {
   grants: Grant[];
   topTenders: TenderPeek[];
   recommendedTier: { name: string; price: string; pitch: string };
+  // Recommended paid SKU derived from the shared readiness engine — the
+  // conversion CTA the anonymous report view shows (the old post-wizard
+  // AssessmentResults slab). null when derivation fails (CTA degrades to the
+  // save-report sign-up only). Not surfaced to signed-in dashboard viewers.
+  nextStep: ReportNextStep | null;
   scoreImpact: { label: string; delta: number; projected: number }[];
   countsByFilter: { all: number; strong: number; closing: number };
   totalSteps: number;
@@ -378,6 +387,13 @@ type DBRow = {
     summary?: string;
     readiness_dimensions?: ReadinessDimensions;
     overall_score?: number;
+    // Classification fields persisted by analyze.ts — read to rebuild the
+    // ApplicantContext for the recommended-next-step CTA. Optional because
+    // older rows predate some of them.
+    sectors?: string[];
+    services?: string[];
+    capabilities?: string[];
+    certifications_detected?: string[];
   } | null;
   gaps: Gap[];
   matched_tenders: MatchedTender[];
@@ -492,6 +508,20 @@ async function rowToReport(row: DBRow, vaultTags: Set<string>): Promise<Assessme
     deriveNextStepsGroups(rawGaps, vaultTags, gapDeltas, stepCompletions);
   const projectedDelta = scoreImpact.reduce((sum, x) => sum + x.delta, 0);
 
+  // Recommended paid next step — same readiness engine the post-wizard page
+  // used, recomputed from the persisted classification so the anonymous
+  // report CTA matches the old AssessmentResults slab. Best-effort: returns
+  // null on failure (the CTA falls back to the save-report sign-up).
+  const analysis = row.ai_analysis;
+  const nextStep = deriveReportNextStep({
+    companyName: row.company_name,
+    sector: row.sector,
+    sectors: analysis?.sectors ?? [],
+    capabilities: analysis?.capabilities ?? analysis?.services ?? [],
+    certifications: analysis?.certifications_detected ?? [],
+    summary: analysis?.summary,
+  });
+
   return {
     reportId: row.public_id,
     displayNumber: String(row.id).padStart(4, "0"),
@@ -514,6 +544,7 @@ async function rowToReport(row: DBRow, vaultTags: Set<string>): Promise<Assessme
       price: tierPrice(row.recommended_tier),
       pitch: tierPitch(row.recommended_tier),
     },
+    nextStep,
     scoreImpact,
     countsByFilter: {
       all: tenders.length,

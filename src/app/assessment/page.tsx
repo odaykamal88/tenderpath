@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { AssessmentInput, TierSlug, Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
-import AssessmentResults from "./AssessmentResults";
 import { Step1, Step2, Step3, type WizardData, type CrawlPreview } from "./WizardSteps";
 import OpportunitySignal from "@/components/assessment/OpportunitySignal";
 
@@ -42,6 +41,9 @@ interface AssessmentResponse {
 
 interface QueuedAssessmentResponse {
   id: number;
+  // UUID capability id — used to hand off to the canonical /assessment/[id]
+  // report view once the pipeline completes.
+  public_id: string;
   status: "queued";
   queued: true;
   poll_url: string;
@@ -78,7 +80,9 @@ interface AssessmentPollResponse {
   assessment_timings?: Record<string, number>;
 }
 
-type WizardPhase = "entry" | "crawling" | "step1" | "step2" | "step3" | "analyzing" | "results";
+// After "analyzing" completes the wizard hands off to /assessment/[id]
+// (the shared report chrome), so there is no inline "results" phase.
+type WizardPhase = "entry" | "crawling" | "step1" | "step2" | "step3" | "analyzing";
 
 const STEP_LABELS = ["Company basics", "What you do", "Experience"];
 const STEP_TIME_REMAINING = ["~120s left", "~80s left", "~30s left"];
@@ -339,6 +343,7 @@ export default function AssessmentPage() {
 }
 
 function AssessmentWizard() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const goalParam = searchParams.get("goal");
   const initialIntent =
@@ -351,7 +356,6 @@ function AssessmentWizard() {
     ...INITIAL_DATA,
     intent: initialIntent,
   });
-  const [results, setResults] = useState<AssessmentResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [analysisMsg, setAnalysisMsg] = useState(0);
   const [authedEmail, setAuthedEmail] = useState<string | null>(null);
@@ -436,25 +440,22 @@ function AssessmentWizard() {
       if (!res.ok) {
         throw new Error(data.error || "Assessment failed");
       }
-      const result = isQueuedAssessmentResponse(data)
-        ? await pollAssessment(data.poll_url)
-        : normalizeAssessmentResponse(data as AssessmentResponse);
-      setResults(result);
-      setPhase("results");
+      if (!isQueuedAssessmentResponse(data)) {
+        throw new Error("Assessment failed");
+      }
+      // Wait for the pipeline to finish before handing off, so the
+      // destination renders the ready report rather than a computing state
+      // that doesn't self-refresh. Then route to the canonical
+      // /assessment/[id] view — the same AssessmentChrome the dashboard
+      // renders, so the post-wizard result matches it exactly. The keep-alive
+      // analyzing screen stays up until the navigation resolves.
+      await pollAssessment(data.poll_url);
+      router.push(`/assessment/${data.public_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setPhase("step3");
     }
-  }, [wizard]);
-
-  const reset = useCallback(() => {
-    setPhase("entry");
-    setEntryUrl("");
-    setPreview(null);
-    setWizard(INITIAL_DATA);
-    setResults(null);
-    setError(null);
-  }, []);
+  }, [wizard, router]);
 
   const isWizardStep = (["step1", "step2", "step3"] as WizardPhase[]).includes(phase);
 
@@ -678,8 +679,6 @@ function AssessmentWizard() {
               </ol>
             </div>
           )}
-
-          {phase === "results" && results && <AssessmentResults data={results} onReset={reset} />}
         </div>
       )}
 

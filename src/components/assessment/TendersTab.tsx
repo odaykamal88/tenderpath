@@ -1,5 +1,9 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import styles from "./AssessmentTabs.module.css";
 import { TenderOpenLink } from "@/components/telemetry/TenderOpenLink";
+import { CountryFilterPills } from "./CountryFilterPills";
 
 // PR-N (2026-05-23): YY/MM/DD deadline format. Sorts cleanly + unambiguous
 // across locales (vs US MM/DD/YY or EU DD/MM/YY). Falls back to "TBA" /
@@ -87,6 +91,34 @@ export function TendersTab({
   const isThin = tenders.length <= THIN_RESULT_THRESHOLD;
   const geoCopy = describeCountries(selectedCountries);
 
+  // Country filter — when one country dominates the feed (e.g. 95% US for a
+  // US/UK/Kenya operator) the user can toggle it off to surface the rest.
+  // Counts are over the full match set; the pills only render when ≥2 countries
+  // are present (CountryFilterPills no-ops otherwise).
+  const countryCounts = useMemo<[string, number][]>(() => {
+    const m = new Map<string, number>();
+    for (const t of tenders) {
+      const c = (t.country ?? "").trim();
+      if (c) m.set(c, (m.get(c) ?? 0) + 1);
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [tenders]);
+  const [excludedCountries, setExcludedCountries] = useState<Set<string>>(() => new Set());
+  const visibleTenders = useMemo(
+    () =>
+      excludedCountries.size === 0
+        ? tenders
+        : tenders.filter((t) => !excludedCountries.has((t.country ?? "").trim())),
+    [tenders, excludedCountries],
+  );
+  const toggleCountry = (c: string) =>
+    setExcludedCountries((prev) => {
+      const next = new Set(prev);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
+      return next;
+    });
+
   return (
     <>
       <div className={styles.tableHead}>
@@ -114,6 +146,16 @@ export function TendersTab({
           ))}
         </div>
       </div>
+
+      <CountryFilterPills
+        counts={countryCounts}
+        excluded={excludedCountries}
+        visibleCount={visibleTenders.length}
+        totalCount={tenders.length}
+        noun="tenders"
+        onToggle={toggleCountry}
+        onClear={() => setExcludedCountries(new Set())}
+      />
 
       {isThin && (
         <div
@@ -154,7 +196,13 @@ export function TendersTab({
         <span style={{ textAlign: "right" }}>Fit</span>
         <span style={{ textAlign: "right" }}>Closes</span>
       </div>
-      {tenders.map((t) => {
+      {visibleTenders.length === 0 && excludedCountries.size > 0 && (
+        <p className={styles.note}>
+          <span className={`${styles.noteTag} tp-mono`}>Filtered</span>
+          All matches are from countries you&rsquo;ve hidden. Re-enable a country above to see them.
+        </p>
+      )}
+      {visibleTenders.map((t) => {
         const reasons = (t.matchReasons ?? []).filter(Boolean).slice(0, 3);
         const sectorChip = t.sector || null;
         const countryChip = t.country || null;
