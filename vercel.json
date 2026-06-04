@@ -24,6 +24,10 @@
     {
       "path": "/api/cron/network-match",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/bot-nudges",
+      "schedule": "30 8 * * *"
     }
   ]
 }

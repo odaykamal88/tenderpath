@@ -15,6 +15,7 @@ const PUBLIC_PATHS = new Set([
   "/api/cron/grants",
   "/api/cron/weekly-digest",
   "/api/cron/daily-digest",
+  "/api/cron/bot-nudges",
   "/api/assessment/public",
   "/api/assessment/preview",
   // Live "opportunity signal" counts shown in the public assessment wizard
@@ -30,6 +31,10 @@ const PUBLIC_PATHS = new Set([
   "/api/pay/verify-usdt",
   "/api/pay/wire-proof",
   "/api/telegram/webhook",
+  // WhatsApp Business Cloud API webhook — Meta posts inbound messages here and
+  // hits GET for the verification handshake; neither can carry a Bearer header.
+  // The route verifies the X-Hub-Signature-256 HMAC itself.
+  "/api/whatsapp/webhook",
   // Vault upload token endpoint — called by @vercel/blob/client's `upload()`
   // on the browser, which cannot attach a Bearer header. The route itself
   // verifies the tp_session JWT via clientPayload inside
