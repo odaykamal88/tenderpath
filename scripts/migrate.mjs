@@ -535,6 +535,33 @@ CREATE INDEX IF NOT EXISTS network_company_matches_company_idx ON network_compan
 CREATE INDEX IF NOT EXISTS network_company_matches_status_idx ON network_company_matches (status, score DESC);
 CREATE INDEX IF NOT EXISTS network_company_matches_tender_idx ON network_company_matches (tender_id);
 ALTER TABLE network_company_matches ADD COLUMN IF NOT EXISTS dismiss_reason TEXT;
+
+-- Bot (Telegram/WhatsApp) channel-agnostic session store. Replaces telegram_sessions.
+CREATE TABLE IF NOT EXISTS bot_sessions (
+  channel TEXT NOT NULL,
+  chat_id TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'idle',
+  data JSONB NOT NULL DEFAULT '{}',
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (channel, chat_id)
+);
+
+-- Binds a messaging identity (Telegram chat / WhatsApp number) to a user account.
+CREATE TABLE IF NOT EXISTS messaging_identities (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  channel TEXT NOT NULL,
+  channel_user_id TEXT NOT NULL,
+  last_nudge_at TIMESTAMPTZ,
+  nudge_opt_out BOOLEAN DEFAULT FALSE,
+  linked_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (channel, channel_user_id)
+);
+CREATE INDEX IF NOT EXISTS messaging_identities_user_idx ON messaging_identities (user_id);
+
+-- One-time deep-link token for bot account linking (separate from login magic_token).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bot_link_token TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bot_link_token_expires_at TIMESTAMPTZ;
 `;
 
 async function migrate() {

@@ -1,68 +1,77 @@
-import type { InlineButton } from "./api";
+import type { BotButton } from "./types";
 
-export const MAIN_MENU: InlineButton[][] = [
+/**
+ * Bot menus + canned copy, authored channel-agnostically. Buttons use abstract
+ * `action` strings (not Telegram callback_data); each adapter renders them.
+ * Text uses the lightweight HTML subset Telegram supports — the WhatsApp
+ * adapter converts it. Keep to <b>, <i>, <code>, <a href>.
+ */
+
+export const MAIN_MENU: BotButton[][] = [
   [
-    { text: "📋 My Assessment", callback_data: "menu_assessment" },
-    { text: "🔑 Login Issue", callback_data: "menu_login" },
+    { label: "📋 My Assessment", action: "menu_assessment" },
+    { label: "🔑 Login Issue", action: "menu_login" },
   ],
   [
-    { text: "🎯 My Top Matches", callback_data: "menu_matches" },
-    { text: "💬 Talk to Team", callback_data: "menu_escalate" },
+    { label: "🎯 My Top Matches", action: "menu_matches" },
+    { label: "💬 Talk to Team", action: "menu_escalate" },
   ],
   [
-    { text: "❓ FAQ", callback_data: "menu_faq" },
-    { text: "📅 Book a 30-min Call", url: "https://calendly.com/oday-kamal-9ya/30min" },
+    { label: "❓ FAQ", action: "menu_faq" },
+    { label: "📅 Book a 30-min Call", url: "https://calendly.com/oday-kamal-9ya/30min" },
   ],
 ];
 
-export const LOGIN_MENU: InlineButton[][] = [
+export const LOGIN_MENU: BotButton[][] = [
   [
-    { text: "I use Google", callback_data: "login_google" },
-    { text: "I use email / magic link", callback_data: "login_magic" },
+    { label: "I use Google", action: "login_google" },
+    { label: "I use email / magic link", action: "login_magic" },
   ],
   [
-    { text: "💬 Talk to Team", callback_data: "menu_escalate" },
-    { text: "← Back", callback_data: "back_menu" },
-  ],
-];
-
-export const FAQ_MENU: InlineButton[][] = [
-  [
-    { text: "What is TenderPath?", callback_data: "faq_what_is" },
-    { text: "How does assessment work?", callback_data: "faq_assessment" },
-  ],
-  [
-    { text: "Agencies covered", callback_data: "faq_agencies" },
-    { text: "What is UNGM?", callback_data: "faq_ungm" },
-  ],
-  [
-    { text: "Documents needed", callback_data: "faq_docs" },
-    { text: "Pricing & plans", callback_data: "faq_pricing" },
-  ],
-  [
-    { text: "Cancel subscription", callback_data: "faq_cancel" },
-    { text: "Arabic support", callback_data: "faq_arabic" },
-  ],
-  [
-    { text: "💬 Talk to Team", callback_data: "menu_escalate" },
-    { text: "← Back", callback_data: "back_menu" },
+    { label: "💬 Talk to Team", action: "menu_escalate" },
+    { label: "← Back", action: "back_menu" },
   ],
 ];
 
-export const FAQ_BACK: InlineButton[][] = [
+export const FAQ_MENU: BotButton[][] = [
   [
-    { text: "← FAQ list", callback_data: "menu_faq" },
-    { text: "💬 Talk to Team", callback_data: "menu_escalate" },
-    { text: "⌂ Menu", callback_data: "back_menu" },
+    { label: "What is TenderPath?", action: "faq_what_is" },
+    { label: "How does assessment work?", action: "faq_assessment" },
+  ],
+  [
+    { label: "Agencies covered", action: "faq_agencies" },
+    { label: "What is UNGM?", action: "faq_ungm" },
+  ],
+  [
+    { label: "Documents needed", action: "faq_docs" },
+    { label: "Pricing & plans", action: "faq_pricing" },
+  ],
+  [
+    { label: "Cancel subscription", action: "faq_cancel" },
+    { label: "Arabic support", action: "faq_arabic" },
+  ],
+  [
+    { label: "💬 Talk to Team", action: "menu_escalate" },
+    { label: "← Back", action: "back_menu" },
   ],
 ];
 
-export const ESCALATE_BACK: InlineButton[][] = [
+export const FAQ_BACK: BotButton[][] = [
   [
-    { text: "💬 Talk to Team", callback_data: "menu_escalate" },
-    { text: "⌂ Main menu", callback_data: "back_menu" },
+    { label: "← FAQ list", action: "menu_faq" },
+    { label: "💬 Talk to Team", action: "menu_escalate" },
+    { label: "⌂ Menu", action: "back_menu" },
   ],
 ];
+
+export const ESCALATE_BACK: BotButton[][] = [
+  [
+    { label: "💬 Talk to Team", action: "menu_escalate" },
+    { label: "⌂ Main menu", action: "back_menu" },
+  ],
+];
+
+export const MENU_BACK: BotButton[][] = [[{ label: "⌂ Main menu", action: "back_menu" }]];
 
 export const WELCOME =
   `Hey! I'm the TenderPath assistant.\n\n` +

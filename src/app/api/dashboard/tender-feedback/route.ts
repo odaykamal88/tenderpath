@@ -1,13 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireAuth } from "@/lib/subscription-guard";
-
-const VALID_STATUSES = ["saved", "not_relevant", "evaluating", "preparing", "submitted", "in_progress", "applied"] as const;
-type FeedbackStatus = (typeof VALID_STATUSES)[number];
-
-function isValidStatus(v: unknown): v is FeedbackStatus {
-  return typeof v === "string" && (VALID_STATUSES as readonly string[]).includes(v);
-}
+import { isTenderFeedbackStatus, upsertTenderFeedback } from "@/lib/dashboard/tender-feedback";
 
 export async function POST(request: Request) {
   const authResult = await requireAuth(request);
@@ -22,21 +16,19 @@ export async function POST(request: Request) {
   if (!tender_id || !status) {
     return NextResponse.json({ error: "tender_id and status are required" }, { status: 400 });
   }
-  if (!isValidStatus(status)) {
+  if (!isTenderFeedbackStatus(status)) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
 
   const userId = authResult.user!.id;
 
-  await sql`
-    INSERT INTO user_tender_feedback (user_id, assessment_id, tender_id, status, reason, created_at, updated_at)
-    VALUES (${userId}, ${assessment_id ?? null}, ${tender_id}, ${status}, ${reason ?? null}, NOW(), NOW())
-    ON CONFLICT (user_id, tender_id)
-    DO UPDATE SET
-      status = EXCLUDED.status,
-      reason = COALESCE(EXCLUDED.reason, user_tender_feedback.reason),
-      updated_at = NOW()
-  `;
+  await upsertTenderFeedback({
+    userId,
+    tenderId: tender_id,
+    status,
+    assessmentId: assessment_id ?? null,
+    reason: reason ?? null,
+  });
 
   console.log("[tp:feedback:persisted]", { userId, tenderId: tender_id, status, assessmentId: assessment_id ?? null });
 
