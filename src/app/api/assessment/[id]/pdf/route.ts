@@ -131,6 +131,11 @@ export async function GET(
   <title>Vendor Readiness Report — ${esc(String(row.company_name))}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    /* Zero the sheet margin so the page padding below is the single source of
+       the printed margin — keeps the download (puppeteer) and direct
+       browser-print outputs identical at ~14mm regardless of the print dialog
+       defaults. */
+    @page { size: A4; margin: 0; }
     body {
       background: #f5f1e8;
       color: #1a1a1a;
@@ -155,7 +160,9 @@ export async function GET(
     @media print {
       body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .no-print { display: none !important; }
-      .page { padding: 0; max-width: 100%; }
+      /* Page margin lives here (not on @page) so it survives "no margins"
+         print settings and the puppeteer download alike. */
+      .page { padding: 14mm; max-width: 100%; }
       tr, div { page-break-inside: avoid; }
       table { width: 100% !important; }
     }
