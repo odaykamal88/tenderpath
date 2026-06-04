@@ -150,7 +150,22 @@ async function loadEuGrants(options: Required<Pick<GrantRefreshOptions, "euLimit
   let scanned = 0;
 
   for (let page = 1; page <= options.euPages; page++) {
-    const batch = await fetchEuFundingGrants(options.euPageSize, page);
+    let batch: Awaited<ReturnType<typeof fetchEuFundingGrants>>;
+    try {
+      batch = await fetchEuFundingGrants(options.euPageSize, page);
+    } catch (err) {
+      // A single failed page (SEDIA throttling, a 5xx, a non-JSON body, or a timeout —
+      // all more likely from a datacenter IP firing rapid sequential requests) must not
+      // discard the whole EU pull. Keep the pages already collected and stop paging —
+      // the same defensive posture as the targeted passes below. Returning partial beats
+      // returning nothing and letting the source go stale (AGENTS.md: degrade safely).
+      console.warn("[tp:grants:eu:page_failed]", {
+        page,
+        keptSoFar: byRef.size,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      break;
+    }
     scanned += batch.totalResults;
     for (const grant of batch.grants) {
       byRef.set(grant.reference_id, grant);

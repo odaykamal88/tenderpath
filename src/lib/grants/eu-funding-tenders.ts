@@ -293,6 +293,9 @@ export async function fetchEuFundingGrants(pageSize = 100, pageNumber = 1, text 
   const response = await fetch(url, {
     method: "POST",
     body: form,
+    // Bound each request so a hung SEDIA call surfaces as a catchable error instead of
+    // silently consuming the cron's 300s budget (which would lose every source's writes).
+    signal: AbortSignal.timeout(25000),
     headers: {
       accept: "application/json",
       "user-agent": "Tenderpath EU grant import (+https://tenderpath.me)",
@@ -331,6 +334,9 @@ export async function fetchEuFundingGrantByReference(reference: string): Promise
   const response = await fetch(url, {
     method: "POST",
     body: form,
+    // Bound each request so a hung SEDIA call surfaces as a catchable error instead of
+    // silently consuming the cron's 300s budget (which would lose every source's writes).
+    signal: AbortSignal.timeout(25000),
     headers: {
       accept: "application/json",
       "user-agent": "Tenderpath EU grant import (+https://tenderpath.me)",
