@@ -16,6 +16,12 @@ const PUBLIC_PATHS = new Set([
   "/api/cron/weekly-digest",
   "/api/cron/daily-digest",
   "/api/cron/bot-nudges",
+  // Vercel cron requests arrive as plain HTTP GETs with Bearer CRON_SECRET
+  // (not a JWT), so they must be allowlisted here or the proxy 401s them
+  // before the handler runs. The routes self-authorize via CRON_SECRET, same
+  // as the crons above. Both are registered in vercel.json.
+  "/api/cron/trial-reminders",
+  "/api/cron/network-match",
   "/api/assessment/public",
   "/api/assessment/preview",
   // Live "opportunity signal" counts shown in the public assessment wizard
