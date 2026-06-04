@@ -49,7 +49,7 @@ export interface SubmissionPortal {
   isFallback?: boolean;
 }
 
-const UNGM_URL = "https://www.ungm.org";
+export const UNGM_URL = "https://www.ungm.org";
 
 const UNHCR: SubmissionPortal = {
   key: "unhcr",
@@ -156,6 +156,27 @@ export interface RegistrationTiming {
   firstTimeRisk: FirstTimeRisk;
 }
 
+/** Calendar days until a deadline; null when missing/unparseable. */
+function daysUntilDeadline(deadline: string | null | undefined): number | null {
+  if (!deadline) return null;
+  const time = new Date(deadline).getTime();
+  if (Number.isNaN(time)) return null;
+  return Math.ceil((time - Date.now()) / 86_400_000);
+}
+
+/** Coarse first-time risk: compare calendar days remaining to a [low, high]
+ *  business-day lead band. Shared by portal and UNGM-level timing so both
+ *  surfaces flag deadline risk with identical thresholds. */
+function riskFromLeadBand(
+  days: number | null,
+  [low, high]: [number, number],
+): FirstTimeRisk {
+  if (days == null || days < 0) return "none";
+  if (days <= low) return "very-tight";
+  if (days <= high) return "tight";
+  return "none";
+}
+
 /**
  * Judge whether a brand-new supplier can realistically register on the portal
  * before this tender's deadline. Coarse by design: compares calendar days left
@@ -165,16 +186,167 @@ export function assessRegistrationTiming(
   deadline: string | null | undefined,
   portal: SubmissionPortal,
 ): RegistrationTiming {
-  if (!deadline) return { daysUntilDeadline: null, firstTimeRisk: "none" };
-  const time = new Date(deadline).getTime();
-  if (Number.isNaN(time)) return { daysUntilDeadline: null, firstTimeRisk: "none" };
+  const days = daysUntilDeadline(deadline);
+  return {
+    daysUntilDeadline: days,
+    firstTimeRisk: riskFromLeadBand(days, portal.leadTimeBusinessDays),
+  };
+}
 
-  const days = Math.ceil((time - Date.now()) / 86_400_000);
-  const [low, high] = portal.leadTimeBusinessDays;
+/* ─────────────────────────────────────────────────────────────────────────
+ * UNGM vendor registration — the UN-wide supplier *identity* layer.
+ *
+ * Distinct from the submission portals above: UNGM (ungm.org) is where a
+ * supplier gets a vendor number and a registration LEVEL shared across ~30 UN
+ * organisations; the bid itself is still uploaded on the agency's own portal
+ * (Quantum, UNHCR Oracle, …). Levels are cumulative — each is a prerequisite
+ * for the next.
+ *
+ * Verified against the UNGM Help Center (2026-06-04):
+ *   - Basic   : general company info, NO documents. Free, ~immediate. Required
+ *               by most UN organisations just to access docs and submit.
+ *   - Level 1 : + Certificate of Incorporation, 3 client references, ownership
+ *               structure. Free, but the organisation EVALUATES it (not instant).
+ *   - Level 2 : + 3 reference letters + 3 yrs audited financials; company must
+ *               be ≥3 years old. For high-value / sensitive procurements.
+ *
+ * GOLDEN RULE (same as the portal registry): assert only what UNGM states.
+ * UNGM is explicit that the *required* level "varies by agency and procurement
+ * opportunity", so we do NOT hardcode a per-agency minimum above Basic — Basic
+ * is the assertable universal gate, and the specific notice states whether
+ * Level 1/2 is needed. Lead-time bands are TenderPath planning estimates that
+ * drive the deadline-risk flag, not UNGM SLAs.
+ * ───────────────────────────────────────────────────────────────────────── */
 
-  let firstTimeRisk: FirstTimeRisk = "none";
-  if (days >= 0 && days <= low) firstTimeRisk = "very-tight";
-  else if (days >= 0 && days <= high) firstTimeRisk = "tight";
+export type UngmLevel = "basic" | "level-1" | "level-2";
 
-  return { daysUntilDeadline: days, firstTimeRisk };
+export interface UngmLevelInfo {
+  level: UngmLevel;
+  /** Display label, e.g. "UNGM Level 1". */
+  label: string;
+  /** What this level unlocks / why it exists. */
+  purpose: string;
+  /** Concrete things the supplier must provide to reach this level. */
+  requirements: string[];
+  /** Whether this level requires uploading documents (→ real prep + eval time). */
+  needsDocuments: boolean;
+  /** Estimated [low, high] business days to become usable, incl. org evaluation. */
+  leadTimeBusinessDays: [number, number];
+  /** Hedged human-facing lead-time phrasing (an estimate, not an SLA). */
+  leadTimeLabel: string;
+}
+
+export const UNGM_LEVELS: Record<UngmLevel, UngmLevelInfo> = {
+  basic: {
+    level: "basic",
+    label: "UNGM Basic",
+    purpose:
+      "The free baseline most UN organisations require before you can access tender documents and submit a bid.",
+    requirements: [
+      "Company name, address, and contact details",
+      "Business/ownership information and the goods or services you offer",
+    ],
+    needsDocuments: false,
+    leadTimeBusinessDays: [0, 1],
+    leadTimeLabel: "usually same day — free, email-verified, no documents",
+  },
+  "level-1": {
+    level: "level-1",
+    label: "UNGM Level 1",
+    purpose:
+      "Required by some organisations before award. The notice states whether this call needs it — start early, because the organisation has to evaluate it.",
+    requirements: [
+      "Certificate of Incorporation (or similar legal document) in English — if the original isn't in English, add a certified English translation",
+      "Contact details for at least three independent, non-affiliated client references (ideally from the last year)",
+      "Ownership structure — owners/principals, parent company, subsidiaries/affiliates, CEO/MD, plus any agents or intermediaries used for UN bids",
+    ],
+    needsDocuments: true,
+    leadTimeBusinessDays: [3, 15],
+    leadTimeLabel: "allow a couple of weeks — needs documents + UN evaluation",
+  },
+  "level-2": {
+    level: "level-2",
+    label: "UNGM Level 2",
+    purpose:
+      "For higher-value or sensitive procurements. Builds on Level 1 with financial and reference depth.",
+    requirements: [
+      "Three reference letters from recent, independent clients",
+      "Audited/certified financial statements for the last three years",
+      "Company established for at least three years",
+    ],
+    needsDocuments: true,
+    leadTimeBusinessDays: [10, 30],
+    leadTimeLabel: "several weeks — audited financials + references, then evaluation",
+  },
+};
+
+export interface UngmRequirement {
+  /**
+   * Minimum level we can honestly assert is needed just to bid. Always "basic"
+   * today: UNGM says higher minimums vary by agency AND opportunity, so we never
+   * fabricate a per-agency mandate above Basic.
+   */
+  minLevelToBid: UngmLevel;
+  /** Whether a higher level is commonly expected before *award* for this buyer
+   *  (hedged — surfaced as "may be required", never as a hard rule). */
+  higherLevelMayApply: boolean;
+  /** Short buyer-specific honest note (verified) or the generic caveat. */
+  note: string;
+  /** True when `note` is the generic fallback (no buyer-specific verified copy). */
+  isFallback?: boolean;
+}
+
+/**
+ * Resolve the UNGM registration expectation for a buying agency. Basic is the
+ * floor for everyone; we add a buyer-specific honest note where we have one,
+ * otherwise the generic "the notice states the level" caveat. Structured so a
+ * specific agency can be raised to a verified higher minimum later — but only
+ * once UNGM/the agency publishes a fixed rule.
+ */
+export function resolveUngmRequirement(
+  agency: string | null | undefined,
+): UngmRequirement {
+  const hay = (agency ?? "").toLowerCase();
+
+  // UNDP "Quantum" family — UNDP works with "prospective suppliers" (Basic) for
+  // bidding and applies additional vetting/levels before contract; the exact
+  // level varies by procurement, so we keep Basic as the floor and explain.
+  if (
+    /\b(undp|unfpa|uncdf|unv)\b/.test(hay) ||
+    hay.includes("un women") ||
+    hay.includes("development programme") ||
+    hay.includes("population fund") ||
+    hay.includes("capital development") ||
+    hay.includes("united nations volunteers")
+  ) {
+    return {
+      minLevelToBid: "basic",
+      higherLevelMayApply: true,
+      note: "UNDP and its Quantum partner agencies let prospective suppliers bid at Basic level; higher levels and vetting apply before contract and vary by procurement — confirm the level this notice requires.",
+    };
+  }
+
+  return {
+    minLevelToBid: "basic",
+    higherLevelMayApply: true,
+    note: "Most UN organisations require at least free UNGM Basic registration to access documents and submit. Some require Level 1 or Level 2 before award — the notice states which. Start any document-based level early.",
+    isFallback: true,
+  };
+}
+
+/**
+ * Judge whether a supplier can realistically reach a given UNGM level before
+ * this tender's deadline. Reuses the same coarse band logic as portal timing.
+ * Mainly meaningful for Level 1/2 (document + evaluation lead time); Basic is
+ * near-instant so it rarely flags.
+ */
+export function assessUngmTiming(
+  deadline: string | null | undefined,
+  level: UngmLevel,
+): RegistrationTiming {
+  const days = daysUntilDeadline(deadline);
+  return {
+    daysUntilDeadline: days,
+    firstTimeRisk: riskFromLeadBand(days, UNGM_LEVELS[level].leadTimeBusinessDays),
+  };
 }

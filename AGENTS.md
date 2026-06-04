@@ -184,6 +184,7 @@ Before changing a subsystem, read its companion docs in `docs/agents/`:
 - `docs/agents/proposal-engine-build-plan.md` — **read first for any work on `src/lib/proposal-package/scoring-engine.ts` or the $299 product evolution.** Sprint 0–7 plan, UN-procurement lane decision, GATE-0 resolutions on multi-lot shape (`lots: LotRubric[]`) and stale-rubric mapping (`generation_status = 'rubric_stale'`)
 - `docs/agents/scoring-engine-spec.md` — design rationale for the single scoring spine shared by $299 Proposal Draft and Senior Review (one extractRubric + one score pass, depth differs not logic)
 - `docs/agents/amendment-versioning-flow.md` — Sprint 3 reference for the amendment/Q&A → version-bump → stale-snapshot flow (mermaid diagram + invariants)
+- `docs/agents/whatsapp-setup.md` — **read first for any bot/messaging work.** The Telegram + WhatsApp bot runs on one channel-agnostic engine in `src/lib/bot/` (engine, adapters, identity linking, LLM answers, inline actions, proactive nudges). WhatsApp is built but dormant until the documented Meta Business setup is done.
 - `docs/learning/eu-grant-proposal-review-case-learnings.md` — extracted lessons from the first real EU proposal review case
 
 Also read product strategy when working on flow, monetization, or dashboard direction:

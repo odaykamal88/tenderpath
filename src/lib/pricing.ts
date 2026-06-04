@@ -1,5 +1,3 @@
-import type { TierSlug } from "@/lib/types";
-
 // Legacy backend slugs → canonical TIERS slugs. The backend still emits
 // `TierSlug` (tender-intelligence / submission-package / strategic-partnership)
 // for assessment.recommended_tier; the user-facing TIERS array uses the new
@@ -189,36 +187,3 @@ export function isComingSoonTier(slug: string | null | undefined): boolean {
   if (!canonical) return false;
   return TIERS.some((t) => t.slug === canonical && t.comingSoon === true);
 }
-
-export interface LegacyTierInfo {
-  name: string;
-  price: string;
-  billingPeriod: string;
-  tagline: string;
-  cta: string;
-}
-
-// Maps backend TierSlugs (unchanged — backend-coupled) to display info for AssessmentResults
-export const TIER_INFO_BY_SLUG: Record<TierSlug, LegacyTierInfo> = {
-  "tender-intelligence": {
-    name: "Grants + Tenders Matching",
-    price: "$49",
-    billingPeriod: "/mo",
-    tagline: "5–10 AI-matched opportunities weekly — tenders and grants scored by fit for your profile",
-    cta: "Get weekly matched tenders & grants",
-  },
-  "submission-package": {
-    name: "Proposal Draft",
-    price: "$299",
-    billingPeriod: "/submission",
-    tagline: "80% complete proposal package delivered in 48–72 hours — collapse 30 hours into 3–4",
-    cta: "Draft my proposal",
-  },
-  "strategic-partnership": {
-    name: "Roster Fast-Track",
-    price: "$749",
-    billingPeriod: "/roster",
-    tagline: "We score you against 8 UN portals (UNGM, WFP, UNICEF, UNDP, IOM, FAO, UNOPS, WHO) and route you to the highest-readiness one",
-    cta: "Fast-track my roster",
-  },
-};

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ConnectBot from "@/components/dashboard/ConnectBot";
 
 const ORG_TYPES = [
   { value: "company", label: "Private Company" },
@@ -366,6 +367,8 @@ export default function SettingsPage() {
           </div>
         </div>
       </form>
+
+      <ConnectBot />
     </div>
   );
 }

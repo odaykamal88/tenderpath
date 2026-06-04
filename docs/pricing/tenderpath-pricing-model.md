@@ -56,7 +56,7 @@ The backend API returns `recommended_tier` using legacy slugs (do not change the
 | `submission-package` | Proposal Draft (T2) |
 | `strategic-partnership` | Roster Fast-Track (T4) |
 
-This mapping is defined in `src/lib/pricing.ts` as `TIER_INFO_BY_SLUG`.
+These legacy slugs are normalized to canonical form by `SLUG_ALIASES` / `resolveTierSlug()` in `src/lib/pricing.ts`; the display data for each tier lives in the `TIERS` array there.
 
 ---
 

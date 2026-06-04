@@ -86,6 +86,21 @@ Additional work done outside the prompt sequence:
 
 ## Current Status
 
+## Latest Session Update — 2026-06-04 (Bot upgrade — proactive, identity-aware, multi-channel)
+
+- **Agent**: Claude Code
+- **Date**: 2026-06-04
+- **Task**: Reworked the Telegram support bot (felt "simpleton") into a proactive, identity-aware, multi-channel deal-flow companion. User chose **both Telegram + WhatsApp** on one shared core, with all four upgrades (proactive push, account linking, LLM answers, inline actions → revenue path).
+- **Architecture**: new `src/lib/bot/` — one channel-agnostic engine + two adapters. `types.ts` (InboundEvent/OutboundMessage/BotButton/ChannelAdapter), `engine.ts` (state machine, refactor of the old webhook handlers), `sessions.ts` (→ `bot_sessions`, channel-keyed), `identity.ts` (link/resolve via one-time token), `nl.ts` (OpenAI gpt-4o-mini grounded answers), `actions.ts` (Save/Dismiss/Bid-analysis), `matches.ts` (pipeline-sourced), `proactive.ts` (nudge builder), `channels/telegram.ts` + `channels/whatsapp.ts`. Old `src/lib/telegram/*` deleted (orphaned).
+- **Webhooks**: `/api/telegram/webhook` now thin (kept rich `[bot:telegram:*]` logging); new `/api/whatsapp/webhook` (GET verify handshake + POST X-Hub-Signature-256). Both added to `proxy.ts` PUBLIC_PATHS.
+- **Linking**: `messaging_identities` + `users.bot_link_token`; new `POST /api/dashboard/connect-bot`; `ConnectBot.tsx` card mounted on Settings page. `/start <token>` (TG) / `LINK <token>` (WA) binds the chat; bot then greets by company name and skips email prompts. Email lookup stays as the unlinked fallback.
+- **Inline actions**: extracted shared `src/lib/dashboard/tender-feedback.ts` (`upsertTenderFeedback`) — used by both the dashboard route and the bot. Save/Dismiss write `user_tender_feedback`; bid-analysis deep-links to `/dashboard/services/bid-no-bid` (slug+price from `pricing.ts`).
+- **Proactive**: new `/api/cron/bot-nudges` (Bearer CRON_SECRET; in PUBLIC_PATHS + vercel.json `30 8 * * *`). Per linked identity, ≤1 nudge / 72h, new matches + deadlines ≤14d, with a 🔕 opt-out. Telegram = free-form; WhatsApp = `tenderpath_alert` template (gated).
+- **WhatsApp**: built but **dormant** until the user completes Meta setup. `GET/POST /api/admin/whatsapp-health` (admin-gated) + runbook `docs/agents/whatsapp-setup.md` (env vars, webhook config, template copy). WhatsApp env vars unset → adapter no-ops with a logged reason.
+- **Schema**: `bot_sessions`, `messaging_identities`, `users.bot_link_token(_expires_at)` added to BOTH `scripts/migrate.mjs` AND a runtime `ensureBotRuntimeSchema()` (self-heals on first hit — `npm run migrate` not auto-run on deploy).
+- **Verified**: `tsc --noEmit` clean; `eslint` clean on all touched files; `npm run build` clean (all bot routes register). DB/auth/LLM/WhatsApp flows can't run locally (no DATABASE_URL) → **walk on Vercel preview** per `project_launch_flows`: connect from Settings → `/start` greets by name → ask a question → My Matches → Save → trigger `bot-nudges?dry_run=1`.
+- **Flagged (out of scope)**: `/api/cron/trial-reminders` and `/api/cron/network-match` are in vercel.json crons but NOT in `proxy.ts` PUBLIC_PATHS — if Vercel cron doesn't bypass the proxy, they're 401'ing. Spawned a task to verify.
+
 ## Latest Session Update — 2026-06-03 (Esdaar additions — built the defensible slice)
 
 - **Agent**: Claude Code
