@@ -346,8 +346,15 @@ export function toGrant(card: IfadListingCard, deadline: string, detailText: str
   };
 }
 
-async function fetchListingHtml(): Promise<string> {
-  const direct = await fetchWithTimeout(LISTING_URL, { headers: HEADERS }, 25000).catch(() => null);
+// Wall-clock budget: the grant cron passes a shared fetch deadline so IFAD's
+// browser-worker calls (listing + per-row detail, ~90s each) stop before the 300s
+// lambda limit instead of running to the kill and 504-ing every source's writes.
+const overBudget = (deadlineAt?: number): boolean => deadlineAt !== undefined && Date.now() >= deadlineAt;
+const budgetMs = (deadlineAt: number | undefined, cap: number): number =>
+  deadlineAt === undefined ? cap : Math.max(1000, Math.min(cap, deadlineAt - Date.now()));
+
+async function fetchListingHtml(deadlineAt?: number): Promise<string> {
+  const direct = await fetchWithTimeout(LISTING_URL, { headers: HEADERS }, budgetMs(deadlineAt, 25000)).catch(() => null);
   if (direct?.ok) {
     const body = await direct.text();
     if (/general-feature-card/.test(body)) return body;
@@ -358,7 +365,7 @@ async function fetchListingHtml(): Promise<string> {
       mode: "navigate",
       waitForSelector: ".general-feature-card a[href*='calls-for-proposal']",
       waitAfterNav: 800,
-      timeoutMs: 90000,
+      timeoutMs: budgetMs(deadlineAt, 90000),
     });
     if (rendered.ok && /general-feature-card/.test(rendered.body)) return rendered.body;
     throw new Error(`IFAD listing browser fallback ${rendered.status}: ${rendered.body.slice(0, 160)}`);
@@ -367,7 +374,7 @@ async function fetchListingHtml(): Promise<string> {
 }
 
 // Detail pages are Akamai-protected; only the browser worker can read them.
-async function fetchDetailText(url: string): Promise<string | null> {
+async function fetchDetailText(url: string, deadlineAt?: number): Promise<string | null> {
   if (!browserAvailable()) return null;
   try {
     const rendered = await fetchViaBrowser(url, {
@@ -375,7 +382,7 @@ async function fetchDetailText(url: string): Promise<string | null> {
       mode: "navigate",
       waitForSelector: "main, article, .journal-content-article",
       waitAfterNav: 600,
-      timeoutMs: 90000,
+      timeoutMs: budgetMs(deadlineAt, 90000),
     });
     if (rendered.ok && !/Access Denied|edgesuite|akamai/i.test(rendered.body)) {
       return stripHtml(rendered.body);
@@ -399,21 +406,28 @@ async function mapPool<T, R>(items: T[], concurrency: number, fn: (item: T) => P
   return out;
 }
 
-export async function fetchIfadGrants(limit = 15): Promise<{ grants: IfadGrant[]; totalScanned: number }> {
-  const html = await withRetry(() => fetchListingHtml(), 2);
+export async function fetchIfadGrants(
+  limit = 15,
+  opts: { deadlineAt?: number } = {},
+): Promise<{ grants: IfadGrant[]; totalScanned: number; skipped: number }> {
+  const html = await withRetry(() => fetchListingHtml(opts.deadlineAt), 2);
   const cards = parseIfadListing(html).filter((c) => !NON_GRANT_RE.test(c.title));
   // Listing is posted-date descending, so the newest (most likely still open) calls come first.
   const candidates = cards.slice(0, limit);
 
+  let skipped = 0;
   const mapped = await mapPool(candidates, 3, async (card) => {
-    const detailText = await fetchDetailText(card.url);
+    if (overBudget(opts.deadlineAt)) { skipped++; return null; } // budget spent — stop enriching
+    const detailText = await fetchDetailText(card.url, opts.deadlineAt);
     const deadline = extractIfadDeadline(`${detailText ?? ""} ${card.description ?? ""}`);
     if (!deadline) return null; // matcher requires a future deadline; fail safe
     return toGrant(card, deadline, detailText);
   });
 
+  if (skipped) console.warn("[tp:grants:ifad:budget_truncated]", { skipped, enriched: mapped.filter(Boolean).length });
   return {
     grants: mapped.filter((g): g is IfadGrant => !!g),
     totalScanned: cards.length,
+    skipped,
   };
 }

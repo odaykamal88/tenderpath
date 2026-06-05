@@ -229,6 +229,12 @@ async function grantQualitySummary(): Promise<GrantRefreshResult["quality"]> {
 
 export async function refreshGrantInventory(options: GrantRefreshOptions = {}): Promise<GrantRefreshResult> {
   const startedAt = Date.now();
+  // Shared wall-clock budget. The route's maxDuration is 300s, so the slow enrichment
+  // sources (IFAD browser worker, Grants.gov detail) must stop fetching by this point and
+  // return partial results — leaving ~70s for the bounded upserts + quality summary —
+  // instead of running to the lambda kill and 504-ing every source's writes. The fast
+  // sources (EU, UNDP, UN Women, MENA) finish well before this and ignore it.
+  const fetchDeadlineAt = startedAt + 230_000;
   const dryRun = options.dryRun ?? false;
   const euLimit = Math.min(250, Math.max(1, options.euLimit ?? 200));
   const euPages = Math.min(5, Math.max(1, options.euPages ?? 5));
@@ -253,11 +259,11 @@ export async function refreshGrantInventory(options: GrantRefreshOptions = {}): 
       return { grants: result.grants, scanned: result.totalScanned };
     }),
     importGrantSource("IFAD", dryRun, async () => {
-      const result = await fetchIfadGrants(ifadLimit);
+      const result = await fetchIfadGrants(ifadLimit, { deadlineAt: fetchDeadlineAt });
       return { grants: result.grants, scanned: result.totalScanned };
     }),
     importGrantSource("Grants.gov", dryRun, async () => {
-      const result = await fetchGrantsGovGrants(grantsGovLimit);
+      const result = await fetchGrantsGovGrants(grantsGovLimit, { deadlineAt: fetchDeadlineAt });
       return { grants: result.grants, scanned: result.totalScanned };
     }),
     importGrantSource("MENA Funders", dryRun, async () => {
