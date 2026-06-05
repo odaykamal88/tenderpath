@@ -173,12 +173,22 @@ async function loadEuGrants(options: Required<Pick<GrantRefreshOptions, "euLimit
     if (page * options.euPageSize >= batch.totalResults) break;
   }
 
-  for (const text of EU_TARGETED_TEXT) {
-    try {
-      const batch = await fetchEuFundingGrants(40, 1, text);
-      for (const grant of batch.grants) byRef.set(grant.reference_id, grant);
-    } catch (err) {
-      console.warn("[tp:grants:eu:targeted_pass_failed]", { text, error: err instanceof Error ? err.message : String(err) });
+  // The targeted passes only add value on top of a working main pull. If the main
+  // pull returned nothing, SEDIA is unreachable from here (it blackholes Vercel's
+  // datacenter IP, so the request hangs) and these passes will fail identically —
+  // skip them instead of burning one timeout per pass. That dead wait (4 × the
+  // request timeout) is what pushed the whole grant cron past its 300s limit and
+  // killed the other five sources' writes too.
+  if (byRef.size === 0) {
+    console.warn("[tp:grants:eu:skipped_targeted_passes]", { reason: "main pull empty (SEDIA unreachable) — not spending timeouts on passes that will fail the same way" });
+  } else {
+    for (const text of EU_TARGETED_TEXT) {
+      try {
+        const batch = await fetchEuFundingGrants(40, 1, text);
+        for (const grant of batch.grants) byRef.set(grant.reference_id, grant);
+      } catch (err) {
+        console.warn("[tp:grants:eu:targeted_pass_failed]", { text, error: err instanceof Error ? err.message : String(err) });
+      }
     }
   }
 
