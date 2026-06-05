@@ -161,12 +161,13 @@ function isAlumniPublicDiplomacy(detail: GrantsGovDetail, notice: GrantsGovNotic
   return /\b(alumni engagement innovation fund|aeif)\b/i.test(text);
 }
 
-export async function fetchGrantsGovDetail(oppId: string): Promise<GrantsGovDetail> {
+export async function fetchGrantsGovDetail(oppId: string, signal?: AbortSignal): Promise<GrantsGovDetail> {
   const body = new URLSearchParams();
   body.set("oppId", oppId);
   const response = await fetch(DETAIL_ENDPOINT, {
     method: "POST",
     body,
+    signal,
     headers: {
       "content-type": "application/x-www-form-urlencoded",
       "user-agent": "Tenderpath grant metadata enrichment (+https://tenderpath.me)",
