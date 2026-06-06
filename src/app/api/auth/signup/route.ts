@@ -3,6 +3,7 @@ import { Resend } from "resend";
 import { sql } from "@/lib/db";
 import { generateMagicToken } from "@/lib/auth";
 import { defaultEmailMeta } from "@/lib/email/defaults";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 function envValue(key: string): string | null {
   const value = process.env[key]?.trim();
@@ -21,6 +22,20 @@ export async function POST(request: Request) {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
+    const ipLimit = enforceRateLimit(request, {
+      namespace: "auth:signup:ip",
+      limit: 12,
+      windowMs: 10 * 60 * 1000,
+    });
+    if (ipLimit) return ipLimit;
+    const emailLimit = enforceRateLimit(request, {
+      namespace: "auth:signup:email",
+      limit: 4,
+      windowMs: 60 * 60 * 1000,
+      keyParts: [normalizedEmail],
+    });
+    if (emailLimit) return emailLimit;
+
     const magicToken = generateMagicToken();
     const expires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
 

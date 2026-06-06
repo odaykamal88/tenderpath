@@ -35,6 +35,15 @@ function qaStatusFor(row: WorkOrderRow): string {
   return "needs_review";
 }
 
+function publicWorkOrder(row: WorkOrderRow): WorkOrderRow {
+  return {
+    ...row,
+    payment_proof_url: row.payment_proof_url
+      ? `/api/admin/work-orders/${row.id}/payment-proof`
+      : null,
+  };
+}
+
 export async function GET(request: Request) {
   const guard = await requireAdmin(request);
   if (!guard.authorized) return guard.response!;
@@ -72,7 +81,7 @@ export async function GET(request: Request) {
   `;
 
   const withQa = (rows as WorkOrderRow[]).map((row) => ({
-    ...row,
+    ...publicWorkOrder(row),
     qa_status: qaStatusFor(row),
   }));
   const filtered = withQa.filter((row) => {

@@ -101,12 +101,12 @@ function ReadinessCard() {
           <span className="font-mono text-[9px] sm:text-[10px] text-mute tracking-[0.06em]">
             Generated 5 min · 12 matches
           </span>
-          <a
+          <Link
             href="/assessment?goal=track-tenders"
             className="font-mono text-[10px] tracking-[0.08em] uppercase text-ink border-b border-ink hover:text-accent hover:border-accent transition-colors whitespace-nowrap"
           >
             Run mine →
-          </a>
+          </Link>
         </div>
       </div>
     </div>

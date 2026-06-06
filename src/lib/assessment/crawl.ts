@@ -1,4 +1,5 @@
 import type { CrawledData } from "@/lib/types";
+import { assertSafeHttpUrl, UnsafeUrlError } from "@/lib/security/safe-url";
 
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -42,6 +43,18 @@ const SUBPAGE_DUPE_PREFIX = 300;
 interface FetchResult {
   html: string;
   finalUrl: string;
+}
+
+function urlForLog(raw: string): { host: string; path: string } | { raw: "invalid" } {
+  try {
+    const parsed = new URL(raw);
+    return {
+      host: parsed.host,
+      path: parsed.pathname.slice(0, 120),
+    };
+  } catch {
+    return { raw: "invalid" };
+  }
 }
 
 function isBrowserFallbackStatus(status: number): boolean {
@@ -149,30 +162,49 @@ function originOf(url: string): string {
 }
 
 async function fetchPage(url: string): Promise<FetchResult | null> {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  let currentUrl = url;
+  for (let hop = 0; hop <= 5; hop += 1) {
+    try {
+      const safeUrl = await assertSafeHttpUrl(currentUrl);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: ACCEPT_HEADERS,
-      redirect: "follow",
-    });
+      let res: Response;
+      try {
+        res = await fetch(safeUrl, {
+          signal: controller.signal,
+          headers: ACCEPT_HEADERS,
+          redirect: "manual",
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
 
-    clearTimeout(timeout);
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get("location");
+        if (!location) return null;
+        currentUrl = new URL(location, safeUrl).toString();
+        continue;
+      }
 
-    const ct = res.headers.get("content-type") ?? "";
-    if (!ct.includes("text/html") && !ct.includes("application/xhtml")) return null;
+      const ct = res.headers.get("content-type") ?? "";
+      if (!ct.includes("text/html") && !ct.includes("application/xhtml")) return null;
 
-    const html = await res.text();
-    if (!res.ok && !(isBrowserFallbackStatus(res.status) && isBrowserFallbackShell(html))) {
+      const html = await res.text();
+      if (!res.ok && !(isBrowserFallbackStatus(res.status) && isBrowserFallbackShell(html))) {
+        return null;
+      }
+
+      return { html, finalUrl: safeUrl.toString() };
+    } catch (err) {
+      if (err instanceof UnsafeUrlError) {
+        console.warn("[crawl] Unsafe URL blocked", { target: urlForLog(currentUrl), code: err.code });
+      }
       return null;
     }
-
-    return { html, finalUrl: res.url };
-  } catch {
-    return null;
   }
+  console.warn("[crawl] Redirect limit exceeded", { target: urlForLog(url) });
+  return null;
 }
 
 /** True when the HTML is a JS-rendered shell with near-no visible text. */
@@ -231,6 +263,15 @@ function isLoginWall(html: string, finalUrl: string): boolean {
  * Returns null and logs when the worker is unavailable, errors, or times out.
  */
 async function fetchViaBrowserWorker(url: string): Promise<FetchResult | null> {
+  try {
+    await assertSafeHttpUrl(url);
+  } catch (err) {
+    if (err instanceof UnsafeUrlError) {
+      console.warn("[crawl] Unsafe browser-worker URL blocked", { target: urlForLog(url), code: err.code });
+    }
+    return null;
+  }
+
   const workerUrl = process.env.CRAWLER_WORKER_URL;
   const crawlerKey = process.env.CRAWLER_WORKER_KEY;
 
@@ -254,7 +295,10 @@ async function fetchViaBrowserWorker(url: string): Promise<FetchResult | null> {
   })
     .then(async (res) => {
       if (!res.ok) {
-        console.warn(`[crawl] Browser worker responded ${res.status} for ${url}`);
+        console.warn("[crawl] Browser worker responded with non-OK status", {
+          status: res.status,
+          target: urlForLog(url),
+        });
         return null;
       }
       const data = (await res.json()) as {
@@ -356,24 +400,30 @@ export async function crawlWebsite(rawInput: string): Promise<CrawledData | null
   for (const candidate of candidates) {
     const result = await fetchPage(candidate);
     if (!result) {
-      console.log(`[crawl] Candidate failed (no response): ${candidate}`);
+      console.log("[crawl] Candidate failed (no response)", { candidate: urlForLog(candidate) });
       continue;
     }
     // Deduplicate: skip if this final destination was already reached via an earlier candidate
     const canonFinal = result.finalUrl.replace(/\/+$/, "").toLowerCase();
     if (seenFinalUrls.has(canonFinal)) {
-      console.log(`[crawl] Skipping duplicate final URL ${result.finalUrl} (from ${candidate})`);
+      console.log("[crawl] Skipping duplicate final URL", {
+        finalUrl: urlForLog(result.finalUrl),
+        candidate: urlForLog(candidate),
+      });
       continue;
     }
     seenFinalUrls.add(canonFinal);
     homeResult = result;
     normalizedInputUsed = candidate;
-    console.log(`[crawl] Candidate succeeded: ${candidate} → ${result.finalUrl}`);
+    console.log("[crawl] Candidate succeeded", {
+      candidate: urlForLog(candidate),
+      finalUrl: urlForLog(result.finalUrl),
+    });
     break;
   }
 
   if (!homeResult || !normalizedInputUsed) {
-    console.warn(`[crawl] All candidates failed for input: "${originalInput}"`);
+    console.warn("[crawl] All candidates failed", { inputLength: originalInput.length });
     return null;
   }
 
@@ -383,9 +433,10 @@ export async function crawlWebsite(rawInput: string): Promise<CrawledData | null
   const inputEtld = etld1(inputBase);
   const resolvedEtld = etld1(homeResult.finalUrl);
   if (inputEtld && resolvedEtld && inputEtld !== resolvedEtld) {
-    console.warn(
-      `[crawl] Domain drift: ${inputBase} → ${homeResult.finalUrl} — marking as failed`
-    );
+    console.warn("[crawl] Domain drift — marking as failed", {
+      input: urlForLog(inputBase),
+      finalUrl: urlForLog(homeResult.finalUrl),
+    });
     const meta = extractMeta(homeResult.html);
     return {
       title: meta.title,
@@ -434,7 +485,7 @@ export async function crawlWebsite(rawInput: string): Promise<CrawledData | null
   // --- Stage 3b: parking-page guard ---
   // Check after browser rendering so we don't misclassify SPA shells as parked.
   if (isParkingPage(homeResult.html, finalHomeText)) {
-    console.warn(`[crawl] Parking page detected at ${homeResult.finalUrl}`);
+    console.warn("[crawl] Parking page detected", { finalUrl: urlForLog(homeResult.finalUrl) });
     return {
       title: meta.title,
       metaDescription: meta.metaDescription,

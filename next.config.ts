@@ -20,8 +20,42 @@ function findModulesRoot(start: string): string {
 }
 const turboRoot = findModulesRoot(projectRoot);
 
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://*.stripe.com https://*.stripe.network",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' https://api.stripe.com https://*.stripe.com https://*.stripe.network https://*.vercel-storage.com https://*.blob.vercel-storage.com",
+  "frame-src https://js.stripe.com https://checkout.stripe.com https://hooks.stripe.com https://*.stripe.com https://*.stripe.network",
+  "media-src 'self' blob: data:",
+  "worker-src 'self' blob:",
+  "upgrade-insecure-requests",
+].join("; ");
+
 const nextConfig: NextConfig = {
   outputFileTracingRoot: turboRoot,
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "Content-Security-Policy", value: contentSecurityPolicy },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "DENY" },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=(), payment=(self \"https://checkout.stripe.com\" \"https://js.stripe.com\")",
+          },
+        ],
+      },
+    ];
+  },
   // These routes read operator-curated CSVs from data/ at runtime via fs. The
   // tracer can't follow the dynamic process.cwd() paths, so without an explicit
   // include the files are omitted from the serverless bundle and the cron reads

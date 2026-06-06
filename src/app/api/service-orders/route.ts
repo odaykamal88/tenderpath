@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
 import { createServiceWorkOrder } from "@/lib/service-orders";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
   const guard = await requireAuth(request);
   if (!guard.authorized) return guard.response!;
+
+  const limited = enforceRateLimit(request, {
+    namespace: "service-orders",
+    limit: 30,
+    windowMs: 60 * 60 * 1000,
+    keyParts: [guard.user!.id],
+  });
+  if (limited) return limited;
 
   const body = await request.json().catch(() => ({}));
 

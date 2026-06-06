@@ -147,8 +147,8 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-    if (!token) return;
-    fetch("/api/dashboard/profile", { headers: { authorization: `Bearer ${token}` } })
+    const headers: HeadersInit = token ? { authorization: `Bearer ${token}` } : {};
+    fetch("/api/dashboard/profile", { headers })
       .then((r) => r.json())
       .then((data: Profile) => {
         setProfile(data);
@@ -175,7 +175,9 @@ export default function SettingsPage() {
     try {
       const res = await fetch("/api/dashboard/profile", {
         method: "PATCH",
-        headers: { "content-type": "application/json", authorization: `Bearer ${token ?? ""}` },
+        headers: token
+          ? { "content-type": "application/json", authorization: `Bearer ${token}` }
+          : { "content-type": "application/json" },
         body: JSON.stringify({
           contact_phone: (form.contact_phone ?? "").trim() || null,
           business_name: (form.business_name ?? "").trim() || null,

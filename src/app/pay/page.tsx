@@ -53,6 +53,11 @@ interface FulfillmentReadiness {
   message: string;
 }
 
+function authHeaders(extra: HeadersInit = {}): HeadersInit {
+  const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+  return token ? { ...extra, authorization: `Bearer ${token}` } : extra;
+}
+
 function CopyBtn({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -121,7 +126,7 @@ function CardTab({ plan, context, disabledReason }: { plan: string | null; conte
     try {
       const res = await fetch("/api/pay/checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           plan,
           tender: context.tender,
@@ -190,7 +195,7 @@ function UsdtTab({ plan, context, disabledReason }: { plan: string | null; conte
     try {
       const res = await fetch("/api/pay/verify-usdt", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ txid: txid.trim(), plan, work_order_id: context.workOrderId, email: email.trim() || undefined }),
       });
       const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
@@ -394,7 +399,7 @@ function WireTab({ plan, context }: { plan: string | null; context: PayContext }
       fd.append("work_order_id", context.workOrderId);
       if (email.trim()) fd.append("email", email.trim());
       if (plan) fd.append("plan", plan);
-      const res = await fetch("/api/pay/wire-proof", { method: "POST", body: fd });
+      const res = await fetch("/api/pay/wire-proof", { method: "POST", headers: authHeaders(), body: fd });
       const data = (await res.json()) as { ok?: boolean; error?: string };
       if (data.ok) { setUploadStatus("done"); setUploadMsg("Receipt uploaded. We'll verify and activate your order within 1–3 business days."); }
       else { setUploadStatus("error"); setUploadMsg(data.error ?? "Upload failed. Please try again."); }

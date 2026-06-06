@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export const metadata = {
   title: "Contact — TenderPath",
   description: "Get in touch with the TenderPath team.",
@@ -9,10 +11,10 @@ export default function ContactPage() {
       {/* Nav */}
       <nav className="border-b border-gray-100 bg-white/95 backdrop-blur-sm sticky top-0 z-50">
         <div className="mx-auto max-w-7xl px-6 flex h-14 items-center justify-between">
-          <a href="/" className="text-lg font-semibold text-gray-900">
+          <Link href="/" className="text-lg font-semibold text-gray-900">
             Tender<span className="text-amber-500">Path</span>
-          </a>
-          <a href="/" className="text-sm text-gray-500 hover:text-gray-900">← Back to home</a>
+          </Link>
+          <Link href="/" className="text-sm text-gray-500 hover:text-gray-900">← Back to home</Link>
         </div>
       </nav>
 
@@ -86,19 +88,19 @@ export default function ContactPage() {
               Check our FAQ for answers to the most common questions about TenderPath,
               UN procurement, and getting started.
             </p>
-            <a
+            <Link
               href="/faq"
               className="inline-flex items-center gap-2 text-sm font-semibold text-amber-600 hover:text-amber-800 transition-colors"
             >
               Browse the FAQ →
-            </a>
+            </Link>
           </div>
         </div>
       </div>
 
       <footer className="border-t border-gray-100 py-8 text-center text-xs text-gray-400">
         © {new Date().getFullYear()} TenderPath. All rights reserved. |{" "}
-        <a href="/" className="underline hover:text-gray-600">Home</a>
+        <Link href="/" className="underline hover:text-gray-600">Home</Link>
       </footer>
     </div>
   );

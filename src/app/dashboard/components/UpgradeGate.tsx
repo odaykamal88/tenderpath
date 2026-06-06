@@ -17,18 +17,22 @@ interface UpgradeGateProps {
 
 type AccessState = "loading" | "open" | "trial" | "locked";
 
+function authHeaders(): HeadersInit {
+  const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+  return token ? { authorization: `Bearer ${token}` } : {};
+}
+
 export default function UpgradeGate({ children, title, description }: UpgradeGateProps) {
   const [access, setAccess] = useState<AccessState>("loading");
 
   useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-    if (!token) { setAccess("locked"); return; }
+    const headers = authHeaders();
 
     Promise.all([
-      fetch("/api/auth/me", { headers: { authorization: `Bearer ${token}` } })
+      fetch("/api/auth/me", { headers })
         .then((res) => (res.ok ? res.json() as Promise<Me> : null))
         .catch(() => null),
-      fetch("/api/dashboard/pipeline", { headers: { authorization: `Bearer ${token}` } })
+      fetch("/api/dashboard/pipeline", { headers })
         .then((res) => (res.ok ? res.json() : null))
         .catch(() => null),
     ]).then(([user, pipelineBody]) => {

@@ -16,7 +16,6 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [step, setStep] = useState<"request" | "verify">("request");
   const [loginMode, setLoginMode] = useState<"magic" | "password">("magic");
-  const [token, setToken] = useState("");
   const [devToken, setDevToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(
     search.get("error") === "google_denied"
@@ -56,7 +55,7 @@ function LoginForm() {
       .then((r) => r.json())
       .then((body) => {
         if (body.token) {
-          localStorage.setItem("tp_token", body.token);
+          localStorage.removeItem("tp_token");
           router.replace(next);
         } else {
           setError(body.error || "This link is invalid or has expired. Please request a new one.");
@@ -102,25 +101,6 @@ function LoginForm() {
     await sendMagicLink(email);
   }
 
-  async function verify(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    const res = await fetch("/api/auth/verify", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token }),
-    });
-    const body = await res.json();
-    setBusy(false);
-    if (!res.ok) {
-      setError(body.error || "Invalid token");
-      return;
-    }
-    localStorage.setItem("tp_token", body.token);
-    router.replace(next);
-  }
-
   async function passwordLogin(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -155,7 +135,7 @@ function LoginForm() {
       }
       return;
     }
-    localStorage.setItem("tp_token", body.token);
+    localStorage.removeItem("tp_token");
     router.replace(next);
   }
 

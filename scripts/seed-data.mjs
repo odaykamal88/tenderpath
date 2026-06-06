@@ -5,8 +5,11 @@
  */
 import { neon } from "@neondatabase/serverless";
 
-const DATABASE_URL = process.env.DATABASE_URL
-  || "postgresql://neondb_owner:npg_smkf6WMOE0QK@ep-purple-sunset-antfe1uh.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require";
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error("DATABASE_URL is required. Refusing to seed against a hardcoded database.");
+  process.exit(1);
+}
 
 const sql = neon(DATABASE_URL);
 

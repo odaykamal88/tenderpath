@@ -1537,8 +1537,8 @@ Preserve all payment, webhook, work_order, and dashboard contracts. Do not push 
     - opsReady: `true`
     - blockers: `turkey-translation: weak match/actionability signal`
 - **Important Warnings**:
-  - Keys in `.env.local` are **LIVE mode** (`sk_live_`). Any local Stripe Checkout session created with these keys will attempt real charges. Do NOT run a full Checkout E2E locally without using a test card on a live-mode dashboard test account.
-  - For real Checkout + signed webhook E2E, use `stripe listen --forward-to localhost:3000/api/webhooks/stripe` with **test-mode** keys (`sk_test_`). Live-mode webhooks cannot be replayed locally with `stripe listen`.
+  - Keys in `.env.local` were **LIVE mode** (redacted). Any local Stripe Checkout session created with live keys will attempt real charges. Do NOT run a full Checkout E2E locally without using a test card on a live-mode dashboard test account.
+  - For real Checkout + signed webhook E2E, use `stripe listen --forward-to localhost:3000/api/webhooks/stripe` with **test-mode** keys. Live-mode webhooks cannot be replayed locally with `stripe listen`.
   - `STRIPE_BIDNOBID_PRICE_ID=your_price_id_here` is still a placeholder. Replace with the real live-mode Price ID from Stripe dashboard before accepting live bid/no-bid payments.
 - **Vercel Production**: Live keys need to be set in Vercel env (Settings → Environment Variables) if not already there. Do not use the Vercel CLI pull method — it returns empty placeholders for sensitive values.
 - **Contracts or Interfaces Changed**: None.
@@ -1553,16 +1553,16 @@ Preserve all payment, webhook, work_order, and dashboard contracts. Do not push 
 - **Task Completed**: Full local Stripe test-mode checkout → webhook → DB E2E. Fixed two schema bugs discovered during E2E, ran Phase 4 QA to confirmed `paymentReady: true`.
 - **Files Changed**:
   - `scripts/migrate.mjs` — added `ALTER TABLE purchase_logs ADD COLUMN IF NOT EXISTS tier TEXT;` and `ALTER TABLE purchase_logs ALTER COLUMN tier DROP NOT NULL;` to handle one-time payment checkouts (bid/no-bid, proposal) that have no subscription tier.
-  - `.env.local` (not committed): switched `STRIPE_SECRET_KEY` to test-mode key (`sk_test_51TRtYi1...`), set `STRIPE_WEBHOOK_SECRET` to Stripe CLI listener secret (`whsec_ab17d...`), set `STRIPE_BIDNOBID_PRICE_ID` to test-mode price created for this E2E (`price_1TRtiN1cZrjsd08cZ6xTaQSt`).
+  - `.env.local` (not committed): switched `STRIPE_SECRET_KEY` to a redacted test-mode key, set `STRIPE_WEBHOOK_SECRET` to a redacted Stripe CLI listener secret, set `STRIPE_BIDNOBID_PRICE_ID` to the test-mode price created for this E2E (`price_1TRtiN1cZrjsd08cZ6xTaQSt`).
 - **Schema Changes Applied to Live DB**:
   - `ALTER TABLE users ADD COLUMN IF NOT EXISTS business_name TEXT;` (and 6 other user profile columns) — needed because `auth.ts`'s `getUserFromRequest` selects these columns; the migration was in `migrate.mjs` but hadn't been applied to the Neon DB yet.
   - `ALTER TABLE purchase_logs ALTER COLUMN tier DROP NOT NULL;` — `purchase_logs.tier` had a NOT NULL constraint but the webhook handler doesn't set it for one-time payments.
 - **Runtime / Data Actions**:
   - Ran `node scripts/migrate.mjs` to apply the user-profile column additions and unblock all API routes.
-  - Started Stripe CLI listener: `/tmp/stripe listen --api-key sk_test_... --forward-to http://localhost:3000/api/webhooks/stripe`
+  - Started Stripe CLI listener with a redacted test-mode API key, forwarding to `http://localhost:3000/api/webhooks/stripe`
   - Created a test-mode price `price_1TRtiN1cZrjsd08cZ6xTaQSt` ($49) in the test Stripe account (the user-supplied price ID belongs to the live account, which is a different Stripe account from the test key).
   - Created a checkout session via `POST /api/analysis/bid-no-bid/checkout` for demo user + pipeline_item_id=5.
-  - Ran `stripe trigger checkout.session.completed --api-key sk_test_...` — Stripe CLI generated a synthetic checkout session, sent it through the listener, webhook received it, returned 200, `purchase_logs` row inserted.
+  - Ran `stripe trigger checkout.session.completed` with a redacted test-mode API key — Stripe CLI generated a synthetic checkout session, sent it through the listener, webhook received it, returned 200, `purchase_logs` row inserted.
   - Directly executed the work_order UPDATE path via Node to verify `work_orders.payment_status` transitions correctly when `work_order_id` is present in session metadata.
   - Work order #4 (`demo@tenderpath.me`, proposal-draft) now shows `payment_status: paid`, `stripe_session_id: cs_test_e2e_final_...` in the DB.
 - **Tests Run**:
@@ -1578,7 +1578,7 @@ Preserve all payment, webhook, work_order, and dashboard contracts. Do not push 
 - **Important Notes**:
   - The test-mode price ID `price_1TRtiN1cZrjsd08cZ6xTaQSt` in `.env.local` is for local test E2E only. For production, `STRIPE_BIDNOBID_PRICE_ID` must be set to `price_1TQjQb01HOM3YIKoVF8dO6ce` (the live-account price) in Vercel.
   - The `users` profile column migration has been applied to the live Neon DB. All API routes that call `getUserFromRequest` (bid-no-bid checkout, work-orders, dashboard, etc.) now work without 500 errors.
-  - The Stripe CLI signing secret (`whsec_ab17d...`) is different from the Vercel-registered endpoint secret (`whsec_PD03...`). Local `.env.local` uses the CLI secret; Vercel must use the endpoint secret.
+  - The Stripe CLI signing secret is different from the Vercel-registered endpoint secret. Local `.env.local` uses the CLI secret; Vercel must use the endpoint secret.
 - **Contracts or Interfaces Changed**: `purchase_logs.tier` is now nullable (was NOT NULL). This is safe — all existing rows had NULL or the migration would have failed; webhook handler never wrote this column anyway.
 - **Docs Updated**: `SESSION.md` only. `scripts/migrate.mjs` updated.
 
@@ -1622,8 +1622,8 @@ Preserve all payment, webhook, work_order, and dashboard contracts. Do not push 
 - **Commit**: No code changes — env-var-only update + `vercel --prod` redeploy
 - **Deployment**: `dpl_AhAuHWAZiXT5Q1xE4ESCGv99cuEY` — target: production, status: Ready
 - **Task Completed**: Updated all three Vercel production Stripe env vars from test-mode to live-mode values using `npx vercel env add ... --force`:
-  - `STRIPE_SECRET_KEY` → `sk_live_51R40A601HOM3YIKo...` (was `sk_test_...`)
-  - `STRIPE_WEBHOOK_SECRET` → `whsec_PD03Kj1GNVeMObX9bSpZIENwXExVy9Vb` (was `whsec_ab17d...` CLI listener secret)
+  - `STRIPE_SECRET_KEY` → redacted live-mode secret (was redacted test-mode secret)
+  - `STRIPE_WEBHOOK_SECRET` → redacted live webhook secret (was redacted CLI listener secret)
   - `STRIPE_BIDNOBID_PRICE_ID` → `price_1TQjQb01HOM3YIKoVF8dO6ce` (was `price_1TRtiN1...` test price)
 - **Blockers**: Live Stripe webhook endpoint registration still required (manual step in Stripe dashboard). Without it, `checkout.session.completed` events won't reach the webhook handler and `work_orders.payment_status` won't update to `paid`.
 - **Contracts or Interfaces Changed**: None.

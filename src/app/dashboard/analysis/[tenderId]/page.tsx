@@ -76,12 +76,6 @@ export default function AnalysisPage() {
 
   useEffect(() => {
     (async () => {
-      const token = localStorage.getItem("tp_token");
-      if (!token) {
-        router.replace("/login?next=/dashboard/analysis/" + pipelineItemId);
-        return;
-      }
-
       try {
         const checkRes = await fetch(
           `/api/analysis/bid-no-bid?pipeline_item_id=${pipelineItemId}`,

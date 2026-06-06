@@ -11,6 +11,7 @@ interface VaultDoc {
   type: DocType;
   expiry_date: string | null;
   file_url: string;
+  download_url?: string;
   created_at: string;
   /** Sprint 10: auto-applied capability tags (e.g. iso-9001, pador,
    *  external-audit). Used by the proposal generator to match evidence
@@ -179,7 +180,12 @@ export default function VaultPage() {
         return;
       }
 
-      const { url: file_url } = await uploadRes.json();
+      const { upload_id } = await uploadRes.json() as { upload_id?: number };
+      if (!upload_id) {
+        setError("Upload completed but could not be saved. Please try again.");
+        setUploading(false);
+        return;
+      }
 
       const res = await fetch("/api/dashboard/vault", {
         method: "POST",
@@ -188,7 +194,7 @@ export default function VaultPage() {
           name: form.name || file.name,
           type: form.type,
           expiry_date: form.expiry_date || null,
-          file_url,
+          upload_id,
         }),
       });
 
@@ -540,7 +546,7 @@ export default function VaultPage() {
                       </td>
                       <td className="px-5 py-3.5 align-top">
                         <a
-                          href={d.file_url}
+                          href={d.download_url ?? d.file_url}
                           target="_blank"
                           rel="noreferrer"
                           className="text-[12.5px] text-stone-900 underline underline-offset-2 hover:no-underline"

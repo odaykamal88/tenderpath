@@ -1,7 +1,6 @@
 import { NextResponse, after } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
-import { getStripe } from "@/lib/stripe";
 import { ensureWorkOrderServiceContext } from "@/lib/service-context";
 import { generateProposalPackage } from "@/lib/proposal-package/generate-proposal";
 import { generateProposalPackageV2 } from "@/lib/proposal-package/generate-proposal-v2";
@@ -123,39 +122,16 @@ async function loadWorkOrderForUser(userId: number, email: string | null, workOr
   return rows[0] ?? null;
 }
 
-async function ensurePaid(order: WorkOrderForGeneration, stripeSessionId: string | undefined): Promise<Response | null> {
+function ensurePaid(order: WorkOrderForGeneration): Response | null {
   if (order.payment_status === "paid") return null;
 
-  const sessionId = stripeSessionId || order.stripe_session_id || "";
-  if (!sessionId) {
-    return NextResponse.json({ error: "Payment required", code: "PAYMENT_REQUIRED" }, { status: 402 });
-  }
-
-  const stripe = getStripe();
-  let session;
-  try {
-    session = await stripe.checkout.sessions.retrieve(sessionId);
-  } catch {
-    return NextResponse.json({ error: "Invalid Stripe session" }, { status: 400 });
-  }
-
-  if (session.payment_status !== "paid") {
-    return NextResponse.json({ error: "Payment not completed" }, { status: 402 });
-  }
-
-  await sql`
-    UPDATE work_orders
-    SET payment_status = 'paid',
-        stripe_session_id = ${sessionId},
-        stripe_customer_id = ${typeof session.customer === "string" ? session.customer : null},
-        amount_cents = ${session.amount_total ?? null},
-        currency = ${session.currency ?? "usd"},
-        updated_at = NOW()
-    WHERE id = ${order.id}
-  `;
-  order.payment_status = "paid";
-  order.stripe_session_id = sessionId;
-  return null;
+  return NextResponse.json(
+    {
+      error: "Payment must be confirmed before generation starts.",
+      code: "PAYMENT_NOT_CONFIRMED",
+    },
+    { status: 402 },
+  );
 }
 
 /** POST - verify payment and delegate to the production fulfillment pipeline. */
@@ -185,7 +161,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "This work order is not a proposal or roster service." }, { status: 400 });
   }
 
-  const paymentError = await ensurePaid(order, body.stripe_session_id);
+  const paymentError = ensurePaid(order);
   if (paymentError) return paymentError;
 
   await ensureWorkOrderServiceContext(order.id, user.id);

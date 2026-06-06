@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOpportunitySignal } from "@/lib/assessment/opportunity-signal";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 /**
  * Public, unauthenticated endpoint that powers the live "opportunity signal"
@@ -20,6 +21,13 @@ function parseList(raw: string | null, max: number): string[] {
 
 export async function GET(request: Request) {
   try {
+    const limited = enforceRateLimit(request, {
+      namespace: "assessment:opportunity-signal:ip",
+      limit: 120,
+      windowMs: 60 * 1000,
+    });
+    if (limited) return limited;
+
     const { searchParams } = new URL(request.url);
     const sectors = parseList(searchParams.get("sectors"), 16);
     const countries = parseList(searchParams.get("countries"), 40);

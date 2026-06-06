@@ -117,7 +117,8 @@ function hasUploadedDocument(intake: JsonRecord | null | undefined): boolean {
   return Boolean(
     cleanText(intake.vault_url, 50)
       || cleanText(intake.financial_documents_url, 50)
-      || cleanText(intake.vault_doc_id, 50),
+      || cleanText(intake.vault_doc_id, 50)
+      || cleanText(intake.financial_documents_doc_id, 50),
   );
 }
 
@@ -184,16 +185,16 @@ async function uploadedDocumentContexts(userId: number, intake: JsonRecord | nul
       kind: "financial",
       url: cleanText(intake.financial_documents_url, 2000),
       fileName: cleanText(intake.financial_documents_filename, 255),
-      documentId: null,
+      documentId: intOrNull(intake.financial_documents_doc_id),
     },
   ].filter((item) => item.url || item.documentId);
 
   const documents: JsonRecord[] = [];
   for (const candidate of candidates) {
-    const extraction = candidate.url
-      ? await loadDocumentExtraction(userId, candidate.url)
-      : candidate.documentId
-        ? await loadVaultDocumentExtraction(userId, candidate.documentId)
+    const extraction = candidate.documentId
+      ? await loadVaultDocumentExtraction(userId, candidate.documentId)
+      : candidate.url
+        ? await loadDocumentExtraction(userId, candidate.url)
         : null;
     const excerptMax = candidate.kind === "requirements" ? 14_000 : 5_000;
     documents.push({

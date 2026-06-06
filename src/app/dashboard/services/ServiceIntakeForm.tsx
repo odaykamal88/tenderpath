@@ -33,6 +33,7 @@ interface ServiceIntakeFormProps {
 interface UploadedFile {
   name: string;
   url: string;
+  vaultDocumentId?: number;
   extraction?: {
     status: string;
     charCount: number;
@@ -203,11 +204,6 @@ export default function ServiceIntakeForm({
         error: `File is ${(file.size / 1024 / 1024).toFixed(1)} MB. Limit is 50 MB.`,
       };
     }
-    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-    if (!token) {
-      return { error: "You are signed out. Refresh the page and try again." };
-    }
-
     // Cap the blob upload at 5 min and stream transfer-progress events so
     // a stuck spinner has a diagnosable trail.
     //
@@ -236,11 +232,12 @@ export default function ServiceIntakeForm({
           });
         }
       }, 5_000);
+      const ext = file.name.match(/\.[A-Za-z0-9]{1,12}$/)?.[0]?.toLowerCase() ?? "";
+      const blobPath = `vault-upload/${crypto.randomUUID()}${ext}`;
       const blob = (await Promise.race([
-        upload(file.name, file, {
+        upload(blobPath, file, {
           access: "public",
           handleUploadUrl: "/api/dashboard/vault/upload-token",
-          clientPayload: JSON.stringify({ token }),
           onUploadProgress: ({ loaded, total, percentage }) => {
             lastProgressAt = Date.now();
             lastPercentage = percentage;
@@ -270,13 +267,13 @@ export default function ServiceIntakeForm({
         clearInterval(stallTimer);
         stallTimer = null;
       }
-      console.info("[upload:client:blob_done]", { url: blob.url });
+      console.info("[upload:client:blob_done]", { pathname: blob.pathname });
 
       onStage("extracting");
       console.info("[upload:client:extract_start]");
       const extractRes = await fetch("/api/dashboard/vault/extract", {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({
           url: blob.url,
           name: file.name,
@@ -293,7 +290,12 @@ export default function ServiceIntakeForm({
         signal: AbortSignal.timeout(60_000),
       });
       const rawExtract = await extractRes.text();
-      let extractData: { extraction?: UploadedFile["extraction"]; error?: string } = {};
+      let extractData: {
+        url?: string;
+        vaultDocumentId?: number;
+        extraction?: UploadedFile["extraction"];
+        error?: string;
+      } = {};
       try {
         extractData = rawExtract ? JSON.parse(rawExtract) : {};
       } catch {
@@ -303,12 +305,16 @@ export default function ServiceIntakeForm({
         status: extractRes.status,
         extractionStatus: extractData.extraction?.status,
       });
-      // Extraction failure is non-fatal — the file is uploaded and usable.
-      // We surface the issue but still hand back the URL so the rest of the
-      // form keeps working.
+      if (!extractRes.ok || !extractData.url || !extractData.vaultDocumentId) {
+        return {
+          error: extractData.error ?? "Upload completed but document processing failed. Please try again.",
+        };
+      }
+
       return {
-        url: blob.url,
+        url: extractData.url,
         name: file.name,
+        vaultDocumentId: extractData.vaultDocumentId,
         extraction: extractData.extraction,
       };
     } catch (err) {
@@ -426,13 +432,11 @@ export default function ServiceIntakeForm({
     setCriteriaNote(null);
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-      if (!token) {
-        setCriteriaError("You are signed out. Refresh the page and try again.");
-        return;
-      }
       const res = await fetch("/api/dashboard/services/fetch-criteria", {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        headers: token
+          ? { "content-type": "application/json", authorization: `Bearer ${token}` }
+          : { "content-type": "application/json" },
         body: JSON.stringify({ url: tenderUrl.trim() }),
       });
       // Read once as text so we can fall back gracefully when the response
@@ -534,8 +538,20 @@ export default function ServiceIntakeForm({
 
       const intakeWithFile = {
         ...fields,
-        ...(uploadedFile ? { vault_url: uploadedFile.url, vault_filename: uploadedFile.name } : {}),
-        ...(financialFile ? { financial_documents_url: financialFile.url, financial_documents_filename: financialFile.name } : {}),
+        ...(uploadedFile
+          ? {
+              vault_url: uploadedFile.url,
+              vault_filename: uploadedFile.name,
+              ...(uploadedFile.vaultDocumentId ? { vault_doc_id: uploadedFile.vaultDocumentId } : {}),
+            }
+          : {}),
+        ...(financialFile
+          ? {
+              financial_documents_url: financialFile.url,
+              financial_documents_filename: financialFile.name,
+              ...(financialFile.vaultDocumentId ? { financial_documents_doc_id: financialFile.vaultDocumentId } : {}),
+            }
+          : {}),
         // Bid-no-bid-only: tender file attached in the "Tender or document"
         // section, and the supporting-documents URL list pasted alongside the
         // file upload. Both are additive keys so downstream LLM context
@@ -545,7 +561,13 @@ export default function ServiceIntakeForm({
         // supporting_link_urls (plural, list) replaces the older
         // supporting_link_url singular — downstream code should treat the
         // singular as a 1-length list for backward compat.
-        ...(tenderFile ? { tender_file_url: tenderFile.url, tender_file_name: tenderFile.name } : {}),
+        ...(tenderFile
+          ? {
+              tender_file_url: tenderFile.url,
+              tender_file_name: tenderFile.name,
+              ...(tenderFile.vaultDocumentId ? { tender_file_doc_id: tenderFile.vaultDocumentId } : {}),
+            }
+          : {}),
         ...(finalSupportingUrls.length ? { supporting_link_urls: finalSupportingUrls } : {}),
         ...(docId ? { vault_doc_id: docId } : {}),
         ...(confirmedPrimarySector ? { confirmed_primary_sector: confirmedPrimarySector } : {}),
@@ -553,8 +575,20 @@ export default function ServiceIntakeForm({
         // match Sprint 9's extractSupplementaryDocRefs intake shape exactly.
         // The widgets render proposal-only so amendmentFile/qaFile will be
         // null in every other service flow.
-        ...(amendmentFile ? { amendment_url: amendmentFile.url, amendment_filename: amendmentFile.name } : {}),
-        ...(qaFile ? { qa_url: qaFile.url, qa_filename: qaFile.name } : {}),
+        ...(amendmentFile
+          ? {
+              amendment_url: amendmentFile.url,
+              amendment_filename: amendmentFile.name,
+              ...(amendmentFile.vaultDocumentId ? { amendment_doc_id: amendmentFile.vaultDocumentId } : {}),
+            }
+          : {}),
+        ...(qaFile
+          ? {
+              qa_url: qaFile.url,
+              qa_filename: qaFile.name,
+              ...(qaFile.vaultDocumentId ? { qa_doc_id: qaFile.vaultDocumentId } : {}),
+            }
+          : {}),
       };
 
       const res = await fetch("/api/service-orders", {

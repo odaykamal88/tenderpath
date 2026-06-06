@@ -28,17 +28,14 @@ const PUBLIC_PATHS = new Set([
   "/api/report",
   "/api/pay/checkout",
   "/api/pay/readiness",
-  "/api/pay/verify-usdt",
-  "/api/pay/wire-proof",
   "/api/telegram/webhook",
   // WhatsApp Business Cloud API webhook — Meta posts inbound messages here and
   // hits GET for the verification handshake; neither can carry a Bearer header.
   // The route verifies the X-Hub-Signature-256 HMAC itself.
   "/api/whatsapp/webhook",
-  // Vault upload token endpoint — called by @vercel/blob/client's `upload()`
-  // on the browser, which cannot attach a Bearer header. The route itself
-  // verifies the tp_session JWT via clientPayload inside
-  // onBeforeGenerateToken, so the proxy gate is intentionally bypassed.
+  // Vault upload token endpoint — called by @vercel/blob/client's `upload()`.
+  // The route authorizes same-origin tp_session cookies itself and accepts a
+  // legacy clientPayload JWT only as fallback, so the proxy gate is bypassed.
   // Also receives the post-upload webhook from Vercel Blob (signature
   // verified by handleUpload()).
   "/api/dashboard/vault/upload-token",
@@ -110,26 +107,33 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // API routes: authenticate via Authorization header
+  // API routes: authenticate via Authorization header or the httpOnly session
+  // cookie. Prefer trying every available token so stale localStorage does not
+  // break a valid cookie-backed session.
   const authHeader = request.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+  const cookieToken = request.cookies.get("tp_session")?.value?.trim() ?? "";
+  const tokens = [bearerToken, cookieToken].filter(Boolean);
+  if (tokens.length === 0) {
     return NextResponse.json(
       { error: "Authentication required", code: "AUTH_REQUIRED" },
       { status: 401 }
     );
   }
 
-  const token = authHeader.slice(7);
-
-  try {
-    await jwtVerify(token, new TextEncoder().encode(secret));
-    return NextResponse.next();
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid or expired token", code: "AUTH_INVALID" },
-      { status: 401 }
-    );
+  for (const token of tokens) {
+    try {
+      await jwtVerify(token, new TextEncoder().encode(secret));
+      return NextResponse.next();
+    } catch {
+      // Try the next token candidate.
+    }
   }
+
+  return NextResponse.json(
+    { error: "Invalid or expired token", code: "AUTH_INVALID" },
+    { status: 401 }
+  );
 }
 
 export const config = {

@@ -161,6 +161,16 @@ const INTAKE_HIDDEN_KEYS = new Set([
   "vault_doc_id",
   "financial_documents_url",
   "financial_documents_filename",
+  "financial_documents_doc_id",
+  "tender_file_url",
+  "tender_file_name",
+  "tender_file_doc_id",
+  "amendment_url",
+  "amendment_filename",
+  "amendment_doc_id",
+  "qa_url",
+  "qa_filename",
+  "qa_doc_id",
 ]);
 
 export function buildIntakeSummary(intake: Record<string, unknown> | null): string {

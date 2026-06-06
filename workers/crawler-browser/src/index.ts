@@ -69,7 +69,66 @@ interface PageResult { status: number; body: string; finalUrl?: string }
 
 type PuppeteerPage = Awaited<ReturnType<Awaited<ReturnType<typeof puppeteer.launch>>["newPage"]>>;
 
-export default {
+interface BrowserDocument {
+  title?: string;
+  body?: {
+    innerText?: string;
+  };
+  documentElement?: {
+    innerHTML?: string;
+  };
+}
+
+function isUnsafeHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (
+    host === "localhost"
+    || host.endsWith(".localhost")
+    || host.endsWith(".local")
+    || host.endsWith(".internal")
+  ) {
+    return true;
+  }
+
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const [a, b] = ipv4.slice(1).map(Number);
+    return a === 0
+      || a === 10
+      || a === 127
+      || (a === 100 && b >= 64 && b <= 127)
+      || (a === 169 && b === 254)
+      || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168)
+      || (a === 198 && (b === 18 || b === 19))
+      || a >= 224;
+  }
+
+  return host === "::1"
+    || host.startsWith("fc")
+    || host.startsWith("fd")
+    || host.startsWith("fe8")
+    || host.startsWith("fe9")
+    || host.startsWith("fea")
+    || host.startsWith("feb");
+}
+
+function assertAllowedUrl(raw: string): void {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error("invalid URL");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error("unsupported URL protocol");
+  }
+  if (url.username || url.password || isUnsafeHostname(url.hostname)) {
+    throw new Error("unsafe URL host");
+  }
+}
+
+const worker = {
   async fetch(req: Request, env: Env): Promise<Response> {
     const path = new URL(req.url).pathname;
     if (path === "/health" && req.method === "GET") return handleHealth(req, env);
@@ -82,6 +141,8 @@ export default {
     return new Response("Not found", { status: 404 });
   },
 };
+
+export default worker;
 
 async function handleHealth(req: Request, env: Env): Promise<Response> {
   const startedAt = Date.now();
@@ -128,6 +189,12 @@ async function handleFetch(req: Request, env: Env): Promise<Response> {
   let input: FetchBody;
   try { input = await req.json(); } catch { return json({ ok: false, status: 0, body: "invalid JSON body" }, 400); }
   if (!input.url) return json({ ok: false, status: 0, body: "url required" }, 400);
+  try {
+    assertAllowedUrl(input.url);
+    if (input.warmupUrl) assertAllowedUrl(input.warmupUrl);
+  } catch (err) {
+    return json({ ok: false, status: 0, body: err instanceof Error ? err.message : "unsafe URL" }, 400);
+  }
 
   const browser = await puppeteer.launch(env.BROWSER);
   try {
@@ -164,6 +231,12 @@ async function handleFetchMany(req: Request, env: Env): Promise<Response> {
   try { input = await req.json(); } catch { return json({ ok: false, results: [], error: "invalid JSON body" }, 400); }
   if (!input.warmupUrl || !Array.isArray(input.requests) || input.requests.length === 0) {
     return json({ ok: false, results: [], error: "warmupUrl and non-empty requests[] required" }, 400);
+  }
+  try {
+    assertAllowedUrl(input.warmupUrl);
+    for (const request of input.requests) assertAllowedUrl(request.url);
+  } catch (err) {
+    return json({ ok: false, results: [], error: err instanceof Error ? err.message : "unsafe URL" }, 400);
   }
 
   const browser = await puppeteer.launch(env.BROWSER);
@@ -220,7 +293,7 @@ function looksLikeChallenge(text: string): boolean {
 
 async function pageLooksLikeChallenge(page: PuppeteerPage): Promise<boolean> {
   const content = await page.evaluate(() => {
-    const doc = (globalThis as unknown as { document?: any }).document;
+    const doc = (globalThis as unknown as { document?: BrowserDocument }).document;
     const title = doc?.title ?? "";
     const body = doc?.body?.innerText?.slice(0, 1000) ?? "";
     const html = doc?.documentElement?.innerHTML?.slice(0, 2000) ?? "";

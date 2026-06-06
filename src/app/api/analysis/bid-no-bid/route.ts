@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
 import { getStripe } from "@/lib/stripe";
+import { ensurePaymentIntegritySchema } from "@/lib/payment-integrity";
 import Anthropic from "@anthropic-ai/sdk";
+import type Stripe from "stripe";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -24,6 +26,71 @@ function safeParseJSON<T>(text: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+async function verifyBidNoBidPayment(
+  stripeSessionId: string,
+  user: { id: number; email: string },
+  pipelineItemId: number,
+): Promise<{ session: Stripe.Checkout.Session | null; response: Response | null }> {
+  const expectedPriceId = process.env.STRIPE_BIDNOBID_PRICE_ID?.trim();
+  if (!expectedPriceId) {
+    return {
+      session: null,
+      response: NextResponse.json({ error: "Bid/no-bid checkout is not configured." }, { status: 503 }),
+    };
+  }
+
+  await ensurePaymentIntegritySchema();
+
+  const stripe = getStripe();
+  let stripeSession: Stripe.Checkout.Session;
+  try {
+    stripeSession = await stripe.checkout.sessions.retrieve(stripeSessionId);
+  } catch {
+    return { session: null, response: NextResponse.json({ error: "Invalid Stripe session" }, { status: 400 }) };
+  }
+
+  if (stripeSession.mode !== "payment" || stripeSession.payment_status !== "paid") {
+    return { session: null, response: NextResponse.json({ error: "Payment not completed" }, { status: 402 }) };
+  }
+
+  const metadata = stripeSession.metadata ?? {};
+  const sessionPlan = metadata.plan || metadata.service || metadata.product;
+  if (sessionPlan !== "bid-no-bid") {
+    console.warn("[bid-no-bid:session_plan_mismatch]", { stripeSessionId, sessionPlan, userId: user.id });
+    return { session: null, response: NextResponse.json({ error: "Payment session does not match this service." }, { status: 400 }) };
+  }
+
+  if (metadata.userId !== String(user.id)) {
+    console.warn("[bid-no-bid:session_user_mismatch]", { stripeSessionId, metadataUserId: metadata.userId, userId: user.id });
+    return { session: null, response: NextResponse.json({ error: "Payment session does not belong to this user." }, { status: 403 }) };
+  }
+
+  if (metadata.pipeline_item_id !== String(pipelineItemId)) {
+    console.warn("[bid-no-bid:session_item_mismatch]", {
+      stripeSessionId,
+      metadataPipelineItemId: metadata.pipeline_item_id,
+      pipelineItemId,
+      userId: user.id,
+    });
+    return { session: null, response: NextResponse.json({ error: "Payment session does not match this tender." }, { status: 400 }) };
+  }
+
+  const sessionEmail = stripeSession.customer_email ?? stripeSession.customer_details?.email ?? null;
+  if (!sessionEmail || sessionEmail.toLowerCase() !== user.email.toLowerCase()) {
+    console.warn("[bid-no-bid:session_email_mismatch]", { stripeSessionId, userId: user.id });
+    return { session: null, response: NextResponse.json({ error: "Payment session does not belong to this user." }, { status: 403 }) };
+  }
+
+  const lineItems = await stripe.checkout.sessions.listLineItems(stripeSession.id, { limit: 10 });
+  const hasExpectedPrice = lineItems.data.some((item) => item.price?.id === expectedPriceId);
+  if (!hasExpectedPrice) {
+    console.warn("[bid-no-bid:session_price_mismatch]", { stripeSessionId, userId: user.id });
+    return { session: null, response: NextResponse.json({ error: "Payment session does not match the configured price." }, { status: 400 }) };
+  }
+
+  return { session: stripeSession, response: null };
 }
 
 /** GET — check if analysis exists for a pipeline item */
@@ -62,15 +129,16 @@ export async function POST(request: Request) {
   };
 
   const { pipeline_item_id, stripe_session_id } = body;
+  const pipelineItemId = Number(pipeline_item_id);
 
-  if (!pipeline_item_id) {
+  if (!Number.isInteger(pipelineItemId) || pipelineItemId <= 0) {
     return NextResponse.json({ error: "pipeline_item_id is required" }, { status: 400 });
   }
 
   // Return existing analysis without re-charging
   const existing = await sql`
     SELECT * FROM bid_analyses
-    WHERE user_id = ${user.id} AND pipeline_item_id = ${pipeline_item_id}
+    WHERE user_id = ${user.id} AND pipeline_item_id = ${pipelineItemId}
     ORDER BY created_at DESC LIMIT 1
   `;
   if (existing.length) return NextResponse.json({ analysis: existing[0] });
@@ -80,17 +148,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Payment required", code: "PAYMENT_REQUIRED" }, { status: 402 });
   }
 
-  const stripe = getStripe();
-  let stripeSession;
-  try {
-    stripeSession = await stripe.checkout.sessions.retrieve(stripe_session_id);
-  } catch {
-    return NextResponse.json({ error: "Invalid Stripe session" }, { status: 400 });
-  }
-
-  if (stripeSession.payment_status !== "paid") {
-    return NextResponse.json({ error: "Payment not completed" }, { status: 402 });
-  }
+  const verification = await verifyBidNoBidPayment(stripe_session_id, user, pipelineItemId);
+  if (verification.response) return verification.response;
+  const stripeSession = verification.session!;
 
   // Prevent session reuse across users/items
   const sessionUsed = await sql`
@@ -114,7 +174,7 @@ export async function POST(request: Request) {
       t.source_url AS t_source_url
     FROM pipeline_items pi
     LEFT JOIN tenders t ON t.id = pi.tender_id
-    WHERE pi.id = ${pipeline_item_id} AND pi.user_id = ${user.id}
+    WHERE pi.id = ${pipelineItemId} AND pi.user_id = ${user.id}
   `;
 
   if (!pipelineRows.length) {
@@ -271,7 +331,7 @@ Return ONLY valid JSON.`,
       strength_areas, gap_areas, required_documents,
       effort_estimate, key_risks, next_steps
     ) VALUES (
-      ${user.id}, ${pipeline_item_id},
+      ${user.id}, ${pipelineItemId},
       ${item.tender_id ?? null},
       ${item.t_source_url ?? null},
       ${stripe_session_id},

@@ -4,11 +4,16 @@ import { handleEvent } from "@/lib/bot/engine";
 
 export async function POST(request: Request): Promise<Response> {
   const secret = request.headers.get("x-telegram-bot-api-secret-token");
-  if (process.env.TELEGRAM_WEBHOOK_SECRET && secret !== process.env.TELEGRAM_WEBHOOK_SECRET) {
+  const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
+  if (!expectedSecret) {
+    console.error("[bot:telegram:secret_missing]");
+    return NextResponse.json({ error: "Telegram webhook secret is not configured" }, { status: 503 });
+  }
+  if (secret !== expectedSecret) {
     // Surface secret-token mismatches so a misconfigured webhook is
     // diagnosable — previously this silently returned 200.
     console.warn("[bot:telegram:secret_mismatch]", JSON.stringify({ haveSecret: Boolean(secret) }));
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   let update: TgUpdate;

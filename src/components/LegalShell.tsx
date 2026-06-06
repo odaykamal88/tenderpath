@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 
 interface Props {
   title: string;
@@ -12,12 +13,12 @@ export default function LegalShell({ title, subtitle, lastUpdated, children }: P
     <div className="min-h-screen bg-white">
       <nav className="border-b border-gray-100 bg-white/95 backdrop-blur-sm sticky top-0 z-50">
         <div className="mx-auto max-w-7xl px-6 flex h-14 items-center justify-between">
-          <a href="/" className="text-lg font-semibold text-gray-900">
+          <Link href="/" className="text-lg font-semibold text-gray-900">
             Tender<span className="text-amber-500">Path</span>
-          </a>
-          <a href="/" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
+          </Link>
+          <Link href="/" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
             ← Back to home
-          </a>
+          </Link>
         </div>
       </nav>
 
@@ -48,9 +49,9 @@ export default function LegalShell({ title, subtitle, lastUpdated, children }: P
             { label: "Security", href: "/security" },
             { label: "Contact", href: "/contact" },
           ].map((l) => (
-            <a key={l.href} href={l.href} className="underline hover:text-gray-600 transition-colors">
+            <Link key={l.href} href={l.href} className="underline hover:text-gray-600 transition-colors">
               {l.label}
-            </a>
+            </Link>
           ))}
         </div>
       </footer>

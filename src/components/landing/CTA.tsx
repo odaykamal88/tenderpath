@@ -1,4 +1,5 @@
 /* CTA — final paper-stamp card on dark ink · mobile-tuned */
+import Link from "next/link";
 
 export default function CTA() {
   return (
@@ -26,13 +27,13 @@ export default function CTA() {
           </p>
 
           <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-4 sm:gap-6 pt-5 sm:pt-6 border-t border-paper-2/15">
-            <a
+            <Link
               href="/assessment?goal=track-tenders"
               className="inline-flex items-center justify-center sm:justify-start gap-3 bg-paper px-6 sm:px-8 py-4 text-[14px] font-medium text-ink hover:bg-accent-2 hover:text-ink transition-colors"
             >
               Run the free assessment
               <span className="font-mono text-[13px]">→</span>
-            </a>
+            </Link>
             <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-paper-2/50 self-center sm:self-auto">
               No card · No login · 5 min
             </span>
@@ -40,9 +41,9 @@ export default function CTA() {
 
           <p className="mt-8 sm:mt-10 pt-5 sm:pt-6 border-t border-paper-2/15 font-mono text-[10.5px] sm:text-[11px] text-paper-2/50">
             Already a member?{" "}
-            <a href="/login" className="text-paper border-b border-paper hover:text-accent-2 hover:border-accent-2">
+            <Link href="/login" className="text-paper border-b border-paper hover:text-accent-2 hover:border-accent-2">
               Sign in to your dashboard →
-            </a>
+            </Link>
           </p>
         </div>
       </div>

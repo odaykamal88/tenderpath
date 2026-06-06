@@ -5,7 +5,11 @@ export function useCountUp(target: number, duration = 1500) {
   const [v, setV] = useState(0);
   useEffect(() => {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduced) { setV(target); return; }
+    if (reduced) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setV(target);
+      return;
+    }
     let raf = 0;
     const start = performance.now();
     const tick = (now: number) => {

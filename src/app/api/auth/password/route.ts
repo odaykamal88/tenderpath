@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createToken } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { hashPassword, verifyPassword } from "@/lib/password";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import {
   DEMO_EMAIL,
   resolveOrMintForSignin,
@@ -31,6 +32,20 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+
+    const ipLimit = enforceRateLimit(request, {
+      namespace: "auth:password:ip",
+      limit: 30,
+      windowMs: 10 * 60 * 1000,
+    });
+    if (ipLimit) return ipLimit;
+    const emailLimit = enforceRateLimit(request, {
+      namespace: "auth:password:email",
+      limit: 12,
+      windowMs: 10 * 60 * 1000,
+      keyParts: [email],
+    });
+    if (emailLimit) return emailLimit;
 
     // Self-heal: keep the demo account password in sync with the displayed hint.
     // Prevents UI/DB drift from locking visitors out of the public demo.

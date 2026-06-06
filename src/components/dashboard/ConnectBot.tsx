@@ -28,7 +28,7 @@ export default function ConnectBot() {
       const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
       const res = await fetch("/api/dashboard/connect-bot", {
         method: "POST",
-        headers: { authorization: `Bearer ${token ?? ""}` },
+        headers: token ? { authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error("link failed");
       const data = (await res.json()) as ConnectResponse;

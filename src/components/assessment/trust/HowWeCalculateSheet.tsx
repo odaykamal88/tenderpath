@@ -17,7 +17,7 @@ export function HowWeCalculateSheet({ open, onClose }: { open: boolean; onClose:
 )`}</pre>
       <p className={styles.copy}>
         Weights are calibrated against 4,200 historical award outcomes (2021–2025).
-        Compliance carries the largest weight because it's the most common rejection
+        Compliance carries the largest weight because it&apos;s the most common rejection
         cause at the eligibility stage.
       </p>
       <ul className={styles.freshness}>

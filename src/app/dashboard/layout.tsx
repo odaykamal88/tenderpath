@@ -90,14 +90,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-    if (!token) {
-      router.replace("/login?next=" + encodeURIComponent(pathname || "/dashboard"));
-      return;
-    }
+    const headers: HeadersInit = token ? { authorization: `Bearer ${token}` } : {};
 
     (async () => {
       const res = await fetch("/api/auth/me", {
-        headers: { authorization: `Bearer ${token}` },
+        headers,
       });
       if (!res.ok) {
         localStorage.removeItem("tp_token");
@@ -107,7 +104,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       const user: Me = await res.json();
 
       const probe = await fetch("/api/dashboard/pipeline", {
-        headers: { authorization: `Bearer ${token}` },
+        headers,
       });
       const body = probe.ok ? await probe.json() : null;
       const access = body?.access;

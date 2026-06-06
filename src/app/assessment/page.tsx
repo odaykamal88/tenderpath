@@ -366,9 +366,9 @@ function AssessmentWizard() {
   // /dashboard (when they have no assessment yet) assume they're signed out.
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-    if (!token) return;
+    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
     let cancelled = false;
-    fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
+    fetch("/api/auth/me", { headers })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled || !data?.email) return;

@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { getUserFromRequest } from "@/lib/auth";
+import { sql } from "@/lib/db";
 import { track } from "@/lib/telemetry/funnel";
 import { evaluateServiceFulfillmentGate } from "@/lib/service-fulfillment-gates";
 import { assertTenderDeadlineIsLive } from "@/lib/tender-deadline-guard";
 import { resolveTierSlug, isComingSoonTier } from "@/lib/pricing";
 import { TRIAL_DAYS } from "@/lib/access";
+import { PROPOSAL_PLAN, ROSTER_PLAN } from "@/lib/proposal-package/types";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 const SLUG_TO_PRICE_ENV: Record<string, string> = {
   "bid-no-bid":              "STRIPE_BIDNOBID_PRICE_ID",
@@ -36,6 +39,19 @@ function metadataValue(value: unknown): string {
   return value.trim().slice(0, 500);
 }
 
+interface CheckoutWorkOrderRow {
+  id: number;
+  plan: string;
+  service_slug: string | null;
+}
+
+function workOrderPlanMatches(order: CheckoutWorkOrderRow, plan: string): boolean {
+  return order.plan === plan
+    || order.service_slug === plan
+    || (plan === PROPOSAL_PLAN && order.service_slug === "proposal")
+    || (plan === ROSTER_PLAN && order.service_slug === "lta-roster");
+}
+
 export async function POST(request: Request) {
   const body = (await request.json()) as {
     plan?: string;
@@ -49,6 +65,13 @@ export async function POST(request: Request) {
   if (!requestedPlan) {
     return NextResponse.json({ error: "plan is required" }, { status: 400 });
   }
+  const checkoutLimit = enforceRateLimit(request, {
+    namespace: "pay:checkout:ip",
+    limit: 40,
+    windowMs: 10 * 60 * 1000,
+    keyParts: [requestedPlan],
+  });
+  if (checkoutLimit) return checkoutLimit;
 
   // Map legacy backend slugs (tender-intelligence etc.) to the canonical
   // TIERS slugs the price-env table understands. See SLUG_ALIASES in pricing.ts.
@@ -102,6 +125,38 @@ export async function POST(request: Request) {
     const pipelineItemId = metadataValue(String(body.pipeline_item_id ?? ""));
     const workOrderId = metadataValue(String(body.work_order_id ?? ""));
     const parsedWorkOrderId = workOrderId && /^\d+$/.test(workOrderId) ? Number(workOrderId) : null;
+    const checkoutUser = await getUserFromRequest(request);
+
+    if (parsedWorkOrderId) {
+      if (!checkoutUser) {
+        return NextResponse.json(
+          { error: "Sign in before paying for a work order.", code: "AUTH_REQUIRED" },
+          { status: 401 },
+        );
+      }
+
+      const workOrderRows = await sql`
+        SELECT id, plan, service_slug
+        FROM work_orders
+        WHERE id = ${parsedWorkOrderId}
+          AND (
+            user_id = ${checkoutUser.id}
+            OR (email IS NOT NULL AND LOWER(email) = LOWER(${checkoutUser.email}))
+          )
+        LIMIT 1
+      ` as unknown as CheckoutWorkOrderRow[];
+      const workOrder = workOrderRows[0];
+      if (!workOrder) {
+        console.warn("[pay:checkout:ownership_blocked]", { workOrderId: parsedWorkOrderId, userId: checkoutUser.id });
+        return NextResponse.json({ error: "Work order not found." }, { status: 404 });
+      }
+      if (!workOrderPlanMatches(workOrder, plan)) {
+        return NextResponse.json(
+          { error: "This checkout plan does not match the saved work order.", code: "PLAN_MISMATCH" },
+          { status: 409 },
+        );
+      }
+    }
 
     // Block tender-anchored paid services when the deadline has already passed
     // or is too close. Subscription plans + roster-fast-track skip this.
@@ -167,7 +222,6 @@ export async function POST(request: Request) {
     // Reads the user from the auth header / tp_session cookie. If we
     // can't identify them (anonymous /pay flow), fall back to the full
     // TRIAL_DAYS — they haven't used any platform trial yet either.
-    const checkoutUser = await getUserFromRequest(request);
     let trialDaysRemaining = TRIAL_DAYS;
     if (checkoutUser?.created_at) {
       const elapsedMs = Date.now() - new Date(checkoutUser.created_at).getTime();
@@ -213,6 +267,7 @@ export async function POST(request: Request) {
           : {}),
       metadata: {
         plan,
+        userId: checkoutUser ? String(checkoutUser.id) : "",
         tender,
         agency,
         pipeline_item_id: pipelineItemId,

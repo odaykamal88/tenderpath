@@ -1,8 +1,39 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { generateMagicToken } from "@/lib/auth";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+
+const OAUTH_STATE_COOKIE = "tp_google_oauth_state";
+
+function readCookie(request: Request, name: string): string | null {
+  const header = request.headers.get("cookie");
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const [rawName, ...valueParts] = part.split("=");
+    if (rawName?.trim() === name) return valueParts.join("=").trim() || null;
+  }
+  return null;
+}
+
+function clearStateCookie(response: NextResponse): NextResponse {
+  response.cookies.set(OAUTH_STATE_COOKIE, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 0,
+    path: "/api/auth/google",
+  });
+  return response;
+}
 
 export async function GET(request: Request) {
+  const limited = enforceRateLimit(request, {
+    namespace: "auth:google:callback:ip",
+    limit: 60,
+    windowMs: 10 * 60 * 1000,
+  });
+  if (limited) return limited;
+
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const stateParam = url.searchParams.get("state");
@@ -13,16 +44,32 @@ export async function GET(request: Request) {
   function errorRedirect(reason: string) {
     const dest = new URL("/login", appUrl);
     dest.searchParams.set("error", reason);
-    return NextResponse.redirect(dest);
+    return clearStateCookie(NextResponse.redirect(dest));
   }
 
   if (oauthError || !code) return errorRedirect("google_denied");
 
   let next = "/dashboard";
   try {
-    const state = JSON.parse(Buffer.from(stateParam ?? "", "base64url").toString()) as { next?: string };
-    if (typeof state.next === "string" && state.next.startsWith("/")) next = state.next;
-  } catch { /* use default */ }
+    const cookieState = readCookie(request, OAUTH_STATE_COOKIE);
+    const state = JSON.parse(Buffer.from(cookieState ?? "", "base64url").toString()) as {
+      nonce?: string;
+      next?: string;
+    };
+    if (!stateParam || stateParam !== state.nonce) {
+      return errorRedirect("google_state_invalid");
+    }
+    if (
+      typeof state.next === "string"
+      && state.next.startsWith("/")
+      && !state.next.startsWith("//")
+      && !state.next.startsWith("/\\")
+    ) {
+      next = state.next;
+    }
+  } catch {
+    return errorRedirect("google_state_invalid");
+  }
 
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
@@ -88,5 +135,5 @@ export async function GET(request: Request) {
   const dest = new URL("/login", appUrl);
   dest.searchParams.set("token", magicToken);
   dest.searchParams.set("next", next);
-  return NextResponse.redirect(dest);
+  return clearStateCookie(NextResponse.redirect(dest));
 }

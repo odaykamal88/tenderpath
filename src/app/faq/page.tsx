@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export const metadata = {
   title: "FAQ — TenderPath",
   description: "Answers to common questions about TenderPath and UN procurement.",
@@ -55,20 +57,20 @@ export default function FAQPage() {
       {/* Nav */}
       <nav className="border-b border-stone-200/70 bg-white/95 backdrop-blur-sm sticky top-0 z-50">
         <div className="mx-auto max-w-5xl px-5 sm:px-6 flex h-14 items-center justify-between">
-          <a
+          <Link
             href="/"
             className="text-[15px] font-semibold text-stone-900"
             style={{ fontFamily: SERIF }}
           >
             Tender<span style={{ color: "#ea580c" }}>·</span>Path
-          </a>
-          <a
+          </Link>
+          <Link
             href="/"
             className="text-[10.5px] sm:text-[11px] font-semibold uppercase tracking-[0.16em] sm:tracking-[0.18em] text-stone-500 hover:text-stone-900 transition-colors"
             style={{ fontFamily: MONO }}
           >
             ← Home
-          </a>
+          </Link>
         </div>
       </nav>
 
@@ -177,9 +179,9 @@ export default function FAQPage() {
           style={{ fontFamily: MONO }}
         >
           © {new Date().getFullYear()} Tender·Path ·{" "}
-          <a href="/" className="underline underline-offset-2 hover:text-stone-700">
+          <Link href="/" className="underline underline-offset-2 hover:text-stone-700">
             Home
-          </a>
+          </Link>
         </p>
       </footer>
     </div>

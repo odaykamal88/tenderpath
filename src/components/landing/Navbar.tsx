@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 
 const navLinks = [
   { label: "Challenge", href: "#challenge" },
@@ -14,8 +15,17 @@ export default function Navbar() {
   const [isAuthed, setIsAuthed] = useState(false);
 
   useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-    setIsAuthed(Boolean(token));
+    let cancelled = false;
+    fetch("/api/auth/me")
+      .then((res) => {
+        if (!cancelled) setIsAuthed(res.ok);
+      })
+      .catch(() => {
+        if (!cancelled) setIsAuthed(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Lock body scroll when sheet is open
@@ -36,11 +46,11 @@ export default function Navbar() {
       <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
         <div className="flex h-14 sm:h-16 items-center justify-between">
           {/* Logo */}
-          <a href="/" className="flex items-baseline gap-0">
+          <Link href="/" className="flex items-baseline gap-0">
             <span className="font-serif text-[19px] sm:text-[22px] font-medium tracking-[-0.01em] text-ink">
               Tender<span className="text-accent">·</span>Path
             </span>
-          </a>
+          </Link>
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-9">
@@ -54,20 +64,20 @@ export default function Navbar() {
               </a>
             ))}
             {isAuthed ? (
-              <a href="/dashboard" className="bg-ink px-5 py-2 text-[12px] font-medium text-paper hover:bg-accent transition-colors">
+              <Link href="/dashboard" className="bg-ink px-5 py-2 text-[12px] font-medium text-paper hover:bg-accent transition-colors">
                 Dashboard →
-              </a>
+              </Link>
             ) : (
               <>
-                <a
+                <Link
                   href="/login"
                   className="font-mono text-[11px] tracking-[0.12em] uppercase text-ink-3 hover:text-ink transition-colors border-b border-rule hover:border-ink pb-0.5"
                 >
                   Sign in
-                </a>
-                <a href="/assessment?goal=track-tenders" className="bg-ink px-5 py-2.5 text-[12px] font-medium text-paper hover:bg-accent transition-colors">
+                </Link>
+                <Link href="/assessment?goal=track-tenders" className="bg-ink px-5 py-2.5 text-[12px] font-medium text-paper hover:bg-accent transition-colors">
                   Free assessment
-                </a>
+                </Link>
               </>
             )}
           </div>
@@ -75,12 +85,12 @@ export default function Navbar() {
           {/* Mobile actions: persistent CTA + hamburger */}
           <div className="md:hidden flex items-center gap-2">
             {!isAuthed && (
-              <a
+              <Link
                 href="/assessment?goal=track-tenders"
                 className="bg-ink px-3.5 py-2 text-[11.5px] font-medium text-paper"
               >
                 Assess →
-              </a>
+              </Link>
             )}
             <button
               className="p-2 -mr-2 text-ink"
@@ -133,27 +143,27 @@ export default function Navbar() {
 
         <div className="mt-auto px-5 pb-8 pt-6 border-t border-rule bg-paper-2/40">
           {isAuthed ? (
-            <a
+            <Link
               href="/dashboard"
               className="block bg-ink px-5 py-4 text-[14px] font-medium text-paper text-center"
             >
               Open dashboard →
-            </a>
+            </Link>
           ) : (
             <div className="flex flex-col gap-3">
-              <a
+              <Link
                 href="/assessment?goal=track-tenders"
                 className="block bg-ink px-5 py-4 text-[14px] font-medium text-paper text-center"
               >
                 Get my readiness score →
-              </a>
-              <a
+              </Link>
+              <Link
                 href="/login"
                 className="block border border-ink px-5 py-3.5 text-[13px] font-medium text-ink text-center"
                 onClick={() => setMobileOpen(false)}
               >
                 Sign in
-              </a>
+              </Link>
             </div>
           )}
           <p className="mt-5 font-mono text-[10px] tracking-[0.1em] uppercase text-mute text-center">
