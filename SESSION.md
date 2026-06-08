@@ -86,6 +86,20 @@ Additional work done outside the prompt sequence:
 
 ## Current Status
 
+## Latest Session Update — 2026-06-08 (Workbench redesign — Phase 2)
+
+- **Agent**: Claude Code
+- **Date**: 2026-06-08
+- **Branches/PRs**: Phase 1 → `claude/workbench-redesign` ([PR #120](https://github.com/odaykamal88/tenderpath/pull/120), base `claude/wip-recovery`). Phase 2 → `claude/workbench-phase-2` ([PR #121](https://github.com/odaykamal88/tenderpath/pull/121), base `claude/workbench-redesign`). Stacked so each PR is a clean diff.
+- **Phase 2 shipped (this session)** — six commits, all verified `tsc`/`eslint`/`next build`:
+  - **Browse** — `GET /api/dashboard/browse` faceted search over `tenders` (search + sector/type/source facets + Best-fit/Closing-soon sort + pagination, expired excluded). LEFT JOINs the viewer's pipeline → matches show real fit + Matched badge; unmatched rows route to the paid bid/no-bid (PasteModal `scored` branch). `BrowsePage` replaces the placeholder.
+  - **Account** (tabbed) — Company profile (real `/api/dashboard/profile` read/write; sectors→`users.sector` chips, countries→`country_focus`); Subscription (real access state, Stripe billing portal for paid); Billing (`GET /api/dashboard/transactions` over work_orders+purchase_logs + CSV; `POST /api/dashboard/billing-portal` Stripe session — no card data); Profile & team (editable phone, passwordless security, ConnectBot moved here, team workspaces flagged).
+  - **Login reskin** — dossier 2-col (spine + form). ALL auth handlers preserved verbatim. **Verified live in-browser** (magic + password, desktop + mobile) — login renders without DB.
+  - **Vault drawer** — real in-drawer upload (file → `/vault/upload` → `/vault` register) + type selector + refetch + workbench `refresh()` so a gap-covering doc lifts the live score.
+  - **Settings consolidation** — `/dashboard/settings` now `redirect()`s to `/dashboard/account` (Company profile replaces the editor); ConnectBot restyled to dossier + mounted in Account → Team. Deleted now-unused `ComingSoonPage`.
+- **Deferred (deliberate, flagged to user)**: Subscribe modal + **per-type Stripe checkout** (needs the 6 prices in `src/lib/workbench/pricing.ts` STRIPE_SETUP created first); **team workspaces** (needs a new multi-user data model — product decision, "coming" state shipped); **full restyle of the heavy legacy pages** (work-orders/[id] panels, services intake, vault page — ~4000 lines of payment/generation-bearing UI; do page-by-page with DB testing, not a blind sweep — they render fine in the new shell today).
+- **Handoff walk on Vercel preview**: Browse search/facets/sort + Matched badges + `→`-to-Paste; Account tabs (profile save, billing portal, CSV); Vault upload covering a gap → score lift; the Login is already verified.
+
 ## Latest Session Update — 2026-06-08 (Workbench dashboard redesign — Phase 1 core loop)
 
 - **Agent**: Claude Code
