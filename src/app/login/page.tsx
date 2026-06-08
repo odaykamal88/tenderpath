@@ -1,16 +1,23 @@
 "use client";
 
+/* Login — reskinned into the Workbench "dossier" system (dark spine + form).
+ * ALL auth logic is preserved verbatim from the prior version: magic link via
+ * /api/auth/signup, password via /api/auth/password (with 5xx vs 4xx vs
+ * magic_link_only handling), Google via /api/auth/google, URL-token verify via
+ * /api/auth/verify, the tp_bridge email prefill, devToken, and the `next`
+ * redirect. Only the presentation changed. */
+
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-
-const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
-const SERIF = "'Fraunces', 'Times New Roman', serif";
+import { C, F } from "@/components/workbench/tokens";
+import { useMedia } from "@/components/workbench/useMedia";
 
 function LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
   const next = search.get("next") || "/dashboard";
+  const mobile = useMedia("(max-width: 859px)");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,11 +29,8 @@ function LoginForm() {
       ? null
       : search.get("error")
       ? "Google sign-in failed. Please try again or use a magic link."
-      : null
+      : null,
   );
-  // Captures the email of a magic-link-only account whose password attempt
-  // just failed. When set, the shared error area renders a one-click switch
-  // to magic-link sign-in instead of "Invalid email or password". Audit P1 #9.
   const [magicNudge, setMagicNudge] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -105,10 +109,6 @@ function LoginForm() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    // Differentiate 4xx (real auth fail) from 5xx (server problem) and from
-    // network errors. Without this split, a misconfigured backend or transient
-    // 500 surfaces to the user as "Invalid email or password" — the exact
-    // silent-failure pattern that hid the audit's P0 #3 from triage.
     let res: Response;
     try {
       res = await fetch("/api/auth/password", {
@@ -127,7 +127,6 @@ function LoginForm() {
       if (res.status >= 500) {
         setError(body.error || "Server error — please try the magic link option below, or email info@tenderpath.me.");
       } else if (body.code === "magic_link_only") {
-        // Surface the switch nudge instead of the generic bad-creds copy.
         setMagicNudge(email);
         setError(null);
       } else {
@@ -139,318 +138,181 @@ function LoginForm() {
     router.replace(next);
   }
 
-  // Auto-verify spinner
+  // ── auto-verify spinner ──────────────────────────────────────
   if (busy && !email && search.get("token")) {
     return (
-      <div
-        className="min-h-screen flex flex-col items-center justify-center gap-4"
-        style={{ backgroundColor: "#fafaf7" }}
-      >
-        <div className="h-7 w-7 animate-spin rounded-full border-2 border-stone-300 border-t-stone-900" />
-        <p
-          className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-700"
-          style={{ fontFamily: MONO }}
-        >
-          Signing you in
-        </p>
-        {error && (
-          <p className="max-w-sm rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3 py-2 text-[12px] text-red-700">
-            {error}
-          </p>
-        )}
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, background: C.paper }}>
+        <div style={{ width: 30, height: 30, borderRadius: 999, border: `2px solid ${C.paper2}`, borderTopColor: C.accent, animation: "tpSpin .8s linear infinite" }} />
+        <p style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: C.ink2 }}>Signing you in</p>
+        {error && <p style={{ maxWidth: 360, borderLeft: `2px solid ${C.neg}`, background: "#fbeceb", padding: "8px 12px", fontFamily: F.sans, fontSize: 12, color: C.neg }}>{error}</p>}
       </div>
     );
   }
 
-  return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center px-4 py-10"
-      style={{ backgroundColor: "#fafaf7" }}
-    >
-      {/* Back link */}
-      <div className="w-full max-w-sm mb-5">
-        <Link
-          href="/"
-          className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-500 hover:text-stone-900 transition-colors"
-          style={{ fontFamily: MONO }}
-        >
-          ← Tender·Path
-        </Link>
-      </div>
+  const labelStyle: React.CSSProperties = { display: "block", fontFamily: F.mono, fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: C.mute };
+  const inputStyle: React.CSSProperties = { marginTop: 5, width: "100%", border: `1px solid ${C.rule}`, background: C.white, padding: "10px 12px", fontFamily: F.sans, fontSize: 13, color: C.ink, outline: "none" };
+  const toggleBtn = (active: boolean): React.CSSProperties => ({ padding: "9px 12px", fontFamily: F.mono, fontSize: 11, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", background: active ? C.ink : "transparent", color: active ? C.paper : C.mute, border: 0, cursor: "pointer" });
 
-      <div className="w-full max-w-sm rounded-md border border-stone-200/70 bg-white p-7">
-        {/* Header */}
-        <div className="mb-6">
-          <div
-            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
-            style={{ fontFamily: MONO }}
-          >
-            Sign in · workspace
-          </div>
-          <h1
-            className="mt-1 text-[28px] leading-[1.1] font-medium text-stone-900 tracking-tight"
-            style={{ fontFamily: SERIF }}
-          >
-            Save your assessment
-          </h1>
-          <p className="mt-1.5 text-[12.5px] leading-relaxed text-stone-600">
-            Free for 14 days — no credit card required. We&apos;ll email you a secure sign-in link, or sign in to a demo workspace with a password.
-          </p>
-        </div>
-
-        {/* Mode toggle — segmented */}
-        <div className="mb-5 grid grid-cols-2 rounded-sm border border-stone-200/70 p-0.5 bg-stone-50/40">
-          <button
-            type="button"
-            onClick={() => {
-              setLoginMode("magic");
-              setStep("request");
-              setError(null);
-              setMagicNudge(null);
-            }}
-            className={`rounded-sm px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] transition-colors ${
-              loginMode === "magic"
-                ? "bg-white text-stone-900 shadow-sm"
-                : "text-stone-500 hover:text-stone-700"
-            }`}
-            style={{ fontFamily: MONO }}
-          >
-            Magic link
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setLoginMode("password");
-              setStep("request");
-              setError(null);
-            }}
-            className={`rounded-sm px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] transition-colors ${
-              loginMode === "password"
-                ? "bg-white text-stone-900 shadow-sm"
-                : "text-stone-500 hover:text-stone-700"
-            }`}
-            style={{ fontFamily: MONO }}
-          >
-            Password
-          </button>
-        </div>
-
-        {loginMode === "password" ? (
-          <form onSubmit={passwordLogin} className="space-y-3">
-            {/* Demo account hint */}
-            <div className="rounded-sm border-l-2 border-orange-600 bg-orange-50/40 px-3.5 py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div
-                    className="text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-700"
-                    style={{ fontFamily: MONO }}
-                  >
-                    Demo account
-                  </div>
-                  <p
-                    className="mt-1 text-[11px] text-stone-700 leading-relaxed"
-                    style={{ fontFamily: MONO }}
-                  >
-                    demo@tenderpath.me<br />
-                    TenderDemo2026!
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail("demo@tenderpath.me");
-                    setPassword("TenderDemo2026!");
-                  }}
-                  className="shrink-0 rounded-sm border border-orange-300 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-orange-700 hover:bg-orange-100/60 transition-colors"
-                  style={{ fontFamily: MONO }}
-                >
-                  Fill
-                </button>
-              </div>
-            </div>
-            <div>
-              <label
-                className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
-                style={{ fontFamily: MONO }}
-              >
-                Email
-              </label>
-              <input
-                type="email"
-                className="mt-1 w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] text-stone-900 placeholder-stone-400 focus:border-stone-700 focus:outline-none"
-                placeholder="you@company.com"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setMagicNudge(null); }}
-                required
-              />
-            </div>
-            <div>
-              <label
-                className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
-                style={{ fontFamily: MONO }}
-              >
-                Password
-              </label>
-              <input
-                type="password"
-                className="mt-1 w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] text-stone-900 placeholder-stone-400 focus:border-stone-700 focus:outline-none"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            <button
-              disabled={busy}
-              className="w-full rounded-sm bg-stone-900 px-4 py-2.5 text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:opacity-50"
-            >
-              {busy ? "Signing in…" : "Sign in →"}
-            </button>
-          </form>
-        ) : step === "request" ? (
-          <form onSubmit={request} className="space-y-3">
-            <div>
-              <label
-                className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
-                style={{ fontFamily: MONO }}
-              >
-                Work email
-              </label>
-              <input
-                type="email"
-                className="mt-1 w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] text-stone-900 placeholder-stone-400 focus:border-stone-700 focus:outline-none"
-                placeholder="you@company.com"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setMagicNudge(null); }}
-                required
-              />
-            </div>
-            <button
-              disabled={busy}
-              className="w-full rounded-sm bg-stone-900 px-4 py-3 sm:py-2.5 text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:opacity-50"
-            >
-              {busy ? "Sending…" : "Send magic link →"}
-            </button>
-          </form>
-        ) : (
-          <div className="space-y-3">
-            <div className="rounded-md border border-stone-200/70 bg-stone-50/40 p-5 text-center">
-              <svg
-                className="mx-auto mb-3 h-7 w-7 text-stone-700"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={1.5}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                />
-              </svg>
-              <div
-                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500 mb-1"
-                style={{ fontFamily: MONO }}
-              >
-                Check your inbox
-              </div>
-              <p className="text-[12.5px] leading-relaxed text-stone-700">
-                We sent a sign-in link to{" "}
-                <span className="font-medium text-stone-900" style={{ fontFamily: MONO }}>
-                  {email}
-                </span>
-                .
-              </p>
-              <p className="mt-1 text-[11px] text-stone-500">Click the link to continue. Also check your spam folder.</p>
-            </div>
-            {process.env.NODE_ENV === "development" && devToken && (
-              <p
-                className="break-all rounded-sm border-l-2 border-orange-600 bg-orange-50/40 px-3 py-2 text-[11px] text-stone-700"
-                style={{ fontFamily: MONO }}
-              >
-                Dev token: <span className="text-orange-700">{devToken}</span>
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={() => setStep("request")}
-              className="text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-500 hover:text-stone-900 transition-colors underline-offset-2 hover:underline"
-              style={{ fontFamily: MONO }}
-            >
-              Use a different email
-            </button>
-          </div>
-        )}
-
-        {magicNudge && (
-          <div className="mt-3 rounded-sm border-l-2 border-blue-600 bg-blue-50/50 px-3.5 py-3 space-y-2">
-            <div
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-700"
-              style={{ fontFamily: MONO }}
-            >
-              Magic-link sign-in
-            </div>
-            <p className="text-[12px] text-stone-700 leading-relaxed">
-              This account uses magic-link sign-in. No password is set.
-            </p>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => sendMagicLink(magicNudge)}
-              className="w-full rounded-sm bg-stone-900 px-3 py-2 text-[11.5px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:opacity-50"
-            >
-              {busy ? "Sending…" : `Send sign-in link to ${magicNudge} →`}
-            </button>
-          </div>
-        )}
-
-        {error && (
-          <p className="mt-3 rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3 py-2 text-[11.5px] text-red-700">
-            {error}
-          </p>
-        )}
-
-        {loginMode === "magic" && step === "request" && (
-          <>
-            <div className="mt-5 flex items-center gap-3">
-              <div className="flex-1 border-t border-stone-200" />
-              <span
-                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
-                style={{ fontFamily: MONO }}
-              >
-                or
-              </span>
-              <div className="flex-1 border-t border-stone-200" />
-            </div>
-            <a
-              href={`/api/auth/google?next=${encodeURIComponent(next)}`}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-sm border border-stone-300 bg-white px-4 py-2.5 text-[12.5px] font-semibold text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-              </svg>
-              Continue with Google
-            </a>
-          </>
-        )}
-      </div>
-
-      <p
-        className="mt-5 text-[10.5px] text-stone-400"
-        style={{ fontFamily: MONO }}
-      >
-        Tender·Path · UN procurement intelligence
+  const formCard = (
+    <div style={{ width: "100%", maxWidth: 372 }}>
+      <div style={{ fontFamily: F.mono, fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: C.accent }}>Sign in · workspace</div>
+      <h1 style={{ fontFamily: F.display, fontSize: 33, fontWeight: 400, letterSpacing: "-0.02em", color: C.ink, lineHeight: 1.08, margin: "6px 0 0" }}>Open your Workbench</h1>
+      <p style={{ fontFamily: F.sans, fontSize: 13.5, lineHeight: 1.55, color: C.ink2, margin: "10px 0 0" }}>
+        30-day free trial — no card required. We&apos;ll email a secure sign-in link, or use a password for the demo workspace.
       </p>
+
+      {/* mode toggle */}
+      <div style={{ display: "inline-flex", border: `1px solid ${C.rule}`, margin: "20px 0 18px" }}>
+        <button type="button" onClick={() => { setLoginMode("magic"); setStep("request"); setError(null); setMagicNudge(null); }} style={toggleBtn(loginMode === "magic")}>Magic link</button>
+        <button type="button" onClick={() => { setLoginMode("password"); setStep("request"); setError(null); }} style={toggleBtn(loginMode === "password")}>Password</button>
+      </div>
+
+      {loginMode === "password" ? (
+        <form onSubmit={passwordLogin} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ borderLeft: `2px solid ${C.accent}`, background: "#f8f2e2", padding: "12px 14px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <div style={{ fontFamily: F.mono, fontSize: 9, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: C.accent }}>Demo account</div>
+              <p style={{ fontFamily: F.mono, fontSize: 11, color: C.ink2, margin: "5px 0 0", lineHeight: 1.5 }}>demo@tenderpath.me<br />TenderDemo2026!</p>
+            </div>
+            <button type="button" onClick={() => { setEmail("demo@tenderpath.me"); setPassword("TenderDemo2026!"); }} style={{ flexShrink: 0, border: `1px solid ${C.rule}`, background: C.white, padding: "5px 9px", fontFamily: F.mono, fontSize: 9.5, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: C.accent, cursor: "pointer" }}>Fill</button>
+          </div>
+          <div>
+            <label style={labelStyle}>Email</label>
+            <input type="email" style={inputStyle} placeholder="you@company.com" value={email} onChange={(e) => { setEmail(e.target.value); setMagicNudge(null); }} required />
+          </div>
+          <div>
+            <label style={labelStyle}>Password</label>
+            <input type="password" style={inputStyle} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </div>
+          <button disabled={busy} style={{ width: "100%", background: C.ink, color: C.paper, border: 0, padding: "12px 0", fontFamily: F.mono, fontSize: 11.5, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", opacity: busy ? 0.5 : 1 }}>
+            {busy ? "Signing in…" : "Sign in →"}
+          </button>
+        </form>
+      ) : step === "request" ? (
+        <form onSubmit={request} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label style={labelStyle}>Work email</label>
+            <input type="email" style={inputStyle} placeholder="you@company.com" value={email} onChange={(e) => { setEmail(e.target.value); setMagicNudge(null); }} required />
+          </div>
+          <button disabled={busy} style={{ width: "100%", background: C.accent, color: C.white, border: 0, padding: "13px 0", fontFamily: F.mono, fontSize: 11.5, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", opacity: busy ? 0.5 : 1 }}>
+            {busy ? "Sending…" : "Send magic link →"}
+          </button>
+        </form>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ border: `1px solid ${C.rule}`, background: C.white, padding: "22px 20px", textAlign: "center" }}>
+            <div style={{ width: 46, height: 46, margin: "0 auto 12px", borderRadius: 999, background: C.ink, color: C.paper, display: "grid", placeItems: "center" }}>
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <div style={{ fontFamily: F.mono, fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: C.mute, marginBottom: 4 }}>Check your inbox</div>
+            <p style={{ fontFamily: F.sans, fontSize: 13, lineHeight: 1.55, color: C.ink2, margin: 0 }}>
+              We sent a sign-in link to <span style={{ fontFamily: F.mono, color: C.ink }}>{email}</span>. Click it to land in your Workbench — check spam if it&apos;s not there in a minute.
+            </p>
+          </div>
+          {process.env.NODE_ENV === "development" && devToken && (
+            <p style={{ wordBreak: "break-all", borderLeft: `2px solid ${C.accent}`, background: "#f8f2e2", padding: "8px 12px", fontFamily: F.mono, fontSize: 11, color: C.ink2 }}>
+              Dev token: <span style={{ color: C.accent }}>{devToken}</span>
+            </p>
+          )}
+          <button type="button" onClick={() => setStep("request")} style={{ alignSelf: "flex-start", fontFamily: F.mono, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.mute, background: "none", border: 0, borderBottom: `1px solid ${C.rule}`, cursor: "pointer", padding: "0 0 2px" }}>
+            Use a different email →
+          </button>
+        </div>
+      )}
+
+      {magicNudge && (
+        <div style={{ marginTop: 14, borderLeft: `2px solid ${C.blue}`, background: "#eef2f7", padding: "12px 14px" }}>
+          <div style={{ fontFamily: F.mono, fontSize: 9.5, fontWeight: 600, letterSpacing: "0.16em", textTransform: "uppercase", color: C.blue }}>Magic-link sign-in</div>
+          <p style={{ fontFamily: F.sans, fontSize: 12.5, color: C.ink2, margin: "6px 0 10px", lineHeight: 1.5 }}>This account uses magic-link sign-in. No password is set.</p>
+          <button type="button" disabled={busy} onClick={() => sendMagicLink(magicNudge)} style={{ width: "100%", background: C.ink, color: C.paper, border: 0, padding: "10px 0", fontFamily: F.mono, fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", opacity: busy ? 0.5 : 1 }}>
+            {busy ? "Sending…" : `Send sign-in link to ${magicNudge} →`}
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <p style={{ marginTop: 14, borderLeft: `2px solid ${C.neg}`, background: "#fbeceb", padding: "9px 12px", fontFamily: F.sans, fontSize: 12, color: C.neg }}>{error}</p>
+      )}
+
+      {loginMode === "magic" && step === "request" && (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "20px 0 14px" }}>
+            <div style={{ flex: 1, borderTop: `1px solid ${C.rule}` }} />
+            <span style={{ fontFamily: F.mono, fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: C.faint }}>or</span>
+            <div style={{ flex: 1, borderTop: `1px solid ${C.rule}` }} />
+          </div>
+          <a href={`/api/auth/google?next=${encodeURIComponent(next)}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9, width: "100%", border: `1px solid ${C.rule}`, background: C.white, padding: "11px 0", fontFamily: F.mono, fontSize: 11.5, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: C.ink2, textDecoration: "none" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+            </svg>
+            Continue with Google
+          </a>
+        </>
+      )}
+
+      <p style={{ marginTop: 18, fontFamily: F.sans, fontSize: 11.5, color: C.faint, textAlign: "center" }}>
+        By continuing you agree to our <Link href="/terms" style={{ color: C.mute }}>Terms</Link> &amp; <Link href="/privacy" style={{ color: C.mute }}>Privacy Policy</Link>.
+      </p>
+    </div>
+  );
+
+  return (
+    <div style={{ minHeight: "100vh", display: "grid", gridTemplateColumns: mobile ? "1fr" : "minmax(0, 1fr) minmax(0, 1fr)", background: C.paper }}>
+      {/* left spine */}
+      {!mobile && (
+        <div style={{ background: C.spine, color: C.paper, padding: "42px 52px", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <div style={{ position: "absolute", top: -60, right: -30, fontFamily: F.display, fontSize: 340, color: "rgba(255,255,255,0.05)", lineHeight: 1, userSelect: "none" }}>§</div>
+          <div style={{ position: "relative" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+              <span style={{ fontFamily: F.display, fontSize: 24, fontWeight: 500, color: C.white }}>TenderPath</span>
+              <span style={{ fontFamily: F.display, fontSize: 24, color: C.accent }}>·</span>
+            </div>
+            <div style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.18em", textTransform: "uppercase", color: C.spineDim, marginTop: 4 }}>The Workbench</div>
+          </div>
+          <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", maxWidth: 440 }}>
+            <h2 style={{ fontFamily: F.display, fontSize: 38, fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.06, color: C.white, margin: 0 }}>Your bid desk for UN &amp; donor tenders.</h2>
+            <p style={{ fontFamily: F.sans, fontSize: 14.5, lineHeight: 1.6, color: "#cdc6b3", margin: "18px 0 24px" }}>
+              One operating surface that scores your readiness, ranks live tenders by fit, walks you through every gap, and turns a bid decision into a submission.
+            </p>
+            <div style={{ borderTop: `1px solid ${C.spineLine}` }}>
+              {[
+                ["01", "Readiness score & the gap Navigator"],
+                ["02", "Live tender matches, ranked by fit"],
+                ["03", "Paste any tender → instant bid / no-bid"],
+                ["04", "Submission-ready proposals on demand"],
+              ].map(([n, t]) => (
+                <div key={n} style={{ display: "flex", gap: 14, alignItems: "baseline", padding: "13px 0", borderBottom: `1px solid ${C.spineLine}` }}>
+                  <span style={{ fontFamily: F.mono, fontSize: 10, color: C.accent2, letterSpacing: "0.1em" }}>{n}</span>
+                  <span style={{ fontFamily: F.sans, fontSize: 13.5, color: "#e4ddcb" }}>{t}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ position: "relative", fontFamily: F.mono, fontSize: 10, letterSpacing: "0.08em", color: C.spineDim }}>1,200+ assessments · 15+ UN agencies · est. 2024</div>
+        </div>
+      )}
+
+      {/* right form panel */}
+      <div style={{ display: "flex", flexDirection: "column", padding: mobile ? "28px 22px" : "36px 48px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Link href="/" style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: C.mute, textDecoration: "none" }}>← TenderPath</Link>
+          <a href="mailto:info@tenderpath.me" style={{ fontFamily: F.mono, fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: C.faint, textDecoration: "none" }}>Need help?</a>
+        </div>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "32px 0" }}>{formCard}</div>
+        <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: C.faint, textAlign: "center" }}>TenderPath · UN procurement intelligence</div>
+      </div>
     </div>
   );
 }
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen" style={{ backgroundColor: "#fafaf7" }} />}>
+    <Suspense fallback={<div style={{ minHeight: "100vh", background: "#f6f3ec" }} />}>
       <LoginForm />
     </Suspense>
   );
