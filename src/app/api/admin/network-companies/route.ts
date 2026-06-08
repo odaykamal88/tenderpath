@@ -48,6 +48,7 @@ export async function GET(request: Request) {
         FROM network_company_matches m
         JOIN tenders t ON t.id = m.tender_id
         WHERE t.status = 'open' AND COALESCE(t.has_broken_link, false) = false
+          AND t.deadline >= CURRENT_DATE
         GROUP BY m.network_company_id
       ) mc ON mc.network_company_id = c.id
       ORDER BY c.is_active DESC, COALESCE(mc.fresh, 0) DESC, c.created_at DESC
@@ -65,6 +66,7 @@ export async function GET(request: Request) {
       JOIN tenders t ON t.id = m.tender_id
       WHERE m.status = 'new' AND c.is_active = TRUE
         AND t.status = 'open' AND COALESCE(t.has_broken_link, false) = false
+        AND t.deadline >= CURRENT_DATE
       ORDER BY t.deadline ASC NULLS LAST, m.score DESC
       LIMIT 100
     `,

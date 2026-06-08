@@ -19,6 +19,7 @@ export async function GET(request: Request) {
       AND c.is_active = TRUE
       AND t.status = 'open'
       AND COALESCE(t.has_broken_link, false) = false
+      AND t.deadline >= CURRENT_DATE
   `;
   return NextResponse.json({ count: rows[0]?.count ?? 0 });
 }
