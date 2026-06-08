@@ -600,6 +600,35 @@ export async function getAssessment(idOrUuid: string): Promise<AssessmentReport 
   return rowToReport(row, vaultTags);
 }
 
+async function loadLatestAssessmentRow(email: string): Promise<DBRow | null> {
+  const rows = await sql`
+    SELECT id, public_id, company_name, email, sector, countries, readiness_score, recommended_tier,
+           ai_analysis, gaps, matched_tenders, matched_grants, assessment_status, created_at
+    FROM assessments
+    WHERE email = ${email}
+    ORDER BY created_at DESC
+    LIMIT 1
+  `;
+  return (rows[0] as DBRow) ?? null;
+}
+
+// Workbench source loader: returns BOTH the fully-mapped report (score,
+// dimensions, resolved-gap state, decoded tenders) AND the raw DB row so the
+// Workbench builder can read action_steps / opportunity_type / opportunity_
+// bucket that the UI-facing mapping intentionally drops. Single query path —
+// the cookie-based getCurrentUserAssessment delegates here, and the
+// dashboard-guard-authenticated /api/dashboard/workbench route calls it with
+// the email resolved from the request.
+export async function loadWorkbenchSource(
+  email: string,
+): Promise<{ report: AssessmentReport; row: DBRow } | null> {
+  const row = await loadLatestAssessmentRow(email);
+  if (!row) return null;
+  const vaultTags = await loadVaultTagsForEmail(row.email ?? email);
+  const report = await rowToReport(row, vaultTags);
+  return { report, row };
+}
+
 export async function getCurrentUserAssessment(): Promise<AssessmentReport | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get("tp_session")?.value;
@@ -608,18 +637,8 @@ export async function getCurrentUserAssessment(): Promise<AssessmentReport | nul
   const claims = await verifyToken(token);
   if (!claims) return null;
 
-  const rows = await sql`
-    SELECT id, public_id, company_name, email, sector, countries, readiness_score, recommended_tier,
-           ai_analysis, gaps, matched_tenders, matched_grants, assessment_status, created_at
-    FROM assessments
-    WHERE email = ${claims.email}
-    ORDER BY created_at DESC
-    LIMIT 1
-  `;
-  if (!rows[0]) return null;
-  const row = rows[0] as DBRow;
-  const vaultTags = await loadVaultTagsForEmail(row.email ?? claims.email);
-  return rowToReport(row, vaultTags);
+  const source = await loadWorkbenchSource(claims.email);
+  return source?.report ?? null;
 }
 
 // Accepts UUID or legacy int; same authorization rules as getAssessment.
@@ -729,7 +748,19 @@ export async function getViewerActivity(): Promise<ViewerActivity | null> {
     if (!token) return null;
     const claims = await verifyToken(token);
     if (!claims) return null;
-    const userId = claims.userId;
+    return await getViewerActivityForUser(claims.userId);
+  } catch (err) {
+    console.warn("[assessment:activity:fetch_failed]", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+// userId-keyed variant for dashboard-guard-authenticated routes (the request
+// carries a bearer token, not the tp_session cookie getViewerActivity reads).
+export async function getViewerActivityForUser(userId: number): Promise<ViewerActivity | null> {
+  try {
 
     // PR-N (2026-05-23): join proposal_packages so generation_status =
     // 'ready' overrides the stale work_orders.status that stays at

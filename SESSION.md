@@ -86,6 +86,22 @@ Additional work done outside the prompt sequence:
 
 ## Current Status
 
+## Latest Session Update — 2026-06-08 (Workbench dashboard redesign — Phase 1 core loop)
+
+- **Agent**: Claude Code
+- **Date**: 2026-06-08
+- **Task**: Rebuilt `/dashboard` from the design handoff (`~/Downloads/design_handoff_tenderpath_workbench[ 2]`) as the multi-route **"Workbench"** (D2 dossier system), wired to real backend. User chose: **core-loop-first**, build **all four** net-new backends eventually (Browse search, billing, payment, team), and **adopt the design's pricing** (EOI $149 / RFQ $199 / ITB $299 / RFP $349; sub $49/mo or $324/yr · 45% off).
+- **Phase 1 shipped (this session)** — Shell + Overview + Matches + Readiness-gaps/Navigator + Paste, all wired to real data:
+  - **New consolidated endpoint** `GET /api/dashboard/workbench` (`force-dynamic`) → one `WorkbenchData` view model. Auth via `getUserFromRequest`+`evaluateAccess` (does NOT 402 trial-expired — returns data + `access.locked` so the UI gates only premium actions). Reuses the exact assessment mapping.
+  - **data.ts refactor** (behavior-preserving): added `loadWorkbenchSource(email)` (report + raw row) and `getViewerActivityForUser(userId)`; cookie-based `getCurrentUserAssessment`/`getViewerActivity` now delegate.
+  - **lib/workbench/**: `types.ts` (WorkbenchData contract), `build.ts` (pure mapper: zips mapped report + raw `Gap[]`/`MatchedTender[]`; derives `nextMove`, pipeline funnel, buckets), `navigator.ts` (enriched Navigator scripts for recognized gaps — UNGM/financials/ISO/references — parameterized from the real profile; falls back to the assessment's `action_steps`; never invents a reg number), `pricing.ts` (design rates + **STRIPE_SETUP block** of env vars to create — existing TIERS/checkout untouched).
+  - **components/workbench/**: tokens/icons/ui atoms, `WorkbenchProvider` (single fetch, overlay host, live-score, gap-close persists via existing `/api/assessment/[uuid]/step-toggle`), `Shell` (dossier spine sidebar + topbar + mobile drawer + content-area trial banner), overlays (`NavigatorDrawer`, `PasteModal`, `VaultDrawer`), pages (Overview/Matches/Gaps/Submissions/ComingSoon).
+  - **Paste flow**: seeded-from-a-match → instant verdict from data we already hold + real pipeline (`evaluating`) / `tender-feedback` (`not_relevant`) writes + proposal upsell; free-text → routes to the **existing paid** bid/no-bid analysis (no fabricated free verdict).
+  - **Routes**: `/dashboard` → Overview; new `/dashboard/{matches,gaps,proposals}`; `/dashboard/{browse,account}` are honest "next pass" placeholders linking to existing equivalents. Old assessment-tab `/dashboard` is replaced (standalone `/assessment/[id]` report untouched). Existing `work-orders`/`vault`/`settings`/`services` pages now render inside the new shell (functional, not yet restyled).
+- **Verified**: `tsc --noEmit` clean; `eslint` clean; `npm run build` clean (all new routes register). **Not walked** — authenticated dashboard needs DATABASE_URL (redirects to /login locally per `project_local_dev_no_database`). **Handoff walk on Vercel preview**: empty-dashboard state → Overview next-move → open Navigator → mark gap closed (live score) → Matches expand → Bid/no-bid (seeded) verdict → Decide to bid → pipeline write → Submissions.
+- **Deferred to Phase 2** (all explicitly chosen by user, owed): Browse search + facets endpoint; Account tabs (billing/invoices, payment-method, team invites); Subscribe modal + **per-type Stripe checkout** (create the 6 prices in `pricing.ts` STRIPE_SETUP); full grouped Vault w/ in-drawer upload + completeness; Login redesign; restyle existing pages into the dossier system; re-wire the real `NotificationBell` into the topbar (Phase 1 uses a static bell). Also: "mark gap closed" persists *steps* but the headline score only rises from real Vault evidence — true acknowledge-to-score needs a gap-ack persistence (decide free-vs-paid for free-text Paste analysis).
+- **Not committed**: changes sit in the working tree on `claude/wip-recovery`; wants its own branch before commit/PR.
+
 ## Latest Session Update — 2026-06-04 (Bot upgrade — proactive, identity-aware, multi-channel)
 
 - **Agent**: Claude Code

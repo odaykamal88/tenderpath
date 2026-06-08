@@ -1,0 +1,23 @@
+/* Workbench motion — drawer/modal/loader keyframes for the redesigned
+   dashboard. Subtle by design. The global prefers-reduced-motion rule in
+   globals.css already neutralizes all of these for users who opt out. */
+
+@keyframes tpFade {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes tpSlideR {
+  from { transform: translateX(40px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes tpSlideL {
+  from { transform: translateX(-40px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes tpPop {
+  from { transform: scale(0.97); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+@keyframes tpSpin {
+  to { transform: rotate(360deg); }
+}
