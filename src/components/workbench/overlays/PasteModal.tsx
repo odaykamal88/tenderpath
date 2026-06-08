@@ -42,6 +42,11 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
   const { data, token, go, openNavigator } = useWorkbench();
   const mobile = useMedia("(max-width: 1023px)");
 
+  // A seed is "scored" only when it carries a real fit (i.e. it's one of the
+  // viewer's matches). A Browse row for a tender we haven't scored for this
+  // user arrives with fit 0 — we must not fake a verdict for it, so it takes
+  // the same paid-analysis path as free-text.
+  const scored = !!seed && seed.fit > 0;
   const seededText = seed
     ? `${seed.title}\n${seed.agency} · ${seed.type}\nSource: ${seed.source} · ${seed.value}`
     : "";
@@ -64,7 +69,7 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
     : { "content-type": "application/json" };
 
   const analyse = () => {
-    if (seed) {
+    if (scored) {
       setStage("analysing");
       setTimeout(() => setStage("verdict"), 1300);
     } else {
@@ -151,9 +156,11 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
         {stage === "input" && (
           <div style={{ padding: 26 }}>
             <p style={{ fontFamily: F.sans, fontSize: 14.5, lineHeight: 1.6, color: C.ink2, margin: "0 0 18px", maxWidth: 560 }}>
-              {seed
+              {scored
                 ? "We've pre-filled this from your matched tender. Analyse it against your file for an instant bid / no-bid call — we only ask for what we don't already have."
-                : "Drop a tender link or paste the notice text. We'll run it through a full bid / no-bid analysis against your vendor file."}
+                : seed
+                  ? "We've pre-filled this tender. We'll run it through a full bid / no-bid analysis against your vendor file."
+                  : "Drop a tender link or paste the notice text. We'll run it through a full bid / no-bid analysis against your vendor file."}
             </p>
             <textarea
               value={text}
@@ -183,11 +190,11 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
               </button>
             )}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 14, flexWrap: "wrap", gap: 12 }}>
-              <span style={{ fontFamily: F.mono, fontSize: 10.5, color: C.mute }}>{seed ? "Pre-filled from a matched tender" : "Paste a link, drop text, or upload a file"}</span>
+              <span style={{ fontFamily: F.mono, fontSize: 10.5, color: C.mute }}>{scored ? "Pre-filled from a matched tender" : seed ? "Pre-filled — we'll run a full analysis" : "Paste a link, drop text, or upload a file"}</span>
               <div style={{ display: "flex", gap: 10 }}>
                 <Btn kind="ghost" size="sm" onClick={onClose}>Cancel</Btn>
                 <Btn kind="gold" size="sm" onClick={analyse} disabled={!inputReady}>
-                  {seed ? "Analyse tender →" : "Run a bid / no-bid analysis →"}
+                  {scored ? "Analyse tender →" : "Run a bid / no-bid analysis →"}
                 </Btn>
               </div>
             </div>

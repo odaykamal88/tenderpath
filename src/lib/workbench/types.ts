@@ -145,6 +145,39 @@ export interface WbVaultSummary {
   missing: number;
 }
 
+/* ── Browse (full tender database) ─────────────────────────── */
+export interface WbBrowseRow {
+  id: number;
+  /** Real tenders.id for seeding the Paste/score flow. */
+  tenderId: number;
+  code: string;
+  title: string;
+  agency: string;
+  type: string;
+  source: string;
+  deadline: string | null;
+  value: string;
+  sector: string | null;
+  country: string | null;
+  /** The viewer's fit for this tender if it's one of their matches, else null. */
+  fit: number | null;
+  matched: boolean;
+  sourceUrl: string | null;
+}
+
+export interface WbFacet {
+  value: string;
+  count: number;
+}
+
+export interface WbBrowseResult {
+  tenders: WbBrowseRow[];
+  facets: { sector: WbFacet[]; type: WbFacet[]; source: WbFacet[] };
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface WorkbenchData {
   hasAssessment: boolean;
   assessmentStatus: "computing" | "ready" | "failed" | null;
