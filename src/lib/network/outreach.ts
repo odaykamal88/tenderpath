@@ -32,6 +32,7 @@ export interface OutreachMatch {
   tender_value: string | null;
   tender_source_url: string | null;
   tender_reference: string | null;
+  tender_type: string | null;
 }
 
 export interface OutreachDraft {
@@ -45,6 +46,40 @@ export function daysUntil(deadline: string | null): number | null {
   const t = new Date(deadline).getTime();
   if (Number.isNaN(t)) return null;
   return Math.round((t - Date.now()) / 86_400_000);
+}
+
+/**
+ * Business days (Mon–Fri) strictly between today and the deadline.
+ * 0 when the deadline is today/past/unparseable — so a `>= N` filter naturally
+ * drops closed and too-soon tenders. Holidays are not modelled (cheap, honest
+ * approximation): the operator's adjustable threshold absorbs the slack.
+ */
+export function businessDaysUntil(deadline: string | null): number | null {
+  if (!deadline) return null;
+  const end = new Date(deadline);
+  if (Number.isNaN(end.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(end);
+  target.setHours(0, 0, 0, 0);
+  let count = 0;
+  const cur = new Date(today);
+  while (cur < target) {
+    cur.setDate(cur.getDate() + 1);
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) count += 1;
+  }
+  return count;
+}
+
+/** Deadline phrase that leads with business days: "10 business days left", "closed". */
+export function relBusinessDeadline(deadline: string | null): string {
+  const cal = daysUntil(deadline);
+  if (cal === null) return "no deadline";
+  if (cal < 0) return `closed ${Math.abs(cal)}d ago`;
+  const biz = businessDaysUntil(deadline) ?? 0;
+  if (biz === 0) return cal === 0 ? "closes today" : "closes this weekend";
+  return `${biz} business day${biz === 1 ? "" : "s"} left`;
 }
 
 /** Human deadline phrase for the UI: "in 11 days", "today", "2d ago", "no deadline". */
@@ -82,6 +117,23 @@ export function reachableChannel(m: Pick<OutreachMatch, "contact_email" | "conta
   if (readiness(m) === "send_ready") return "email";
   if (hasLinkedIn(m)) return "linkedin";
   return "none";
+}
+
+// Consultancy / advisory / individual-expert work. The shared matchTenders
+// engine already drops `opportunity_type === "Consultancy"` and individual-
+// contractor postings for non-consulting profiles, but UN/IFI feeds routinely
+// tag advisory RFPs as "RFP"/"Services"/null. This catches the untagged ones
+// (and any company mis-classified as consulting) so the operator can keep the
+// bizdev radar focused on tenders our SMEs can actually deliver + bid. It's a
+// default-ON display filter, not a hard rule — toggle it off for a network
+// company that genuinely IS a consultancy.
+const CONSULTANCY_TYPE_RE = /consultanc/i;
+const CONSULTANCY_TITLE_RE = /\b(individual|national|international|senior|junior|home[- ]based)?\s*consultant|consultanc(?:y|ies)|terms of reference|\btors?\b|technical assistance|capacity[- ]building|feasibility study|baseline (?:study|survey|assessment)|mid[- ]?term review|end[- ]?line (?:study|survey|evaluation)|monitoring (?:and|&) evaluation|\bm\s?&\s?e\b|\bm and e\b|impact evaluation|research (?:study|consultancy)|advisory services|call for (?:experts?|cvs?)|roster of (?:experts?|consultants?)\b/i;
+
+/** True when a match looks like consultancy/advisory/individual-expert work. */
+export function isConsultancyTender(m: Pick<OutreachMatch, "tender_type" | "tender_title">): boolean {
+  if (m.tender_type && CONSULTANCY_TYPE_RE.test(m.tender_type)) return true;
+  return CONSULTANCY_TITLE_RE.test(m.tender_title ?? "");
 }
 
 /** Best-effort: only surface an estimated value when it looks meaningful — never invent one. */
@@ -202,23 +254,133 @@ export function buildLinkedInDraft(m: OutreachMatch, signoff: string): LinkedInD
 }
 
 export interface ShortlistOptions {
-  hideClosed?: boolean;
+  /** Minimum business days until the deadline (default 10 — below that it's too close to pitch). */
+  minBusinessDays?: number;
+  /** Minimum fit score to surface (default 70 — outreach is for high matches only). */
+  minScore?: number;
+  /** Drop consultancy/advisory tenders (default true). */
+  excludeConsultancies?: boolean;
+  /** Email-ready (we hold a usable email) only. */
   sendReadyOnly?: boolean;
 }
 
-/** Soonest actionable deadline first, then fit. Optionally drops closed / non-send-ready rows. */
+export const OUTREACH_DEFAULTS = {
+  minBusinessDays: 10,
+  minScore: 70,
+  excludeConsultancies: true,
+} as const;
+
+/**
+ * Apply the operator's filters then sort soonest-deadline-first, then fit.
+ * Defaults enforce the launch rules: ≥10 business days to deadline, high fit,
+ * no consultancies. Each is adjustable from the UI.
+ */
 export function rankForOutreach(matches: OutreachMatch[], opts: ShortlistOptions = {}): OutreachMatch[] {
-  let list = matches.slice();
-  if (opts.hideClosed) {
-    list = list.filter((m) => {
-      const d = daysUntil(m.tender_deadline);
-      return d === null || d >= 0;
-    });
+  const minBusinessDays = opts.minBusinessDays ?? OUTREACH_DEFAULTS.minBusinessDays;
+  const minScore = opts.minScore ?? OUTREACH_DEFAULTS.minScore;
+  const excludeConsultancies = opts.excludeConsultancies ?? OUTREACH_DEFAULTS.excludeConsultancies;
+
+  return matches
+    .filter((m) => {
+      if (minScore > 0 && m.score < minScore) return false;
+      if (excludeConsultancies && isConsultancyTender(m)) return false;
+      if (minBusinessDays > 0) {
+        const biz = businessDaysUntil(m.tender_deadline);
+        // No deadline → keep (can't disqualify on a date we don't have).
+        if (biz !== null && biz < minBusinessDays) return false;
+      }
+      if (opts.sendReadyOnly && readiness(m) !== "send_ready") return false;
+      return true;
+    })
+    .sort(byDeadlineThenScore);
+}
+
+/** A company and the qualifying tenders we can pitch it in one go. */
+export interface CompanyGroup {
+  company_id: number;
+  company_name: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_linkedin: string | null;
+  channel: OutreachChannel;
+  matches: OutreachMatch[];
+}
+
+/**
+ * Bundle an already-filtered, already-ranked match list by company. Groups keep
+ * the incoming (deadline-first) order; companies are ordered by their soonest
+ * deadline so the most time-critical bundles surface first.
+ */
+export function groupByCompany(matches: OutreachMatch[]): CompanyGroup[] {
+  const groups = new Map<number, CompanyGroup>();
+  for (const m of matches) {
+    let g = groups.get(m.company_id);
+    if (!g) {
+      g = {
+        company_id: m.company_id,
+        company_name: m.company_name,
+        contact_name: m.contact_name,
+        contact_email: m.contact_email,
+        contact_linkedin: m.contact_linkedin,
+        channel: reachableChannel(m),
+        matches: [],
+      };
+      groups.set(m.company_id, g);
+    }
+    g.matches.push(m);
   }
-  if (opts.sendReadyOnly) {
-    list = list.filter((m) => readiness(m) === "send_ready");
-  }
-  return list.sort(byDeadlineThenScore);
+  return [...groups.values()].sort((a, b) => byDeadlineThenScore(a.matches[0], b.matches[0]));
+}
+
+/** One numbered tender line for a bundle email body. */
+function bundleTenderLine(m: OutreachMatch, idx: number): string {
+  const where = [m.tender_agency?.trim(), m.tender_country?.trim()].filter(Boolean).join(" · ");
+  const value = meaningfulValue(m.tender_value);
+  const reason = topReasons(m.match_reasons, 1);
+  const parts = [
+    `${idx + 1}. "${m.tender_title}"${where ? ` — ${where}` : ""}`,
+    `   ${deadlinePhraseOf(m).replace(/^closing/, "Closes")}${value ? ` · est. ${value}` : ""}`,
+  ];
+  if (reason) parts.push(`   Why you: ${reason}`);
+  if (m.tender_source_url) parts.push(`   ${m.tender_source_url}`);
+  return parts.join("\n");
+}
+
+/**
+ * Turn a company's bundle into ONE cold email listing every selected tender.
+ * Deterministic (no LLM), honest on every deadline, and preserves the isolation
+ * invariant — this only builds copy for the operator to send from their own
+ * inbox. Pass the (possibly de-selected) subset the operator wants to pitch.
+ */
+export function buildBundleEmail(
+  group: Pick<CompanyGroup, "company_name" | "contact_name">,
+  matches: OutreachMatch[],
+  signoff: string,
+): OutreachDraft {
+  const n = matches.length;
+  const subject = n === 1
+    ? buildOutreachDraft(matches[0], signoff).subject
+    : `${n} live tenders ${group.company_name} looks a strong fit for`;
+
+  const intro = n === 1
+    ? `A live opportunity just came up that ${group.company_name} looks like a strong fit for:`
+    : `A few live opportunities just came up that ${group.company_name} looks like a strong fit for:`;
+
+  const body = [
+    `Hi ${firstName(group.contact_name)},`,
+    "",
+    intro,
+    "",
+    matches.map(bundleTenderLine).join("\n\n"),
+    "",
+    n === 1
+      ? PITCH
+      : "I help companies turn matches like these into submission-ready bids, fast. Want a quick read on any of them — the deadlines, the key requirements, and where you'd be strong or weak? No cost to look.",
+    "",
+    signoff || "[Your name]\nTenderPath",
+  ].join("\n");
+
+  return { subject, body };
 }
 
 function byDeadlineThenScore(a: OutreachMatch, b: OutreachMatch): number {

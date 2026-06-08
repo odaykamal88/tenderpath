@@ -124,6 +124,39 @@ export default function AdminNetworkPage() {
     }
   }
 
+  async function setManyStatus(matchIds: number[], status: string) {
+    if (matchIds.length === 0) return;
+    const idSet = new Set(matchIds);
+    // Optimistic: drop the whole bundle in place and decrement each company's
+    // fresh count by how many of its matches we just moved off the worklist.
+    const affected = (data?.fresh ?? []).filter((m) => idSet.has(m.id));
+    const decByCompany = new Map<number, number>();
+    for (const m of affected) decByCompany.set(m.company_id, (decByCompany.get(m.company_id) ?? 0) + 1);
+    setData((d) => (d ? {
+      ...d,
+      fresh: d.fresh.filter((m) => !idSet.has(m.id)),
+      companies: d.companies.map((c) => decByCompany.has(c.id)
+        ? { ...c, fresh_count: Math.max(0, c.fresh_count - (decByCompany.get(c.id) ?? 0)) }
+        : c),
+    } : d));
+    setToast(null);
+    try {
+      const results = await Promise.all(matchIds.map((id) =>
+        fetch(`/api/admin/network-companies/matches/${id}`, {
+          method: "PATCH",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ status }),
+        }).then((res) => res.ok),
+      ));
+      const failed = results.filter((ok) => !ok).length;
+      if (failed > 0) throw new Error(`${failed} of ${matchIds.length} didn't update`);
+      setToast({ ok: true, msg: `Marked ${matchIds.length} ${status}.` });
+    } catch (err) {
+      setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to update matches" });
+      await load({ silent: true }); // reconcile silently on failure
+    }
+  }
+
   async function deleteCompany(companyId: number, name: string) {
     if (typeof window !== "undefined" && !window.confirm(`Delete "${name}" and all its matches? This cannot be undone.`)) return;
     // Optimistic + background: drop the company and its fresh matches in place.
@@ -291,6 +324,7 @@ export default function AdminNetworkPage() {
         loading={loading}
         busy={busy}
         onSetStatus={setMatchStatus}
+        onSetManyStatus={setManyStatus}
       />
 
       <section className={styles.panel}>

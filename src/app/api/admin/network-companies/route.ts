@@ -58,7 +58,8 @@ export async function GET(request: Request) {
         c.id AS company_id, c.name AS company_name, c.contact_name, c.contact_email, c.contact_linkedin,
         t.id AS tender_id, t.title AS tender_title, t.agency AS tender_agency,
         t.country AS tender_country, t.sector AS tender_sector, t.deadline AS tender_deadline,
-        t.estimated_value AS tender_value, t.source_url AS tender_source_url, t.reference_id AS tender_reference
+        t.estimated_value AS tender_value, t.source_url AS tender_source_url, t.reference_id AS tender_reference,
+        t.opportunity_type AS tender_type
       FROM network_company_matches m
       JOIN network_companies c ON c.id = m.network_company_id
       JOIN tenders t ON t.id = m.tender_id
