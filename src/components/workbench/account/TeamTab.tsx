@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { C, F } from "../tokens";
 import { useWorkbench } from "../WorkbenchProvider";
 import { Block, Field } from "./atoms";
+import ConnectBot from "@/components/dashboard/ConnectBot";
 
 export function TeamTab() {
   const { data, token } = useWorkbench();
@@ -95,6 +96,8 @@ export function TeamTab() {
           Team workspaces are coming. You&apos;ll be able to invite colleagues to share your vendor file and split bid work — with Owner / Admin / Member roles and magic-link invites. Today your account is single-user.
         </p>
       </Block>
+
+      <ConnectBot />
     </div>
   );
 }
