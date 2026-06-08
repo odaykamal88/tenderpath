@@ -1,15 +1,15 @@
 "use client";
 
-/* Document Vault drawer (Phase 1).
+/* Document Vault drawer.
  *
  * The repository everything reads from. Shows the user's real vault documents
- * (grouped by type, with downloads) and the documents still missing — derived
- * from their open readiness gaps, each deep-linking into the Navigator. The full
- * grouped vault with the completeness meter + in-drawer upload lands with the
- * Phase-2 Vault work; this keeps the Navigator's "open your Vault" link real and
- * routes uploads to the existing vault page. */
+ * (grouped by type, with downloads + completeness meter) and the documents
+ * still missing — derived from their open readiness gaps, each deep-linking
+ * into the Navigator. Supports real in-drawer upload: file → /vault/upload
+ * (blob + extract) → /vault (register), then refetches the list and refreshes
+ * the workbench so an upload that covers a gap lifts the live score. */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { C, F } from "../tokens";
 import { Btn } from "../ui";
@@ -34,12 +34,26 @@ const TYPE_LABEL: Record<string, string> = {
   other: "Other documents",
 };
 
+const UPLOAD_TYPES: [string, string][] = [
+  ["certification", "Registration / certification"],
+  ["financial", "Financial statement"],
+  ["cv", "Team / CV"],
+  ["past_performance", "Past performance / reference"],
+  ["other", "Other document"],
+];
+
 export function VaultDrawer({ onClose }: { onClose: () => void }) {
   const router = useRouter();
-  const { data, token, openNavigator } = useWorkbench();
+  const { data, token, openNavigator, refresh } = useWorkbench();
   const mobile = useMedia("(max-width: 1023px)");
   const [docs, setDocs] = useState<VaultDoc[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [pending, setPending] = useState<File | null>(null);
+  const [uploadType, setUploadType] = useState("other");
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState<string | null>(null);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -48,33 +62,81 @@ export function VaultDrawer({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/dashboard/vault", {
-          headers: token ? { authorization: `Bearer ${token}` } : {},
-          cache: "no-store",
-        });
-        if (res.status === 402) {
-          setError("Subscribe to access your Document Vault.");
-          return;
-        }
-        if (!res.ok) {
-          setError("We couldn't load your Vault.");
-          return;
-        }
-        const body = (await res.json()) as { documents: VaultDoc[] };
-        setDocs(body.documents ?? []);
-      } catch {
-        setError("We couldn't load your Vault.");
-      }
-    })();
+  // Pure fetch (no setState) so callers can set state inside their own async
+  // closures — keeps the effect free of the set-state-in-effect cascade rule.
+  const loadDocs = useCallback(async (): Promise<{ docs?: VaultDoc[]; error?: string }> => {
+    try {
+      const res = await fetch("/api/dashboard/vault", {
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+        cache: "no-store",
+      });
+      if (res.status === 402) return { error: "Subscribe to access your Document Vault." };
+      if (!res.ok) return { error: "We couldn't load your Vault." };
+      const body = (await res.json()) as { documents: VaultDoc[] };
+      return { docs: body.documents ?? [] };
+    } catch {
+      return { error: "We couldn't load your Vault." };
+    }
   }, [token]);
 
-  const onFile = docs?.length ?? 0;
+  useEffect(() => {
+    (async () => {
+      const r = await loadDocs();
+      if (r.error) setError(r.error);
+      else {
+        setDocs(r.docs ?? []);
+        setError(null);
+      }
+    })();
+  }, [loadDocs]);
+
+  const doUpload = async () => {
+    if (!pending) return;
+    setUploading(true);
+    setUploadErr(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", pending);
+      const up = await fetch("/api/dashboard/vault/upload", {
+        method: "POST",
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      const upBody = (await up.json().catch(() => ({}))) as { upload_id?: number; error?: string };
+      if (!up.ok || upBody.upload_id == null) {
+        setUploadErr(upBody.error ?? "Upload failed.");
+        setUploading(false);
+        return;
+      }
+      const reg = await fetch("/api/dashboard/vault", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ name: pending.name, type: uploadType, upload_id: upBody.upload_id }),
+      });
+      if (!reg.ok) {
+        const rb = (await reg.json().catch(() => ({}))) as { error?: string };
+        setUploadErr(rb.error ?? "Couldn't save to your Vault.");
+        setUploading(false);
+        return;
+      }
+      // Success — clear, reload the list, and refresh the workbench so a doc
+      // that covers a gap lifts the live score + clears the missing row.
+      setPending(null);
+      setUploadType("other");
+      if (fileRef.current) fileRef.current.value = "";
+      const r = await loadDocs();
+      if (!r.error) setDocs(r.docs ?? []);
+      refresh();
+    } catch {
+      setUploadErr("Upload failed. Please try again.");
+    }
+    setUploading(false);
+  };
+
+  const onFileCount = docs?.length ?? 0;
   const missingGaps = data.gaps.filter((g) => g.status === "open");
-  const total = onFile + missingGaps.length;
-  const pct = total > 0 ? Math.round((onFile / total) * 100) : 0;
+  const total = onFileCount + missingGaps.length;
+  const pct = total > 0 ? Math.round((onFileCount / total) * 100) : 0;
 
   const grouped = new Map<string, VaultDoc[]>();
   for (const d of docs ?? []) {
@@ -107,7 +169,7 @@ export function VaultDrawer({ onClose }: { onClose: () => void }) {
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                 <span style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "#9aa3ad" }}>Completeness</span>
                 <span style={{ fontFamily: F.mono, fontSize: 10, color: C.accent2 }}>
-                  {onFile}/{total} · {pct}%
+                  {onFileCount}/{total} · {pct}%
                 </span>
               </div>
               <div style={{ height: 4, background: C.spineLine }}>
@@ -162,11 +224,31 @@ export function VaultDrawer({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        {/* footer */}
-        <div style={{ borderTop: `1px solid ${C.rule}`, background: C.white, padding: "14px 22px", display: "flex", gap: 10, alignItems: "center" }}>
-          <span style={{ fontFamily: F.mono, fontSize: 10, color: C.mute, flex: 1 }}>Files are checksummed &amp; date-stamped on upload</span>
-          <Btn kind="ghost" size="sm" onClick={onClose}>Close</Btn>
-          <Btn kind="gold" size="sm" onClick={() => { onClose(); router.push("/dashboard/vault"); }}>+ Upload document</Btn>
+        {/* footer / upload */}
+        <div style={{ borderTop: `1px solid ${C.rule}`, background: C.white, padding: "14px 22px" }}>
+          <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp" onChange={(e) => { setPending(e.target.files?.[0] ?? null); setUploadErr(null); }} style={{ display: "none" }} />
+          {pending ? (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <span style={{ color: C.accent }}><Icon name="upload" size={15} /></span>
+                <span style={{ flex: 1, minWidth: 0, fontFamily: F.sans, fontSize: 13, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pending.name}</span>
+                <select value={uploadType} onChange={(e) => setUploadType(e.target.value)} style={{ fontFamily: F.sans, fontSize: 12, color: C.ink, border: `1px solid ${C.rule}`, background: C.white, padding: "5px 6px", outline: "none" }}>
+                  {UPLOAD_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </div>
+              {uploadErr && <div style={{ fontFamily: F.sans, fontSize: 12, color: C.neg, marginBottom: 8 }}>{uploadErr}</div>}
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <Btn kind="ghost" size="sm" onClick={() => { setPending(null); setUploadErr(null); if (fileRef.current) fileRef.current.value = ""; }} disabled={uploading}>Cancel</Btn>
+                <Btn kind="gold" size="sm" onClick={doUpload} disabled={uploading}>{uploading ? "Uploading…" : "Upload →"}</Btn>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <span style={{ fontFamily: F.mono, fontSize: 10, color: C.mute, flex: 1 }}>Files are checksummed &amp; date-stamped on upload</span>
+              <Btn kind="ghost" size="sm" onClick={() => router.push("/dashboard/vault")}>Open full Vault</Btn>
+              <Btn kind="gold" size="sm" onClick={() => fileRef.current?.click()}>+ Upload</Btn>
+            </div>
+          )}
         </div>
       </div>
     </div>
