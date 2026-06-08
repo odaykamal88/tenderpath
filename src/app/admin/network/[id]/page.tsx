@@ -91,6 +91,7 @@ export default function AdminNetworkCompanyPage() {
   const [editing, setEditing] = useState(false);
   const [editReasonId, setEditReasonId] = useState<number | null>(null);
   const [reasonDraft, setReasonDraft] = useState("");
+  const [showDismissed, setShowDismissed] = useState(false);
 
   const load = useCallback(async () => {
     if (!Number.isInteger(id) || id <= 0) {
@@ -152,7 +153,16 @@ export default function AdminNetworkCompanyPage() {
   }
 
   async function setMatchStatus(matchId: number, status: string, reason?: string) {
-    setBusy(true);
+    // Optimistic + background — update the row in place so the page doesn't
+    // reload/flash on every status change. Reconcile silently on failure.
+    setData((d) => (d ? {
+      ...d,
+      matches: d.matches.map((m) => (m.id === matchId
+        ? { ...m, status, ...(reason !== undefined ? { dismiss_reason: reason || null } : {}) }
+        : m)),
+    } : d));
+    setEditReasonId(null);
+    setReasonDraft("");
     setToast(null);
     try {
       const res = await fetch(`/api/admin/network-companies/matches/${matchId}`, {
@@ -162,13 +172,9 @@ export default function AdminNetworkCompanyPage() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
-      setEditReasonId(null);
-      setReasonDraft("");
-      await load();
     } catch (err) {
       setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to update match" });
-    } finally {
-      setBusy(false);
+      await load(); // reconcile on failure
     }
   }
 
@@ -189,6 +195,9 @@ export default function AdminNetworkCompanyPage() {
 
   const c = data?.company;
   const ai = c?.ai_analysis;
+  const allMatches = data?.matches ?? [];
+  const dismissedCount = allMatches.filter((m) => m.status === "dismissed").length;
+  const visibleMatches = showDismissed ? allMatches : allMatches.filter((m) => m.status !== "dismissed");
 
   return (
     <>
@@ -244,14 +253,22 @@ export default function AdminNetworkCompanyPage() {
       <section className={styles.panel}>
         <header className={styles.panelHead}>
           <div>
-            <h2 className={styles.panelTitle}>Matches ({data?.matches.length ?? 0})</h2>
+            <h2 className={styles.panelTitle}>Matches ({visibleMatches.length})</h2>
             <p className={styles.panelSub}>Open tenders this company fits, soonest deadline first. Fresh ones are flagged &lsquo;new&rsquo;.</p>
           </div>
+          {dismissedCount > 0 && (
+            <label className={styles.sessionSubtle} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+              <input type="checkbox" checked={showDismissed} onChange={(e) => setShowDismissed(e.target.checked)} />
+              Show dismissed ({dismissedCount})
+            </label>
+          )}
         </header>
         {loading ? (
           <div className={styles.woEmpty}>Loading…</div>
-        ) : !data || data.matches.length === 0 ? (
-          <div className={styles.woEmpty}>No open-tender matches yet. Try Re-match now.</div>
+        ) : visibleMatches.length === 0 ? (
+          <div className={styles.woEmpty}>
+            {allMatches.length === 0 ? "No open-tender matches yet. Try Re-match now." : "No active matches — all dismissed. Tick ‘Show dismissed’ to review them."}
+          </div>
         ) : (
           <div className={styles.tableWrap}>
             <table className={styles.dossierTable}>
@@ -265,7 +282,7 @@ export default function AdminNetworkCompanyPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.matches.map((m) => (
+                {visibleMatches.map((m) => (
                   <tr key={m.id}>
                     <td style={{ maxWidth: 360 }}>
                       {m.tender_source_url ? (
