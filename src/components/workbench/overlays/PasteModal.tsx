@@ -37,6 +37,16 @@ function Pill({ kind, resolved }: { kind: ReqKind; resolved?: boolean }) {
   );
 }
 
+interface PasteVerdict {
+  tender: { title: string; agency: string | null };
+  fit: number;
+  recommend: boolean;
+  summary: string;
+  on_file: string[];
+  gaps: string[];
+  asks: string[];
+}
+
 export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: () => void }) {
   const router = useRouter();
   const { data, token, go, openNavigator } = useWorkbench();
@@ -55,6 +65,8 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
   const [file, setFile] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [decided, setDecided] = useState<"bid" | "pass" | null>(null);
+  const [analysis, setAnalysis] = useState<PasteVerdict | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -68,34 +80,72 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
     ? { authorization: `Bearer ${token}`, "content-type": "application/json" }
     : { "content-type": "application/json" };
 
-  const analyse = () => {
+  const analyse = async () => {
     if (scored) {
+      // Seeded from a match — instant verdict from data we already hold.
       setStage("analysing");
       setTimeout(() => setStage("verdict"), 1300);
-    } else {
-      // No free analysis engine for arbitrary tenders — hand off to the paid
-      // bid/no-bid analysis rather than fake a verdict. Carry the text across.
-      try {
-        sessionStorage.setItem("tp_paste_prefill", file ? `Uploaded file: ${file}` : text);
-      } catch {
-        /* sessionStorage may be unavailable — non-fatal */
-      }
+      return;
+    }
+    if (file && !text.trim()) {
+      // A file upload needs the paid extraction pipeline — hand off rather than
+      // fake a verdict from a filename.
       onClose();
       router.push("/dashboard/services/bid-no-bid");
+      return;
+    }
+    // Free-text / URL — run the real quick verdict.
+    setAnalysisError(null);
+    setStage("analysing");
+    const t = text.trim();
+    const isUrl = /^https?:\/\/\S+$/i.test(t);
+    try {
+      const res = await fetch("/api/dashboard/paste-analyze", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify(isUrl ? { url: t } : { text: t }),
+      });
+      if (!res.ok) {
+        const b = (await res.json().catch(() => ({}))) as { error?: string };
+        setAnalysisError(b.error ?? "Couldn't analyse this tender. Please try again.");
+        setStage("input");
+        return;
+      }
+      const v = (await res.json()) as PasteVerdict;
+      setAnalysis(v);
+      setStage("verdict");
+    } catch {
+      setAnalysisError("Couldn't reach the analysis service. Please try again.");
+      setStage("input");
     }
   };
 
-  // Verdict data (seeded only) — all real.
-  const openGaps = (data.gaps.filter((g) => g.status === "open").slice(0, 3));
-  const haves = (seed?.sectors ?? []).slice(0, 3);
-  const asks = [
-    { id: "method", label: "Technical methodology note", field: "Briefly, your delivery approach for this scope…" },
-    { id: "team", label: "Proposed team / key CVs", field: "Key personnel you'd assign (names or roles)…" },
-  ];
-  const fit = seed?.fit ?? 0;
-  const recommend = fit >= 70 && openGaps.length <= 2;
+  const matchGapId = (title: string): string | null => {
+    const lt = title.toLowerCase();
+    return (
+      data.gaps.find((g) => {
+        const gt = g.title.toLowerCase();
+        return gt.includes(lt) || lt.includes(gt);
+      })?.id ?? null
+    );
+  };
+
+  // Verdict data — from the live analysis (free-text) or held match data (seeded).
+  const fit = analysis ? analysis.fit : seed?.fit ?? 0;
+  const haves: string[] = analysis ? analysis.on_file : (seed?.sectors ?? []).slice(0, 3).map((s) => `${s} experience`);
+  const openGaps: { id: string | null; title: string }[] = analysis
+    ? analysis.gaps.map((g) => ({ title: g, id: matchGapId(g) }))
+    : data.gaps.filter((g) => g.status === "open").slice(0, 3).map((g) => ({ id: g.id, title: g.title }));
+  const asks = analysis
+    ? analysis.asks.map((label, i) => ({ id: `a${i}`, label, field: "Add the detail here…" }))
+    : [
+        { id: "method", label: "Technical methodology note", field: "Briefly, your delivery approach for this scope…" },
+        { id: "team", label: "Proposed team / key CVs", field: "Key personnel you'd assign (names or roles)…" },
+      ];
+  const recommend = analysis ? analysis.recommend : fit >= 70 && openGaps.length <= 2;
   const asksAnswered = asks.filter((a) => (answers[a.id] || "").trim().length > 4).length;
-  const subType = submissionType(detectSubmissionType(seed?.type));
+  const bidTitle = seed?.title ?? analysis?.tender.title ?? "Pasted tender";
+  const subType = submissionType(detectSubmissionType(seed?.type ?? analysis?.tender.title));
 
   const onBid = () => {
     setDecided("bid");
@@ -105,14 +155,14 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
       headers: authHeaders,
       body: JSON.stringify({
         tender_id: seed?.tenderId ?? null,
-        tender_title: seed?.title,
-        tender_agency: seed?.agency ?? null,
+        tender_title: bidTitle,
+        tender_agency: seed?.agency ?? analysis?.tender.agency ?? null,
         tender_deadline: seed?.deadline ?? null,
         tender_value: seed?.value ?? null,
-        fit_score: seed?.fit ?? 0,
+        fit_score: fit,
         stage: "evaluating",
         source_url: seed?.sourceUrl ?? null,
-        match_reasons: seed?.why ? [seed.why] : null,
+        match_reasons: seed?.why ? [seed.why] : analysis?.summary ? [analysis.summary] : null,
       }),
     }).catch((err) => console.warn("[workbench:paste:pipeline_failed]", err));
   };
@@ -159,9 +209,12 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
               {scored
                 ? "We've pre-filled this from your matched tender. Analyse it against your file for an instant bid / no-bid call — we only ask for what we don't already have."
                 : seed
-                  ? "We've pre-filled this tender. We'll run it through a full bid / no-bid analysis against your vendor file."
-                  : "Drop a tender link or paste the notice text. We'll run it through a full bid / no-bid analysis against your vendor file."}
+                  ? "We've pre-filled this tender. We'll read it, check it against your file, and give you a bid / no-bid call."
+                  : "Drop a tender link or paste the notice text — we'll read it, check it against your file, and give you an instant bid / no-bid call. Upload a PDF/Word doc and we'll run the full paid analysis."}
             </p>
+            {analysisError && (
+              <div style={{ marginBottom: 14, borderLeft: `2px solid ${C.neg}`, background: "#fbeceb", padding: "9px 12px", fontFamily: F.sans, fontSize: 12.5, color: C.neg }}>{analysisError}</div>
+            )}
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -194,7 +247,7 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
               <div style={{ display: "flex", gap: 10 }}>
                 <Btn kind="ghost" size="sm" onClick={onClose}>Cancel</Btn>
                 <Btn kind="gold" size="sm" onClick={analyse} disabled={!inputReady}>
-                  {scored ? "Analyse tender →" : "Run a bid / no-bid analysis →"}
+                  {file && !text.trim() ? "Run full analysis →" : "Analyse tender →"}
                 </Btn>
               </div>
             </div>
@@ -216,7 +269,7 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
         )}
 
         {/* VERDICT */}
-        {stage === "verdict" && seed && (
+        {stage === "verdict" && (scored || analysis) && (
           <div style={{ padding: "0 0 22px" }}>
             <div style={{ padding: "22px 26px", borderBottom: `1px solid ${C.rule}`, background: C.white, display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap" }}>
               <div style={{ textAlign: "center", flexShrink: 0 }}>
@@ -228,9 +281,11 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
                   {recommend ? "● Recommended: BID" : "● Recommended: PROCEED WITH CAUTION"}
                 </div>
                 <p style={{ fontFamily: F.sans, fontSize: 14, lineHeight: 1.55, color: C.ink2, margin: "8px 0 0" }}>
-                  {recommend
-                    ? `Strong alignment on sector and track record. ${openGaps.length === 0 ? "Every eligibility item you'd typically need is covered." : `${openGaps.length} open gap${openGaps.length === 1 ? "" : "s"} to close before the deadline.`} We need ${asks.length} inputs from you to complete the picture.`
-                    : "Adjacent fit. Winnable with the right partner or once your gaps close, but weigh the effort against your stronger matches."}
+                  {analysis?.summary
+                    ? analysis.summary
+                    : recommend
+                      ? `Strong alignment on sector and track record. ${openGaps.length === 0 ? "Every eligibility item you'd typically need is covered." : `${openGaps.length} open gap${openGaps.length === 1 ? "" : "s"} to close before the deadline.`} We need ${asks.length} inputs from you to complete the picture.`
+                      : "Adjacent fit. Winnable with the right partner or once your gaps close, but weigh the effort against your stronger matches."}
                 </p>
               </div>
             </div>
@@ -240,17 +295,17 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
               <div style={{ marginTop: 12, border: `1px solid ${C.rule}`, background: C.white }}>
                 {haves.map((h) => (
                   <div key={h} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 15px", borderBottom: `1px solid ${C.ruleSoft}` }}>
-                    <span style={{ flex: 1, fontFamily: F.sans, fontSize: 13.5, color: C.ink }}>{h} experience</span>
+                    <span style={{ flex: 1, fontFamily: F.sans, fontSize: 13.5, color: C.ink }}>{h}</span>
                     <span style={{ fontFamily: F.mono, fontSize: 10.5, color: C.mute, display: mobile ? "none" : "block" }}>On your profile</span>
                     <Pill kind="have" />
                   </div>
                 ))}
                 {openGaps.map((g) => (
-                  <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 15px", borderBottom: `1px solid ${C.ruleSoft}`, background: "#fdf6f6" }}>
+                  <div key={g.title} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 15px", borderBottom: `1px solid ${C.ruleSoft}`, background: "#fdf6f6" }}>
                     <span style={{ flex: 1, fontFamily: F.sans, fontSize: 13.5, color: C.ink, fontWeight: 500 }}>{g.title}</span>
-                    <button onClick={() => fixGap(g.id)} style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.06em", textTransform: "uppercase", color: C.ink, background: C.white, border: `1px solid ${C.rule}`, padding: "5px 9px", cursor: "pointer" }}>
+                    {g.id && <button onClick={() => fixGap(g.id as string)} style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.06em", textTransform: "uppercase", color: C.ink, background: C.white, border: `1px solid ${C.rule}`, padding: "5px 9px", cursor: "pointer" }}>
                       Fix with the Navigator →
-                    </button>
+                    </button>}
                     <Pill kind="gap" />
                   </div>
                 ))}
