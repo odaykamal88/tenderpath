@@ -89,7 +89,7 @@ export function SubmissionsPage() {
               </div>
               <div style={{ fontFamily: F.mono, fontSize: 9.5, color: C.mute, marginTop: 3 }}>{t.turnaround} turnaround</div>
               <div style={{ marginTop: 14 }}>
-                <Btn kind="primary" size="sm" full onClick={() => router.push("/dashboard/services/proposal")}>Start →</Btn>
+                <Btn kind="primary" size="sm" full onClick={() => router.push(`/dashboard/services/proposal?type=${t.code}`)}>Start →</Btn>
               </div>
             </Card>
           ))}

@@ -15,6 +15,7 @@ import { sql } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/auth";
 import { evaluateAccess } from "@/lib/access";
 import { getFreeSubmissionStatus } from "@/lib/free-submission";
+import { newSubscriptionConfigured } from "@/lib/workbench/pricing";
 import { loadWorkbenchSource, getViewerActivityForUser } from "@/lib/assessment/data";
 import { buildWorkbenchData, emptyWorkbenchData } from "@/lib/workbench/build";
 import type { NavigatorCompany } from "@/lib/workbench/navigator";
@@ -149,6 +150,7 @@ export async function GET(request: Request) {
     locked: !accessInfo.hasAccess,
     isPaid: accessInfo.reason === "subscribed" || accessInfo.reason === "admin",
     freeSubmissionEligible: freeSubmission.eligible,
+    newSubscriptionLive: newSubscriptionConfigured(),
   };
   const trialDays = accessInfo.trialDaysLeft;
 

@@ -86,6 +86,15 @@ Additional work done outside the prompt sequence:
 
 ## Current Status
 
+## Latest Session Update — 2026-06-09 (Per-type Stripe checkout — wiring done, DORMANT until prices created)
+
+- **Agent**: Claude Code · **Branch**: `claude/per-type-stripe-checkout` (off main, post landing-ship). `tsc`/`eslint`/`next build` clean; dormant paths render-verified in preview (no console errors).
+- **What/why**: the product DISPLAYS per-submission pricing (EOI $149 / RFQ $199 / ITB $299 / RFP $349) and the $49/$324 subscription, but checkout only ever charged the single `proposal-draft` price. This wires the per-type + subscription checkout **fully dormant behind unset env vars** — zero behaviour change until the Stripe prices exist, then it activates.
+- **Backend** (`/api/pay/checkout` + `lib/workbench/pricing.ts`): per-type submission price override — a `proposal-draft` checkout carrying `submission_type` (EOI/RFQ/ITB/RFP) bills at that type's price *iff* `configuredSubmissionPriceId()` is non-null, else the package price (fulfilment stays proposal-draft). New subscription slugs `sub-monthly`/`sub-annual` (bypass the TIERS resolver; in SUBSCRIPTION_PLANS + TRIAL_PLANS → subscription mode + 30-day trial). Helpers: `configuredSubmissionPriceId`, `subscriptionPriceId`, `newSubscriptionConfigured`, `isSubmissionCode`.
+- **Per-type UI threading**: SubmissionsPage cards → `/dashboard/services/proposal?type=<CODE>` → services/[service] reads `?type` → ServiceIntakeForm `payHref(..., submissionType)` → `/pay?submission_type=` → CardTab posts `submission_type` to checkout. No schema change.
+- **Subscription UI**: `WbAccess.newSubscriptionLive` (server `newSubscriptionConfigured()`); `openSubscribe` routes to `/pay?plan=sub-annual` when live, else the existing `annual-access` (never dead-ends); `/pay` shows a locked summary for the sub slugs (EXTRA_PLAN_DISPLAY) instead of the tier grid.
+- **YOUR PART NEXT — create these 6 Stripe prices + set the env vars** (then it's live, no redeploy logic needed beyond the env): `STRIPE_PRICE_SUBMISSION_EOI` ($149 one-time), `STRIPE_PRICE_SUBMISSION_RFQ` ($199), `STRIPE_PRICE_SUBMISSION_ITB` ($299), `STRIPE_PRICE_SUBMISSION_RFP` ($349), `STRIPE_PRICE_SUB_MONTHLY` ($49/mo recurring), `STRIPE_PRICE_SUB_ANNUAL` ($324/yr recurring). After setting them, walk: Submissions card "Start EOI" → intake → `/pay` charges $149; Subscribe → `/pay?plan=sub-annual` charges $324/yr w/ trial. Until set: identical to today (package price; Subscribe → annual-access).
+
 ## Latest Session Update — 2026-06-09 (Landing redesign — structure + first-submission-free credit + walkthrough video)
 
 - **Agent**: Claude Code · **Branch**: committed on `claude/landing-redesign` (`2d8b358` structure+credit; walkthrough video in a follow-up commit). **Not pushed** (no PR opened). All `tsc`/`eslint`/`next build` clean; landing **driven + verified live in the preview** (desktop + mobile, real DB connected via `.env.local`).

@@ -437,6 +437,7 @@ export default async function ServiceDetailPage({
               initialTenderUrl={context.tenderUrl}
               label={service.cta}
               assessmentSnapshot={assessmentSnapshot}
+              submissionType={typeof query.type === "string" ? query.type : null}
             />
           )}
         </aside>

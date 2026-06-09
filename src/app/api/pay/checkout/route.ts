@@ -10,6 +10,7 @@ import { TRIAL_DAYS } from "@/lib/access";
 import { PROPOSAL_PLAN, ROSTER_PLAN } from "@/lib/proposal-package/types";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { consumeFreeSubmissionForProposal } from "@/lib/free-submission";
+import { configuredSubmissionPriceId } from "@/lib/workbench/pricing";
 
 const SLUG_TO_PRICE_ENV: Record<string, string> = {
   "bid-no-bid":              "STRIPE_BIDNOBID_PRICE_ID",
@@ -20,12 +21,22 @@ const SLUG_TO_PRICE_ENV: Record<string, string> = {
   // two prices. The slug picks the price; both unlock the same tier.
   "annual-access":           "STRIPE_PRICE_ANNUAL_ACCESS_99",
   "annual-access-founding":  "STRIPE_PRICE_ANNUAL_ACCESS_49",
+  // Workbench redesign flat subscription ($49/mo · $324/yr). Dormant until the
+  // two prices are created — unset env → the 503 "not configured" path.
+  "sub-monthly":             "STRIPE_PRICE_SUB_MONTHLY",
+  "sub-annual":              "STRIPE_PRICE_SUB_ANNUAL",
 };
+
+// The new flat-subscription slugs aren't TIERS entries, so they bypass the
+// TIERS-alias resolver (resolveTierSlug) below.
+const NEW_SUBSCRIPTION_SLUGS = new Set(["sub-monthly", "sub-annual"]);
 
 const SUBSCRIPTION_PLANS = new Set([
   "grants-tenders-matching",
   "annual-access",
   "annual-access-founding",
+  "sub-monthly",
+  "sub-annual",
 ]);
 
 // PR-L (2026-05-23): plans that get a Stripe-managed trial. The platform
@@ -33,7 +44,7 @@ const SUBSCRIPTION_PLANS = new Set([
 // both to 30 days (TRIAL_DAYS in /lib/access) and added an anti-double-
 // count rule: the Stripe trial is shortened to whatever's left of the
 // platform trial, so a user can never get more than TRIAL_DAYS total free.
-const TRIAL_PLANS = new Set(["annual-access", "annual-access-founding"]);
+const TRIAL_PLANS = new Set(["annual-access", "annual-access-founding", "sub-monthly", "sub-annual"]);
 
 function metadataValue(value: unknown): string {
   if (typeof value !== "string") return "";
@@ -60,6 +71,7 @@ export async function POST(request: Request) {
     agency?: string | null;
     pipeline_item_id?: string | number | null;
     work_order_id?: string | number | null;
+    submission_type?: string | null;
   };
   const requestedPlan = body.plan;
 
@@ -76,7 +88,7 @@ export async function POST(request: Request) {
 
   // Map legacy backend slugs (tender-intelligence etc.) to the canonical
   // TIERS slugs the price-env table understands. See SLUG_ALIASES in pricing.ts.
-  const plan = resolveTierSlug(requestedPlan);
+  const plan = NEW_SUBSCRIPTION_SLUGS.has(requestedPlan) ? requestedPlan : resolveTierSlug(requestedPlan);
   if (!plan) {
     console.warn("[pay:slug:unknown]", { requestedPlan });
     return NextResponse.json({ error: "Unknown plan" }, { status: 400 });
@@ -98,12 +110,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unknown plan" }, { status: 400 });
   }
 
-  const priceId = process.env[priceEnvKey];
+  let priceId = process.env[priceEnvKey];
   if (!priceId) {
     return NextResponse.json(
       { error: "Card payments for this plan are not yet configured. Please use USDT or wire transfer." },
       { status: 503 }
     );
+  }
+
+  // Per-type submission pricing: a proposal-draft is billed at the EOI/RFQ/ITB/
+  // RFP rate when the request carries a submission_type AND that type's Stripe
+  // price is configured. DORMANT until those prices exist — an unconfigured type
+  // leaves priceId at the single proposal-package price, so the charge can never
+  // mismatch what's displayed. Fulfilment stays plan=proposal-draft regardless.
+  const submissionTypeRaw = metadataValue(body.submission_type);
+  if (plan === "proposal-draft" && submissionTypeRaw) {
+    const perTypePrice = configuredSubmissionPriceId(submissionTypeRaw);
+    if (perTypePrice) priceId = perTypePrice;
   }
 
   if (!process.env.STRIPE_SECRET_KEY) {
@@ -297,6 +320,7 @@ export async function POST(request: Request) {
         agency,
         pipeline_item_id: pipelineItemId,
         work_order_id: workOrderId,
+        submission_type: submissionTypeRaw,
         ...gate.metadata,
       },
     });

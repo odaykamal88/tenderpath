@@ -143,6 +143,10 @@ export interface WbAccess {
   /** Trial user who hasn't used their one free proposal submission yet — the UI
    *  advertises "first one's on us" at the proposal-commission points. */
   freeSubmissionEligible: boolean;
+  /** Both new flat-subscription Stripe prices ($49/mo · $324/yr) are configured.
+   *  When false the Subscribe CTA falls back to the existing annual-access flow
+   *  so it never dead-ends before the prices exist. */
+  newSubscriptionLive: boolean;
 }
 
 export interface WbVaultSummary {

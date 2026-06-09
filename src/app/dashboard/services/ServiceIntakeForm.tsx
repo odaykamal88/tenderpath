@@ -28,6 +28,9 @@ interface ServiceIntakeFormProps {
    * disambiguation before the paid order.
    */
   assessmentSnapshot?: AssessmentSnapshot | null;
+  /** EOI/RFQ/ITB/RFP — when set + that type's Stripe price is configured, the
+   *  proposal is billed at the per-type rate (else the single package price). */
+  submissionType?: string | null;
 }
 
 interface UploadedFile {
@@ -80,6 +83,7 @@ function payHref(plan: string, context: {
   agency?: string | null;
   pipelineItemId?: string | null;
   workOrderId: number;
+  submissionType?: string | null;
 }) {
   const params = new URLSearchParams({
     plan,
@@ -88,6 +92,7 @@ function payHref(plan: string, context: {
   if (context.tenderTitle) params.set("tender", context.tenderTitle);
   if (context.agency) params.set("agency", context.agency);
   if (context.pipelineItemId) params.set("pipeline_item_id", context.pipelineItemId);
+  if (context.submissionType) params.set("submission_type", context.submissionType);
   return `/pay?${params.toString()}`;
 }
 
@@ -101,6 +106,7 @@ export default function ServiceIntakeForm({
   initialTenderUrl,
   label,
   assessmentSnapshot,
+  submissionType,
 }: ServiceIntakeFormProps) {
   const router = useRouter();
   const [tenderUrl, setTenderUrl] = useState(initialTenderUrl ?? "");
@@ -629,6 +635,7 @@ export default function ServiceIntakeForm({
           agency,
           pipelineItemId: pipelineItemId ?? null,
           workOrderId: data.workOrder.id,
+          submissionType: service === "proposal" ? (submissionType ?? null) : null,
         }));
         return;
       }

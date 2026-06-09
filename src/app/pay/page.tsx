@@ -40,6 +40,7 @@ interface PayContext {
   agency: string | null;
   pipelineItemId: string | null;
   workOrderId: string | null;
+  submissionType: string | null;
 }
 
 interface FulfillmentReadiness {
@@ -133,6 +134,7 @@ function CardTab({ plan, context, disabledReason, freeEligible }: { plan: string
           agency: context.agency,
           pipeline_item_id: context.pipelineItemId,
           work_order_id: context.workOrderId,
+          submission_type: context.submissionType,
         }),
       });
       const data = (await res.json()) as { clientSecret?: string; free?: boolean; url?: string; error?: string };
@@ -580,6 +582,7 @@ function PayPage() {
     agency: searchParams.get("agency"),
     pipelineItemId: searchParams.get("pipeline_item_id"),
     workOrderId: searchParams.get("work_order_id"),
+    submissionType: searchParams.get("submission_type"),
   };
   const [selectedSlug, setSelectedSlug] = useState<string | null>(planSlug);
   const [storedTab, setStoredTab] = useState<Tab>("card");
@@ -593,7 +596,16 @@ function PayPage() {
   // If `?plan=…` is present in the URL, hide step 01 entirely and let them
   // jump straight to payment method.
   const planPrelocked = Boolean(planSlug);
-  const preselectedTier = planSlug ? TIERS.find((t) => t.slug === planSlug) : null;
+  // The new flat-subscription slugs aren't TIERS entries; give them a display
+  // shape so the checkout shows a locked summary (not the tier grid). Only the
+  // name/price/billingPeriod/featured fields are read by the summary below.
+  const EXTRA_PLAN_DISPLAY: Record<string, { name: string; price: string; billingPeriod: string; featured: boolean }> = {
+    "sub-monthly": { name: "Workbench subscription", price: "$49", billingPeriod: "/mo", featured: false },
+    "sub-annual": { name: "Workbench subscription", price: "$324", billingPeriod: "/yr", featured: true },
+  };
+  const preselectedTier = planSlug
+    ? (TIERS.find((t) => t.slug === planSlug) ?? EXTRA_PLAN_DISPLAY[planSlug] ?? null)
+    : null;
 
   useEffect(() => {
     if (!selectedSlug) return;
