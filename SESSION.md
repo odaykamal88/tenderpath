@@ -86,6 +86,17 @@ Additional work done outside the prompt sequence:
 
 ## Current Status
 
+## Latest Session Update — 2026-06-08 (Workbench redesign — Phase 3)
+
+- **Agent**: Claude Code · **Branch/PR**: `claude/workbench-phase-3` → [PR #122](https://github.com/odaykamal88/tenderpath/pull/122) (stacked on phase-2). All commits `tsc`/`eslint`/`build` clean.
+- **Shipped + preview-verified** (drove the live Vercel preview in Chrome, demo login):
+  - **Real notification bell** — topbar `WbNotificationBell` derives "closing soon" notices from live matches, localStorage read-state, rows open seeded Paste.
+  - **Legacy restyle** (high-traffic, prioritized) — `services/[service]` + `ServiceIntakeForm`, work-order detail panels (BidNoBid/Proposal/Roster/Outcome), work-orders list, vault page, service support/loading → dossier tokens (stone→ink/rule/accent via globals @theme; semantic status colours preserved). **Verified on preview**: services intake, vault page, work-orders list all render clean dossier. (Work-order detail panels build-clean but not eyeballed — demo has no WO.) Rarely-hit pages (pipeline/applications/bid-analysis/analysis/proposals-scored-view) **left per user's "prioritize" call.**
+  - **gap-acknowledge→score** — "mark gap closed" persists a `g{idx}-closed` marker via the existing `assessment_step_completions` (step-toggle regex relaxed; no migration); the workbench endpoint reads closures + seeds the provider's closedGaps so the **live** score rises by the gap's impact and survives reload. Server assessment `readiness_score` stays evidence-based; Navigator copy nudges adding Vault evidence to verify. (Logic only — demo has no gaps to eyeball.)
+  - **free-text Paste** — new `POST /api/dashboard/paste-analyze` (one Haiku call, rate-limited + auth-gated) reads a pasted URL/notice, grounds it against the user's profile + known gaps, returns fit + requirements ledger. PasteModal renders the verdict from live analysis (free-text / unscored Browse rows) OR held match data (seeded); LLM-detected gaps that map to a known gap deep-link into the Navigator; file uploads still route to the paid deep bid/no-bid. **Verified end-to-end on preview** (real Haiku verdict, ledger, decision buttons).
+  - **Browse facet fix** — excluded a malformed JSON sector value (`{"sector_code":…}`) from facets (caught in preview QA).
+- **Still owed**: Subscribe modal + per-type Stripe (needs the 6 prices created); team workspaces (multi-user model); the rarely-hit legacy restyle (deprioritized). Preview alias for QA: `tenderpath-git-claude-workbench-ad96e6-…vercel.app`.
+
 ## Latest Session Update — 2026-06-08 (Workbench redesign — Phase 2)
 
 - **Agent**: Claude Code
