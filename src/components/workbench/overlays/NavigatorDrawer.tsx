@@ -201,7 +201,7 @@ export function NavigatorDrawer({ gap, onClose }: { gap: WbGap; onClose: () => v
         <div style={{ borderTop: `1px solid ${C.rule}`, background: C.white, padding: "14px 22px", display: "flex", gap: 10, alignItems: "center" }}>
           {closed ? (
             <div style={{ flex: 1, fontFamily: F.sans, fontSize: 13, color: C.pos, display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 15 }}>✓</span> Gap marked closed — upload the evidence to your Vault to lock the score gain.
+              <span style={{ fontSize: 15 }}>✓</span> Gap marked closed — your live readiness reflects it. Add the evidence to your Vault when you have it to make it verified.
             </div>
           ) : (
             <>

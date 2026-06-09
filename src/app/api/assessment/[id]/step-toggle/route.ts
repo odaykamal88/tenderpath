@@ -3,10 +3,11 @@ import { sql } from "@/lib/db";
 import { ensureAssessmentRuntimeColumns } from "@/lib/assessment/run";
 import { authorizeAssessmentRead } from "@/lib/assessment/authz";
 
-// Step keys are opaque to the API but currently shaped as `g{gapIdx}-s{stepIdx}`
-// by deriveNextStepsGroups. We enforce the shape at the boundary so a leaked
-// or fuzzed key can't smuggle arbitrary text into the completion log.
-const STEP_KEY_RE = /^g\d+-s\d+$/;
+// Step keys are opaque to the API but shaped as `g{gapIdx}-s{stepIdx}` (a
+// Next-Steps to-do) or `g{gapIdx}-closed` (a gap marked closed in the Navigator,
+// which lifts the live readiness score). We enforce the shape at the boundary so
+// a leaked or fuzzed key can't smuggle arbitrary text into the completion log.
+const STEP_KEY_RE = /^g\d+-(?:s\d+|closed)$/;
 
 // Hard cap on writes per assessment to keep the table from being weaponised
 // by a malicious caller toggling thousands of bogus keys past the regex bound

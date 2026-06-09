@@ -111,6 +111,7 @@ function mapGaps(report: AssessmentReport, raw: Gap[], navCompany: NavigatorComp
       why: g.why,
       fixLabel: severity === "high" ? "Walk me through it" : script.kind === "review" ? "Review" : "Fix it",
       stepKeys,
+      closeKey: `g${i}-closed`,
       stepsDone: g.stepsDone,
       copilot: script,
     };
@@ -214,11 +215,16 @@ export function buildWorkbenchData(input: {
   vault: WbVaultSummary;
   access: WbAccess;
   trialDays: number;
+  /** Gap indices the user has marked closed (g{idx}-closed persisted). */
+  acknowledgedIdx?: Set<number>;
 }): WorkbenchData {
   const { report, rawGaps, rawTenders, navCompany, activity, submissions, vault, access, trialDays } = input;
 
   const matches = mapMatches(report, rawTenders);
   const gaps = mapGaps(report, rawGaps, navCompany);
+  const acknowledgedGapIds = [...(input.acknowledgedIdx ?? [])]
+    .map((i) => gaps[i]?.id)
+    .filter((x): x is string => !!x);
   const pipeline = buildPipeline(report, activity);
   const nextMove = deriveNextMove(report, gaps, matches, submissions);
 
@@ -244,6 +250,7 @@ export function buildWorkbenchData(input: {
     pipeline,
     nextMove,
     gaps,
+    acknowledgedGapIds,
     matches,
     submissions,
     vault,
@@ -268,6 +275,7 @@ export function emptyWorkbenchData(input: {
     pipeline: { matched: 0, strong: 0, active: 0, submitted: 0, dueSoon: 0, total: 0 },
     nextMove: null,
     gaps: [],
+    acknowledgedGapIds: [],
     matches: [],
     submissions: [],
     vault: { onFile: 0, total: 0, missing: 0 },

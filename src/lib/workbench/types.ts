@@ -82,6 +82,9 @@ export interface WbGap {
   fixLabel: string;
   /** assessment_step_completions keys (g{idx}-s{j}) for real persistence. */
   stepKeys: string[];
+  /** Persistence key for "gap marked closed" (g{idx}-closed) — drives the live
+   *  score and survives reload. */
+  closeKey: string;
   stepsDone: number;
   copilot: NavigatorScript;
 }
@@ -187,6 +190,9 @@ export interface WorkbenchData {
   pipeline: WbPipeline;
   nextMove: WbNextMove | null;
   gaps: WbGap[];
+  /** Gap ids the user has marked closed (persisted) — seeds the live score so
+   *  it survives reload. */
+  acknowledgedGapIds: string[];
   matches: WbMatch[];
   submissions: WbSubmission[];
   vault: WbVaultSummary;

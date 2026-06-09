@@ -128,6 +128,12 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
           }
         }
         setData(body);
+        // Seed session closes from persisted acknowledgements so the live score
+        // survives reload (union — never drop an optimistic close that's still
+        // in flight to the server).
+        if (body.acknowledgedGapIds.length > 0) {
+          setClosedGaps((prev) => new Set([...prev, ...body.acknowledgedGapIds]));
+        }
         setFatal(null);
       } catch {
         setFatal("We couldn't load your Workbench. Please refresh.");
@@ -175,20 +181,18 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
         n.add(gap.id);
         return n;
       });
-      // Persist progress for real: mark the gap's assessment steps complete.
-      // Best-effort — a failed write just means the checkmarks reset on a hard
-      // reload; it never blocks the optimistic UI.
+      // Persist the closure for real (g{idx}-closed) so it lifts the live score
+      // and survives reload. Best-effort — a failed write just means the close
+      // reverts on a hard reload; it never blocks the optimistic UI.
       const reportId = data?.reportId;
-      if (reportId && gap.stepKeys.length > 0) {
-        for (const stepKey of gap.stepKeys) {
-          void fetch(`/api/assessment/${reportId}/step-toggle`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ stepKey, done: true }),
-          }).catch((err) => {
-            console.warn("[workbench:gap-close:persist_failed]", { stepKey, err });
-          });
-        }
+      if (reportId) {
+        void fetch(`/api/assessment/${reportId}/step-toggle`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ stepKey: gap.closeKey, done: true }),
+        }).catch((err) => {
+          console.warn("[workbench:gap-close:persist_failed]", { closeKey: gap.closeKey, err });
+        });
       }
     },
     [data],

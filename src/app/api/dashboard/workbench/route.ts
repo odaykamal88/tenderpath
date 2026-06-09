@@ -111,6 +111,26 @@ async function loadVaultSummary(userId: number, openGapCount: number): Promise<W
   }
 }
 
+// Gap indices the user has marked closed in the Navigator (g{idx}-closed in
+// assessment_step_completions). These lift the live readiness score and persist
+// across reloads. Best-effort — a hiccup just means closes look unmarked.
+async function loadAcknowledgedGapIdx(assessmentId: number): Promise<Set<number>> {
+  try {
+    const rows = await sql`
+      SELECT step_key FROM assessment_step_completions
+      WHERE assessment_id = ${assessmentId} AND step_key LIKE 'g%-closed'
+    `;
+    const set = new Set<number>();
+    for (const r of rows) {
+      const m = String(r.step_key).match(/^g(\d+)-closed$/);
+      if (m) set.add(Number(m[1]));
+    }
+    return set;
+  } catch {
+    return new Set();
+  }
+}
+
 export async function GET(request: Request) {
   const user = (await getUserFromRequest(request)) as User | null;
   if (!user) {
@@ -157,7 +177,10 @@ export async function GET(request: Request) {
   const rawGaps = (row.gaps ?? []) as Gap[];
   const rawTenders = (row.matched_tenders ?? []) as MatchedTender[];
   const openGapCount = report.gaps.filter((g) => !g.resolved).length;
-  const vault = await loadVaultSummary(user.id, openGapCount);
+  const [vault, acknowledgedIdx] = await Promise.all([
+    loadVaultSummary(user.id, openGapCount),
+    loadAcknowledgedGapIdx(row.id),
+  ]);
 
   const navCompany: NavigatorCompany = {
     legalName: user.business_name ?? report.companyName,
@@ -177,6 +200,7 @@ export async function GET(request: Request) {
     vault,
     access,
     trialDays,
+    acknowledgedIdx,
   });
 
   return NextResponse.json(data);
