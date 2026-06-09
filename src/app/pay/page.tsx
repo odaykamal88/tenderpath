@@ -10,8 +10,8 @@ const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   : null;
 import { TIERS, isComingSoonTier } from "@/lib/pricing";
 
-const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
-const SERIF = "'Fraunces', 'Times New Roman', serif";
+const MONO = "var(--font-jetbrains), ui-monospace, Menlo, monospace";
+const SERIF = "var(--font-fraunces), Georgia, serif";
 
 const CONFIG = {
   usdt: {
@@ -67,7 +67,7 @@ function CopyBtn({ value }: { value: string }) {
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       }}
-      className="shrink-0 rounded-sm border border-stone-300 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 transition-colors"
+      className="shrink-0 rounded-none border border-[#d8d1bf] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#2b3543] hover:border-[#2b3543] transition-colors"
       style={{ fontFamily: MONO }}
     >
       {copied ? "Copied" : "Copy"}
@@ -81,8 +81,8 @@ function ReadinessCard({ readiness }: { readiness: FulfillmentReadiness | null }
   if (!readiness || readiness.mode === "self_serve") return null;
   const blocked = !readiness.payment_allowed;
   return (
-    <div className={`rounded-sm border-l-2 px-3.5 py-3 text-[12px] leading-relaxed ${
-      blocked ? "border-red-600 bg-red-50/40 text-red-800" : "border-amber-600 bg-amber-50/40 text-amber-950"
+    <div className={`rounded-none border-l-2 px-3.5 py-3 text-[12px] leading-relaxed ${
+      blocked ? "border-[#9c2a2a] bg-[#f6e9e9]/50 text-[#7a2020]" : "border-[#b3691a] bg-[#f7efe0]/60 text-[#7a4711]"
     }`}>
       <div
         className="text-[10px] font-semibold uppercase tracking-[0.18em]"
@@ -165,14 +165,14 @@ function CardTab({ plan, context, disabledReason, freeEligible }: { plan: string
       {status !== "mounted" && (
         <div className="space-y-3">
           {error && (
-            <p className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3 py-2 text-[11.5px] text-red-700">
+            <p className="rounded-none border-l-2 border-[#9c2a2a] bg-[#f6e9e9]/50 px-3 py-2 text-[11.5px] text-[#9c2a2a]">
               {error}
             </p>
           )}
           <button
             onClick={startCheckout}
             disabled={status === "loading" || !plan || Boolean(disabledReason)}
-            className="w-full rounded-sm bg-stone-900 px-4 py-3 text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-none bg-[#0f1620] px-4 py-3 text-[12.5px] font-semibold text-white hover:bg-[#2b3543] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           >
             {status === "loading"
               ? (freeEligible ? "Claiming…" : "Loading secure checkout…")
@@ -214,7 +214,7 @@ function UsdtTab({ plan, context, disabledReason }: { plan: string | null; conte
 
   if (disabledReason) {
     return (
-      <div className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3.5 py-3 text-[12px] text-red-800 leading-relaxed">
+      <div className="rounded-none border-l-2 border-[#9c2a2a] bg-[#f6e9e9]/50 px-3.5 py-3 text-[12px] text-[#7a2020] leading-relaxed">
         {disabledReason}
       </div>
     );
@@ -223,37 +223,37 @@ function UsdtTab({ plan, context, disabledReason }: { plan: string | null; conte
   return (
     <div className="space-y-4">
       {tier && (
-        <div className="rounded-sm border-l-2 border-orange-600 bg-orange-50/40 px-3.5 py-3">
+        <div className="rounded-none border-l-2 border-[#9c6b1f] bg-[#f4ecdb]/60 px-3.5 py-3">
           <div
-            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-700"
+            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9c6b1f]"
             style={{ fontFamily: MONO }}
           >
             Send exactly
           </div>
           <p
-            className="mt-0.5 text-[15px] font-medium text-stone-900 tabular-nums"
+            className="mt-0.5 text-[15px] font-medium text-[#0f1620] tabular-nums"
             style={{ fontFamily: SERIF }}
           >
             {tier.price} USDT
           </p>
-          <p className="mt-0.5 text-[11.5px] text-stone-600">
+          <p className="mt-0.5 text-[11.5px] text-[#6b6557]">
             Network: TRC20 (Tron) — lowest fees for MENA region.
           </p>
         </div>
       )}
 
       {/* Address + QR */}
-      <div className="rounded-md border border-stone-200/70 bg-white p-4 space-y-4">
+      <div className="rounded-none border border-[#d8d1bf]/70 bg-white p-4 space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500 mb-1"
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6b6557] mb-1"
               style={{ fontFamily: MONO }}
             >
               USDT wallet · TRC20
             </div>
             <code
-              className="text-[11px] text-stone-900 break-all leading-relaxed"
+              className="text-[11px] text-[#0f1620] break-all leading-relaxed"
               style={{ fontFamily: MONO }}
             >
               {address}
@@ -261,8 +261,8 @@ function UsdtTab({ plan, context, disabledReason }: { plan: string | null; conte
           </div>
           <CopyBtn value={address} />
         </div>
-        <div className="flex justify-center border-t border-stone-100 pt-4">
-          <div className="rounded-sm border border-stone-200 bg-white p-2">
+        <div className="flex justify-center border-t border-[#e4ddcb] pt-4">
+          <div className="rounded-none border border-[#d8d1bf] bg-white p-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
@@ -277,21 +277,21 @@ function UsdtTab({ plan, context, disabledReason }: { plan: string | null; conte
         </div>
       </div>
 
-      <div className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3.5 py-2.5">
-        <p className="text-[11.5px] text-red-800 leading-relaxed">
+      <div className="rounded-none border-l-2 border-[#9c2a2a] bg-[#f6e9e9]/50 px-3.5 py-2.5">
+        <p className="text-[11.5px] text-[#7a2020] leading-relaxed">
           <strong>TRC20 (Tron) network only.</strong> Sending on the wrong network results in permanent loss of funds.
         </p>
       </div>
 
       {/* Card onramp */}
-      <div className="rounded-md border border-stone-200/70 bg-stone-50/40 p-4">
+      <div className="rounded-none border border-[#d8d1bf]/70 bg-[#ece6d5]/40 p-4">
         <div
-          className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500 mb-2"
+          className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6b6557] mb-2"
           style={{ fontFamily: MONO }}
         >
           Don&apos;t have USDT?
         </div>
-        <p className="text-[12px] text-stone-700 leading-relaxed">
+        <p className="text-[12px] text-[#2b3543] leading-relaxed">
           Buy with Visa or Mastercard from any of these on-ramps:
         </p>
         <div className="mt-2.5 flex flex-wrap gap-2">
@@ -305,7 +305,7 @@ function UsdtTab({ plan, context, disabledReason }: { plan: string | null; conte
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-sm border border-stone-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-stone-700 hover:border-stone-700 transition-colors"
+              className="rounded-none border border-[#d8d1bf] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#2b3543] hover:border-[#2b3543] transition-colors"
               style={{ fontFamily: MONO }}
             >
               {name} →
@@ -316,19 +316,19 @@ function UsdtTab({ plan, context, disabledReason }: { plan: string | null; conte
 
       {/* TXID auto-verify */}
       {verifyStatus === "done" ? (
-        <div className="rounded-sm border-l-2 border-emerald-600 bg-emerald-50/40 px-3.5 py-3 text-[12px] text-emerald-800 leading-relaxed">
+        <div className="rounded-none border-l-2 border-[#1f6b3d] bg-[#f3f8f4]/60 px-3.5 py-3 text-[12px] text-[#1f6b3d] leading-relaxed">
           <strong>Payment received.</strong> {verifyMsg}
         </div>
       ) : (
-        <form onSubmit={handleVerify} className="rounded-md border border-stone-200/70 bg-stone-50/40 p-4 space-y-3">
+        <form onSubmit={handleVerify} className="rounded-none border border-[#d8d1bf]/70 bg-[#ece6d5]/40 p-4 space-y-3">
           <div
-            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6b6557]"
             style={{ fontFamily: MONO }}
           >
             Confirm your payment automatically
           </div>
           <div>
-            <label className="block text-[11px] text-stone-600 mb-1" style={{ fontFamily: MONO }}>
+            <label className="block text-[11px] text-[#6b6557] mb-1" style={{ fontFamily: MONO }}>
               Your email address
             </label>
             <input
@@ -336,12 +336,12 @@ function UsdtTab({ plan, context, disabledReason }: { plan: string | null; conte
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2 text-[12px] text-stone-900 focus:border-stone-700 focus:outline-none"
+              className="w-full rounded-none border border-[#d8d1bf] bg-white px-3 py-2 text-[12px] text-[#0f1620] focus:border-[#2b3543] focus:outline-none"
               style={{ fontFamily: MONO }}
             />
           </div>
           <div>
-            <label className="block text-[11px] text-stone-600 mb-1" style={{ fontFamily: MONO }}>
+            <label className="block text-[11px] text-[#6b6557] mb-1" style={{ fontFamily: MONO }}>
               Transaction ID (TXID) from TronScan
             </label>
             <input
@@ -349,25 +349,25 @@ function UsdtTab({ plan, context, disabledReason }: { plan: string | null; conte
               value={txid}
               onChange={(e) => setTxid(e.target.value)}
               placeholder="64-character hex hash"
-              className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2 text-[11.5px] text-stone-900 focus:border-stone-700 focus:outline-none"
+              className="w-full rounded-none border border-[#d8d1bf] bg-white px-3 py-2 text-[11.5px] text-[#0f1620] focus:border-[#2b3543] focus:outline-none"
               style={{ fontFamily: MONO }}
             />
           </div>
           {verifyStatus === "error" && (
-            <p className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3 py-2 text-[11.5px] text-red-700">
+            <p className="rounded-none border-l-2 border-[#9c2a2a] bg-[#f6e9e9]/50 px-3 py-2 text-[11.5px] text-[#9c2a2a]">
               {verifyMsg}
             </p>
           )}
           <button
             type="submit"
             disabled={verifyStatus === "loading" || !txid.trim() || Boolean(disabledReason)}
-            className="w-full rounded-sm bg-stone-900 px-4 py-2.5 text-[12px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-none bg-[#0f1620] px-4 py-2.5 text-[12px] font-semibold text-white hover:bg-[#2b3543] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {verifyStatus === "loading" ? "Verifying…" : "Verify transaction →"}
           </button>
-          <p className="text-center text-[10.5px] text-stone-400" style={{ fontFamily: MONO }}>
+          <p className="text-center text-[10.5px] text-[#8c8676]" style={{ fontFamily: MONO }}>
             Or email your receipt to{" "}
-            <a href={`mailto:${CONFIG.supportEmail}`} className="underline underline-offset-2 hover:text-stone-700">
+            <a href={`mailto:${CONFIG.supportEmail}`} className="underline underline-offset-2 hover:text-[#2b3543]">
               {CONFIG.supportEmail}
             </a>
           </p>
@@ -416,20 +416,20 @@ function WireTab({ plan, context }: { plan: string | null; context: PayContext }
 
   return (
     <div className="space-y-4">
-      <div className="rounded-md border border-stone-200/70 overflow-hidden">
+      <div className="rounded-none border border-[#d8d1bf]/70 overflow-hidden">
         {wireRows.map(([label, value]) => (
           <div
             key={label}
-            className="flex items-center gap-3 px-4 py-3 border-b border-stone-100 last:border-0"
+            className="flex items-center gap-3 px-4 py-3 border-b border-[#e4ddcb] last:border-0"
           >
             <span
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500 w-28 shrink-0"
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6b6557] w-28 shrink-0"
               style={{ fontFamily: MONO }}
             >
               {label}
             </span>
             <span
-              className="text-[11.5px] text-stone-900 flex-1 break-all"
+              className="text-[11.5px] text-[#0f1620] flex-1 break-all"
               style={{ fontFamily: MONO }}
             >
               {value}
@@ -438,25 +438,25 @@ function WireTab({ plan, context }: { plan: string | null; context: PayContext }
           </div>
         ))}
       </div>
-      <p className="text-[12px] leading-relaxed text-stone-600">
-        Use your <strong className="text-stone-900">email address</strong> as the payment reference so we can match your transfer. Wire transfers are reflected within 1–3 business days.
+      <p className="text-[12px] leading-relaxed text-[#6b6557]">
+        Use your <strong className="text-[#0f1620]">email address</strong> as the payment reference so we can match your transfer. Wire transfers are reflected within 1–3 business days.
       </p>
 
       {/* Screenshot upload */}
       {uploadStatus === "done" ? (
-        <div className="rounded-sm border-l-2 border-emerald-600 bg-emerald-50/40 px-3.5 py-3 text-[12px] text-emerald-800 leading-relaxed">
+        <div className="rounded-none border-l-2 border-[#1f6b3d] bg-[#f3f8f4]/60 px-3.5 py-3 text-[12px] text-[#1f6b3d] leading-relaxed">
           <strong>Receipt received.</strong> {uploadMsg}
         </div>
       ) : (
-        <form onSubmit={handleUpload} className="rounded-md border border-stone-200/70 bg-stone-50/40 p-4 space-y-3">
+        <form onSubmit={handleUpload} className="rounded-none border border-[#d8d1bf]/70 bg-[#ece6d5]/40 p-4 space-y-3">
           <div
-            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6b6557]"
             style={{ fontFamily: MONO }}
           >
             Upload your payment receipt
           </div>
           <div>
-            <label className="block text-[11px] text-stone-600 mb-1" style={{ fontFamily: MONO }}>
+            <label className="block text-[11px] text-[#6b6557] mb-1" style={{ fontFamily: MONO }}>
               Your email address
             </label>
             <input
@@ -464,23 +464,23 @@ function WireTab({ plan, context }: { plan: string | null; context: PayContext }
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2 text-[12px] text-stone-900 focus:border-stone-700 focus:outline-none"
+              className="w-full rounded-none border border-[#d8d1bf] bg-white px-3 py-2 text-[12px] text-[#0f1620] focus:border-[#2b3543] focus:outline-none"
               style={{ fontFamily: MONO }}
             />
           </div>
           <div>
             {file ? (
-              <div className="flex items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-[11.5px] text-emerald-800" style={{ fontFamily: MONO }}>
+              <div className="flex items-center gap-2 rounded-none border border-[#bfe0cc] bg-[#f3f8f4]/80 px-3 py-2 text-[11.5px] text-[#1f6b3d]" style={{ fontFamily: MONO }}>
                 <span className="flex-1 truncate">{file.name}</span>
-                <button type="button" onClick={() => setFile(null)} className="shrink-0 underline underline-offset-2 hover:text-emerald-900">Remove</button>
+                <button type="button" onClick={() => setFile(null)} className="shrink-0 underline underline-offset-2 hover:text-[#1a5c34]">Remove</button>
               </div>
             ) : (
-              <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-stone-300 px-3.5 py-3 text-[11.5px] text-stone-500 hover:border-stone-700 hover:text-stone-700 transition-colors">
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-none border border-dashed border-[#d8d1bf] px-3.5 py-3 text-[11.5px] text-[#6b6557] hover:border-[#2b3543] hover:text-[#2b3543] transition-colors">
                 <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M8 2v8M5 5l3-3 3 3M2 12h12v2H2z" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 <span className="leading-snug flex-1" style={{ fontFamily: MONO }}>
-                  <span className="font-semibold text-stone-700">Choose file</span> — screenshot or PDF of bank transfer receipt
+                  <span className="font-semibold text-[#2b3543]">Choose file</span> — screenshot or PDF of bank transfer receipt
                 </span>
                 <input
                   type="file"
@@ -492,20 +492,20 @@ function WireTab({ plan, context }: { plan: string | null; context: PayContext }
             )}
           </div>
           {uploadStatus === "error" && (
-            <p className="rounded-sm border-l-2 border-red-600 bg-red-50/40 px-3 py-2 text-[11.5px] text-red-700">
+            <p className="rounded-none border-l-2 border-[#9c2a2a] bg-[#f6e9e9]/50 px-3 py-2 text-[11.5px] text-[#9c2a2a]">
               {uploadMsg}
             </p>
           )}
           <button
             type="submit"
             disabled={uploadStatus === "loading" || !file}
-            className="w-full rounded-sm bg-stone-900 px-4 py-2.5 text-[12px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-none bg-[#0f1620] px-4 py-2.5 text-[12px] font-semibold text-white hover:bg-[#2b3543] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {uploadStatus === "loading" ? "Uploading…" : "Upload receipt →"}
           </button>
-          <p className="text-center text-[10.5px] text-stone-400" style={{ fontFamily: MONO }}>
+          <p className="text-center text-[10.5px] text-[#8c8676]" style={{ fontFamily: MONO }}>
             Or email your receipt to{" "}
-            <a href={`mailto:${CONFIG.supportEmail}`} className="underline underline-offset-2 hover:text-stone-700">
+            <a href={`mailto:${CONFIG.supportEmail}`} className="underline underline-offset-2 hover:text-[#2b3543]">
               {CONFIG.supportEmail}
             </a>
           </p>
@@ -520,9 +520,9 @@ function WireTab({ plan, context }: { plan: string | null; context: PayContext }
 function ContextCard({ context }: { context: PayContext }) {
   if (!context.tender && !context.agency && !context.pipelineItemId && !context.workOrderId) return null;
   return (
-    <div className="rounded-md border border-stone-200/70 bg-white p-5">
+    <div className="rounded-none border border-[#d8d1bf]/70 bg-white p-5">
       <div
-        className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-3"
+        className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8c8676] mb-3"
         style={{ fontFamily: MONO }}
       >
         Work context
@@ -531,13 +531,13 @@ function ContextCard({ context }: { context: PayContext }) {
         {context.tender && (
           <div>
             <div
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6b6557]"
               style={{ fontFamily: MONO }}
             >
               Tender
             </div>
             <p
-              className="mt-0.5 text-[14px] font-medium text-stone-900 leading-snug"
+              className="mt-0.5 text-[14px] font-medium text-[#0f1620] leading-snug"
               style={{ fontFamily: SERIF }}
             >
               {context.tender}
@@ -547,17 +547,17 @@ function ContextCard({ context }: { context: PayContext }) {
         {context.agency && (
           <div>
             <div
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6b6557]"
               style={{ fontFamily: MONO }}
             >
               Agency
             </div>
-            <p className="mt-0.5 text-[13px] text-stone-700">{context.agency}</p>
+            <p className="mt-0.5 text-[13px] text-[#2b3543]">{context.agency}</p>
           </div>
         )}
         {(context.pipelineItemId || context.workOrderId) && (
           <p
-            className="text-[11px] text-stone-500"
+            className="text-[11px] text-[#6b6557]"
             style={{ fontFamily: MONO }}
           >
             {context.pipelineItemId ? `Pipeline item · #${context.pipelineItemId}` : null}
@@ -660,20 +660,20 @@ function PayPage() {
       : undefined;
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#fafaf7" }}>
+    <div className="min-h-screen" style={{ backgroundColor: "#f6f3ec" }}>
       {/* Nav */}
-      <nav className="border-b border-stone-200/70 bg-white/95 backdrop-blur-sm sticky top-0 z-50">
+      <nav className="border-b border-[#d8d1bf]/70 bg-white/95 backdrop-blur-sm sticky top-0 z-50">
         <div className="mx-auto max-w-lg px-5 sm:px-6 flex h-14 items-center justify-between">
           <Link
             href="/"
-            className="text-[15px] font-semibold text-stone-900"
+            className="text-[15px] font-semibold text-[#0f1620]"
             style={{ fontFamily: SERIF }}
           >
-            Tender<span style={{ color: "#ea580c" }}>·</span>Path
+            Tender<span style={{ color: "#9c6b1f" }}>·</span>Path
           </Link>
           <Link
             href="/dashboard"
-            className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-500 hover:text-stone-900 transition-colors"
+            className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6b6557] hover:text-[#0f1620] transition-colors"
             style={{ fontFamily: MONO }}
           >
             ← Dashboard
@@ -685,52 +685,52 @@ function PayPage() {
         {/* Header */}
         <div className="px-1">
           <div
-            className="text-[10.5px] sm:text-[11px] font-semibold uppercase tracking-[0.16em] sm:tracking-[0.18em] text-stone-400"
+            className="text-[10.5px] sm:text-[11px] font-semibold uppercase tracking-[0.16em] sm:tracking-[0.18em] text-[#8c8676]"
             style={{ fontFamily: MONO }}
           >
             Checkout · payment
           </div>
           <h1
-            className="mt-1 text-[30px] sm:text-[36px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+            className="mt-1 text-[30px] sm:text-[36px] leading-[1.05] font-medium text-[#0f1620] tracking-tight"
             style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
           >
             Complete your purchase
           </h1>
-          <p className="mt-1.5 text-[13px] text-stone-600">
+          <p className="mt-1.5 text-[13px] text-[#6b6557]">
             Select a plan, then choose how to pay.
           </p>
         </div>
 
         <ContextCard context={context} />
         {planComingSoon && (
-          <div className="rounded-md border-l-2 border-amber-600 bg-amber-50/60 px-4 py-3.5">
+          <div className="rounded-none border-l-2 border-[#b3691a] bg-[#f7efe0]/80 px-4 py-3.5">
             <div
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700"
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#b3691a]"
               style={{ fontFamily: MONO }}
             >
               Coming soon
             </div>
-            <p className="mt-1 text-[13px] leading-relaxed text-amber-950">
+            <p className="mt-1 text-[13px] leading-relaxed text-[#7a4711]">
               {preselectedTier?.name ?? "This service"} isn&rsquo;t available for purchase yet — we&rsquo;ve paused checkout. Explore the other services in the meantime, and we&rsquo;ll announce when this one opens.
             </p>
           </div>
         )}
         {freeEligible && !planComingSoon && (
-          <div className="rounded-md border-l-2 border-emerald-600 bg-emerald-50/60 px-4 py-3.5">
+          <div className="rounded-none border-l-2 border-[#1f6b3d] bg-[#f3f8f4]/80 px-4 py-3.5">
             <div
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700"
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#1f6b3d]"
               style={{ fontFamily: MONO }}
             >
               First submission · on us
             </div>
-            <p className="mt-1 text-[13px] leading-relaxed text-emerald-950">
+            <p className="mt-1 text-[13px] leading-relaxed text-[#174d2b]">
               Your first proposal submission is free while you&rsquo;re on trial — no card needed. Claim it below and we&rsquo;ll start assembling it right away.
             </p>
           </div>
         )}
         {!planComingSoon && <ReadinessCard readiness={readiness} />}
         {!planComingSoon && readinessError && (
-          <div className="rounded-sm border-l-2 border-amber-600 bg-amber-50/40 px-3.5 py-3 text-[12px] text-amber-900 leading-relaxed">
+          <div className="rounded-none border-l-2 border-[#b3691a] bg-[#f7efe0]/60 px-3.5 py-3 text-[12px] text-[#8a5114] leading-relaxed">
             {readinessError}
           </div>
         )}
@@ -740,16 +740,16 @@ function PayPage() {
             render a compact summary card so the user knows what they're
             paying for without having to re-pick from a grid. */}
         {planPrelocked && preselectedTier ? (
-          <div className="rounded-md border border-stone-200/70 bg-white p-4 sm:p-5">
+          <div className="rounded-none border border-[#d8d1bf]/70 bg-white p-4 sm:p-5">
             <div className="flex items-baseline gap-2.5 mb-3">
               <span
-                className="text-[10px] font-semibold tabular-nums text-stone-400"
+                className="text-[10px] font-semibold tabular-nums text-[#8c8676]"
                 style={{ fontFamily: MONO }}
               >
                 01
               </span>
               <h2
-                className="text-[13px] sm:text-[15px] font-semibold uppercase tracking-[0.13em] sm:tracking-[0.15em] text-stone-700"
+                className="text-[13px] sm:text-[15px] font-semibold uppercase tracking-[0.13em] sm:tracking-[0.15em] text-[#2b3543]"
                 style={{ fontFamily: MONO }}
               >
                 Your selected service
@@ -758,14 +758,14 @@ function PayPage() {
             <div className="flex items-baseline justify-between gap-3">
               <div className="min-w-0">
                 <p
-                  className="text-[14px] font-medium text-stone-900 leading-snug truncate"
+                  className="text-[14px] font-medium text-[#0f1620] leading-snug truncate"
                   style={{ fontFamily: SERIF }}
                 >
                   {preselectedTier.name}
                 </p>
                 {preselectedTier.featured && (
                   <span
-                    className="inline-block mt-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-orange-700"
+                    className="inline-block mt-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-[#9c6b1f]"
                     style={{ fontFamily: MONO }}
                   >
                     · Popular ·
@@ -773,12 +773,12 @@ function PayPage() {
                 )}
               </div>
               <p
-                className="text-[22px] font-medium text-stone-900 tabular-nums tracking-tight shrink-0"
+                className="text-[22px] font-medium text-[#0f1620] tabular-nums tracking-tight shrink-0"
                 style={{ fontFamily: SERIF }}
               >
                 {preselectedTier.price}
                 <span
-                  className="text-[10px] font-medium text-stone-500 ml-1"
+                  className="text-[10px] font-medium text-[#6b6557] ml-1"
                   style={{ fontFamily: MONO }}
                 >
                   {preselectedTier.billingPeriod}
@@ -787,16 +787,16 @@ function PayPage() {
             </div>
           </div>
         ) : (
-          <div className="rounded-md border border-stone-200/70 bg-white p-4 sm:p-5">
+          <div className="rounded-none border border-[#d8d1bf]/70 bg-white p-4 sm:p-5">
             <div className="flex items-baseline gap-2.5 mb-4">
               <span
-                className="text-[10px] font-semibold tabular-nums text-stone-400"
+                className="text-[10px] font-semibold tabular-nums text-[#8c8676]"
                 style={{ fontFamily: MONO }}
               >
                 01
               </span>
               <h2
-                className="text-[13px] sm:text-[15px] font-semibold uppercase tracking-[0.13em] sm:tracking-[0.15em] text-stone-700"
+                className="text-[13px] sm:text-[15px] font-semibold uppercase tracking-[0.13em] sm:tracking-[0.15em] text-[#2b3543]"
                 style={{ fontFamily: MONO }}
               >
                 Select your plan
@@ -807,33 +807,33 @@ function PayPage() {
                 <button
                   key={t.slug}
                   onClick={() => setSelectedSlug(t.slug)}
-                  className={`rounded-sm border p-3.5 text-left transition-colors ${
+                  className={`rounded-none border p-3.5 text-left transition-colors ${
                     selectedSlug === t.slug
-                      ? "border-stone-900 bg-stone-50/40"
-                      : "border-stone-200/70 hover:border-stone-400 bg-white"
+                      ? "border-[#0f1620] bg-[#ece6d5]/40"
+                      : "border-[#d8d1bf]/70 hover:border-[#8c8676] bg-white"
                   }`}
                 >
                   {t.featured && (
                     <span
-                      className="inline-block text-[9px] font-semibold uppercase tracking-[0.18em] text-orange-700 mb-1.5"
+                      className="inline-block text-[9px] font-semibold uppercase tracking-[0.18em] text-[#9c6b1f] mb-1.5"
                       style={{ fontFamily: MONO }}
                     >
                       · Popular ·
                     </span>
                   )}
                   <p
-                    className="text-[12px] font-medium text-stone-700 leading-snug"
+                    className="text-[12px] font-medium text-[#2b3543] leading-snug"
                     style={{ fontFamily: MONO }}
                   >
                     {t.name}
                   </p>
                   <p
-                    className="mt-1.5 text-[20px] font-medium text-stone-900 tabular-nums tracking-tight"
+                    className="mt-1.5 text-[20px] font-medium text-[#0f1620] tabular-nums tracking-tight"
                     style={{ fontFamily: SERIF }}
                   >
                     {t.price}
                     <span
-                      className="text-[10px] font-medium text-stone-500 ml-1"
+                      className="text-[10px] font-medium text-[#6b6557] ml-1"
                       style={{ fontFamily: MONO }}
                     >
                       {t.billingPeriod}
@@ -846,16 +846,16 @@ function PayPage() {
         )}
 
         {/* Step 2 — method */}
-        <div className="rounded-md border border-stone-200/70 bg-white p-4 sm:p-5">
+        <div className="rounded-none border border-[#d8d1bf]/70 bg-white p-4 sm:p-5">
           <div className="flex items-baseline gap-2.5 mb-4">
             <span
-              className="text-[10px] font-semibold tabular-nums text-stone-400"
+              className="text-[10px] font-semibold tabular-nums text-[#8c8676]"
               style={{ fontFamily: MONO }}
             >
               02
             </span>
             <h2
-              className="text-[13px] sm:text-[15px] font-semibold uppercase tracking-[0.13em] sm:tracking-[0.15em] text-stone-700"
+              className="text-[13px] sm:text-[15px] font-semibold uppercase tracking-[0.13em] sm:tracking-[0.15em] text-[#2b3543]"
               style={{ fontFamily: MONO }}
             >
               Choose how to pay
@@ -864,7 +864,7 @@ function PayPage() {
 
           {/* Tabs */}
           <div
-            className={`grid gap-1 rounded-sm border border-stone-200/70 p-0.5 bg-stone-50/40 mb-5 ${
+            className={`grid gap-1 rounded-none border border-[#d8d1bf]/70 p-0.5 bg-[#ece6d5]/40 mb-5 ${
               tabs.length === 2 ? "grid-cols-2" : "grid-cols-3"
             }`}
           >
@@ -872,10 +872,10 @@ function PayPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`rounded-sm py-2.5 sm:py-2 text-[10.5px] font-semibold uppercase tracking-[0.13em] sm:tracking-[0.15em] transition-colors ${
+                className={`rounded-none py-2.5 sm:py-2 text-[10.5px] font-semibold uppercase tracking-[0.13em] sm:tracking-[0.15em] transition-colors ${
                   activeTab === tab.id
-                    ? "bg-white text-stone-900 shadow-sm"
-                    : "text-stone-500 hover:text-stone-700"
+                    ? "bg-white text-[#0f1620] shadow-sm"
+                    : "text-[#6b6557] hover:text-[#2b3543]"
                 }`}
                 style={{ fontFamily: MONO }}
               >
@@ -896,16 +896,16 @@ function PayPage() {
 
         {/* After payment */}
         {activeTab !== "card" && (
-          <div className="rounded-md border border-stone-200/70 bg-white p-4 sm:p-5">
+          <div className="rounded-none border border-[#d8d1bf]/70 bg-white p-4 sm:p-5">
             <div className="flex items-baseline gap-2.5 mb-4">
               <span
-                className="text-[10px] font-semibold tabular-nums text-stone-400"
+                className="text-[10px] font-semibold tabular-nums text-[#8c8676]"
                 style={{ fontFamily: MONO }}
               >
                 03
               </span>
               <h2
-                className="text-[13px] sm:text-[15px] font-semibold uppercase tracking-[0.13em] sm:tracking-[0.15em] text-stone-700"
+                className="text-[13px] sm:text-[15px] font-semibold uppercase tracking-[0.13em] sm:tracking-[0.15em] text-[#2b3543]"
                 style={{ fontFamily: MONO }}
               >
                 After payment
@@ -919,10 +919,10 @@ function PayPage() {
               ].map((step, i) => (
                 <li
                   key={i}
-                  className="flex gap-3 text-[12.5px] leading-relaxed text-stone-700"
+                  className="flex gap-3 text-[12.5px] leading-relaxed text-[#2b3543]"
                 >
                   <span
-                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-[9px] font-semibold text-stone-700 tabular-nums mt-0.5"
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#d8d1bf] bg-white text-[9px] font-semibold text-[#2b3543] tabular-nums mt-0.5"
                     style={{ fontFamily: MONO }}
                   >
                     {i + 1}
@@ -937,13 +937,13 @@ function PayPage() {
 
       <footer className="py-7 text-center">
         <p
-          className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+          className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-[#8c8676]"
           style={{ fontFamily: MONO }}
         >
           © {new Date().getFullYear()} Tender·Path ·{" "}
           <a
             href={`mailto:${CONFIG.supportEmail}`}
-            className="underline underline-offset-2 hover:text-stone-700"
+            className="underline underline-offset-2 hover:text-[#2b3543]"
           >
             {CONFIG.supportEmail}
           </a>
