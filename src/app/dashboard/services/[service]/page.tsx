@@ -157,8 +157,9 @@ const SERVICE_PREVIEW_MAP: Record<ServiceSlug, SamplePreviewType> = {
   "lta-roster": "roster",
 };
 
-const MONO_FONT = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
-const SERIF_FONT = "'Fraunces', 'Times New Roman', serif";
+// Dossier fonts (match the Workbench: JetBrains mono + Fraunces serif).
+const MONO_FONT = "var(--font-jetbrains), 'SF Mono', ui-monospace, monospace";
+const SERIF_FONT = "var(--font-fraunces), 'Times New Roman', serif";
 
 function firstValue(value: string | string[] | undefined): string | null {
   if (Array.isArray(value)) return value[0] ?? null;
@@ -208,7 +209,7 @@ export default async function ServiceDetailPage({
       {/* Back link */}
       <Link
         href="/dashboard/services"
-        className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-500 hover:text-stone-900 transition-colors"
+        className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-3 hover:text-ink transition-colors"
         style={{ fontFamily: MONO_FONT }}
       >
         ← All service paths
@@ -217,49 +218,49 @@ export default async function ServiceDetailPage({
       {/* Header */}
       <header className="mt-5 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-3xl">
-          <div className="flex items-center gap-3 text-[11px] text-stone-500">
+          <div className="flex items-center gap-3 text-[11px] text-ink-3">
             <span
-              className="font-semibold uppercase tracking-[0.18em] text-stone-400"
+              className="font-semibold uppercase tracking-[0.18em] text-mute"
               style={{ fontFamily: MONO_FONT }}
             >
               Workbench · Service path
             </span>
-            <span className="text-stone-300">·</span>
+            <span className="text-mute">·</span>
             <span style={{ fontFamily: MONO_FONT }}>{service.eyebrow}</span>
           </div>
           <h1
-            className="mt-1 text-[56px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+            className="mt-1 text-[56px] leading-[1.05] font-medium text-ink tracking-tight"
             style={{ fontFamily: SERIF_FONT, fontFeatureSettings: "'ss01'" }}
           >
             {service.title}
           </h1>
-          <p className="mt-2 text-[15.5px] leading-relaxed text-stone-600">
+          <p className="mt-2 text-[15.5px] leading-relaxed text-ink-2">
             {service.lead}
           </p>
         </div>
         {tier && (
-          <div className="shrink-0 rounded-md border border-stone-200/70 bg-white px-5 py-4 min-w-[200px]">
+          <div className="shrink-0 border border-rule bg-white px-5 py-4 min-w-[200px]">
             <div
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-mute"
               style={{ fontFamily: MONO_FONT }}
             >
               Price
             </div>
             <div className="mt-1.5 flex items-baseline gap-1">
               <span
-                className="text-[36px] leading-none font-medium tabular-nums text-stone-900"
+                className="text-[36px] leading-none font-medium tabular-nums text-ink"
                 style={{ fontFamily: SERIF_FONT }}
               >
                 {tier.price}
               </span>
               <span
-                className="text-[12px] text-stone-500"
+                className="text-[12px] text-ink-3"
                 style={{ fontFamily: MONO_FONT }}
               >
                 {tier.billingPeriod}
               </span>
             </div>
-            <div className="mt-1 text-[11.5px] text-stone-500 leading-snug">
+            <div className="mt-1 text-[11.5px] text-ink-3 leading-snug">
               {comingSoon ? "Coming soon" : tier.billingNote}
             </div>
           </div>
@@ -270,27 +271,24 @@ export default async function ServiceDetailPage({
       <div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.9fr)]">
         {/* LEFT — how it works + caveat + sample */}
         <section className="space-y-7">
-          {/* How it works (was "02 ·"; "01 · Deliverables" block removed per
-              2026-05-21 UX cleanup — the deliverable list duplicates what the
-              sample-output drawer already shows). */}
-          <div className="rounded-md border border-stone-200/70 bg-white p-6">
+          <div className="border border-rule bg-white p-6">
             <h2
-              className="text-[22px] font-medium text-stone-900 mb-4"
+              className="text-[22px] font-medium text-ink mb-4"
               style={{ fontFamily: SERIF_FONT }}
             >
               <span
-                className="text-[11px] font-semibold tabular-nums text-stone-400 mr-2 align-middle"
+                className="text-[11px] font-semibold tabular-nums text-accent mr-2 align-middle"
                 style={{ fontFamily: MONO_FONT }}
               >
-                01 ·
+                §01 ·
               </span>
               How it works
             </h2>
             <ol className="space-y-3">
               {service.workflow.map((item, index) => (
-                <li key={item} className="flex gap-4 text-[14px] text-stone-700 leading-relaxed">
+                <li key={item} className="flex gap-4 text-[14px] text-ink-2 leading-relaxed">
                   <span
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-[10px] font-semibold text-stone-700 tabular-nums mt-0.5"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-rule bg-white text-[10px] font-semibold text-ink-2 tabular-nums mt-0.5"
                     style={{ fontFamily: MONO_FONT }}
                   >
                     {index + 1}
@@ -302,19 +300,19 @@ export default async function ServiceDetailPage({
           </div>
 
           {/* Caveat */}
-          <div className="rounded-md border-l-2 border-amber-600 bg-amber-50/40 px-4 py-3.5">
+          <div className="border-l-2 border-accent bg-[#f8f2e2] px-4 py-3.5">
             <div
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700"
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent"
               style={{ fontFamily: MONO_FONT }}
             >
               Note · before you order
             </div>
-            <p className="mt-1.5 text-[13.5px] leading-relaxed text-amber-950">{service.caveat}</p>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-2">{service.caveat}</p>
           </div>
 
           {/* Sample output */}
-          <details className="group rounded-md border border-stone-200/70 bg-white">
-            <summary className="cursor-pointer list-none flex items-center gap-3 px-6 py-4 text-[13px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:text-stone-900 select-none">
+          <details className="group border border-rule bg-white">
+            <summary className="cursor-pointer list-none flex items-center gap-3 px-6 py-4 text-[13px] font-semibold uppercase tracking-[0.15em] text-ink-2 hover:text-ink select-none">
               <svg
                 className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-90"
                 fill="none"
@@ -326,7 +324,7 @@ export default async function ServiceDetailPage({
               </svg>
               <span style={{ fontFamily: MONO_FONT }}>Sample output · redacted preview</span>
             </summary>
-            <div className="border-t border-stone-200/70 px-6 py-5">
+            <div className="border-t border-rule px-6 py-5">
               <SampleOutputPreview
                 type={SERVICE_PREVIEW_MAP[service.slug]}
                 variant="light"
@@ -336,24 +334,21 @@ export default async function ServiceDetailPage({
         </section>
 
         {/* RIGHT — order */}
-        <aside className="rounded-md border border-stone-200/70 bg-white p-6 self-start lg:sticky lg:top-6">
-          {/* Work context (Delivery SLA badge removed 2026-05-21 — surfacing
-              a fixed SLA next to checkout overpromised; the per-service
-              workflow step covers timing instead). */}
+        <aside className="border border-rule bg-white p-6 self-start lg:sticky lg:top-6">
           <h2
-            className="text-[18px] font-medium text-stone-900 flex items-center gap-2"
+            className="text-[18px] font-medium text-ink flex items-center gap-2"
             style={{ fontFamily: SERIF_FONT }}
           >
             <span
-              className="text-[10px] font-semibold tabular-nums text-stone-400 align-middle"
+              className="text-[10px] font-semibold tabular-nums text-accent align-middle"
               style={{ fontFamily: MONO_FONT }}
             >
-              02 ·
+              §02 ·
             </span>
             <span>Work context</span>
             {service.intakePrompt && (
               <span
-                className="ml-0.5 inline-flex h-[15px] w-[15px] cursor-help items-center justify-center rounded-full border border-stone-300 text-[9px] font-bold text-stone-500 align-middle"
+                className="ml-0.5 inline-flex h-[15px] w-[15px] cursor-help items-center justify-center rounded-full border border-rule text-[9px] font-bold text-ink-3 align-middle"
                 style={{ fontFamily: MONO_FONT }}
                 title={service.intakePrompt}
                 aria-label={service.intakePrompt}
@@ -367,35 +362,35 @@ export default async function ServiceDetailPage({
               {context.tender && (
                 <div>
                   <dt
-                    className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+                    className="text-[10px] font-semibold uppercase tracking-[0.18em] text-mute"
                     style={{ fontFamily: MONO_FONT }}
                   >
                     Tender
                   </dt>
-                  <dd className="mt-0.5 text-[13px] text-stone-900 leading-snug">{context.tender}</dd>
+                  <dd className="mt-0.5 text-[13px] text-ink leading-snug">{context.tender}</dd>
                 </div>
               )}
               {context.agency && (
                 <div>
                   <dt
-                    className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+                    className="text-[10px] font-semibold uppercase tracking-[0.18em] text-mute"
                     style={{ fontFamily: MONO_FONT }}
                   >
                     Agency
                   </dt>
-                  <dd className="mt-0.5 text-[13px] text-stone-900">{context.agency}</dd>
+                  <dd className="mt-0.5 text-[13px] text-ink">{context.agency}</dd>
                 </div>
               )}
               {context.pipelineItemId && (
                 <div>
                   <dt
-                    className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+                    className="text-[10px] font-semibold uppercase tracking-[0.18em] text-mute"
                     style={{ fontFamily: MONO_FONT }}
                   >
                     Pipeline item
                   </dt>
                   <dd
-                    className="mt-0.5 text-[13px] text-stone-900"
+                    className="mt-0.5 text-[13px] text-ink"
                     style={{ fontFamily: MONO_FONT }}
                   >
                     #{context.pipelineItemId}
@@ -404,32 +399,28 @@ export default async function ServiceDetailPage({
               )}
             </dl>
           ) : (
-            <p className="mt-3 text-[12.5px] leading-relaxed text-stone-500">
+            <p className="mt-3 text-[12.5px] leading-relaxed text-ink-3">
               No tender attached yet. Open a matched tender from the dashboard or pipeline to carry context into checkout.
             </p>
           )}
 
-          {/* Intake prompt blockquote moved to a hover-tooltip on the (i)
-              icon next to the "Work context" heading (2026-05-21) so the
-              order panel reads cleaner. */}
-
           {/* Intake form — gated when the service is held back ("coming soon") */}
           {comingSoon ? (
-            <div className="mt-4 rounded-md border-l-2 border-amber-600 bg-amber-50/50 px-4 py-4">
+            <div className="mt-4 border-l-2 border-accent bg-[#f8f2e2] px-4 py-4">
               <div
-                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700"
+                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent"
                 style={{ fontFamily: MONO_FONT }}
               >
                 Coming soon
               </div>
-              <p className="mt-1.5 text-[13.5px] leading-relaxed text-amber-950">
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-2">
                 This service isn&rsquo;t open for orders yet — we&rsquo;re putting the finishing
                 touches on it. Explore the other service paths in the meantime, and we&rsquo;ll
                 announce the moment it opens.
               </p>
               <Link
                 href="/dashboard/services/bid-no-bid"
-                className="mt-3 inline-block text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:text-stone-900"
+                className="mt-3 inline-block text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-2 hover:text-ink"
                 style={{ fontFamily: MONO_FONT }}
               >
                 ← Browse available services
