@@ -36,7 +36,7 @@ export default function Pricing() {
       <div className="lk-container" style={{ maxWidth: 1180, margin: "0 auto", padding: "0 24px" }}>
         <div style={{ textAlign: "center" }}>
           <div style={{ display: "inline-block" }}>
-            <SectionTag n="04" label="Pricing" />
+            <SectionTag n="05" label="Pricing" />
           </div>
           <h2 style={{ fontFamily: LF.display, fontSize: mobile ? 30 : 46, fontWeight: 400, letterSpacing: "-0.02em", color: LC.ink, margin: "16px 0 0", lineHeight: 1.05 }}>
             One subscription. Pay per win.

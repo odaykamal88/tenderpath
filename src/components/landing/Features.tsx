@@ -219,7 +219,7 @@ export default function Features() {
       <div className="lk-container" style={{ maxWidth: 1180, margin: "0 auto", padding: "0 24px" }}>
         <div style={{ textAlign: mobile ? "left" : "center", marginBottom: mobile ? 34 : 60 }}>
           <div style={{ display: "inline-block" }}>
-            <SectionTag n="03" label="What's inside" />
+            <SectionTag n="04" label="What's inside" />
           </div>
           <h2 style={{ fontFamily: LF.display, fontSize: mobile ? 28 : 44, fontWeight: 400, letterSpacing: "-0.02em", color: LC.ink, margin: "16px 0 0", lineHeight: 1.06 }}>
             Your whole bid desk, in one place.

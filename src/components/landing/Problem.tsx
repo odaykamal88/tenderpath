@@ -14,7 +14,7 @@ export default function Problem() {
   return (
     <section style={{ background: LC.paper, padding: mobile ? "52px 0" : "88px 0" }}>
       <div className="lk-container" style={{ maxWidth: 1180, margin: "0 auto", padding: "0 24px" }}>
-        <SectionTag n="01" label="Why bidding is broken" />
+        <SectionTag n="02" label="Why bidding is broken" />
         <h2
           style={{
             fontFamily: LF.display,

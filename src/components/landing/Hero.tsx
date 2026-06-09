@@ -113,11 +113,11 @@ export default function Hero({ viewer }: { viewer: LandingViewer }) {
             </Link>
           )}
           <a
-            href="#how"
+            href="#see"
             className="lk-navlink"
             style={{ fontFamily: LF.mono, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: LC.ink2, textDecoration: "none", borderBottom: `1px solid ${LC.rule}`, paddingBottom: 3 }}
           >
-            See how it works →
+            Watch it work →
           </a>
         </div>
 

@@ -1,5 +1,6 @@
 import Nav from "@/components/landing/Nav";
 import Hero from "@/components/landing/Hero";
+import VideoSection from "@/components/landing/VideoSection";
 import Problem from "@/components/landing/Problem";
 import HowItWorks from "@/components/landing/HowItWorks";
 import Features from "@/components/landing/Features";
@@ -24,6 +25,7 @@ export default async function Home() {
     <div style={{ background: "#f6f3ec", minHeight: "100vh" }}>
       <Nav viewer={viewer} />
       <Hero viewer={viewer} />
+      <VideoSection />
       <Problem />
       <HowItWorks />
       <Features />
