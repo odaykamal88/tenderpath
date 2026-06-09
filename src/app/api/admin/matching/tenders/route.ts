@@ -56,6 +56,10 @@ export async function GET(request: Request) {
   const agency = url.searchParams.get("agency")?.trim() ?? "";
   const sector = url.searchParams.get("sector")?.trim() ?? "";
   const deadlineBefore = url.searchParams.get("deadline_before")?.trim() ?? "";
+  // Minimum lead time: only surface tenders whose deadline is at least N days
+  // out, so there's still time to actually apply. 0 (or absent) = no floor,
+  // which also lets through past-deadline and no-deadline rows (legacy view).
+  const minDays = Math.max(0, Math.floor(Number(url.searchParams.get("min_days") ?? 0)) || 0);
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 200), 1), 500);
 
   const rows = (await sql`
@@ -81,6 +85,10 @@ export async function GET(request: Request) {
       AND (
         NULLIF(${deadlineBefore}, '') IS NULL
         OR (t.deadline IS NOT NULL AND t.deadline <= NULLIF(${deadlineBefore}, '')::date)
+      )
+      AND (
+        ${minDays} <= 0
+        OR (t.deadline IS NOT NULL AND t.deadline >= CURRENT_DATE + (${minDays})::int)
       )
     ORDER BY t.deadline ASC NULLS LAST, t.created_at DESC
     LIMIT ${limit}
@@ -127,6 +135,6 @@ export async function GET(request: Request) {
       agencies: harmonizeFilterValues(agenciesRows.map((r) => r.agency as string | null)),
       sectors: harmonizeFilterValues(sectorsRows.map((r) => r.sector as string | null), { dropCoded: true }),
     },
-    applied: { q, country, agency, sector, deadlineBefore, limit },
+    applied: { q, country, agency, sector, deadlineBefore, minDays, limit },
   });
 }

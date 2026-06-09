@@ -66,12 +66,17 @@ export default function AdminNetworkPage() {
   const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [submitting, setSubmitting] = useState(false);
+  // Minimum lead time on the outreach worklist (days until deadline). Defaults
+  // to 10 so the shortlist surfaces tenders with real runway to apply, not the
+  // closing-tomorrow ones that crowd a soonest-deadline-first list. "0" = all.
+  const [minDays, setMinDays] = useState("10");
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/network-companies", { headers: authHeaders() });
+      const qs = Number(minDays) > 0 ? `?min_days=${encodeURIComponent(minDays)}` : "";
+      const res = await fetch(`/api/admin/network-companies${qs}`, { headers: authHeaders() });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       setData(await res.json());
     } catch (err) {
@@ -79,7 +84,7 @@ export default function AdminNetworkPage() {
     } finally {
       if (!opts?.silent) setLoading(false);
     }
-  }, []);
+  }, [minDays]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -198,10 +203,26 @@ export default function AdminNetworkPage() {
           <h1 className={styles.pageTitle}>Bizdev match radar</h1>
           <p className={styles.pageSub}>
             Companies from your network, auto-matched against live tenders every couple of days.
-            Fresh high-fit matches surface here for outreach.
+            Fresh high-fit matches surface here for outreach — by default only those closing 10+ days
+            out, so there&rsquo;s runway to reach out. Use <em>Min lead time</em> to widen or narrow that.
           </p>
         </div>
         <div className={styles.pageActions}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--admin-muted, #888)" }}>
+            Min lead time
+            <select
+              value={minDays}
+              onChange={(e) => setMinDays(e.target.value)}
+              className={styles.adminSearchInput}
+              style={{ padding: "6px 8px" }}
+              title="Only surface matches whose tender deadline is at least this far out, so there's still time to reach out and bid."
+            >
+              <option value="10">10+ days</option>
+              <option value="7">7+ days</option>
+              <option value="3">3+ days</option>
+              <option value="0">All (incl. closing soon)</option>
+            </select>
+          </label>
           <button type="button" className={styles.btnPrimary} onClick={() => setShowForm((s) => !s)}>
             {showForm ? "Close" : "Add company"}
           </button>
