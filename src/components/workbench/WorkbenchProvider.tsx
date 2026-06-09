@@ -160,10 +160,12 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
   const openPaste = useCallback((match?: WbMatch | null) => setPasteSeed(match ?? null), []);
   const openVault = useCallback(() => setVaultOpen(true), []);
   const openSubscribe = useCallback(() => {
-    // Phase-1: the dedicated Subscribe modal lands with the Account/billing work.
-    // For now route to the real, working pay page so nothing dead-ends.
-    window.open("/pay?plan=annual-access", "_blank", "noopener,noreferrer");
-  }, []);
+    // Use the new flat subscription ($49/mo · $324/yr) once its Stripe prices
+    // are configured; until then fall back to the existing annual-access flow so
+    // the CTA never dead-ends. The pay page handles plan selection + checkout.
+    const plan = data?.access.newSubscriptionLive ? "sub-annual" : "annual-access";
+    window.open(`/pay?plan=${plan}`, "_blank", "noopener,noreferrer");
+  }, [data]);
 
   const isClosed = useCallback(
     (gapId: string) => {

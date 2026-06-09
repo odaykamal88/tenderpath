@@ -129,3 +129,31 @@ export function submissionPriceId(code: SubmissionCode): string | null {
   const t = submissionType(code);
   return process.env[t.stripePriceEnv] ?? null;
 }
+
+const SUBMISSION_CODES = new Set<SubmissionCode>(["EOI", "RFQ", "ITB", "RFP"]);
+
+/** Narrowing guard — only an exact EOI/RFQ/ITB/RFP is a billable submission code
+ *  (submissionType() falls back to RFP for unknown input, which must NOT be used
+ *  to pick a price). */
+export function isSubmissionCode(value: string | null | undefined): value is SubmissionCode {
+  return typeof value === "string" && SUBMISSION_CODES.has(value.toUpperCase() as SubmissionCode);
+}
+
+/** Per-type price only when the env is configured AND the code is exact. Null →
+ *  caller keeps the existing single-price flow (the dormant default until the
+ *  Stripe products are created). */
+export function configuredSubmissionPriceId(code: string | null | undefined): string | null {
+  if (!isSubmissionCode(code)) return null;
+  return submissionPriceId(code.toUpperCase() as SubmissionCode);
+}
+
+/** Configured Stripe price id for a subscription cycle, or null when unset. */
+export function subscriptionPriceId(cycle: "monthly" | "annual"): string | null {
+  return process.env[SUBSCRIPTION_PLANS[cycle].stripePriceEnv] ?? null;
+}
+
+/** True when BOTH new subscription prices are configured — gates whether the UI
+ *  offers the $49/$324 plans or falls back to the existing annual-access flow. */
+export function newSubscriptionConfigured(): boolean {
+  return Boolean(subscriptionPriceId("monthly")) && Boolean(subscriptionPriceId("annual"));
+}
