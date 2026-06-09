@@ -96,7 +96,10 @@ export async function GET(request: Request) {
         ORDER BY ${sort === "fit" ? sql`pf.fit DESC NULLS LAST, t.deadline ASC NULLS LAST` : sql`t.deadline ASC NULLS LAST`}, t.id DESC
         LIMIT ${PAGE_SIZE} OFFSET ${offset}
       `,
-      sql`SELECT t.sector AS value, COUNT(*)::int AS count FROM tenders t ${join} ${facetWhere} AND t.sector IS NOT NULL AND t.sector <> '' GROUP BY t.sector ORDER BY count DESC, value LIMIT 30`,
+      // Exclude malformed sector values that leaked from source data (e.g. a
+      // JSON blob {"sector_code":"SG",…} in tenders.sector) so the facet list
+      // stays clean.
+      sql`SELECT t.sector AS value, COUNT(*)::int AS count FROM tenders t ${join} ${facetWhere} AND t.sector IS NOT NULL AND t.sector <> '' AND t.sector NOT LIKE '{%' AND length(t.sector) <= 60 GROUP BY t.sector ORDER BY count DESC, value LIMIT 30`,
       sql`SELECT t.opportunity_type AS value, COUNT(*)::int AS count FROM tenders t ${join} ${facetWhere} AND t.opportunity_type IS NOT NULL AND t.opportunity_type <> '' GROUP BY t.opportunity_type ORDER BY count DESC, value LIMIT 30`,
       sql`SELECT t.source_name AS value, COUNT(*)::int AS count FROM tenders t ${join} ${facetWhere} AND t.source_name IS NOT NULL AND t.source_name <> '' GROUP BY t.source_name ORDER BY count DESC, value LIMIT 30`,
     ]);
