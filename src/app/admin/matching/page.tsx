@@ -29,7 +29,7 @@ interface MatchingTendersResponse {
     agencies: string[];
     sectors: string[];
   };
-  applied: { q: string; country: string; agency: string; sector: string; deadlineBefore: string; limit: number };
+  applied: { q: string; country: string; agency: string; sector: string; deadlineBefore: string; minDays: number; limit: number };
 }
 
 function authHeaders(): HeadersInit {
@@ -70,8 +70,9 @@ export default function AdminMatchingPage() {
   const [agency, setAgency] = useState("");
   const [sector, setSector] = useState("");
   const [deadlineBefore, setDeadlineBefore] = useState("");
+  const [minDays, setMinDays] = useState("10");
 
-  const load = useCallback(async (params: { q: string; country: string; agency: string; sector: string; deadlineBefore: string }) => {
+  const load = useCallback(async (params: { q: string; country: string; agency: string; sector: string; deadlineBefore: string; minDays: string }) => {
     setLoading(true);
     setError(null);
     try {
@@ -81,6 +82,7 @@ export default function AdminMatchingPage() {
       if (params.agency) u.set("agency", params.agency);
       if (params.sector) u.set("sector", params.sector);
       if (params.deadlineBefore) u.set("deadline_before", params.deadlineBefore);
+      u.set("min_days", params.minDays || "0");
       const res = await fetch(`/api/admin/matching/tenders?${u.toString()}`, { headers: authHeaders() });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       setData(await res.json());
@@ -92,18 +94,23 @@ export default function AdminMatchingPage() {
   }, []);
 
   useEffect(() => {
+    // Absent min_days defaults to a 10-day floor (the actionable view); an
+    // explicit value — including "0" for "show everything" — is honoured as-is.
+    const initMin = getInitial("min_days");
     const init = {
       q: getInitial("q"),
       country: getInitial("country"),
       agency: getInitial("agency"),
       sector: getInitial("sector"),
       deadlineBefore: getInitial("deadline_before"),
+      minDays: initMin === "" ? "10" : initMin,
     };
     setQ(init.q);
     setCountry(init.country);
     setAgency(init.agency);
     setSector(init.sector);
     setDeadlineBefore(init.deadlineBefore);
+    setMinDays(init.minDays);
     load(init);
   }, [load]);
 
@@ -132,7 +139,7 @@ export default function AdminMatchingPage() {
           <button
             type="button"
             className={styles.btnGhost}
-            onClick={() => load({ q, country, agency, sector, deadlineBefore })}
+            onClick={() => load({ q, country, agency, sector, deadlineBefore, minDays })}
             disabled={loading}
           >
             {loading ? "Loading…" : "Refresh"}
@@ -231,6 +238,18 @@ export default function AdminMatchingPage() {
             onChange={(e) => setDeadlineBefore(e.target.value)}
             className={styles.adminSearchInput}
           />
+          <label style={{ display: "grid", gap: 4, fontSize: 11, color: "var(--admin-muted, #888)" }}>
+            Min days to deadline
+            <input
+              type="number"
+              name="min_days"
+              min={0}
+              value={minDays}
+              onChange={(e) => setMinDays(e.target.value)}
+              className={styles.adminSearchInput}
+              title="Only show tenders closing at least this many days out. 0 = show all, including closing-soon and past-deadline."
+            />
+          </label>
           <button type="submit" className={styles.btnPrimary}>Apply</button>
         </form>
       </section>
@@ -239,7 +258,7 @@ export default function AdminMatchingPage() {
         <header className={styles.panelHead}>
           <div>
             <h2 className={styles.panelTitle}>Open tenders</h2>
-            <p className={styles.panelSub}>Soonest deadline first. Broken-link tenders excluded.</p>
+            <p className={styles.panelSub}>Soonest deadline first. Broken-link tenders excluded. Showing tenders closing 10+ days out by default — set <em>Min days to deadline</em> to 0 to include closing-soon and past-deadline tenders.</p>
           </div>
           {data && <span className={styles.panelMeta}>{data.total} shown</span>}
         </header>

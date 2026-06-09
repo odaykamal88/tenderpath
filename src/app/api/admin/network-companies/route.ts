@@ -28,6 +28,13 @@ export async function GET(request: Request) {
   if (!guard.authorized) return guard.response!;
   await ensureNetworkMatchingColumns();
 
+  // Minimum lead time on the outreach worklist: only surface matches whose
+  // tender deadline is at least N days out, so there's still runway to reach
+  // out and bid. 0 (or absent) = no floor, the legacy "everything" view.
+  // Applied to BOTH the worklist and each company's Fresh count so the badge
+  // and the list agree.
+  const minDays = Math.max(0, Math.floor(Number(new URL(request.url).searchParams.get("min_days") ?? 0)) || 0);
+
   const [rows, fresh] = await Promise.all([
     sql`
       SELECT
@@ -43,7 +50,13 @@ export async function GET(request: Request) {
         SELECT
           m.network_company_id,
           COUNT(*) AS total,
-          COUNT(*) FILTER (WHERE m.status = 'new') AS fresh,
+          COUNT(*) FILTER (
+            WHERE m.status = 'new'
+              AND (
+                ${minDays} <= 0
+                OR (t.deadline IS NOT NULL AND t.deadline >= CURRENT_DATE + (${minDays})::int)
+              )
+          ) AS fresh,
           MAX(m.score) AS top_score
         FROM network_company_matches m
         JOIN tenders t ON t.id = m.tender_id
@@ -67,6 +80,10 @@ export async function GET(request: Request) {
       WHERE m.status = 'new' AND c.is_active = TRUE
         AND t.status = 'open' AND COALESCE(t.has_broken_link, false) = false
         AND t.deadline >= CURRENT_DATE
+        AND (
+          ${minDays} <= 0
+          OR (t.deadline IS NOT NULL AND t.deadline >= CURRENT_DATE + (${minDays})::int)
+        )
       ORDER BY t.deadline ASC NULLS LAST, m.score DESC
       LIMIT 100
     `,
