@@ -13,6 +13,7 @@ import { Icon, type IconName } from "./icons";
 import { Avatar } from "./ui";
 import { useMedia } from "./useMedia";
 import { useWorkbench } from "./WorkbenchProvider";
+import { WbNotificationBell } from "./WbNotificationBell";
 
 interface NavDef {
   id: string;
@@ -177,10 +178,7 @@ function Topbar({ mobile, onBurger }: { mobile: boolean; onBurger: () => void })
           <span style={{ fontFamily: F.sans, fontSize: 12.5, color: C.faint }}>Search tenders, gaps…</span>
         </Link>
       )}
-      <button aria-label="Notifications" style={{ position: "relative", background: "transparent", border: `1px solid ${C.rule}`, padding: 8, cursor: "pointer", color: C.ink2, display: "flex" }}>
-        <Icon name="bell" size={16} />
-        {data.pipeline.dueSoon > 0 && <span style={{ position: "absolute", top: 5, right: 6, width: 6, height: 6, borderRadius: 999, background: C.neg }} />}
-      </button>
+      <WbNotificationBell />
       {!mobile && (
         <button onClick={() => openPaste()} style={{ background: C.accent, color: C.white, border: 0, padding: "10px 16px", cursor: "pointer", fontFamily: F.mono, fontSize: 10.5, letterSpacing: "0.1em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
           + Paste a tender
