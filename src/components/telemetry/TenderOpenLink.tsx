@@ -5,6 +5,7 @@ import { trackClient } from "@/lib/telemetry/client";
 interface TenderOpenLinkProps {
   href: string;
   className?: string;
+  style?: React.CSSProperties;
   code: string;
   sourceProvenance?: "primary" | "aggregator" | "unknown";
   confidence?: "high" | "medium" | "low" | null;
@@ -15,6 +16,7 @@ interface TenderOpenLinkProps {
 export function TenderOpenLink({
   href,
   className,
+  style,
   code,
   sourceProvenance,
   confidence,
@@ -27,6 +29,7 @@ export function TenderOpenLink({
       target="_blank"
       rel="noreferrer"
       className={className}
+      style={style}
       onClick={() => {
         trackClient("tender_clicked", {
           code,

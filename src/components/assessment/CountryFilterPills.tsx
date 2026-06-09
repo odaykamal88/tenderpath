@@ -1,17 +1,16 @@
 "use client";
 
-import styles from "./AssessmentTabs.module.css";
+import type { CSSProperties } from "react";
+import { C, F } from "@/components/workbench/tokens";
 
 /**
- * CountryFilterPills — oval country toggles for the Tenders / Grants feeds.
+ * CountryFilterPills — country toggles for the Tenders / Grants feeds.
  *
  * When one country dominates a user's matches (e.g. 95% US for a US/UK/Kenya
- * operator), these let them hide that country to see the rest. Each pill shows
- * the country + its match count; clicking toggles it OFF (excluded). Presentation
- * only — the owning tab holds the excluded-set state and does the filtering.
- *
- * Hidden entirely when there are fewer than two countries to choose between: a
- * single-country (or country-less) feed has nothing to filter.
+ * operator), these let them hide it to see the rest. Each pill shows the country
+ * + its match count; clicking toggles it OFF. Presentation only — the owning tab
+ * holds the excluded-set state and does the filtering. Hidden when there are
+ * fewer than two countries: a single-country feed has nothing to filter.
  */
 export function CountryFilterPills({
   counts,
@@ -22,12 +21,10 @@ export function CountryFilterPills({
   onToggle,
   onClear,
 }: {
-  // [country, matchCount][], caller-sorted (most common first).
   counts: [string, number][];
   excluded: Set<string>;
   visibleCount: number;
   totalCount: number;
-  // "tenders" | "grants" — used in the toggle tooltips only.
   noun: string;
   onToggle: (country: string) => void;
   onClear: () => void;
@@ -35,9 +32,16 @@ export function CountryFilterPills({
   if (counts.length < 2) return null;
   const anyOff = excluded.size > 0;
 
+  const mono = (extra: CSSProperties = {}): CSSProperties => ({
+    fontFamily: F.mono,
+    fontSize: 10,
+    letterSpacing: "0.06em",
+    ...extra,
+  });
+
   return (
-    <div className={styles.countryFilter}>
-      <span className={`${styles.countryFilterLabel} tp-mono`}>Country</span>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", margin: "14px 0 4px" }}>
+      <span style={mono({ textTransform: "uppercase", color: C.faint, marginRight: 2 })}>Country</span>
       {counts.map(([country, n]) => {
         const off = excluded.has(country);
         return (
@@ -45,13 +49,23 @@ export function CountryFilterPills({
             key={country}
             type="button"
             onClick={() => onToggle(country)}
-            data-off={off ? "true" : undefined}
             aria-pressed={!off}
             title={off ? `Show ${country} ${noun}` : `Hide ${country} ${noun}`}
-            className={`${styles.countryPill} tp-mono`}
+            style={mono({
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "5px 10px",
+              border: `1px solid ${off ? C.ruleSoft : C.rule}`,
+              background: off ? "transparent" : C.white,
+              color: off ? C.faint : C.ink2,
+              textDecoration: off ? "line-through" : "none",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            })}
           >
             {country}
-            <span className={styles.countryPillCount}>{n}</span>
+            <span style={{ color: off ? C.faint : C.mute, fontVariantNumeric: "tabular-nums" }}>{n}</span>
           </button>
         );
       })}
@@ -60,11 +74,19 @@ export function CountryFilterPills({
           <button
             type="button"
             onClick={onClear}
-            className={`${styles.countryPillClear} tp-mono`}
+            style={mono({
+              padding: "5px 10px",
+              border: 0,
+              background: "none",
+              color: C.accent,
+              cursor: "pointer",
+              textTransform: "uppercase",
+              borderBottom: `1px solid ${C.rule}`,
+            })}
           >
             Reset
           </button>
-          <span className={`${styles.countryFilterShowing} tp-mono`}>
+          <span style={mono({ color: C.faint })}>
             Showing {visibleCount} of {totalCount}
           </span>
         </>
