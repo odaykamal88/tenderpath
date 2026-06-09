@@ -140,6 +140,9 @@ export interface WbAccess {
   isTrialing: boolean;
   locked: boolean;
   isPaid: boolean;
+  /** Trial user who hasn't used their one free proposal submission yet — the UI
+   *  advertises "first one's on us" at the proposal-commission points. */
+  freeSubmissionEligible: boolean;
 }
 
 export interface WbVaultSummary {

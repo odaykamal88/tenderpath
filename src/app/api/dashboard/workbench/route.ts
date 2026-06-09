@@ -14,6 +14,7 @@ import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/auth";
 import { evaluateAccess } from "@/lib/access";
+import { getFreeSubmissionStatus } from "@/lib/free-submission";
 import { loadWorkbenchSource, getViewerActivityForUser } from "@/lib/assessment/data";
 import { buildWorkbenchData, emptyWorkbenchData } from "@/lib/workbench/build";
 import type { NavigatorCompany } from "@/lib/workbench/navigator";
@@ -138,6 +139,8 @@ export async function GET(request: Request) {
   }
 
   const accessInfo = evaluateAccess(user);
+  // Fail-closed DB read (ensures its own schema) — never blocks the dashboard.
+  const freeSubmission = await getFreeSubmissionStatus(user);
   const access: WbAccess = {
     hasAccess: accessInfo.hasAccess,
     reason: accessInfo.reason,
@@ -145,6 +148,7 @@ export async function GET(request: Request) {
     isTrialing: accessInfo.isTrialing,
     locked: !accessInfo.hasAccess,
     isPaid: accessInfo.reason === "subscribed" || accessInfo.reason === "admin",
+    freeSubmissionEligible: freeSubmission.eligible,
   };
   const trialDays = accessInfo.trialDaysLeft;
 

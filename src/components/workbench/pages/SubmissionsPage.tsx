@@ -66,6 +66,14 @@ export function SubmissionsPage() {
 
       <div>
         <SectionHead title="Commission a new proposal" hint="Per submission · separate from your subscription" />
+        {data.access.freeSubmissionEligible && (
+          <Card style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", marginBottom: 14, borderLeft: `3px solid ${C.pos}`, background: "#f3f8f4", flexWrap: "wrap" }}>
+            <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: C.white, background: C.pos, padding: "3px 8px" }}>On us</span>
+            <span style={{ fontFamily: F.sans, fontSize: 13, color: C.ink, flex: 1, minWidth: 220 }}>
+              <strong style={{ fontWeight: 600 }}>Your first proposal submission is free</strong> while you&apos;re on trial — the credit is applied automatically at checkout, any format below.
+            </span>
+          </Card>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 14 }}>
           {SUBMISSION_TYPES.map((t) => (
             <Card key={t.code} style={{ display: "flex", flexDirection: "column", padding: "18px 18px" }}>
