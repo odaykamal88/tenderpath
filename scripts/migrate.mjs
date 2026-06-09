@@ -39,6 +39,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS org_type TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_description TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_source TEXT DEFAULT 'unset';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS mined_profile_facts JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS free_submission_used_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS free_submission_used_work_order_id INTEGER;
 
 CREATE TABLE IF NOT EXISTS subscriptions (
   id SERIAL PRIMARY KEY,
@@ -235,6 +237,9 @@ ALTER TABLE purchase_logs ADD COLUMN IF NOT EXISTS amount_cents INTEGER;
 ALTER TABLE purchase_logs ADD COLUMN IF NOT EXISTS referrer TEXT;
 ALTER TABLE purchase_logs ADD COLUMN IF NOT EXISTS tier TEXT;
 ALTER TABLE purchase_logs ALTER COLUMN tier DROP NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS purchase_logs_stripe_session_id_unique
+  ON purchase_logs (stripe_session_id)
+  WHERE stripe_session_id IS NOT NULL AND stripe_session_id <> '';
 
 ALTER TABLE crawl_logs ADD COLUMN IF NOT EXISTS status TEXT;
 ALTER TABLE crawl_logs ADD COLUMN IF NOT EXISTS duration_ms INTEGER;
@@ -307,7 +312,7 @@ CREATE TABLE IF NOT EXISTS work_orders (
   user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   plan TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'new',
-  payment_status TEXT DEFAULT 'paid',
+  payment_status TEXT DEFAULT 'pending',
   stripe_session_id TEXT UNIQUE,
   stripe_customer_id TEXT,
   amount_cents INTEGER,
@@ -330,6 +335,10 @@ ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS tender_url TEXT;
 ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS intake JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS usdt_txid TEXT;
 ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS payment_proof_url TEXT;
+ALTER TABLE work_orders ALTER COLUMN payment_status SET DEFAULT 'pending';
+CREATE UNIQUE INDEX IF NOT EXISTS work_orders_usdt_txid_unique
+  ON work_orders (usdt_txid)
+  WHERE usdt_txid IS NOT NULL AND usdt_txid <> '';
 
 CREATE TABLE IF NOT EXISTS proposal_packages (
   id SERIAL PRIMARY KEY,
@@ -362,6 +371,27 @@ ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DE
 CREATE INDEX IF NOT EXISTS proposal_packages_work_order_plan ON proposal_packages (work_order_id, plan, created_at DESC);
 CREATE INDEX IF NOT EXISTS proposal_packages_pending_idx ON proposal_packages (generation_status, updated_at)
   WHERE generation_status IN ('pending','generating');
+
+CREATE TABLE IF NOT EXISTS bid_analyses (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  pipeline_item_id INTEGER REFERENCES pipeline_items(id) ON DELETE SET NULL,
+  tender_id INTEGER REFERENCES tenders(id) ON DELETE SET NULL,
+  tender_url TEXT,
+  stripe_session_id TEXT,
+  win_probability INTEGER NOT NULL,
+  recommendation TEXT NOT NULL,
+  strength_areas JSONB DEFAULT '[]',
+  gap_areas JSONB DEFAULT '[]',
+  required_documents JSONB DEFAULT '[]',
+  effort_estimate TEXT NOT NULL,
+  key_risks JSONB DEFAULT '[]',
+  next_steps JSONB DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS bid_analyses_stripe_session_id_unique
+  ON bid_analyses (stripe_session_id)
+  WHERE stripe_session_id IS NOT NULL AND stripe_session_id <> '';
 
 CREATE TABLE IF NOT EXISTS weekly_digest_logs (
   id SERIAL PRIMARY KEY,

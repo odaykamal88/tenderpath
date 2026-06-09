@@ -22,6 +22,9 @@ export const FUNNEL_EVENTS = [
   // persisted (dashboard renders the remediation panel) but no ZIP is
   // produced and no "ready" email is sent.
   "deliverable_blocked",
+  // First-proposal-free credit redeemed: a trial user's first proposal
+  // submission was fulfilled for $0 instead of going through paid checkout.
+  "free_submission_redeemed",
 ] as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[number];

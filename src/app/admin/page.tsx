@@ -6,6 +6,11 @@ import { StatusTag, StatusDot, Sparkbar } from "./_components/StatusTag";
 
 type TabId = "overview" | "demo";
 
+function authHeaders(): HeadersInit {
+  const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
+  return token ? { authorization: `Bearer ${token}` } : {};
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Types — mirror /api/admin/stats response
 // ─────────────────────────────────────────────────────────────────────
@@ -236,10 +241,8 @@ export default function AdminPage() {
   const [sourceDetailError, setSourceDetailError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-    if (!token) return;
     try {
-      const res = await fetch("/api/admin/stats", { headers: { authorization: `Bearer ${token}` } });
+      const res = await fetch("/api/admin/stats", { headers: authHeaders() });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = await res.json();
       setStats(data);
@@ -251,10 +254,8 @@ export default function AdminPage() {
   }, []);
 
   const loadDemo = useCallback(async () => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-    if (!token) return;
     try {
-      const res = await fetch("/api/admin/demo-usage", { headers: { authorization: `Bearer ${token}` } });
+      const res = await fetch("/api/admin/demo-usage", { headers: authHeaders() });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       setDemoUsage(await res.json());
     } catch (e) {
@@ -267,12 +268,10 @@ export default function AdminPage() {
   useEffect(() => { load(); loadDemo(); }, [load, loadDemo]);
 
   const triggerSync = async () => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-    if (!token) return;
     setSyncing(true);
     setSyncResult(null);
     try {
-      const res = await fetch("/api/admin/sync-tenders", { method: "POST", headers: { authorization: `Bearer ${token}` } });
+      const res = await fetch("/api/admin/sync-tenders", { method: "POST", headers: authHeaders() });
       const data = await res.json();
       setSyncResult({ ok: data.ok, message: data.message ?? (data.ok ? "Sync triggered." : "Sync failed.") });
       setTimeout(load, 2000);
@@ -284,13 +283,11 @@ export default function AdminPage() {
   };
 
   const loadSourceDetail = async (platform: string) => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-    if (!token) return;
     setSourceDetailLoading(platform);
     setSourceDetailError(null);
     try {
       const res = await fetch(`/api/admin/source-health?platform=${encodeURIComponent(platform)}`, {
-        headers: { authorization: `Bearer ${token}` },
+        headers: authHeaders(),
       });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       setSourceDetail(await res.json());

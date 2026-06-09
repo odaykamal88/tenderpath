@@ -1,0 +1,26 @@
+/* Landing (D2 dossier marketing surface) — button/link hover transitions.
+   The redesigned landing uses inline styles keyed off the LC/LF tokens in
+   src/components/landing/kit.tsx; these two classes carry the only :hover
+   states (inline styles can't express :hover). Imported via globals.css. */
+
+.lk-btn {
+  transition: transform 0.15s, box-shadow 0.15s, background 0.15s, color 0.15s, border-color 0.15s;
+}
+.lk-btn:hover {
+  transform: translateY(-1px);
+}
+
+.lk-navlink {
+  transition: color 0.15s;
+  position: relative;
+}
+.lk-navlink:hover {
+  color: #9c6b1f;
+}
+
+/* Used by the (deferred) walkthrough loader spinner. */
+@keyframes lkspin {
+  to {
+    transform: rotate(360deg);
+  }
+}

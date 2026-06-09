@@ -31,9 +31,11 @@ import {
   type DocumentExtractionResult,
   type ExtractionStatus,
 } from "./extract";
+import { assertSafeHttpUrl, UnsafeUrlError } from "@/lib/security/safe-url";
 
 const FETCH_TIMEOUT_MS = 20_000;
 const MAX_TEXT_CHARS = 24_000;
+const MAX_FETCH_BYTES = 15 * 1024 * 1024;
 const CACHE_FRESH_DAYS = 30;
 
 interface CachedRow {
@@ -98,6 +100,29 @@ function isCacheFresh(updatedAt: string | null): boolean {
   return ageDays < CACHE_FRESH_DAYS;
 }
 
+async function fetchSafeUrl(url: URL): Promise<{ response: Response; finalUrl: URL }> {
+  let current = url.toString();
+  for (let hop = 0; hop <= 5; hop += 1) {
+    const safeUrl = await assertSafeHttpUrl(current);
+    const response = await fetch(safeUrl, {
+      headers: {
+        "user-agent": "TenderPathBot/1.0 (+https://www.tenderpath.me)",
+        accept: "text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.5",
+      },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      redirect: "manual",
+    });
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) throw new Error("Redirect missing Location header");
+      current = new URL(location, safeUrl).toString();
+      continue;
+    }
+    return { response, finalUrl: safeUrl };
+  }
+  throw new Error("Redirect limit exceeded");
+}
+
 /**
  * Fetch a single URL (or return cached extraction). Never throws.
  */
@@ -123,14 +148,12 @@ export async function fetchAndPersistUrl(args: {
   let parsed: URL;
   try {
     parsed = new URL(url);
-    if (!["http:", "https:"].includes(parsed.protocol)) {
-      throw new Error(`unsupported protocol: ${parsed.protocol}`);
-    }
+    await assertSafeHttpUrl(parsed.toString());
   } catch (err) {
     console.warn("[doc:fetch-url:invalid_url]", {
       userId,
-      urlPrefix: url.slice(0, 60),
-      error: err instanceof Error ? err.message : String(err),
+      inputLength: url.length,
+      error: err instanceof UnsafeUrlError ? err.code : err instanceof Error ? err.message : String(err),
     });
     return {
       url,
@@ -148,14 +171,8 @@ export async function fetchAndPersistUrl(args: {
   let extractionResult: DocumentExtractionResult | null = null;
   let fetchErr: string | null = null;
   try {
-    const res = await fetch(parsed.toString(), {
-      headers: {
-        "user-agent": "TenderPathBot/1.0 (+https://www.tenderpath.me)",
-        accept: "text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.5",
-      },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      redirect: "follow",
-    });
+    const { response: res, finalUrl } = await fetchSafeUrl(parsed);
+    parsed = finalUrl;
     if (!res.ok) {
       fetchErr = `HTTP ${res.status}`;
       console.warn("[doc:fetch-url:non_2xx]", {
@@ -164,12 +181,19 @@ export async function fetchAndPersistUrl(args: {
         status: res.status,
       });
     } else {
+      const contentLength = Number(res.headers.get("content-length") ?? "0");
+      if (contentLength > MAX_FETCH_BYTES) {
+        throw new Error("Fetched document is too large");
+      }
       const contentType = (res.headers.get("content-type") || "").toLowerCase();
       const isPdf =
         contentType.includes("application/pdf") ||
         parsed.pathname.toLowerCase().endsWith(".pdf");
       if (isPdf) {
         const buffer = Buffer.from(await res.arrayBuffer());
+        if (buffer.byteLength > MAX_FETCH_BYTES) {
+          throw new Error("Fetched document is too large");
+        }
         extractionResult = await extractDocumentText({
           buffer,
           mimeType: "application/pdf",
@@ -178,6 +202,9 @@ export async function fetchAndPersistUrl(args: {
         text = extractionResult.text.slice(0, MAX_TEXT_CHARS);
       } else {
         const html = await res.text();
+        if (Buffer.byteLength(html, "utf8") > MAX_FETCH_BYTES) {
+          throw new Error("Fetched document is too large");
+        }
         text = stripHtml(html);
       }
     }
@@ -215,7 +242,7 @@ export async function fetchAndPersistUrl(args: {
   } catch (err) {
     console.warn("[doc:fetch-url:persist_failed]", {
       userId,
-      url: url.slice(0, 120),
+      host: parsed.host,
       error: err instanceof Error ? err.message : String(err),
     });
   }

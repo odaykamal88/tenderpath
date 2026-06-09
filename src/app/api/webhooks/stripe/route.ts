@@ -5,6 +5,7 @@ import type Stripe from "stripe";
 import { createWorkOrderFromCheckout } from "@/lib/work-orders";
 import { notifyAdmin } from "@/lib/email/notifyAdmin";
 import { track } from "@/lib/telemetry/funnel";
+import { ensurePaymentIntegritySchema } from "@/lib/payment-integrity";
 
 // Sprint 18. The webhook synchronously calls createWorkOrderFromCheckout
 // which uses Next.js after() to kick off Bid/No-Bid generation. The
@@ -76,6 +77,8 @@ export async function POST(request: Request) {
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  await ensurePaymentIntegritySchema();
+
   const email = session.customer_email ?? session.customer_details?.email;
   const customerId = typeof session.customer === "string" ? session.customer : null;
   const subscriptionId = typeof session.subscription === "string" ? session.subscription : null;

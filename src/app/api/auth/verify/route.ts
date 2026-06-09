@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { createToken } from "@/lib/auth";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
   const body = await request.json();
@@ -9,6 +10,20 @@ export async function POST(request: Request) {
   if (!token || typeof token !== "string") {
     return NextResponse.json({ error: "Token is required" }, { status: 400 });
   }
+
+  const ipLimit = enforceRateLimit(request, {
+    namespace: "auth:verify:ip",
+    limit: 40,
+    windowMs: 10 * 60 * 1000,
+  });
+  if (ipLimit) return ipLimit;
+  const tokenLimit = enforceRateLimit(request, {
+    namespace: "auth:verify:token",
+    limit: 8,
+    windowMs: 10 * 60 * 1000,
+    keyParts: [token.slice(0, 18)],
+  });
+  if (tokenLimit) return tokenLimit;
 
   const users = await sql`
     SELECT id, email, name, tier, subscription_status, is_super_admin, trial_start_date

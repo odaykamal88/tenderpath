@@ -130,7 +130,7 @@ const AssessmentDocument = ({
       {/* Summary */}
       <View style={{ marginBottom: 28 }}>
         <Text style={{ fontSize: 11, color: INK2, lineHeight: 1.6, fontStyle: "italic" }}>
-          "{summary}"
+          {`"${summary}"`}
         </Text>
       </View>
 

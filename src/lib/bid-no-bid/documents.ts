@@ -63,6 +63,15 @@ function asStringArray(v: unknown): string[] {
   return v.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
 }
 
+function asPositiveInt(v: unknown): number | null {
+  if (typeof v === "number" && Number.isInteger(v) && v > 0) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const parsed = Number(v);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
+}
+
 interface VaultDocRow {
   id: number;
   name: string;
@@ -71,6 +80,42 @@ interface VaultDocRow {
   text_content: string | null;
   char_count: number | null;
   status: string | null;
+}
+
+async function loadVaultDocsByIds(
+  userId: number,
+  documentIds: number[],
+): Promise<VaultDocRow[]> {
+  const ids = Array.from(new Set(documentIds)).filter((id) => Number.isInteger(id) && id > 0);
+  if (ids.length === 0) return [];
+  try {
+    const rows = (await sql`
+      SELECT
+        vd.id,
+        vd.name,
+        vd.file_url,
+        vd.tags,
+        de.text_content,
+        de.char_count,
+        de.status
+      FROM vault_documents vd
+      LEFT JOIN document_extractions de
+        ON de.user_id = vd.user_id
+       AND (de.vault_document_id = vd.id OR de.file_url = vd.file_url)
+      WHERE vd.user_id = ${userId}
+        AND vd.id = ANY(${ids}::int[])
+      ORDER BY vd.created_at DESC
+      LIMIT 12
+    `) as unknown as VaultDocRow[];
+    return rows;
+  } catch (err) {
+    console.warn("[bnb:docs:vault_id_lookup_failed]", {
+      userId,
+      docCount: ids.length,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return [];
+  }
 }
 
 /**
@@ -185,7 +230,10 @@ export async function loadBidNoBidDocuments(args: {
   // Only fetch the tender URL if there's no uploaded tender file — the
   // uploaded file is canonical when present.
   const hasUploadedTender =
-    asString(intake?.tender_file_url) !== null || asString(intake?.vault_url) !== null;
+    asString(intake?.tender_file_url) !== null
+    || asString(intake?.vault_url) !== null
+    || asPositiveInt(intake?.tender_file_doc_id) !== null
+    || asPositiveInt(intake?.vault_doc_id) !== null;
   if (tenderUrl && !hasUploadedTender) fetchTargets.push(tenderUrl);
   for (const u of pastedSupportingUrls) {
     if (!fetchTargets.includes(u)) fetchTargets.push(u);
@@ -209,6 +257,35 @@ export async function loadBidNoBidDocuments(args: {
       charCount: row.char_count ?? row.text_content.length,
       source: "vault",
     });
+  }
+
+  // -- Phase 2b: explicit vault document ids from the intake. This keeps
+  // uploaded docs grounded even when the browser-facing intake URL is the
+  // authenticated /api/dashboard/vault/:id/download route rather than the
+  // raw Blob URL stored in document_extractions.
+  const explicitDocRefs = [
+    { id: asPositiveInt(intake?.vault_doc_id), purpose: "tender_main" as DocPurpose },
+    { id: asPositiveInt(intake?.tender_file_doc_id), purpose: "tender_main" as DocPurpose },
+    { id: asPositiveInt(intake?.financial_documents_doc_id), purpose: "supporting" as DocPurpose },
+  ].filter((ref): ref is { id: number; purpose: DocPurpose } => ref.id !== null);
+  if (explicitDocRefs.length > 0) {
+    const purposeById = new Map(explicitDocRefs.map((ref) => [ref.id, ref.purpose]));
+    const explicitRows = await loadVaultDocsByIds(userId, explicitDocRefs.map((ref) => ref.id));
+    for (const row of explicitRows) {
+      if (docs.length >= MAX_DOCS_RETURNED) break;
+      if (!row.text_content || row.status !== "extracted") continue;
+      if (seenUrls.has(row.file_url)) continue;
+      seenUrls.add(row.file_url);
+      docs.push({
+        fileName: row.name,
+        fileUrl: row.file_url,
+        purpose: purposeById.get(row.id) ?? purposeFromTags(row.tags),
+        docClass: classFromTags(row.tags) ?? "other",
+        text: row.text_content.slice(0, MAX_TEXT_PER_DOC),
+        charCount: row.char_count ?? row.text_content.length,
+        source: "vault",
+      });
+    }
   }
 
   // -- Phase 3: legacy paths — document_extractions rows reachable by URL

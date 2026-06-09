@@ -108,7 +108,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
 
   if (loading) {
     return (
-      <div className="px-8 py-16 text-[13px] text-stone-500" style={{ fontFamily: MONO }}>
+      <div className="px-8 py-16 text-[13px] text-ink-3" style={{ fontFamily: MONO }}>
         Loading work order…
       </div>
     );
@@ -129,7 +129,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
       {/* Back link */}
       <Link
         href="/dashboard/work-orders"
-        className="inline-flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.15em] text-stone-600 hover:text-stone-900 transition-colors border-b border-stone-300 hover:border-stone-900 pb-0.5"
+        className="inline-flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.15em] text-ink-2 hover:text-ink transition-colors border-b border-rule hover:border-ink pb-0.5"
         style={{ fontFamily: MONO }}
       >
         ← Back to work orders
@@ -138,16 +138,16 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
       {/* Header */}
       <header className="mt-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="flex items-center gap-3 text-[11px] text-stone-500">
+          <div className="flex items-center gap-3 text-[11px] text-ink-3">
             <span
-              className="font-semibold uppercase tracking-[0.18em] text-stone-400"
+              className="font-semibold uppercase tracking-[0.18em] text-mute"
               style={{ fontFamily: MONO }}
             >
               Work order
             </span>
-            <span className="text-stone-300">·</span>
+            <span className="text-mute">·</span>
             <span className="tabular-nums" style={{ fontFamily: MONO }}>{orderRef(order.id)}</span>
-            <span className="text-stone-300">·</span>
+            <span className="text-mute">·</span>
             <span
               className="uppercase tracking-[0.15em] font-semibold"
               style={{ fontFamily: MONO }}
@@ -156,21 +156,21 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
             </span>
           </div>
           <h1
-            className="mt-1 text-[44px] leading-[1.1] font-medium text-stone-900 tracking-tight"
+            className="mt-1 text-[44px] leading-[1.1] font-medium text-ink tracking-tight"
             style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
           >
             {order.tender_title ?? label(order.plan)}
           </h1>
-          <p className="mt-1 text-[13.5px] text-stone-600">
-            <span className={order.payment_status === "paid" ? "text-emerald-700 font-semibold" : "text-stone-500"}>
+          <p className="mt-1 text-[13.5px] text-ink-2">
+            <span className={order.payment_status === "paid" ? "text-emerald-700 font-semibold" : "text-ink-3"}>
               {order.payment_status ?? "pending"}
             </span>
-            <span className="mx-2 text-stone-300">·</span>
+            <span className="mx-2 text-mute">·</span>
             <span style={{ fontFamily: MONO }}>{money(order.amount_cents, order.currency)}</span>
           </p>
         </div>
         <span
-          className="shrink-0 rounded-sm bg-stone-900 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white self-start"
+          className="shrink-0 rounded-sm bg-ink px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white self-start"
           style={{ fontFamily: MONO }}
         >
           {label(order.status)}
@@ -221,7 +221,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
             href={order.tender_url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex rounded-sm border border-stone-300 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
+            className="inline-flex rounded-sm border border-rule bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-2 hover:border-ink hover:text-ink transition-colors"
             style={{ fontFamily: MONO }}
           >
             Open tender source ↗

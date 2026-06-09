@@ -31,6 +31,25 @@ function shortRef(reference: string | null, sourceName: string | null): string {
   return raw.replace(/^UNGM-/, "").replace(/^GRANTS_GOV:/, "").slice(0, 22);
 }
 
+/** Live, non-expired open tenders currently tracked — the real figure behind
+ *  the landing's "live tenders tracked" stat. Returns null on any failure so
+ *  the stat hides rather than showing a fabricated number. */
+export async function getLiveTenderCount(): Promise<number | null> {
+  try {
+    const rows = await sql`
+      SELECT COUNT(*)::int AS n
+      FROM tenders
+      WHERE status = 'open'
+        AND (deadline IS NULL OR deadline > CURRENT_DATE)
+    `;
+    const n = rows[0]?.n as number | undefined;
+    return typeof n === "number" && n > 0 ? n : null;
+  } catch (err) {
+    console.error("[landing:tender-count]", err instanceof Error ? err.message : String(err));
+    return null;
+  }
+}
+
 export async function getLandingTenders(limit = 8): Promise<LandingTender[]> {
   try {
     const rows = await sql`

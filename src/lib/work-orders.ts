@@ -61,6 +61,18 @@ export async function createWorkOrderFromCheckout(
   const workOrderId = workOrderIdRaw && /^\d+$/.test(workOrderIdRaw)
     ? Number(workOrderIdRaw)
     : null;
+  const metadataUserIdRaw = cleanMeta(session.metadata?.userId);
+  const metadataUserId = metadataUserIdRaw && /^\d+$/.test(metadataUserIdRaw)
+    ? Number(metadataUserIdRaw)
+    : null;
+  if (metadataUserId && metadataUserId !== userId) {
+    console.error("[tp:work_order:checkout_user_mismatch]", {
+      sessionId: session.id,
+      metadataUserId,
+      resolvedUserId: userId,
+    });
+    return;
+  }
 
   const customerId = typeof session.customer === "string" ? session.customer : null;
   const email = session.customer_email ?? session.customer_details?.email ?? null;
@@ -93,6 +105,11 @@ export async function createWorkOrderFromCheckout(
           agency = COALESCE(agency, ${agency}),
           updated_at = NOW()
         WHERE id = ${workOrderId}
+          AND (
+            user_id IS NULL
+            OR user_id = ${userId}
+            OR (email IS NOT NULL AND LOWER(email) = LOWER(${email}))
+          )
         RETURNING *
         )
         SELECT updated.*, previous.payment_status AS previous_payment_status
@@ -136,6 +153,15 @@ export async function createWorkOrderFromCheckout(
       `;
 
   const order = rows[0];
+  if (!order && workOrderId) {
+    console.error("[tp:work_order:checkout_ownership_mismatch]", {
+      sessionId: session.id,
+      workOrderId,
+      userId,
+      plan,
+    });
+    return;
+  }
   let fulfillmentGate: Awaited<ReturnType<typeof evaluateServiceFulfillmentGate>> | null = null;
   if (order) {
     try {

@@ -11,6 +11,7 @@ interface VaultDoc {
   type: DocType;
   expiry_date: string | null;
   file_url: string;
+  download_url?: string;
   created_at: string;
   /** Sprint 10: auto-applied capability tags (e.g. iso-9001, pador,
    *  external-audit). Used by the proposal generator to match evidence
@@ -179,7 +180,12 @@ export default function VaultPage() {
         return;
       }
 
-      const { url: file_url } = await uploadRes.json();
+      const { upload_id } = await uploadRes.json() as { upload_id?: number };
+      if (!upload_id) {
+        setError("Upload completed but could not be saved. Please try again.");
+        setUploading(false);
+        return;
+      }
 
       const res = await fetch("/api/dashboard/vault", {
         method: "POST",
@@ -188,7 +194,7 @@ export default function VaultPage() {
           name: form.name || file.name,
           type: form.type,
           expiry_date: form.expiry_date || null,
-          file_url,
+          upload_id,
         }),
       });
 
@@ -225,40 +231,40 @@ export default function VaultPage() {
         {/* Header */}
         <header className="flex items-end justify-between gap-6 mb-2">
           <div>
-            <div className="flex items-center gap-3 text-[11px] text-stone-500">
-              <span className="font-semibold uppercase tracking-[0.18em] text-stone-400">Workbench · Tools</span>
-              <span className="text-stone-300">·</span>
+            <div className="flex items-center gap-3 text-[11px] text-ink-3">
+              <span className="font-semibold uppercase tracking-[0.18em] text-mute">Workbench · Tools</span>
+              <span className="text-mute">·</span>
               <span style={{ fontFamily: MONO }}>{loading ? "loading…" : `${docs.length} on file`}</span>
             </div>
             <h1
-              className="mt-1 text-[36px] sm:text-[48px] lg:text-[56px] leading-[1.05] font-medium text-stone-900 tracking-tight"
+              className="mt-1 text-[36px] sm:text-[48px] lg:text-[56px] leading-[1.05] font-medium text-ink tracking-tight"
               style={{ fontFamily: SERIF, fontFeatureSettings: "'ss01'" }}
             >
-              Document <em className="italic text-stone-500">vault</em>
+              Document <em className="italic text-ink-3">vault</em>
             </h1>
-            <p className="mt-1 max-w-2xl text-[15px] leading-relaxed text-stone-600">
+            <p className="mt-1 max-w-2xl text-[15px] leading-relaxed text-ink-2">
               The compliance library you reuse across submissions. Track expiry, attach to readiness gaps, and pull straight into proposals.
             </p>
           </div>
         </header>
 
         {/* Stats */}
-        <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-px bg-stone-200/70 rounded-md overflow-hidden">
+        <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-px bg-rule/70 rounded-md overflow-hidden">
           {[
             { label: "Total", value: totals.total, sub: "all documents" },
             { label: "Expiring", value: totals.expiring, sub: `≤ ${EXPIRY_WARN_DAYS} days`, urgent: totals.expiring > 0 },
             { label: "Certifications", value: totals.certs, sub: "compliance" },
             { label: "Financial", value: totals.financial, sub: "audits · statements" },
           ].map((s) => (
-            <div key={s.label} className="bg-stone-50/60 px-4 py-3.5">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500">{s.label}</div>
+            <div key={s.label} className="bg-paper-3/60 px-4 py-3.5">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-ink-3">{s.label}</div>
               <div
-                className={`mt-1 text-[28px] leading-none font-medium tabular-nums ${s.urgent ? "text-red-600" : "text-stone-900"}`}
+                className={`mt-1 text-[28px] leading-none font-medium tabular-nums ${s.urgent ? "text-red-600" : "text-ink"}`}
                 style={{ fontFamily: SERIF }}
               >
                 {loading ? "—" : s.value}
               </div>
-              <div className="mt-1 text-[11px] text-stone-500">{s.sub}</div>
+              <div className="mt-1 text-[11px] text-ink-3">{s.sub}</div>
             </div>
           ))}
         </div>
@@ -296,22 +302,22 @@ export default function VaultPage() {
             the user typed into Bid/No-Bid / Proposal-Draft intake forms so
             they can audit it. CLAIMS, not evidence — labelled accordingly. */}
         {minedFactsCount(minedFacts) > 0 && (
-          <div className="mt-5 rounded-md border border-stone-200 bg-stone-50/40 px-4 py-3.5">
+          <div className="mt-5 rounded-md border border-rule bg-paper-3/40 px-4 py-3.5">
             <div className="flex items-baseline justify-between gap-3 mb-2">
               <div
-                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-600"
+                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-2"
                 style={{ fontFamily: MONO }}
               >
                 What we inferred from your intake
               </div>
               <div
-                className="text-[10px] uppercase tracking-[0.15em] text-stone-400"
+                className="text-[10px] uppercase tracking-[0.15em] text-mute"
                 style={{ fontFamily: MONO }}
               >
                 Claims · not evidence
               </div>
             </div>
-            <p className="text-[11.5px] leading-relaxed text-stone-500 mb-3">
+            <p className="text-[11.5px] leading-relaxed text-ink-3 mb-3">
               Extracted from the narrative you typed into intake forms.
               Carried forward across tenders so you don&rsquo;t retype.
               The proposal engine uses these only to fill empty profile
@@ -323,32 +329,32 @@ export default function VaultPage() {
             >
               {typeof minedFacts?.years_of_experience === "number" && (
                 <div className="flex items-baseline gap-2">
-                  <dt className="text-stone-500 min-w-[110px]">Years of experience</dt>
-                  <dd className="text-stone-800 font-medium">{minedFacts.years_of_experience}</dd>
+                  <dt className="text-ink-3 min-w-[110px]">Years of experience</dt>
+                  <dd className="text-ink font-medium">{minedFacts.years_of_experience}</dd>
                 </div>
               )}
               {Array.isArray(minedFacts?.sectors_covered) && minedFacts.sectors_covered.length > 0 && (
                 <div className="flex items-baseline gap-2 sm:col-span-2">
-                  <dt className="text-stone-500 min-w-[110px] shrink-0">Sectors</dt>
-                  <dd className="text-stone-800">{minedFacts.sectors_covered.join(", ")}</dd>
+                  <dt className="text-ink-3 min-w-[110px] shrink-0">Sectors</dt>
+                  <dd className="text-ink">{minedFacts.sectors_covered.join(", ")}</dd>
                 </div>
               )}
               {Array.isArray(minedFacts?.agencies_worked_with) && minedFacts.agencies_worked_with.length > 0 && (
                 <div className="flex items-baseline gap-2 sm:col-span-2">
-                  <dt className="text-stone-500 min-w-[110px] shrink-0">Agencies / donors</dt>
-                  <dd className="text-stone-800">{minedFacts.agencies_worked_with.join(", ")}</dd>
+                  <dt className="text-ink-3 min-w-[110px] shrink-0">Agencies / donors</dt>
+                  <dd className="text-ink">{minedFacts.agencies_worked_with.join(", ")}</dd>
                 </div>
               )}
               {Array.isArray(minedFacts?.geographic_reach) && minedFacts.geographic_reach.length > 0 && (
                 <div className="flex items-baseline gap-2 sm:col-span-2">
-                  <dt className="text-stone-500 min-w-[110px] shrink-0">Geographic reach</dt>
-                  <dd className="text-stone-800">{minedFacts.geographic_reach.join(", ")}</dd>
+                  <dt className="text-ink-3 min-w-[110px] shrink-0">Geographic reach</dt>
+                  <dd className="text-ink">{minedFacts.geographic_reach.join(", ")}</dd>
                 </div>
               )}
               {Array.isArray(minedFacts?.key_capabilities) && minedFacts.key_capabilities.length > 0 && (
                 <div className="flex items-baseline gap-2 sm:col-span-2">
-                  <dt className="text-stone-500 min-w-[110px] shrink-0">Key capabilities</dt>
-                  <dd className="text-stone-800">{minedFacts.key_capabilities.join(", ")}</dd>
+                  <dt className="text-ink-3 min-w-[110px] shrink-0">Key capabilities</dt>
+                  <dd className="text-ink">{minedFacts.key_capabilities.join(", ")}</dd>
                 </div>
               )}
             </dl>
@@ -358,23 +364,23 @@ export default function VaultPage() {
         {/* Upload form */}
         <form
           onSubmit={upload}
-          className="mt-7 rounded-md border border-stone-200/70 bg-white p-5"
+          className="mt-7 rounded-md border border-rule/70 bg-white p-5"
         >
           <div
-            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-3"
+            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-mute mb-3"
             style={{ fontFamily: MONO }}
           >
             New document · drop in or upload
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <input
-              className="rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] focus:outline-none focus:border-stone-700"
+              className="rounded-sm border border-rule bg-white px-3 py-2.5 text-[13px] focus:outline-none focus:border-ink"
               placeholder="Document name (defaults to filename)"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
             <select
-              className="rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] focus:outline-none focus:border-stone-700"
+              className="rounded-sm border border-rule bg-white px-3 py-2.5 text-[13px] focus:outline-none focus:border-ink"
               value={form.type}
               onChange={(e) => setForm({ ...form, type: e.target.value as DocType })}
             >
@@ -386,14 +392,14 @@ export default function VaultPage() {
             </select>
             <div>
               <label
-                className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-1.5"
+                className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-mute mb-1.5"
                 style={{ fontFamily: MONO }}
               >
                 Expiry date · optional
               </label>
               <input
                 type="date"
-                className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] focus:outline-none focus:border-stone-700"
+                className="w-full rounded-sm border border-rule bg-white px-3 py-2.5 text-[13px] focus:outline-none focus:border-ink"
                 value={form.expiry_date}
                 onChange={(e) => setForm({ ...form, expiry_date: e.target.value })}
                 style={{ fontFamily: MONO }}
@@ -401,7 +407,7 @@ export default function VaultPage() {
             </div>
             <div>
               <label
-                className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-1.5"
+                className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-mute mb-1.5"
                 style={{ fontFamily: MONO }}
               >
                 File · required
@@ -410,7 +416,7 @@ export default function VaultPage() {
                 id="vault-file-input"
                 type="file"
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp"
-                className="w-full text-[12.5px] text-stone-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-sm file:border-0 file:text-[10px] file:font-semibold file:uppercase file:tracking-[0.15em] file:bg-stone-900 file:text-white hover:file:bg-stone-800 cursor-pointer"
+                className="w-full text-[12.5px] text-ink-2 file:mr-3 file:py-1.5 file:px-3 file:rounded-sm file:border-0 file:text-[10px] file:font-semibold file:uppercase file:tracking-[0.15em] file:bg-ink file:text-white hover:file:bg-ink cursor-pointer"
                 onChange={(e) => {
                   const file = e.target.files?.[0] ?? null;
                   setSelectedFile(file);
@@ -418,11 +424,11 @@ export default function VaultPage() {
                 }}
                 required
               />
-              <p className="mt-1 text-[11px] text-stone-500">PDF, Word, Excel, or image · max 10MB</p>
+              <p className="mt-1 text-[11px] text-ink-3">PDF, Word, Excel, or image · max 10MB</p>
             </div>
           </div>
           {uploading && (
-            <div className="mt-3 flex items-center gap-2 text-[12.5px] text-stone-600">
+            <div className="mt-3 flex items-center gap-2 text-[12.5px] text-ink-2">
               <svg className="animate-spin h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -436,14 +442,14 @@ export default function VaultPage() {
         </form>
 
         {/* Documents table */}
-        <section className="mt-7 rounded-md border border-stone-200/70 bg-white overflow-hidden">
-          <div className="border-b border-stone-200/70 px-5 py-4 flex items-baseline justify-between">
+        <section className="mt-7 rounded-md border border-rule/70 bg-white overflow-hidden">
+          <div className="border-b border-rule/70 px-5 py-4 flex items-baseline justify-between">
             <h2
-              className="text-[20px] font-medium text-stone-900"
+              className="text-[20px] font-medium text-ink"
               style={{ fontFamily: SERIF }}
             >
               <span
-                className="text-[10px] font-semibold tabular-nums text-stone-400 mr-2 align-middle"
+                className="text-[10px] font-semibold tabular-nums text-mute mr-2 align-middle"
                 style={{ fontFamily: MONO }}
               >
                 01 ·
@@ -451,7 +457,7 @@ export default function VaultPage() {
               On file
             </h2>
             <span
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400"
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-mute"
               style={{ fontFamily: MONO }}
             >
               {docs.length.toString().padStart(2, "0")} documents
@@ -459,18 +465,18 @@ export default function VaultPage() {
           </div>
 
           {loading ? (
-            <div className="p-5 text-[13px] text-stone-500">Loading…</div>
+            <div className="p-5 text-[13px] text-ink-3">Loading…</div>
           ) : docs.length === 0 ? (
             <div className="p-10 text-center">
-              <p className="text-[13.5px] text-stone-500 max-w-md mx-auto">
+              <p className="text-[13.5px] text-ink-3 max-w-md mx-auto">
                 No documents yet. Upload your first compliance certificate, financial statement, or past-performance reference above.
               </p>
             </div>
           ) : (
             <table className="w-full text-[13px]">
-              <thead className="bg-stone-50/60">
+              <thead className="bg-paper-3/60">
                 <tr
-                  className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500 text-left"
+                  className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-3 text-left"
                   style={{ fontFamily: MONO }}
                 >
                   <th className="px-5 py-3 font-semibold">Ref · Name</th>
@@ -487,28 +493,28 @@ export default function VaultPage() {
                   const expired = days !== null && days < 0;
                   const warning = days !== null && days >= 0 && days <= EXPIRY_WARN_DAYS;
                   return (
-                    <tr key={d.id} className="border-t border-stone-200/70 hover:bg-stone-50/40 transition-colors">
+                    <tr key={d.id} className="border-t border-rule/70 hover:bg-paper-3/40 transition-colors">
                       <td className="px-5 py-3.5 align-top">
                         <div
-                          className="text-[10px] tracking-wider text-stone-400"
+                          className="text-[10px] tracking-wider text-mute"
                           style={{ fontFamily: MONO }}
                         >
                           {docRef(d.id)}
                         </div>
-                        <div className="mt-0.5 text-stone-900 font-medium leading-tight">{d.name}</div>
+                        <div className="mt-0.5 text-ink font-medium leading-tight">{d.name}</div>
                         {Array.isArray(d.tags) && d.tags.length > 0 && (
                           <div className="mt-1.5 flex flex-wrap gap-1">
                             {d.tags.slice(0, 6).map((tag) => (
                               <span
                                 key={tag}
-                                className="inline-block rounded-sm bg-stone-100 px-1.5 py-0.5 text-[10px] tracking-wide text-stone-600"
+                                className="inline-block rounded-sm bg-paper-2 px-1.5 py-0.5 text-[10px] tracking-wide text-ink-2"
                                 style={{ fontFamily: MONO }}
                               >
                                 {tag}
                               </span>
                             ))}
                             {d.tags.length > 6 && (
-                              <span className="text-[10px] text-stone-400" style={{ fontFamily: MONO }}>
+                              <span className="text-[10px] text-mute" style={{ fontFamily: MONO }}>
                                 +{d.tags.length - 6}
                               </span>
                             )}
@@ -517,7 +523,7 @@ export default function VaultPage() {
                       </td>
                       <td className="px-5 py-3.5 align-top">
                         <span
-                          className="inline-block text-[10px] uppercase tracking-[0.15em] font-semibold text-stone-700"
+                          className="inline-block text-[10px] uppercase tracking-[0.15em] font-semibold text-ink-2"
                           style={{ fontFamily: MONO }}
                         >
                           {d.type.replace("_", " ")}
@@ -526,7 +532,7 @@ export default function VaultPage() {
                       <td className="px-5 py-3.5 align-top">
                         {d.expiry_date ? (
                           <div
-                            className={`text-[12px] tabular-nums ${expired ? "text-red-700 font-semibold" : warning ? "text-amber-700 font-semibold" : "text-stone-600"}`}
+                            className={`text-[12px] tabular-nums ${expired ? "text-red-700 font-semibold" : warning ? "text-amber-700 font-semibold" : "text-ink-2"}`}
                             style={{ fontFamily: MONO }}
                           >
                             {shortDate(d.expiry_date)}
@@ -535,15 +541,15 @@ export default function VaultPage() {
                             </span>
                           </div>
                         ) : (
-                          <span className="text-[12px] text-stone-400">—</span>
+                          <span className="text-[12px] text-mute">—</span>
                         )}
                       </td>
                       <td className="px-5 py-3.5 align-top">
                         <a
-                          href={d.file_url}
+                          href={d.download_url ?? d.file_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-[12.5px] text-stone-900 underline underline-offset-2 hover:no-underline"
+                          className="text-[12.5px] text-ink underline underline-offset-2 hover:no-underline"
                         >
                           Open ↗
                         </a>
@@ -551,7 +557,7 @@ export default function VaultPage() {
                       <td className="px-5 py-3.5 align-top">
                         <a
                           href={`/dashboard/services/proposal?doc_id=${d.id}`}
-                          className="text-[10.5px] font-semibold uppercase tracking-[0.15em] text-stone-700 border border-stone-300 rounded-sm px-2 py-1 bg-white hover:border-stone-700 hover:text-stone-900 transition-colors whitespace-nowrap"
+                          className="text-[10.5px] font-semibold uppercase tracking-[0.15em] text-ink-2 border border-rule rounded-sm px-2 py-1 bg-white hover:border-ink hover:text-ink transition-colors whitespace-nowrap"
                         >
                           Use in proposal
                         </a>
@@ -559,7 +565,7 @@ export default function VaultPage() {
                       <td className="px-5 py-3.5 align-top text-right">
                         <button
                           onClick={() => remove(d.id)}
-                          className="text-[11px] text-stone-400 hover:text-red-600 transition-colors"
+                          className="text-[11px] text-mute hover:text-red-600 transition-colors"
                         >
                           Delete
                         </button>

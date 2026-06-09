@@ -134,7 +134,7 @@ interface AnalysisGrade {
 
 const GRADE_BAND_STYLES: Record<SelfGradeBand, { ring: string; text: string; chip: string; bar: string }> = {
   excellent: { ring: "ring-emerald-500", text: "text-emerald-700", chip: "bg-emerald-700", bar: "bg-emerald-600" },
-  strong:    { ring: "ring-stone-700",   text: "text-stone-800",   chip: "bg-stone-800",   bar: "bg-stone-700" },
+  strong:    { ring: "ring-ink-2",   text: "text-ink",   chip: "bg-ink",   bar: "bg-ink-2" },
   competent: { ring: "ring-amber-500",   text: "text-amber-700",   chip: "bg-amber-600",   bar: "bg-amber-500" },
   thin:      { ring: "ring-orange-500",  text: "text-orange-700",  chip: "bg-orange-600",  bar: "bg-orange-500" },
   weak:      { ring: "ring-red-500",     text: "text-red-700",     chip: "bg-red-700",     bar: "bg-red-600" },
@@ -150,7 +150,7 @@ const DIMENSION_LABEL: Record<keyof AnalysisGrade["dimensions"], string> = {
 
 const BAND_STYLES: Record<ProjectedBand, { bar: string; chip: string; ring: string }> = {
   A: { bar: "bg-emerald-600", chip: "bg-emerald-700 text-white", ring: "ring-emerald-200" },
-  B: { bar: "bg-stone-700", chip: "bg-stone-800 text-white", ring: "ring-stone-200" },
+  B: { bar: "bg-ink-2", chip: "bg-ink text-white", ring: "ring-rule" },
   C: { bar: "bg-amber-500", chip: "bg-amber-600 text-white", ring: "ring-amber-200" },
   D: { bar: "bg-red-600", chip: "bg-red-700 text-white", ring: "ring-red-200" },
 };
@@ -209,7 +209,7 @@ function evidenceClasses(label: EvidenceLabel | undefined): string {
       return "border-amber-600 text-amber-700";
     case "inference":
     default:
-      return "border-stone-400 text-stone-500";
+      return "border-rule text-ink-3";
   }
 }
 
@@ -222,10 +222,10 @@ function eligibilityStatusClasses(status: BidEligibilityFinding["status"]): stri
 function Term({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[9px] font-semibold uppercase tracking-[0.16em] text-stone-500 mb-0.5" style={{ fontFamily: MONO }}>
+      <div className="text-[9px] font-semibold uppercase tracking-[0.16em] text-ink-3 mb-0.5" style={{ fontFamily: MONO }}>
         {label}
       </div>
-      <div className="text-[13px] font-semibold text-stone-900">{value}</div>
+      <div className="text-[13px] font-semibold text-ink">{value}</div>
     </div>
   );
 }
@@ -297,7 +297,7 @@ function recBorder(rec: BidOutput["recommendation"]): string {
 function sevTint(sev: BidGap["severity"]): string {
   if (sev === "high") return "text-red-700";
   if (sev === "medium") return "text-amber-700";
-  return "text-stone-500";
+  return "text-ink-3";
 }
 
 export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tenderDeadline }: BidNoBidPanelProps) {
@@ -368,7 +368,7 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
 
   if (loading) {
     return (
-      <section className="rounded-md border border-stone-200/70 bg-white p-5 text-[13px] text-stone-500" style={{ fontFamily: MONO }}>
+      <section className="rounded-md border border-rule/70 bg-white p-5 text-[13px] text-ink-3" style={{ fontFamily: MONO }}>
         Loading bid analysis…
       </section>
     );
@@ -376,11 +376,11 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
 
   if (paymentStatus !== "paid") {
     return (
-      <section className="rounded-md border-l-2 border-stone-300 bg-stone-50/60 p-5">
-        <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+      <section className="rounded-md border-l-2 border-rule bg-paper-3/60 p-5">
+        <h2 className="text-[20px] font-medium text-ink" style={{ fontFamily: SERIF }}>
           Bid analysis
         </h2>
-        <p className="mt-2 text-[13px] text-stone-600">
+        <p className="mt-2 text-[13px] text-ink-2">
           Your Bid/No-Bid analysis will be generated automatically as soon as payment is confirmed. No ops review required.
         </p>
       </section>
@@ -402,10 +402,10 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
   if (generationLikelyStalled) {
     return (
       <section className="rounded-md border-l-2 border-amber-600 bg-amber-50/40 p-5">
-        <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+        <h2 className="text-[20px] font-medium text-ink" style={{ fontFamily: SERIF }}>
           Ready to start your analysis
         </h2>
-        <p className="mt-2 text-[13px] text-stone-700">
+        <p className="mt-2 text-[13px] text-ink-2">
           Payment is confirmed. Auto-fulfillment didn&apos;t kick off — start the analysis manually and we&apos;ll email the PDF when it&apos;s ready (usually 2–5 minutes).
         </p>
         {error && (
@@ -415,7 +415,7 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
           type="button"
           onClick={handleRegenerate}
           disabled={regenBusy}
-          className="mt-3 rounded-sm bg-stone-900 px-3.5 py-2 text-[11.5px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="mt-3 rounded-sm bg-ink px-3.5 py-2 text-[11.5px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-ink transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ fontFamily: MONO }}
         >
           {regenBusy ? "Starting…" : "Start analysis →"}
@@ -427,10 +427,10 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
   if (!pkg || (isGenerating && pkg?.generation_status !== "failed")) {
     return (
       <section className="rounded-md border-l-2 border-amber-600 bg-amber-50/40 p-5">
-        <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+        <h2 className="text-[20px] font-medium text-ink" style={{ fontFamily: SERIF }}>
           Generating your analysis…
         </h2>
-        <p className="mt-2 text-[13px] text-stone-700">
+        <p className="mt-2 text-[13px] text-ink-2">
           We&rsquo;re running the Bid/No-Bid pipeline against your company profile. This usually completes in 2–5 minutes. You don&rsquo;t need to wait here — we&rsquo;ll email you the PDF when it&rsquo;s ready.
         </p>
         {error && (
@@ -443,7 +443,7 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
   if (pkg.generation_status === "failed" || !pkg.output) {
     return (
       <section className="rounded-md border-l-2 border-red-600 bg-red-50/40 p-5">
-        <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+        <h2 className="text-[20px] font-medium text-ink" style={{ fontFamily: SERIF }}>
           Generation hit a snag
         </h2>
         <p className="mt-2 text-[13px] text-red-800">
@@ -453,7 +453,7 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
           type="button"
           onClick={handleRegenerate}
           disabled={regenBusy || (data?.remaining_regenerations ?? 0) <= 0}
-          className="mt-3 rounded-sm bg-stone-900 px-3.5 py-2 text-[11.5px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="mt-3 rounded-sm bg-ink px-3.5 py-2 text-[11.5px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-ink transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ fontFamily: MONO }}
         >
           {regenBusy ? "Retrying…" : "Retry generation →"}
@@ -470,10 +470,10 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
 
   return (
     <section className={`rounded-md border-l-2 ${recBorder(out.recommendation)} bg-white shadow-sm`}>
-      <div className="p-5 border-b border-stone-100">
+      <div className="p-5 border-b border-rule">
         <div className="flex items-baseline justify-between mb-4">
           <div className="flex items-baseline gap-3 flex-wrap">
-            <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+            <h2 className="text-[20px] font-medium text-ink" style={{ fontFamily: SERIF }}>
                 Bid analysis
             </h2>
             {tenderTypeLabel && tenderTypeLabel !== "Unknown" && (
@@ -491,7 +491,7 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
                 href={pkg.pdf_url}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-sm border border-stone-300 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
+                className="rounded-sm border border-rule px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-2 hover:border-ink hover:text-ink transition-colors"
                 style={{ fontFamily: MONO }}
               >
                 Download PDF ↓
@@ -506,7 +506,7 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
           </div>
         </div>
         {out.tender_type_note && (
-          <p className="mb-3 text-[12px] text-stone-600 leading-snug">{out.tender_type_note}</p>
+          <p className="mb-3 text-[12px] text-ink-2 leading-snug">{out.tender_type_note}</p>
         )}
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-6">
           <span
@@ -515,14 +515,14 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
           >
             {out.recommendation}
           </span>
-          <p className="text-[11px] uppercase tracking-[0.16em] text-stone-500" style={{ fontFamily: MONO }}>
+          <p className="text-[11px] uppercase tracking-[0.16em] text-ink-3" style={{ fontFamily: MONO }}>
             Win probability · {out.win_probability_band}
           </p>
-          <p className="text-[11px] uppercase tracking-[0.16em] text-stone-500" style={{ fontFamily: MONO }}>
+          <p className="text-[11px] uppercase tracking-[0.16em] text-ink-3" style={{ fontFamily: MONO }}>
             Effort · {out.effort_estimate_hours} hrs
           </p>
         </div>
-        <p className="mt-3 text-[15px] leading-relaxed text-stone-800" style={{ fontFamily: SERIF }}>
+        <p className="mt-3 text-[15px] leading-relaxed text-ink" style={{ fontFamily: SERIF }}>
           {out.headline}
         </p>
       </div>
@@ -539,11 +539,11 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
           [keyof AnalysisGrade["dimensions"], { score_0_20: number; rationale: string }]
         >;
         return (
-          <div className="border-b border-stone-200/70 px-5 py-5 bg-white">
+          <div className="border-b border-rule/70 px-5 py-5 bg-white">
             <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
               <div>
                 <div
-                  className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500 mb-1"
+                  className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-3 mb-1"
                   style={{ fontFamily: MONO }}
                 >
                   Analysis quality · self-graded
@@ -552,13 +552,13 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
               </div>
               <div className={`flex items-baseline gap-2 px-4 py-2 rounded-sm ring-2 ${styles.ring} ring-inset bg-white`}>
                 <span
-                  className="text-[32px] font-medium tabular-nums leading-none text-stone-900"
+                  className="text-[32px] font-medium tabular-nums leading-none text-ink"
                   style={{ fontFamily: SERIF }}
                 >
                   {g.score_0_100}
                 </span>
                 <span
-                  className="text-[12px] tabular-nums text-stone-500"
+                  className="text-[12px] tabular-nums text-ink-3"
                   style={{ fontFamily: MONO }}
                 >
                   / 100
@@ -572,38 +572,38 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
                   <li key={key}>
                     <div className="flex items-baseline justify-between gap-2 mb-1">
                       <span
-                        className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500"
+                        className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-3"
                         style={{ fontFamily: MONO }}
                       >
                         {DIMENSION_LABEL[key]}
                       </span>
                       <span
-                        className="text-[11px] tabular-nums text-stone-700 whitespace-nowrap"
+                        className="text-[11px] tabular-nums text-ink-2 whitespace-nowrap"
                         style={{ fontFamily: MONO }}
                       >
                         {dim.score_0_20}/20
                       </span>
                     </div>
-                    <div className="h-1.5 w-full rounded-full bg-stone-100 overflow-hidden">
+                    <div className="h-1.5 w-full rounded-full bg-paper-2 overflow-hidden">
                       <div
                         className={`h-full ${styles.bar} transition-all`}
                         style={{ width: `${widthPct}%` }}
                       />
                     </div>
-                    <p className="mt-1 text-[11.5px] leading-snug text-stone-600">{dim.rationale}</p>
+                    <p className="mt-1 text-[11.5px] leading-snug text-ink-2">{dim.rationale}</p>
                   </li>
                 );
               })}
             </ul>
             {g.callouts.length > 0 && (
-              <div className="rounded-sm border-l-2 border-stone-700 bg-stone-50/60 px-3 py-2">
+              <div className="rounded-sm border-l-2 border-ink bg-paper-3/60 px-3 py-2">
                 <div
-                  className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-stone-500 mb-1"
+                  className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-ink-3 mb-1"
                   style={{ fontFamily: MONO }}
                 >
                   How to lift the score
                 </div>
-                <ul className="text-[12px] leading-snug text-stone-700 space-y-1">
+                <ul className="text-[12px] leading-snug text-ink-2 space-y-1">
                   {g.callouts.map((c, i) => (
                     <li key={i}>· {c}</li>
                   ))}
@@ -625,11 +625,11 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
           ? Math.round((ps.total_points_projected / ps.total_points_possible) * 100)
           : null;
         return (
-          <div className="border-b border-stone-200/70 px-5 py-5 bg-white">
+          <div className="border-b border-rule/70 px-5 py-5 bg-white">
             <div className="flex flex-wrap items-baseline justify-between gap-3 mb-4">
               <div className="flex items-baseline gap-3">
                 <span
-                  className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+                  className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-3"
                   style={{ fontFamily: MONO }}
                 >
                   Projected score
@@ -643,12 +643,12 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
               </div>
               {ps.total_points_possible != null && ps.total_points_projected != null && (
                 <div
-                  className="text-[12px] tabular-nums text-stone-700"
+                  className="text-[12px] tabular-nums text-ink-2"
                   style={{ fontFamily: MONO }}
                 >
-                  <span className="text-[20px] font-medium text-stone-900">{ps.total_points_projected}</span>
-                  <span className="text-stone-400"> / {ps.total_points_possible}</span>
-                  {pct != null && <span className="ml-2 text-stone-500">({pct}%)</span>}
+                  <span className="text-[20px] font-medium text-ink">{ps.total_points_projected}</span>
+                  <span className="text-mute"> / {ps.total_points_possible}</span>
+                  {pct != null && <span className="ml-2 text-ink-3">({pct}%)</span>}
                 </div>
               )}
             </div>
@@ -659,24 +659,24 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
                   <li key={`${c.name}-${i}`} className="grid grid-cols-1 gap-1.5 lg:grid-cols-[1fr_auto]">
                     <div>
                       <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-[13px] font-medium text-stone-900">{c.name}</span>
+                        <span className="text-[13px] font-medium text-ink">{c.name}</span>
                         <span
-                          className="text-[11px] tabular-nums text-stone-600 whitespace-nowrap"
+                          className="text-[11px] tabular-nums text-ink-2 whitespace-nowrap"
                           style={{ fontFamily: MONO }}
                         >
                           {c.projected_points} / {c.max_points}
                         </span>
                       </div>
-                      <div className="mt-1 h-1.5 w-full rounded-full bg-stone-100 overflow-hidden">
+                      <div className="mt-1 h-1.5 w-full rounded-full bg-paper-2 overflow-hidden">
                         <div
                           className={`h-full ${styles.bar} transition-all`}
                           style={{ width: `${cPct}%` }}
                         />
                       </div>
-                      <p className="mt-1.5 text-[12px] leading-snug text-stone-600">{c.rationale}</p>
+                      <p className="mt-1.5 text-[12px] leading-snug text-ink-2">{c.rationale}</p>
                     </div>
                     <span
-                      className="self-start text-[10px] uppercase tracking-[0.14em] text-stone-400 lg:pt-0.5"
+                      className="self-start text-[10px] uppercase tracking-[0.14em] text-mute lg:pt-0.5"
                       style={{ fontFamily: MONO }}
                       title={CONFIDENCE_LABEL[c.confidence]}
                     >
@@ -699,10 +699,10 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
           the wow moment — the user sees that their uploaded CV, capability
           statement, and TOR were actually read and cited. */}
       {(out.documents_ingested?.length ?? 0) > 0 && (
-        <div className="border-b border-stone-200/70 px-5 py-4 bg-stone-50/40">
+        <div className="border-b border-rule/70 px-5 py-4 bg-paper-3/40">
           <div className="flex items-baseline justify-between gap-3 mb-2">
             <div
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500"
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-3"
               style={{ fontFamily: MONO }}
             >
               Grounded in · {out.documents_ingested!.length} document{out.documents_ingested!.length === 1 ? "" : "s"}
@@ -726,7 +726,7 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
                   className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-1 text-[11px] ${
                     cited
                       ? "border-emerald-300 bg-emerald-50/60 text-emerald-800"
-                      : "border-stone-300 bg-white text-stone-600"
+                      : "border-rule bg-white text-ink-2"
                   }`}
                   style={{ fontFamily: MONO }}
                   title={`${doc.purpose} · ${doc.char_count.toLocaleString()} chars · source: ${doc.source}`}
@@ -743,7 +743,7 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
             })}
           </ul>
           {(out.applicant_documents_cited?.length ?? 0) === 0 && (
-            <p className="mt-2 text-[11px] text-stone-500 leading-snug">
+            <p className="mt-2 text-[11px] text-ink-3 leading-snug">
               These files were read but the analysis didn&apos;t explicitly cite any of them. Re-running with sharper documents (TOR + capability statement + CV) tends to produce stronger grounded reasoning.
             </p>
           )}
@@ -753,10 +753,10 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
       <div className="grid grid-cols-1 gap-5 p-5 lg:grid-cols-2">
         {out.fit_reasoning.length > 0 && (
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-2" style={{ fontFamily: MONO }}>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-mute mb-2" style={{ fontFamily: MONO }}>
               Why this matches
             </div>
-            <ul className="space-y-1.5 text-[13px] text-stone-800 leading-snug">
+            <ul className="space-y-1.5 text-[13px] text-ink leading-snug">
               {out.fit_reasoning.map((r, i) => (
                 <li key={i} className="flex gap-2">
                   <span className="text-amber-700 shrink-0">·</span>
@@ -769,10 +769,10 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
 
         {out.gap_analysis.length > 0 && (
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-2" style={{ fontFamily: MONO }}>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-mute mb-2" style={{ fontFamily: MONO }}>
               Gaps to close
             </div>
-            <ul className="space-y-2 text-[13px] text-stone-800">
+            <ul className="space-y-2 text-[13px] text-ink">
               {out.gap_analysis.map((g, i) => (
                 <li key={i}>
                   <div className="flex items-baseline gap-2 flex-wrap">
@@ -789,7 +789,7 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
                     )}
                     <span className="font-semibold leading-snug">{g.gap}</span>
                   </div>
-                  <p className="ml-12 text-[12px] text-stone-600 leading-relaxed">{g.fix}</p>
+                  <p className="ml-12 text-[12px] text-ink-2 leading-relaxed">{g.fix}</p>
                 </li>
               ))}
             </ul>
@@ -798,11 +798,11 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
       </div>
 
       {eligibilityFindings.length > 0 && (
-        <div className="border-t border-stone-100 p-5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-3" style={{ fontFamily: MONO }}>
+        <div className="border-t border-rule p-5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-mute mb-3" style={{ fontFamily: MONO }}>
             Eligibility findings
           </div>
-          <ul className="space-y-3 text-[13px] text-stone-800">
+          <ul className="space-y-3 text-[13px] text-ink">
             {eligibilityFindings.map((f, i) => {
               // PR-N (2026-05-23): chip dedup. User reported confusion on
               // findings rendering BOTH a status header (GAP / UNVERIFIED /
@@ -854,7 +854,7 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
                     </div>
                   )}
                   {f.rationale && (
-                    <p className="text-[12px] text-stone-600 leading-relaxed">{f.rationale}</p>
+                    <p className="text-[12px] text-ink-2 leading-relaxed">{f.rationale}</p>
                   )}
                 </li>
               );
@@ -864,11 +864,11 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
       )}
 
       {showCommercialTerms && out.commercial_terms && (
-        <div className="border-t border-stone-100 bg-blue-50/30 p-5">
+        <div className="border-t border-rule bg-blue-50/30 p-5">
           <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-800 mb-2" style={{ fontFamily: MONO }}>
             Commercial terms
           </div>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-[13px] text-stone-800 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-[13px] text-ink sm:grid-cols-4">
             {out.commercial_terms.payment_terms && (
               <Term label="Payment terms" value={out.commercial_terms.payment_terms} />
             )}
@@ -895,7 +895,7 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
             )}
           </div>
           {out.commercial_terms.notes.length > 0 && (
-            <ul className="mt-3 space-y-1 text-[12px] text-stone-600 leading-relaxed">
+            <ul className="mt-3 space-y-1 text-[12px] text-ink-2 leading-relaxed">
               {out.commercial_terms.notes.map((n, i) => (
                 <li key={i}>· {n}</li>
               ))}
@@ -905,7 +905,7 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
       )}
 
       {out.red_flags.length > 0 && (
-        <div className="border-t border-stone-100 bg-red-50/40 p-5">
+        <div className="border-t border-rule bg-red-50/40 p-5">
           <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-red-700 mb-1.5" style={{ fontFamily: MONO }}>
             Red flags
           </div>
@@ -918,7 +918,7 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
       )}
 
       {out.recommendation === "conditional" && out.conditions_for_bid.length > 0 && (
-        <div className="border-t border-stone-100 bg-amber-50/40 p-5">
+        <div className="border-t border-rule bg-amber-50/40 p-5">
           <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700 mb-1.5" style={{ fontFamily: MONO }}>
             Conditions to convert to a bid
           </div>
@@ -939,11 +939,11 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
       <RegistrationBlock agency={agency} deadline={tenderDeadline} />
 
       {out.next_steps.length > 0 && (
-        <div className="border-t border-stone-100 p-5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-2" style={{ fontFamily: MONO }}>
+        <div className="border-t border-rule p-5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-mute mb-2" style={{ fontFamily: MONO }}>
             Next steps
           </div>
-          <ol className="text-[13px] text-stone-800 space-y-1.5">
+          <ol className="text-[13px] text-ink space-y-1.5">
             {out.next_steps.map((s, i) => (
               <li key={i} className="flex gap-2.5">
                 <span className="text-amber-700 tabular-nums shrink-0" style={{ fontFamily: MONO }}>
@@ -956,8 +956,8 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
         </div>
       )}
 
-      <div className="border-t border-stone-100 p-5 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <p className="text-[11px] text-stone-500" style={{ fontFamily: MONO }}>
+      <div className="border-t border-rule p-5 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <p className="text-[11px] text-ink-3" style={{ fontFamily: MONO }}>
           Generation {pkg.generation_attempts ?? 1} · {remaining} regenerate{remaining === 1 ? "" : "s"} left
         </p>
         {error && <p className="text-[11.5px] text-red-700">{error}</p>}
@@ -965,7 +965,7 @@ export default function BidNoBidPanel({ workOrderId, paymentStatus, agency, tend
           type="button"
           onClick={handleRegenerate}
           disabled={regenBusy || remaining <= 0}
-          className="rounded-sm border border-stone-300 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded-sm border border-rule px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-2 hover:border-ink hover:text-ink transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ fontFamily: MONO }}
         >
           {regenBusy ? "Regenerating…" : remaining <= 0 ? "Regenerate limit reached" : "Regenerate analysis →"}
@@ -1020,7 +1020,7 @@ function ExportToProposalButton({ workOrderId }: { workOrderId: number }) {
         type="button"
         onClick={handleClick}
         disabled={busy}
-        className="rounded-sm bg-stone-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-orange-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="rounded-sm bg-ink px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-orange-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         style={{ fontFamily: MONO }}
         title="Spin this into a proposal draft — fresh checkout, pre-loaded with this analysis"
       >
@@ -1058,24 +1058,24 @@ function LadderRow({
   return (
     <div>
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <div className="text-[13.5px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+        <div className="text-[13.5px] font-medium text-ink" style={{ fontFamily: SERIF }}>
           {label}
         </div>
         <div className={`text-[10px] uppercase tracking-[0.14em] ${tagClass}`} style={{ fontFamily: MONO }}>
           {tag}
         </div>
       </div>
-      <p className="mt-1 text-[12.5px] leading-snug text-stone-700">{purpose}</p>
-      <ul className="mt-1.5 space-y-0.5 text-[12px] text-stone-600">
+      <p className="mt-1 text-[12.5px] leading-snug text-ink-2">{purpose}</p>
+      <ul className="mt-1.5 space-y-0.5 text-[12px] text-ink-2">
         {requirements.map((r, i) => (
           <li key={i} className="flex gap-2">
-            <span className="text-stone-400 shrink-0">·</span>
+            <span className="text-mute shrink-0">·</span>
             <span>{r}</span>
           </li>
         ))}
       </ul>
       <div
-        className="mt-1.5 text-[10.5px] uppercase tracking-[0.12em] text-stone-400"
+        className="mt-1.5 text-[10.5px] uppercase tracking-[0.12em] text-mute"
         style={{ fontFamily: MONO }}
       >
         {leadLabel}
@@ -1110,16 +1110,16 @@ function UngmRegistrationBlock({
       ? { border: "border-red-600", bg: "bg-red-50/40", text: "text-red-800" }
       : risk === "tight"
         ? { border: "border-amber-600", bg: "bg-amber-50/40", text: "text-amber-900" }
-        : { border: "border-stone-300", bg: "bg-stone-50/40", text: "text-stone-700" };
+        : { border: "border-rule", bg: "bg-paper-3/40", text: "text-ink-2" };
 
   const days = timing.daysUntilDeadline;
   const deadlinePhrase =
     days != null && days >= 0 ? `Deadline in ${days} day${days === 1 ? "" : "s"}. ` : "";
 
   return (
-    <div className="border-t border-stone-100 p-5">
+    <div className="border-t border-rule p-5">
       <div
-        className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-2"
+        className="text-[10px] font-semibold uppercase tracking-[0.18em] text-mute mb-2"
         style={{ fontFamily: MONO }}
       >
         Before you can submit · UNGM vendor registration
@@ -1134,11 +1134,11 @@ function UngmRegistrationBlock({
           leadLabel={basic.leadTimeLabel}
         />
 
-        <div className="mt-3 pt-3 border-t border-stone-200/70">
+        <div className="mt-3 pt-3 border-t border-rule/70">
           <LadderRow
             label={level1.label}
             tag="May be required before award"
-            tagClass="text-stone-500"
+            tagClass="text-ink-3"
             purpose={level1.purpose}
             requirements={level1.requirements}
             leadLabel={level1.leadTimeLabel}
@@ -1159,17 +1159,17 @@ function UngmRegistrationBlock({
             href={UNGM_URL}
             target="_blank"
             rel="noreferrer"
-            className="rounded-sm bg-stone-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors"
+            className="rounded-sm bg-ink px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-ink transition-colors"
             style={{ fontFamily: MONO }}
           >
             Register on UNGM →
           </a>
-          <span className="text-[11px] text-stone-500" style={{ fontFamily: MONO }}>
+          <span className="text-[11px] text-ink-3" style={{ fontFamily: MONO }}>
             · free vendor number + tender alerts
           </span>
         </div>
 
-        <p className="mt-2.5 text-[11.5px] leading-snug text-stone-500">{req.note}</p>
+        <p className="mt-2.5 text-[11.5px] leading-snug text-ink-3">{req.note}</p>
       </div>
     </div>
   );
@@ -1197,23 +1197,23 @@ function RegistrationBlock({
       ? { border: "border-red-600", bg: "bg-red-50/40", text: "text-red-800", label: "text-red-700" }
       : risk === "tight"
         ? { border: "border-amber-600", bg: "bg-amber-50/40", text: "text-amber-900", label: "text-amber-700" }
-        : { border: "border-stone-300", bg: "bg-stone-50/40", text: "text-stone-700", label: "text-stone-500" };
+        : { border: "border-rule", bg: "bg-paper-3/40", text: "text-ink-2", label: "text-ink-3" };
 
   const days = timing.daysUntilDeadline;
   const deadlinePhrase =
     days != null && days >= 0 ? `Deadline in ${days} day${days === 1 ? "" : "s"}. ` : "";
 
   return (
-    <div className="border-t border-stone-100 p-5">
+    <div className="border-t border-rule p-5">
       <div
-        className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-2"
+        className="text-[10px] font-semibold uppercase tracking-[0.18em] text-mute mb-2"
         style={{ fontFamily: MONO }}
       >
         Before you can submit · registration
       </div>
       <div className={`rounded-sm border-l-2 ${riskStyles.border} ${riskStyles.bg} px-4 py-3`}>
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
-          <div className="text-[14px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+          <div className="text-[14px] font-medium text-ink" style={{ fontFamily: SERIF }}>
             {portal.portalName}
           </div>
           <div
@@ -1233,7 +1233,7 @@ function RegistrationBlock({
           </p>
         )}
 
-        <ol className="mt-3 space-y-1.5 text-[13px] text-stone-800">
+        <ol className="mt-3 space-y-1.5 text-[13px] text-ink">
           {portal.steps.map((s, i) => (
             <li key={i} className="flex gap-2.5">
               <span className="text-amber-700 tabular-nums shrink-0" style={{ fontFamily: MONO }}>
@@ -1249,7 +1249,7 @@ function RegistrationBlock({
             href={portal.registrationUrl}
             target="_blank"
             rel="noreferrer"
-            className="rounded-sm bg-stone-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors"
+            className="rounded-sm bg-ink px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-ink transition-colors"
             style={{ fontFamily: MONO }}
           >
             Register →
@@ -1259,7 +1259,7 @@ function RegistrationBlock({
               href={portal.signInUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded-sm border border-stone-300 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
+              className="rounded-sm border border-rule px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-2 hover:border-ink hover:text-ink transition-colors"
               style={{ fontFamily: MONO }}
             >
               Sign in
@@ -1270,20 +1270,20 @@ function RegistrationBlock({
               href={portal.guideUrl}
               target="_blank"
               rel="noreferrer"
-              className="text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-500 hover:text-stone-900 underline underline-offset-2"
+              className="text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-3 hover:text-ink underline underline-offset-2"
               style={{ fontFamily: MONO }}
             >
               Official guide ↗
             </a>
           )}
           {portal.alsoRegisterUngm && (
-            <span className="text-[11px] text-stone-500" style={{ fontFamily: MONO }}>
+            <span className="text-[11px] text-ink-3" style={{ fontFamily: MONO }}>
               · also register free on UNGM for a vendor ID + alerts
             </span>
           )}
         </div>
 
-        <p className="mt-2.5 text-[11.5px] leading-snug text-stone-500">{portal.note}</p>
+        <p className="mt-2.5 text-[11.5px] leading-snug text-ink-3">{portal.note}</p>
       </div>
     </div>
   );

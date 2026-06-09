@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { crawlWebsite } from "@/lib/assessment/crawl";
 import { classifyIndustry, inferProfileExtras } from "@/lib/assessment/analyze";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 function inferConfidence(
   crawl: Awaited<ReturnType<typeof crawlWebsite>> | null
@@ -20,6 +21,20 @@ export async function POST(request: Request) {
   if (!body.website?.trim()) {
     return NextResponse.json({ error: "website is required" }, { status: 400 });
   }
+
+  const ipLimit = enforceRateLimit(request, {
+    namespace: "assessment:preview:ip",
+    limit: 30,
+    windowMs: 10 * 60 * 1000,
+  });
+  if (ipLimit) return ipLimit;
+  const websiteLimit = enforceRateLimit(request, {
+    namespace: "assessment:preview:website",
+    limit: 8,
+    windowMs: 10 * 60 * 1000,
+    keyParts: [body.website.trim()],
+  });
+  if (websiteLimit) return websiteLimit;
 
   try {
     const crawl = await crawlWebsite(body.website.trim());

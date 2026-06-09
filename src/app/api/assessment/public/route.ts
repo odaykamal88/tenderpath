@@ -10,6 +10,7 @@ import {
 } from "@/lib/assessment/run";
 import { track } from "@/lib/telemetry/funnel";
 import type { AssessmentInput } from "@/lib/types";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import {
   isDemoEmail,
   resolveOrMintForAnonymousSubmission,
@@ -29,6 +30,20 @@ export async function POST(request: Request) {
   };
   const validationError = validateAssessmentInput(body);
   if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
+
+  const ipLimit = enforceRateLimit(request, {
+    namespace: "assessment:public:ip",
+    limit: 12,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (ipLimit) return ipLimit;
+  const emailLimit = enforceRateLimit(request, {
+    namespace: "assessment:public:email",
+    limit: 5,
+    windowMs: 60 * 60 * 1000,
+    keyParts: [body.email],
+  });
+  if (emailLimit) return emailLimit;
 
   // Sprint 24 (audit 2026-05-20 demo isolation): mint a fresh tp_demo_session
   // cookie for every anonymous submission with the demo email. The new value

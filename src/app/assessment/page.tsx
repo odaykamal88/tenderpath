@@ -360,15 +360,17 @@ function AssessmentWizard() {
   const [analysisMsg, setAnalysisMsg] = useState(0);
   const [authedEmail, setAuthedEmail] = useState<string | null>(null);
   const msgTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Guards the landing ?site= hand-off so the auto-crawl fires exactly once.
+  const autoCrawlStarted = useRef(false);
 
   // Detect signed-in users so the page can show its auth state instead of
   // looking like an anonymous landing — otherwise users bounced here from
   // /dashboard (when they have no assessment yet) assume they're signed out.
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-    if (!token) return;
+    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
     let cancelled = false;
-    fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
+    fetch("/api/auth/me", { headers })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled || !data?.email) return;
@@ -394,22 +396,26 @@ function AssessmentWizard() {
     return () => { if (msgTimer.current) clearInterval(msgTimer.current); };
   }, [phase]);
 
-  const startCrawl = useCallback(async () => {
-    if (!entryUrl.trim()) { setPhase("step1"); return; }
+  const startCrawl = useCallback(async (explicitUrl?: string) => {
+    // explicitUrl lets the landing paste-box hand-off (?site=) crawl without
+    // waiting for entryUrl state to settle. Guard the type so an onClick event
+    // object can never be mistaken for a URL.
+    const url = (typeof explicitUrl === "string" ? explicitUrl : entryUrl).trim();
+    if (!url) { setPhase("step1"); return; }
     setPhase("crawling");
     setError(null);
     try {
       const res = await fetch("/api/assessment/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ website: entryUrl.trim() }),
+        body: JSON.stringify({ website: url }),
       });
       const data = (await res.json()) as CrawlPreview & { error?: string };
       if (!data.error) {
         setPreview(data);
         setWizard((d) => ({
           ...d,
-          website: entryUrl.trim(),
+          website: url,
           companyName: d.companyName || data.detectedName || "",
           description: d.description || data.detectedDescription || "",
           sectors: d.sectors.length ? d.sectors : data.detectedSectors,
@@ -419,13 +425,25 @@ function AssessmentWizard() {
           submissionLanguage: d.submissionLanguage || data.detectedLanguage || "",
         }));
       } else {
-        setWizard((d) => ({ ...d, website: entryUrl.trim() }));
+        setWizard((d) => ({ ...d, website: url }));
       }
     } catch {
-      setWizard((d) => ({ ...d, website: entryUrl.trim() }));
+      setWizard((d) => ({ ...d, website: url }));
     }
     setPhase("step1");
   }, [entryUrl]);
+
+  // Landing paste-box hand-off: ?site=<host> pre-fills the entry URL and kicks
+  // off the crawl once, so "Score me" on the homepage flows straight into the
+  // wizard's crawl → Step 1 without the user re-typing their site.
+  useEffect(() => {
+    if (autoCrawlStarted.current) return;
+    const site = searchParams.get("site")?.trim();
+    if (!site) return;
+    autoCrawlStarted.current = true;
+    setEntryUrl(site);
+    void startCrawl(site);
+  }, [searchParams, startCrawl]);
 
   const runAssessment = useCallback(async () => {
     setPhase("analyzing");
@@ -525,7 +543,7 @@ function AssessmentWizard() {
                     className="bg-transparent border-b border-ink px-0 py-3 font-serif text-[22px] text-ink placeholder:text-mute focus:outline-none focus:border-accent"
                   />
                   <button
-                    onClick={startCrawl}
+                    onClick={() => startCrawl()}
                     disabled={!entryUrl.trim()}
                     className="bg-ink text-paper font-mono text-[11px] tracking-[0.12em] uppercase px-6 hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   >

@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
 import { sql } from "@/lib/db";
 import { Resend } from "resend";
+import { requireAuth } from "@/lib/subscription-guard";
 import { generateBidNoBid, BID_PLAN } from "@/lib/bid-no-bid/generate";
 import { generateProposalPackage } from "@/lib/proposal-package/generate-proposal";
 import { generateRosterFastTrack } from "@/lib/proposal-package/generate-roster";
 import { PROPOSAL_PLAN, ROSTER_PLAN } from "@/lib/proposal-package/types";
 import { isComingSoonTier } from "@/lib/pricing";
+import { ensurePaymentIntegritySchema } from "@/lib/payment-integrity";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import {
   evaluateServiceFulfillmentGate,
   markWorkOrderForFulfillmentGate,
@@ -41,6 +44,22 @@ interface TronScanResponse {
   trc20TransferInfo?: TronScanTransfer[];
 }
 
+interface WorkOrderPaymentRow {
+  id: number;
+  plan: string;
+  service_slug: string | null;
+  email: string | null;
+  payment_status: string | null;
+  usdt_txid: string | null;
+}
+
+function workOrderPlanMatches(order: WorkOrderPaymentRow, plan: string): boolean {
+  return order.plan === plan
+    || order.service_slug === plan
+    || (plan === PROPOSAL_PLAN && order.service_slug === "proposal")
+    || (plan === ROSTER_PLAN && order.service_slug === "lta-roster");
+}
+
 async function sendOpsAlert(orderId: number, plan: string, email: string | null, txid: string) {
   const key = process.env.RESEND_API_KEY?.trim();
   if (!key) return;
@@ -65,6 +84,10 @@ async function sendOpsAlert(orderId: number, plan: string, email: string | null,
 }
 
 export async function POST(req: NextRequest) {
+  const guard = await requireAuth(req);
+  if (!guard.authorized) return guard.response!;
+  const user = guard.user!;
+
   let body: { txid?: string; work_order_id?: string | number; plan?: string; email?: string };
   try {
     body = (await req.json()) as typeof body;
@@ -72,7 +95,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { txid, work_order_id: rawId, plan, email } = body;
+  const { txid, work_order_id: rawId, plan } = body;
 
   if (!txid || typeof txid !== "string" || !/^[0-9a-fA-F]{64}$/.test(txid.trim())) {
     return NextResponse.json(
@@ -82,6 +105,18 @@ export async function POST(req: NextRequest) {
   }
   if (!rawId || !plan) {
     return NextResponse.json({ error: "work_order_id and plan are required" }, { status: 400 });
+  }
+  const userLimit = enforceRateLimit(req, {
+    namespace: "pay:verify-usdt:user",
+    limit: 10,
+    windowMs: 10 * 60 * 1000,
+    keyParts: [user.id, rawId],
+  });
+  if (userLimit) return userLimit;
+
+  const normalizedTxid = txid.trim();
+  if (typeof PLAN_MIN_USDT[plan] !== "number") {
+    return NextResponse.json({ error: "Unsupported USDT payment plan." }, { status: 400 });
   }
   // Product-wide "coming soon" gate (e.g. Roster/LTA) — don't verify/fulfil a
   // crypto payment for a held-back tier.
@@ -95,6 +130,45 @@ export async function POST(req: NextRequest) {
   if (!Number.isInteger(workOrderId) || workOrderId <= 0) {
     return NextResponse.json({ error: "Invalid work_order_id" }, { status: 400 });
   }
+
+  await ensurePaymentIntegritySchema();
+
+  const ownedRows = await sql`
+    SELECT id, plan, service_slug, email, payment_status, usdt_txid
+    FROM work_orders
+    WHERE id = ${workOrderId}
+      AND (
+        user_id = ${user.id}
+        OR (email IS NOT NULL AND LOWER(email) = LOWER(${user.email}))
+      )
+    LIMIT 1
+  ` as unknown as WorkOrderPaymentRow[];
+  const ownedOrder = ownedRows[0];
+  if (!ownedOrder) {
+    console.warn("[verify-usdt:ownership_blocked]", { workOrderId, userId: user.id });
+    return NextResponse.json({ error: "Work order not found." }, { status: 404 });
+  }
+  if (!workOrderPlanMatches(ownedOrder, plan)) {
+    return NextResponse.json({ error: "This payment plan does not match the work order." }, { status: 409 });
+  }
+  if (ownedOrder.payment_status === "paid") {
+    return NextResponse.json({ error: "This work order is already marked paid." }, { status: 409 });
+  }
+  if (ownedOrder.usdt_txid && ownedOrder.usdt_txid !== normalizedTxid) {
+    return NextResponse.json({ error: "This work order already has a submitted USDT transaction." }, { status: 409 });
+  }
+
+  const duplicateTx = await sql`
+    SELECT id FROM work_orders
+    WHERE usdt_txid = ${normalizedTxid}
+      AND id <> ${workOrderId}
+    LIMIT 1
+  `;
+  if (duplicateTx.length) {
+    console.warn("[verify-usdt:duplicate_txid_blocked]", { workOrderId, existingWorkOrderId: duplicateTx[0].id });
+    return NextResponse.json({ error: "This USDT transaction has already been submitted." }, { status: 409 });
+  }
+
   const gate = await evaluateServiceFulfillmentGate({ plan, workOrderId });
   if (!gate.payment_allowed) {
     return NextResponse.json(
@@ -114,7 +188,7 @@ export async function POST(req: NextRequest) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12_000);
     const res = await fetch(
-      `https://apilist.tronscanapi.com/api/transaction-info?hash=${encodeURIComponent(txid.trim())}`,
+      `https://apilist.tronscanapi.com/api/transaction-info?hash=${encodeURIComponent(normalizedTxid)}`,
       { signal: controller.signal, headers: { Accept: "application/json" } },
     );
     clearTimeout(timer);
@@ -164,18 +238,16 @@ export async function POST(req: NextRequest) {
   }
 
   const minAmount = PLAN_MIN_USDT[plan];
-  if (minAmount) {
-    const sent = Number(usdtTransfer.amount_str ?? "0");
-    if (sent < minAmount) {
-      const sentDisplay = (sent / 1_000_000).toFixed(2);
-      const expectedDisplay = (minAmount / 1_000_000).toFixed(2);
-      return NextResponse.json(
-        {
-          error: `Amount sent (${sentDisplay} USDT) is less than the required ${expectedDisplay} USDT for this plan.`,
-        },
-        { status: 422 },
-      );
-    }
+  const sent = Number(usdtTransfer.amount_str ?? "0");
+  if (sent < minAmount) {
+    const sentDisplay = (sent / 1_000_000).toFixed(2);
+    const expectedDisplay = (minAmount / 1_000_000).toFixed(2);
+    return NextResponse.json(
+      {
+        error: `Amount sent (${sentDisplay} USDT) is less than the required ${expectedDisplay} USDT for this plan.`,
+      },
+      { status: 422 },
+    );
   }
 
   // Decide downstream payment_status. Auto-fulfilled plans (bid-no-bid today)
@@ -188,11 +260,17 @@ export async function POST(req: NextRequest) {
   const rows = await sql`
     UPDATE work_orders
     SET
-      usdt_txid         = ${txid.trim()},
+      usdt_txid         = ${normalizedTxid},
       payment_status    = ${nextPaymentStatus},
-      email             = COALESCE(email, ${email?.trim() ?? null}),
+      email             = COALESCE(email, ${user.email}),
       updated_at        = NOW()
     WHERE id = ${workOrderId}
+      AND (
+        user_id = ${user.id}
+        OR (email IS NOT NULL AND LOWER(email) = LOWER(${user.email}))
+      )
+      AND payment_status IS DISTINCT FROM 'paid'
+      AND (usdt_txid IS NULL OR usdt_txid = ${normalizedTxid})
     RETURNING id, plan, email, tender_title, agency
   `;
 
@@ -207,8 +285,8 @@ export async function POST(req: NextRequest) {
   sendOpsAlert(
     order.id as number,
     order.plan as string,
-    (order.email as string | null) ?? email?.trim() ?? null,
-    txid.trim(),
+    (order.email as string | null) ?? user.email,
+    normalizedTxid,
   ).catch((err) => console.error("[verify-usdt] ops email failed", err));
 
   if (autoFulfilled) {

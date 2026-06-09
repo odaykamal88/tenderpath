@@ -27,7 +27,7 @@ export function NgoVariant({ onSubmit }: { onSubmit: (data: { url?: string; regN
         <textarea required value={thesis} onChange={(e) => setThesis(e.target.value)} rows={3} placeholder="We deliver last-mile vaccines in arid Kenya." className={styles.textarea} />
       </label>
       <button type="submit" className={styles.submit}>Assess →</button>
-      <p className={styles.privacy}>We don't share your registration number. Used only to verify donor-eligibility flags.</p>
+      <p className={styles.privacy}>We don&apos;t share your registration number. Used only to verify donor-eligibility flags.</p>
     </form>
   );
 }

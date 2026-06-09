@@ -274,6 +274,11 @@ export async function initializeDatabase() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS purchase_logs_stripe_session_id_unique
+    ON purchase_logs (stripe_session_id)
+    WHERE stripe_session_id IS NOT NULL AND stripe_session_id <> ''
+  `;
 
   await sql`
     CREATE TABLE IF NOT EXISTS user_tender_feedback (
@@ -335,7 +340,7 @@ export async function initializeDatabase() {
       user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       plan TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'new',
-      payment_status TEXT DEFAULT 'paid',
+      payment_status TEXT DEFAULT 'pending',
       stripe_session_id TEXT UNIQUE,
       stripe_customer_id TEXT,
       amount_cents INTEGER,
@@ -356,6 +361,14 @@ export async function initializeDatabase() {
   await sql`ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS service_slug TEXT`;
   await sql`ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS tender_url TEXT`;
   await sql`ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS intake JSONB DEFAULT '{}'::jsonb`;
+  await sql`ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS usdt_txid TEXT`;
+  await sql`ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS payment_proof_url TEXT`;
+  await sql`ALTER TABLE work_orders ALTER COLUMN payment_status SET DEFAULT 'pending'`;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS work_orders_usdt_txid_unique
+    ON work_orders (usdt_txid)
+    WHERE usdt_txid IS NOT NULL AND usdt_txid <> ''
+  `;
 
   await sql`
     CREATE TABLE IF NOT EXISTS proposal_packages (
@@ -395,6 +408,11 @@ export async function initializeDatabase() {
   // and the customer's $39–$749 charge produced no deliverable.
   await sql`ALTER TABLE proposal_packages ALTER COLUMN user_id DROP NOT NULL`;
   await sql`CREATE INDEX IF NOT EXISTS proposal_packages_work_order_plan ON proposal_packages (work_order_id, plan, created_at DESC)`;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS bid_analyses_stripe_session_id_unique
+    ON bid_analyses (stripe_session_id)
+    WHERE stripe_session_id IS NOT NULL AND stripe_session_id <> ''
+  `;
 
   await sql`
     CREATE TABLE IF NOT EXISTS weekly_digest_logs (

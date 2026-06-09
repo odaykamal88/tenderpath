@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireDashboardAccess } from "@/lib/access";
 import { extractDocumentText, persistDocumentExtraction } from "@/lib/documents/extract";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
+
+function blobPathFor(userId: number, fileName: string): string {
+  const ext = fileName.match(/\.[A-Za-z0-9]{1,12}$/)?.[0]?.toLowerCase() ?? "";
+  return `vault/${userId}/${crypto.randomUUID()}${ext}`;
+}
 
 // Stable [vault:upload:*] log tags on every error branch so the next failed
 // upload tells us what's actually breaking — the previous route swallowed
@@ -12,6 +18,14 @@ export const maxDuration = 30;
 export async function POST(req: NextRequest) {
   const guard = await requireDashboardAccess(req);
   if (!guard.authorized) return guard.response!;
+
+  const limited = enforceRateLimit(req, {
+    namespace: "vault-upload",
+    limit: 20,
+    windowMs: 60 * 60 * 1000,
+    keyParts: [guard.user!.id],
+  });
+  if (limited) return limited;
 
   let stage = "parse_form";
   try {
@@ -59,23 +73,18 @@ export async function POST(req: NextRequest) {
 
     stage = "blob_upload";
     let fileUrl: string;
-    let storedVia: "blob" | "base64" = "blob";
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { put } = require("@vercel/blob");
-      const blob = await put(`vault/${guard.user!.id}/${Date.now()}-${file.name}`, bytes, {
+      const blob = await put(blobPathFor(guard.user!.id, file.name), bytes, {
         access: "public",
         addRandomSuffix: true,
         contentType: file.type,
       });
       fileUrl = blob.url;
     } catch (blobErr) {
-      // Fallback: encode as base64 data URL. Surfaces enough context that the
-      // next prod failure tells us whether it's a missing BLOB_READ_WRITE_TOKEN
-      // (the most common cause — observed during the Sprint 4 bid-no-bid PDF
-      // pipeline) or a real upload error.
-      console.warn("[vault:upload:blob_fallback]", {
+      console.error("[vault:upload:blob_failed]", {
         userId: guard.user!.id,
         fileName: file.name,
         fileSize: file.size,
@@ -83,9 +92,10 @@ export async function POST(req: NextRequest) {
         errorMessage: blobErr instanceof Error ? blobErr.message : String(blobErr),
         hasBlobToken: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
       });
-      const base64 = bytes.toString("base64");
-      fileUrl = `data:${file.type};base64,${base64}`;
-      storedVia = "base64";
+      return NextResponse.json(
+        { error: "Document storage is unavailable. Please try again shortly.", code: "BLOB_UPLOAD_FAILED" },
+        { status: 503 },
+      );
     }
 
     stage = "extract_text";
@@ -105,10 +115,10 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({
-      url: fileUrl,
+      upload_id: persisted.id,
       name: file.name,
       extraction: persisted,
-      storedVia,
+      storedVia: "blob",
     });
   } catch (err) {
     console.error("[vault:upload:failed]", {

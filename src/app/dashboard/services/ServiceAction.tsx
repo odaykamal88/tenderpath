@@ -38,7 +38,7 @@ export default function ServiceAction({
     return (
       <Link
         href={checkoutHref}
-        className="inline-flex w-full items-center justify-center rounded-sm bg-stone-900 px-4 py-3 text-[13px] font-semibold text-white hover:bg-stone-800 transition-colors"
+        className="inline-flex w-full items-center justify-center rounded-sm bg-ink px-4 py-3 text-[13px] font-semibold text-white hover:bg-ink transition-colors"
       >
         {label}
       </Link>
@@ -50,11 +50,11 @@ export default function ServiceAction({
       <div>
         <Link
           href="/dashboard/pipeline"
-          className="inline-flex w-full items-center justify-center rounded-sm bg-stone-900 px-4 py-3 text-[13px] font-semibold text-white hover:bg-stone-800 transition-colors"
+          className="inline-flex w-full items-center justify-center rounded-sm bg-ink px-4 py-3 text-[13px] font-semibold text-white hover:bg-ink transition-colors"
         >
           Select a tender in pipeline →
         </Link>
-        <p className="mt-2 text-[11.5px] leading-relaxed text-stone-500">
+        <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">
           Bid/no-bid analysis needs a pipeline tender so the recommendation can use your saved match evidence.
         </p>
       </div>
@@ -103,7 +103,7 @@ export default function ServiceAction({
         type="button"
         onClick={startBidNoBid}
         disabled={loading}
-        className="inline-flex w-full items-center justify-center rounded-sm bg-stone-900 px-4 py-3 text-[13px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex w-full items-center justify-center rounded-sm bg-ink px-4 py-3 text-[13px] font-semibold text-white hover:bg-ink transition-colors disabled:cursor-not-allowed disabled:opacity-50"
       >
         {loading ? (
           <>

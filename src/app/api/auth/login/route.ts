@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { sql } from "@/lib/db";
 import { generateMagicToken } from "@/lib/auth";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 function envValue(key: string): string | null {
   const value = process.env[key]?.trim();
@@ -17,16 +18,29 @@ export async function POST(request: Request) {
   }
 
   const normalizedEmail = email.toLowerCase().trim();
+  const ipLimit = enforceRateLimit(request, {
+    namespace: "auth:login:ip",
+    limit: 12,
+    windowMs: 10 * 60 * 1000,
+  });
+  if (ipLimit) return ipLimit;
+  const emailLimit = enforceRateLimit(request, {
+    namespace: "auth:login:email",
+    limit: 4,
+    windowMs: 60 * 60 * 1000,
+    keyParts: [normalizedEmail],
+  });
+  if (emailLimit) return emailLimit;
 
   const users = await sql`
     SELECT id FROM users WHERE email = ${normalizedEmail}
   `;
 
   if (users.length === 0) {
-    return NextResponse.json(
-      { error: "No account found with this email" },
-      { status: 404 }
-    );
+    return NextResponse.json({
+      ok: true,
+      message: "If that account exists, a magic link has been sent.",
+    });
   }
 
   const magicToken = generateMagicToken();
@@ -82,7 +96,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ok: true,
-    message: "Magic link sent to your email",
+    message: "If that account exists, a magic link has been sent.",
     ...(isDev && { _devToken: magicToken }),
   });
 }

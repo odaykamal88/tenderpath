@@ -5,6 +5,15 @@ import { sendWorkOrderStatusNotification } from "@/lib/email/sendWorkOrderNotifi
 
 const STATUSES = new Set(["new", "in_progress", "waiting_on_client", "delivered", "canceled"]);
 
+function publicWorkOrder(row: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...row,
+    payment_proof_url: row.payment_proof_url
+      ? `/api/admin/work-orders/${row.id}/payment-proof`
+      : null,
+  };
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const guard = await requireAdmin(request);
   if (!guard.authorized) return guard.response!;
@@ -57,5 +66,5 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     });
   }
 
-  return NextResponse.json({ workOrder });
+  return NextResponse.json({ workOrder: publicWorkOrder(workOrder as Record<string, unknown>) });
 }

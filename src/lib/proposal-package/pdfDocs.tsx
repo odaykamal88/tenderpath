@@ -645,7 +645,7 @@ export async function renderSubmissionInstructionsPdf(
           <View style={styles.section}>
             <Text style={styles.h2}>Where to start</Text>
             <Text style={{ fontSize: 10, color: INK2, marginBottom: 10, lineHeight: 1.4 }}>
-              We scored {ctx.companyName} against {breakdown.length} UN procurement portals. Start with the highest-readiness agency — it's the one with the strongest document coverage, category fit, and geographic reach today.
+              We scored {ctx.companyName} against {breakdown.length} UN procurement portals. Start with the highest-readiness agency — it is the one with the strongest document coverage, category fit, and geographic reach today.
             </Text>
             {startHere && <AgencyBlockPdf agency={startHere} tag="START HERE" />}
             {viable.length > 0 && (

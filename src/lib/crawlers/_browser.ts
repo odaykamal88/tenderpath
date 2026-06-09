@@ -6,6 +6,7 @@
  * Requires CRAWLER_WORKER_URL and CRAWLER_WORKER_KEY in the environment.
  */
 import { fetchWithTimeout } from "./types";
+import { assertSafeHttpUrl } from "@/lib/security/safe-url";
 
 export interface BrowserFetchOpts {
   method?: "GET" | "POST";
@@ -46,6 +47,9 @@ export async function fetchViaBrowser(
   url: string,
   opts: BrowserFetchOpts = {},
 ): Promise<BrowserFetchResult> {
+  await assertSafeHttpUrl(url);
+  if (opts.warmupUrl) await assertSafeHttpUrl(opts.warmupUrl);
+
   const workerUrl = process.env.CRAWLER_WORKER_URL;
   const key = process.env.CRAWLER_WORKER_KEY;
   if (!workerUrl || !key) {

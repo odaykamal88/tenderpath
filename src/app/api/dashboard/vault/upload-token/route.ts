@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { HandleUploadBody } from "@vercel/blob/client";
 import { handleUpload } from "@vercel/blob/client";
-import { verifyToken } from "@/lib/auth";
+import { getUserFromRequest, verifyToken } from "@/lib/auth";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
+function isAllowedClientPath(pathname: string): boolean {
+  return /^vault-upload\/[a-z0-9-]+(?:\.[a-z0-9]{1,12})?$/i.test(pathname);
+}
+
 // Direct-to-Blob upload coordinator. Two responsibilities:
 //
 //   1. blob.generate-client-token — the browser SDK calls here to mint a
-//      signed token. The SDK can't carry an Authorization header on this
-//      call, so we accept the tp_session JWT through `clientPayload`
-//      instead. Token is rejected if the JWT is missing or invalid.
+//      signed token. Same-origin cookies authorize the request; the legacy
+//      `clientPayload` JWT is accepted only as a fallback for older sessions.
 //
 //   2. blob.upload-completed — Vercel Blob webhook after the file lands in
 //      storage. Signature is verified by handleUpload(). We don't run
@@ -23,6 +27,13 @@ export const maxDuration = 30;
 // Whitelisted in src/proxy.ts because the SDK's POST to this route can't
 // supply a Bearer header. Authorization happens inside onBeforeGenerateToken.
 export async function POST(req: NextRequest) {
+  const limited = enforceRateLimit(req, {
+    namespace: "vault-upload-token",
+    limit: 80,
+    windowMs: 10 * 60 * 1000,
+  });
+  if (limited) return limited;
+
   let body: HandleUploadBody;
   try {
     body = (await req.json()) as HandleUploadBody;
@@ -32,27 +43,36 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const requestUser = await getUserFromRequest(req);
     const result = await handleUpload({
       body,
       request: req,
       onBeforeGenerateToken: async (pathname, clientPayload) => {
-        let token: string | null = null;
+        if (!isAllowedClientPath(pathname)) {
+          console.warn("[vault:upload-token:bad_path]", { pathname });
+          throw new Error("Invalid upload path");
+        }
+        let tokenUserId: number | null = null;
         if (clientPayload) {
           try {
             const parsed = JSON.parse(clientPayload) as { token?: string };
-            token = parsed.token ?? null;
+            const token = parsed.token ?? null;
+            if (token) {
+              const claims = await verifyToken(token);
+              tokenUserId = claims?.userId ?? null;
+            }
           } catch {
-            // fall through — token stays null and request fails
+            // fall through — cookie auth may still authorize the request
           }
         }
-        if (!token) {
+        if (requestUser && tokenUserId && requestUser.id !== tokenUserId) {
+          console.warn("[vault:upload-token:user_mismatch]", { pathname });
+          throw new Error("Upload authentication mismatch");
+        }
+        const userId = requestUser?.id ?? tokenUserId;
+        if (!userId) {
           console.warn("[vault:upload-token:no_token]", { pathname });
           throw new Error("Authentication required for upload");
-        }
-        const claims = await verifyToken(token);
-        if (!claims) {
-          console.warn("[vault:upload-token:invalid_token]", { pathname });
-          throw new Error("Invalid or expired token");
         }
         return {
           allowedContentTypes: [
@@ -70,7 +90,7 @@ export async function POST(req: NextRequest) {
           // is the bug we're fixing here.
           maximumSizeInBytes: 50 * 1024 * 1024,
           addRandomSuffix: true,
-          tokenPayload: JSON.stringify({ userId: claims.userId }),
+          tokenPayload: JSON.stringify({ userId }),
         };
       },
       onUploadCompleted: async ({ blob, tokenPayload }) => {
@@ -79,7 +99,7 @@ export async function POST(req: NextRequest) {
         // calls after upload returns — keeping this a no-op so a webhook
         // failure can never roll the upload back.
         console.info("[vault:upload-token:webhook_completed]", {
-          url: blob.url,
+          pathname: blob.pathname,
           tokenPayload,
         });
       },

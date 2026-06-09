@@ -3,6 +3,7 @@ import { requireDashboardAccess } from "@/lib/access";
 import { extractDocumentText, persistDocumentExtraction } from "@/lib/documents/extract";
 import { classifyDocument, classToTag, tenderTitleTag } from "@/lib/documents/classify";
 import { sql } from "@/lib/db";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 45;
@@ -40,6 +41,14 @@ export async function POST(req: NextRequest) {
   try {
     const guard = await requireDashboardAccess(req);
     if (!guard.authorized) return guard.response!;
+
+    const limited = enforceRateLimit(req, {
+      namespace: "vault-extract",
+      limit: 30,
+      windowMs: 60 * 60 * 1000,
+      keyParts: [guard.user!.id],
+    });
+    if (limited) return limited;
 
     let url: string;
     let name: string;
@@ -184,7 +193,7 @@ export async function POST(req: NextRequest) {
       }
 
       return NextResponse.json({
-        url,
+        url: `/api/dashboard/vault/${vaultDocumentId}/download`,
         name,
         vaultDocumentId,
         purpose: purposeTag,

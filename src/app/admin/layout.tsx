@@ -32,14 +32,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
-    if (!token) {
-      router.replace("/login?next=/admin");
-      return;
-    }
+    const headers: HeadersInit = token ? { authorization: `Bearer ${token}` } : {};
 
     (async () => {
       const res = await fetch("/api/auth/me", {
-        headers: { authorization: `Bearer ${token}` },
+        headers,
       });
       if (!res.ok) {
         localStorage.removeItem("tp_token");
@@ -58,7 +55,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       // render and stays hidden on any failure.
       try {
         const fc = await fetch("/api/admin/network-companies/fresh-count", {
-          headers: { authorization: `Bearer ${token}` },
+          headers,
         });
         if (fc.ok) setFreshCount(Number((await fc.json()).count) || 0);
       } catch {
