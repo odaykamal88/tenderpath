@@ -214,7 +214,7 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
 
   if (loading) {
     return (
-      <section className="rounded-md border border-stone-200/70 bg-white p-5 text-[13px] text-stone-500" style={{ fontFamily: MONO }}>
+      <section className="rounded-md border border-rule/70 bg-white p-5 text-[13px] text-ink-3" style={{ fontFamily: MONO }}>
         Loading proposal package…
       </section>
     );
@@ -222,11 +222,11 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
 
   if (paymentStatus !== "paid") {
     return (
-      <section className="rounded-md border-l-2 border-stone-300 bg-stone-50/60 p-5">
-        <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+      <section className="rounded-md border-l-2 border-rule bg-paper-3/60 p-5">
+        <h2 className="text-[20px] font-medium text-ink" style={{ fontFamily: SERIF }}>
           Proposal package
         </h2>
-        <p className="mt-2 text-[13px] text-stone-600">
+        <p className="mt-2 text-[13px] text-ink-2">
           Your 80%-complete proposal package — technical proposal (.docx), cover letter (.docx), financial template (.xlsx), and compliance matrix (.pdf) — will be generated automatically as soon as payment is confirmed. No ops review.
         </p>
       </section>
@@ -242,10 +242,10 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
   if (!pkg || (isGenerating && pkg?.generation_status !== "failed")) {
     return (
       <section className="rounded-md border-l-2 border-amber-600 bg-amber-50/40 p-5">
-        <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+        <h2 className="text-[20px] font-medium text-ink" style={{ fontFamily: SERIF }}>
           Drafting your proposal…
         </h2>
-        <p className="mt-2 text-[13px] text-stone-700">
+        <p className="mt-2 text-[13px] text-ink-2">
           We&rsquo;re extracting the tender requirements and drafting your technical proposal, cover letter, compliance matrix, and pre-wired financial template. This usually takes 5–15 minutes. You don&rsquo;t need to wait — we&rsquo;ll email you when the ZIP bundle is ready.
         </p>
         {error && <p className="mt-2 text-[12px] text-red-700">Last error: {error}</p>}
@@ -256,7 +256,7 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
   if (pkg.generation_status === "failed" || !pkg.output) {
     return (
       <section className="rounded-md border-l-2 border-red-600 bg-red-50/40 p-5">
-        <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+        <h2 className="text-[20px] font-medium text-ink" style={{ fontFamily: SERIF }}>
           Generation hit a snag
         </h2>
         <p className="mt-2 text-[13px] text-red-800">
@@ -270,7 +270,7 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
           // OR the API explicitly returned a finite remaining counter (which
           // only happens once we add the per-day rate-limit gate).
           disabled={regenBusy || (data?.remaining_regenerations != null && data.remaining_regenerations <= 0)}
-          className="mt-3 rounded-sm bg-stone-900 px-3.5 py-2 text-[11.5px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="mt-3 rounded-sm bg-ink px-3.5 py-2 text-[11.5px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-ink transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ fontFamily: MONO }}
         >
           {regenBusy ? "Retrying…" : "Retry generation →"}
@@ -320,14 +320,14 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
 
     return (
       <section className={`rounded-md border-l-2 ${passes ? "border-emerald-700" : "border-red-700"} bg-white shadow-sm`}>
-        <div className="p-5 border-b border-stone-100">
+        <div className="p-5 border-b border-rule">
           <div className="flex items-baseline justify-between mb-3 flex-wrap gap-3">
-            <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+            <h2 className="text-[20px] font-medium text-ink" style={{ fontFamily: SERIF }}>
               Proposal package
             </h2>
             <Link
               href={`/dashboard/proposals/${workOrderId}`}
-              className="rounded-sm bg-stone-900 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors"
+              className="rounded-sm bg-ink px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-ink transition-colors"
               style={{ fontFamily: MONO }}
             >
               View full proposal →
@@ -350,16 +350,16 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
                 {triggeredCount} disqualifier{triggeredCount === 1 ? "" : "s"} triggered
               </span>
             )}
-            <span className="text-stone-300">·</span>
-            <span className="text-[16px] font-medium tabular-nums text-stone-900" style={{ fontFamily: SERIF }}>
+            <span className="text-mute">·</span>
+            <span className="text-[16px] font-medium tabular-nums text-ink" style={{ fontFamily: SERIF }}>
               {estimatedTotal.toFixed(0)}
-              <span className="text-[12px] text-stone-500" style={{ fontFamily: MONO }}>
+              <span className="text-[12px] text-ink-3" style={{ fontFamily: MONO }}>
                 {" "}
                 / {achievableTotal} · {pct}%
               </span>
             </span>
           </div>
-          <p className="text-[13px] leading-relaxed text-stone-600">
+          <p className="text-[13px] leading-relaxed text-ink-2">
             Compliance verdict, per-criterion rubric scoring, and applicant-action findings for every weakness. Full breakdown and draft body on the proposal page.
           </p>
           {/* Sprint 13. Surface the supplementary docs the engine considered so
@@ -380,9 +380,9 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
         </div>
 
         {severityCounts.length > 0 && (
-          <div className="border-t border-stone-100 p-5">
+          <div className="border-t border-rule p-5">
             <div
-              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400 mb-3"
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-mute mb-3"
               style={{ fontFamily: MONO }}
             >
               {scored.routedGaps.length} finding{scored.routedGaps.length === 1 ? "" : "s"} to address
@@ -411,15 +411,15 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
                 );
               })}
             </div>
-            <p className="mt-3 text-[11.5px] text-stone-500 leading-relaxed" style={{ fontFamily: MONO }}>
+            <p className="mt-3 text-[11.5px] text-ink-3 leading-relaxed" style={{ fontFamily: MONO }}>
               Address gaps in the draft + upload evidence on the proposal page, then re-run. Unlimited re-runs against this tender are included.
             </p>
           </div>
         )}
 
-        <div className="border-t border-stone-100 p-5 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div className="border-t border-rule p-5 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-0.5">
-            <p className="text-[11px] text-stone-500" style={{ fontFamily: MONO }}>
+            <p className="text-[11px] text-ink-3" style={{ fontFamily: MONO }}>
               {isUnlimited
                 ? `Generation ${pkg.generation_attempts ?? 1} · unlimited re-runs included`
                 : `Generation ${pkg.generation_attempts ?? 1} · ${remaining} regenerate${remaining === 1 ? "" : "s"} left`}
@@ -429,7 +429,7 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
                 otherwise it would be cap-shaming an unused account. */}
             {formatQuotaLine(data?.quota) && (
               <p
-                className="text-[10.5px] text-stone-400"
+                className="text-[10.5px] text-mute"
                 style={{ fontFamily: MONO }}
               >
                 {formatQuotaLine(data?.quota)}
@@ -441,7 +441,7 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
             type="button"
             onClick={handleRegenerate}
             disabled={regenBusy || (!isUnlimited && (remaining ?? 0) <= 0) || (data?.quota != null && data.quota.remaining <= 0)}
-            className="rounded-sm border border-stone-300 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded-sm border border-rule px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-2 hover:border-ink hover:text-ink transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ fontFamily: MONO }}
           >
             {regenBusy
@@ -469,15 +469,15 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
 
   return (
     <section className="rounded-md border-l-2 border-emerald-700 bg-white shadow-sm">
-      <div className="p-5 border-b border-stone-100">
+      <div className="p-5 border-b border-rule">
         <div className="flex items-baseline justify-between mb-4 flex-wrap gap-3">
-          <h2 className="text-[20px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+          <h2 className="text-[20px] font-medium text-ink" style={{ fontFamily: SERIF }}>
             Proposal package
           </h2>
           <div className="flex items-baseline gap-2">
             <Link
               href={`/dashboard/proposals/${workOrderId}`}
-              className="rounded-sm border border-stone-300 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors"
+              className="rounded-sm border border-rule px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-2 hover:border-ink hover:text-ink transition-colors"
               style={{ fontFamily: MONO }}
             >
               View full proposal →
@@ -487,7 +487,7 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
                 href={pkg.pdf_url}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-sm bg-stone-900 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors"
+                className="rounded-sm bg-ink px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-ink transition-colors"
                 style={{ fontFamily: MONO }}
               >
                 Download bundle (.zip) ↓
@@ -495,16 +495,16 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
             )}
           </div>
         </div>
-        <p className="text-[11px] uppercase tracking-[0.16em] text-stone-500" style={{ fontFamily: MONO }}>
+        <p className="text-[11px] uppercase tracking-[0.16em] text-ink-3" style={{ fontFamily: MONO }}>
           Compliance · {compliant} compliant · {partial} partial · {gapsCount} gap{gapsCount === 1 ? "" : "s"}
         </p>
-        <p className="mt-3 text-[14px] leading-relaxed text-stone-800" style={{ fontFamily: SERIF }}>
+        <p className="mt-3 text-[14px] leading-relaxed text-ink" style={{ fontFamily: SERIF }}>
           {out.executive_summary}
         </p>
       </div>
 
       {out.missing_information.length > 0 && (
-        <div className="border-t border-stone-100 bg-amber-50/40 p-5">
+        <div className="border-t border-rule bg-amber-50/40 p-5">
           <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700 mb-1.5" style={{ fontFamily: MONO }}>
             We need this from you to finish
           </div>
@@ -516,9 +516,9 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
         </div>
       )}
 
-      <div className="border-t border-stone-100 p-5 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+      <div className="border-t border-rule p-5 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-col gap-0.5">
-          <p className="text-[11px] text-stone-500" style={{ fontFamily: MONO }}>
+          <p className="text-[11px] text-ink-3" style={{ fontFamily: MONO }}>
             {isUnlimited
               ? `Generation ${pkg.generation_attempts ?? 1} · unlimited re-runs included`
               : `Generation ${pkg.generation_attempts ?? 1} · ${remaining} regenerate${remaining === 1 ? "" : "s"} left`}
@@ -527,7 +527,7 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
               scored panel renders, so the rate-limit headroom is visible on
               both old and new package shapes. */}
           {formatQuotaLine(data?.quota) && (
-            <p className="text-[10.5px] text-stone-400" style={{ fontFamily: MONO }}>
+            <p className="text-[10.5px] text-mute" style={{ fontFamily: MONO }}>
               {formatQuotaLine(data?.quota)}
             </p>
           )}
@@ -537,7 +537,7 @@ export default function ProposalPackagePanel({ workOrderId, paymentStatus }: Pro
           type="button"
           onClick={handleRegenerate}
           disabled={regenBusy || (!isUnlimited && (remaining ?? 0) <= 0) || (data?.quota != null && data.quota.remaining <= 0)}
-          className="rounded-sm border border-stone-300 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-700 hover:border-stone-700 hover:text-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded-sm border border-rule px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-2 hover:border-ink hover:text-ink transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ fontFamily: MONO }}
         >
           {regenBusy

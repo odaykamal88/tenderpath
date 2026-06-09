@@ -666,9 +666,9 @@ export default function ServiceIntakeForm({
   };
 
   const inputCls =
-    "mt-1.5 w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] text-stone-900 focus:border-stone-700 focus:outline-none";
+    "mt-1.5 w-full rounded-sm border border-rule bg-white px-3 py-2.5 text-[13px] text-ink focus:border-ink focus:outline-none";
 
-  const labelCls = "block text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500";
+  const labelCls = "block text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-3";
 
   return (
     <form onSubmit={submit} className="mt-5 space-y-4">
@@ -697,7 +697,7 @@ export default function ServiceIntakeForm({
               value={tenderUrl}
               onChange={(e) => setTenderUrl(e.target.value)}
               placeholder="Paste tender URL"
-              className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 text-[13px] text-stone-900 focus:border-stone-700 focus:outline-none"
+              className="w-full rounded-sm border border-rule bg-white px-3 py-2.5 text-[13px] text-ink focus:border-ink focus:outline-none"
               style={{ fontFamily: MONO }}
             />
             {tenderFile ? (
@@ -720,9 +720,9 @@ export default function ServiceIntakeForm({
                 </button>
               </div>
             ) : (
-              <label className="flex h-full cursor-pointer items-center gap-2.5 rounded-sm border border-dashed border-stone-300 px-3 py-2.5 text-[12px] text-stone-500 hover:border-stone-700 hover:text-stone-700 transition-colors">
+              <label className="flex h-full cursor-pointer items-center gap-2.5 rounded-sm border border-dashed border-rule px-3 py-2.5 text-[12px] text-ink-3 hover:border-ink hover:text-ink-2 transition-colors">
                 {uploadingTender ? (
-                  <svg className="h-4 w-4 shrink-0 animate-spin text-stone-500" viewBox="0 0 24 24" fill="none">
+                  <svg className="h-4 w-4 shrink-0 animate-spin text-ink-3" viewBox="0 0 24 24" fill="none">
                     <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
                     <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
                   </svg>
@@ -736,7 +736,7 @@ export default function ServiceIntakeForm({
                     ? `Uploading… ${tenderProgress != null ? `${tenderProgress}%` : ""}`
                     : uploadingTender === "extracting"
                     ? "Reading document…"
-                    : <>or <span className="font-semibold text-stone-700">upload the tender file</span></>}
+                    : <>or <span className="font-semibold text-ink-2">upload the tender file</span></>}
                 </span>
                 <input
                   type="file"
@@ -802,9 +802,9 @@ export default function ServiceIntakeForm({
                 </button>
               </div>
             ) : (
-              <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-stone-300 px-3.5 py-3 text-[12px] text-stone-500 hover:border-stone-700 hover:text-stone-700 transition-colors">
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-rule px-3.5 py-3 text-[12px] text-ink-3 hover:border-ink hover:text-ink-2 transition-colors">
                 {uploading ? (
-                  <svg className="h-4 w-4 shrink-0 mt-0.5 animate-spin text-stone-500" viewBox="0 0 24 24" fill="none">
+                  <svg className="h-4 w-4 shrink-0 mt-0.5 animate-spin text-ink-3" viewBox="0 0 24 24" fill="none">
                     <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
                     <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
                   </svg>
@@ -818,7 +818,7 @@ export default function ServiceIntakeForm({
                     ? `Uploading file… ${generalProgress != null ? `${generalProgress}%` : ""}`
                     : uploading === "extracting"
                     ? "Reading document…"
-                    : <><span className="font-semibold text-stone-700">Choose file</span> — {uploadHint[service]}</>}
+                    : <><span className="font-semibold text-ink-2">Choose file</span> — {uploadHint[service]}</>}
                 </span>
                 <input
                   type="file"
@@ -868,9 +868,9 @@ export default function ServiceIntakeForm({
                 </button>
               </div>
             ) : (
-              <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-stone-300 px-3.5 py-3 text-[12px] text-stone-500 hover:border-stone-700 hover:text-stone-700 transition-colors">
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-rule px-3.5 py-3 text-[12px] text-ink-3 hover:border-ink hover:text-ink-2 transition-colors">
                 {uploadingFinancial ? (
-                  <svg className="h-4 w-4 shrink-0 mt-0.5 animate-spin text-stone-500" viewBox="0 0 24 24" fill="none">
+                  <svg className="h-4 w-4 shrink-0 mt-0.5 animate-spin text-ink-3" viewBox="0 0 24 24" fill="none">
                     <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
                     <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
                   </svg>
@@ -886,7 +886,7 @@ export default function ServiceIntakeForm({
                     ? "Reading document…"
                     : (
                       <>
-                        <span className="font-semibold text-stone-700">Choose file</span> —{" "}
+                        <span className="font-semibold text-ink-2">Choose file</span> —{" "}
                         {service === "bid-no-bid"
                           ? "Capability statements, certifications, partner letters, financials, or anything else the analysis should weigh"
                           : "Audited financials, bank reference, or balance sheet (optional, sharpens the financial section)"}
@@ -926,7 +926,7 @@ export default function ServiceIntakeForm({
                   type="button"
                   onClick={addSupportingUrl}
                   disabled={!supportingUrlInput.trim()}
-                  className="shrink-0 rounded-sm border border-stone-300 bg-white px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-700 hover:border-stone-700 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                  className="shrink-0 rounded-sm border border-rule bg-white px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-2 hover:border-ink hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
                   style={{ fontFamily: MONO }}
                 >
                   Add
@@ -1019,9 +1019,9 @@ export default function ServiceIntakeForm({
                   </button>
                 </div>
               ) : (
-                <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-amber-300 bg-white px-3.5 py-3 text-[12px] text-stone-500 hover:border-amber-700 hover:text-stone-700 transition-colors">
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-amber-300 bg-white px-3.5 py-3 text-[12px] text-ink-3 hover:border-amber-700 hover:text-ink-2 transition-colors">
                   {uploadingAmendment ? (
-                    <svg className="h-4 w-4 shrink-0 mt-0.5 animate-spin text-stone-500" viewBox="0 0 24 24" fill="none">
+                    <svg className="h-4 w-4 shrink-0 mt-0.5 animate-spin text-ink-3" viewBox="0 0 24 24" fill="none">
                       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
                       <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
                     </svg>
@@ -1037,7 +1037,7 @@ export default function ServiceIntakeForm({
                       ? "Reading document…"
                       : (
                         <>
-                          <span className="font-semibold text-stone-700">Choose file</span> —
+                          <span className="font-semibold text-ink-2">Choose file</span> —
                           {" "}Corrigendum, addendum, or amendment PDF (the engine will treat it as overriding the original TOR).
                         </>
                       )}
@@ -1084,9 +1084,9 @@ export default function ServiceIntakeForm({
                   </button>
                 </div>
               ) : (
-                <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-amber-300 bg-white px-3.5 py-3 text-[12px] text-stone-500 hover:border-amber-700 hover:text-stone-700 transition-colors">
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-sm border border-dashed border-amber-300 bg-white px-3.5 py-3 text-[12px] text-ink-3 hover:border-amber-700 hover:text-ink-2 transition-colors">
                   {uploadingQa ? (
-                    <svg className="h-4 w-4 shrink-0 mt-0.5 animate-spin text-stone-500" viewBox="0 0 24 24" fill="none">
+                    <svg className="h-4 w-4 shrink-0 mt-0.5 animate-spin text-ink-3" viewBox="0 0 24 24" fill="none">
                       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
                       <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
                     </svg>
@@ -1102,7 +1102,7 @@ export default function ServiceIntakeForm({
                       ? "Reading document…"
                       : (
                         <>
-                          <span className="font-semibold text-stone-700">Choose file</span> —
+                          <span className="font-semibold text-ink-2">Choose file</span> —
                           {" "}Published Q&A or clarifications round (the engine will treat the answers as binding).
                         </>
                       )}
@@ -1140,7 +1140,7 @@ export default function ServiceIntakeForm({
                   type="button"
                   onClick={handleFetchCriteria}
                   disabled={fetchingCriteria || !tenderUrl.trim()}
-                  className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-700 hover:text-stone-900 disabled:text-stone-300 disabled:cursor-not-allowed border-b border-stone-300 hover:border-stone-700 disabled:border-stone-200 transition-colors"
+                  className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-2 hover:text-ink disabled:text-mute disabled:cursor-not-allowed border-b border-rule hover:border-ink disabled:border-rule transition-colors"
                   style={{ fontFamily: MONO }}
                   title={!tenderUrl.trim() ? "Paste a tender URL above first" : "Fetch eligibility + evaluation criteria from the URL"}
                 >
@@ -1197,7 +1197,7 @@ export default function ServiceIntakeForm({
                   {discoveredAttachments.map((a) => (
                     <li
                       key={a.href}
-                      className="flex items-center gap-2 text-[11.5px] text-stone-800"
+                      className="flex items-center gap-2 text-[11.5px] text-ink"
                       style={{ fontFamily: MONO }}
                     >
                       <span className="shrink-0 rounded-sm border border-blue-200 bg-white px-1.5 py-0.5 text-[9px] font-semibold uppercase text-blue-700">
@@ -1233,7 +1233,7 @@ export default function ServiceIntakeForm({
       <button
         type="submit"
         disabled={busy}
-        className="w-full rounded-sm bg-stone-900 px-4 py-3 text-[13px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full rounded-sm bg-ink px-4 py-3 text-[13px] font-semibold text-white hover:bg-ink transition-colors disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? "Saving intake…" : `${label} →`}
       </button>

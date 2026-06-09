@@ -42,7 +42,7 @@ const LABEL: Record<string, string> = {
 function toneClasses(tone: Tone): string {
   if (tone === "pos") return "border-emerald-300 text-emerald-800 hover:bg-emerald-50";
   if (tone === "neg") return "border-red-300 text-red-800 hover:bg-red-50";
-  return "border-stone-300 text-stone-700 hover:bg-stone-50";
+  return "border-rule text-ink-2 hover:bg-paper-3";
 }
 
 function authHeaders(): HeadersInit {
@@ -121,13 +121,13 @@ export default function OutcomeCapture({ workOrderId }: { workOrderId: number })
   if (!data || !data.eligible) return null;
 
   return (
-    <section className="mt-4 rounded-md border border-stone-200/70 bg-white p-5">
+    <section className="mt-4 rounded-md border border-rule/70 bg-white p-5">
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <h3 className="text-[16px] font-medium text-stone-900" style={{ fontFamily: SERIF }}>
+        <h3 className="text-[16px] font-medium text-ink" style={{ fontFamily: SERIF }}>
           How did this bid go?
         </h3>
         {data.predicted && (
-          <span className="text-[11px] text-stone-400 tabular-nums" style={{ fontFamily: MONO }}>
+          <span className="text-[11px] text-mute tabular-nums" style={{ fontFamily: MONO }}>
             we rated this draft {data.predicted.band} · {data.predicted.score.toFixed(0)}/{data.predicted.max}
           </span>
         )}
@@ -135,8 +135,8 @@ export default function OutcomeCapture({ workOrderId }: { workOrderId: number })
 
       {phase === "done" && selected ? (
         <div className="mt-3">
-          <p className="text-[13px] text-stone-700 leading-relaxed">
-            Recorded: <span className="font-semibold text-stone-900">{LABEL[selected]}</span>. Thanks — every result you
+          <p className="text-[13px] text-ink-2 leading-relaxed">
+            Recorded: <span className="font-semibold text-ink">{LABEL[selected]}</span>. Thanks — every result you
             report sharpens the score for your next tender.
           </p>
           <button
@@ -145,7 +145,7 @@ export default function OutcomeCapture({ workOrderId }: { workOrderId: number })
               setPhase("pick");
               setError(null);
             }}
-            className="mt-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-500 hover:text-stone-900 transition-colors"
+            className="mt-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-3 hover:text-ink transition-colors"
             style={{ fontFamily: MONO }}
           >
             Change →
@@ -153,9 +153,9 @@ export default function OutcomeCapture({ workOrderId }: { workOrderId: number })
         </div>
       ) : phase === "detail" && selected ? (
         <div className="mt-3">
-          <p className="text-[12.5px] text-stone-600 leading-relaxed">
+          <p className="text-[12.5px] text-ink-2 leading-relaxed">
             Sorry to hear it. What do you think went wrong?{" "}
-            <span className="text-stone-400">(optional — we use it to sharpen your next draft)</span>
+            <span className="text-mute">(optional — we use it to sharpen your next draft)</span>
           </p>
           <textarea
             value={detail}
@@ -163,14 +163,14 @@ export default function OutcomeCapture({ workOrderId }: { workOrderId: number })
             rows={3}
             maxLength={4000}
             placeholder="e.g. price was too high, missed a mandatory form, weak past-performance section…"
-            className="mt-2 w-full rounded-sm border border-stone-300 bg-white px-3 py-2 text-[13px] text-stone-800 focus:border-stone-700 focus:outline-none"
+            className="mt-2 w-full rounded-sm border border-rule bg-white px-3 py-2 text-[13px] text-ink focus:border-ink focus:outline-none"
           />
           <div className="mt-2 flex items-center gap-2 flex-wrap">
             <button
               type="button"
               disabled={busy}
               onClick={() => void submit(selected, detail.trim() || null)}
-              className="rounded-sm bg-stone-900 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-stone-800 transition-colors disabled:opacity-50"
+              className="rounded-sm bg-ink px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-white hover:bg-ink transition-colors disabled:opacity-50"
               style={{ fontFamily: MONO }}
             >
               {busy ? "Recording…" : "Submit"}
@@ -179,7 +179,7 @@ export default function OutcomeCapture({ workOrderId }: { workOrderId: number })
               type="button"
               disabled={busy}
               onClick={() => void submit(selected, null)}
-              className="text-[11px] font-semibold uppercase tracking-[0.15em] text-stone-500 hover:text-stone-900 transition-colors disabled:opacity-50"
+              className="text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-3 hover:text-ink transition-colors disabled:opacity-50"
               style={{ fontFamily: MONO }}
             >
               Skip note
