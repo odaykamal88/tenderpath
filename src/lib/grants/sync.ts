@@ -150,7 +150,22 @@ async function loadEuGrants(options: Required<Pick<GrantRefreshOptions, "euLimit
   let scanned = 0;
 
   for (let page = 1; page <= options.euPages; page++) {
-    const batch = await fetchEuFundingGrants(options.euPageSize, page);
+    let batch: Awaited<ReturnType<typeof fetchEuFundingGrants>>;
+    try {
+      batch = await fetchEuFundingGrants(options.euPageSize, page);
+    } catch (err) {
+      // A single failed page (SEDIA throttling, a 5xx, a non-JSON body, or a timeout —
+      // all more likely from a datacenter IP firing rapid sequential requests) must not
+      // discard the whole EU pull. Keep the pages already collected and stop paging —
+      // the same defensive posture as the targeted passes below. Returning partial beats
+      // returning nothing and letting the source go stale (AGENTS.md: degrade safely).
+      console.warn("[tp:grants:eu:page_failed]", {
+        page,
+        keptSoFar: byRef.size,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      break;
+    }
     scanned += batch.totalResults;
     for (const grant of batch.grants) {
       byRef.set(grant.reference_id, grant);
@@ -158,12 +173,22 @@ async function loadEuGrants(options: Required<Pick<GrantRefreshOptions, "euLimit
     if (page * options.euPageSize >= batch.totalResults) break;
   }
 
-  for (const text of EU_TARGETED_TEXT) {
-    try {
-      const batch = await fetchEuFundingGrants(40, 1, text);
-      for (const grant of batch.grants) byRef.set(grant.reference_id, grant);
-    } catch (err) {
-      console.warn("[tp:grants:eu:targeted_pass_failed]", { text, error: err instanceof Error ? err.message : String(err) });
+  // The targeted passes only add value on top of a working main pull. If the main
+  // pull returned nothing, SEDIA is unreachable from here (it blackholes Vercel's
+  // datacenter IP, so the request hangs) and these passes will fail identically —
+  // skip them instead of burning one timeout per pass. That dead wait (4 × the
+  // request timeout) is what pushed the whole grant cron past its 300s limit and
+  // killed the other five sources' writes too.
+  if (byRef.size === 0) {
+    console.warn("[tp:grants:eu:skipped_targeted_passes]", { reason: "main pull empty (SEDIA unreachable) — not spending timeouts on passes that will fail the same way" });
+  } else {
+    for (const text of EU_TARGETED_TEXT) {
+      try {
+        const batch = await fetchEuFundingGrants(40, 1, text);
+        for (const grant of batch.grants) byRef.set(grant.reference_id, grant);
+      } catch (err) {
+        console.warn("[tp:grants:eu:targeted_pass_failed]", { text, error: err instanceof Error ? err.message : String(err) });
+      }
     }
   }
 
@@ -204,6 +229,12 @@ async function grantQualitySummary(): Promise<GrantRefreshResult["quality"]> {
 
 export async function refreshGrantInventory(options: GrantRefreshOptions = {}): Promise<GrantRefreshResult> {
   const startedAt = Date.now();
+  // Shared wall-clock budget. The route's maxDuration is 300s, so the slow enrichment
+  // sources (IFAD browser worker, Grants.gov detail) must stop fetching by this point and
+  // return partial results — leaving ~70s for the bounded upserts + quality summary —
+  // instead of running to the lambda kill and 504-ing every source's writes. The fast
+  // sources (EU, UNDP, UN Women, MENA) finish well before this and ignore it.
+  const fetchDeadlineAt = startedAt + 230_000;
   const dryRun = options.dryRun ?? false;
   const euLimit = Math.min(250, Math.max(1, options.euLimit ?? 200));
   const euPages = Math.min(5, Math.max(1, options.euPages ?? 5));
@@ -228,11 +259,11 @@ export async function refreshGrantInventory(options: GrantRefreshOptions = {}): 
       return { grants: result.grants, scanned: result.totalScanned };
     }),
     importGrantSource("IFAD", dryRun, async () => {
-      const result = await fetchIfadGrants(ifadLimit);
+      const result = await fetchIfadGrants(ifadLimit, { deadlineAt: fetchDeadlineAt });
       return { grants: result.grants, scanned: result.totalScanned };
     }),
     importGrantSource("Grants.gov", dryRun, async () => {
-      const result = await fetchGrantsGovGrants(grantsGovLimit);
+      const result = await fetchGrantsGovGrants(grantsGovLimit, { deadlineAt: fetchDeadlineAt });
       return { grants: result.grants, scanned: result.totalScanned };
     }),
     importGrantSource("MENA Funders", dryRun, async () => {

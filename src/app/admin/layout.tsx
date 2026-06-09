@@ -16,12 +16,11 @@ const NAV = [
   { href: "/admin",              label: "Overview",      hint: "01" },
   { href: "/admin/assessments",  label: "Assessments",   hint: "02" },
   { href: "/admin/work-orders",  label: "Work Orders",   hint: "03" },
-  { href: "/admin/bid-analysis", label: "Bid Analysis",  hint: "04" },
-  { href: "/admin/matching",     label: "Matching",      hint: "05" },
-  { href: "/admin/network",      label: "Network",       hint: "06" },
-  { href: "/admin/feedback",     label: "Feedback",      hint: "07" },
-  { href: "/admin/proposal-health", label: "Health",     hint: "08" },
-  { href: "/admin/grant-health", label: "Grant Health",  hint: "09" },
+  { href: "/admin/matching",     label: "Matching",      hint: "04" },
+  { href: "/admin/network",      label: "Network",       hint: "05" },
+  { href: "/admin/feedback",     label: "Feedback",      hint: "06" },
+  { href: "/admin/proposal-health", label: "Health",     hint: "07" },
+  { href: "/admin/grant-health", label: "Grant Health",  hint: "08" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

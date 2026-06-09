@@ -15,9 +15,9 @@ import { matchActionButtons, parseMatchAction, applyMatchAction } from "./action
  * adapter for the originating channel, runs the conversation state machine,
  * and replies via `adapter.send`. No provider-specific code lives here.
  *
- * When the chat is linked to a user account, the bot greets by name and scopes
- * lookups to that account. Unlinked chats can ask general questions or request
- * support, but never receive assessment or match data from an email-only lookup.
+ * When the chat is linked to a user account, the bot greets by name and skips
+ * the email prompts (lookups are scoped to the linked user). Unlinked chats
+ * fall back to the email-keyed flow.
  */
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.tenderpath.me";
@@ -59,26 +59,6 @@ function welcomeText(user: LinkedUser | null): string {
 
 async function sendMainMenu(adapter: ChannelAdapter, chatId: string, user: LinkedUser | null): Promise<void> {
   await adapter.send(chatId, { text: welcomeText(user), buttons: MAIN_MENU });
-}
-
-async function sendLinkedAccountRequired(
-  adapter: ChannelAdapter,
-  event: InboundEvent,
-  intent: "assessment" | "matches",
-): Promise<void> {
-  console.warn("[bot:account_link_required]", {
-    channel: event.channel,
-    chatId: event.chatId,
-    intent,
-  });
-  const label = intent === "assessment" ? "assessment" : "matches";
-  await clearSession(event.channel, event.chatId);
-  return adapter.send(event.chatId, {
-    text:
-      `For security, I can't show your ${label} from an email address in chat.\n\n` +
-      `Sign in and connect the assistant from <b>Dashboard → Settings</b>, or open your dashboard directly: <a href="${APP_URL}/dashboard">${APP_URL}/dashboard</a>`,
-    buttons: [[{ label: "Open dashboard", url: `${APP_URL}/dashboard` }, { label: "💬 Talk to Team", action: "menu_escalate" }], [{ label: "⌂ Menu", action: "back_menu" }]],
-  });
 }
 
 async function handleCallbackPayload(event: InboundEvent, adapter: ChannelAdapter, user: LinkedUser | null): Promise<void> {
@@ -169,12 +149,14 @@ async function handleCallbackPayload(event: InboundEvent, adapter: ChannelAdapte
   // account that owns this chat.
   if (data === "menu_assessment") {
     if (user) return handleAssessmentResult(adapter, chatId, user.email);
-    return sendLinkedAccountRequired(adapter, event, "assessment");
+    await setSession(event.channel, chatId, { state: "awaiting_email", intent: "assessment" });
+    return adapter.send(chatId, { text: "Which email did you use for your assessment?" });
   }
 
   if (data === "menu_matches") {
     if (user) return handleLinkedMatches(adapter, chatId, user);
-    return sendLinkedAccountRequired(adapter, event, "matches");
+    await setSession(event.channel, chatId, { state: "awaiting_email", intent: "matches" });
+    return adapter.send(chatId, { text: "Which email is your account under?" });
   }
 
   if (data === "menu_escalate") {
@@ -347,8 +329,8 @@ async function handleTextMessage(event: InboundEvent, adapter: ChannelAdapter, u
       return adapter.send(chatId, { text: "That doesn't look quite right — want to try again?" });
     }
     await clearSession(event.channel, chatId);
-    if (session.intent === "assessment") return sendLinkedAccountRequired(adapter, event, "assessment");
-    if (session.intent === "matches") return sendLinkedAccountRequired(adapter, event, "matches");
+    if (session.intent === "assessment") return handleAssessmentResult(adapter, chatId, email);
+    if (session.intent === "matches") return handleMatchesResult(adapter, chatId, email);
     if (session.intent === "escalate") return handleEscalation(adapter, event, email);
   }
 

@@ -158,6 +158,13 @@ const SLUG_KEYWORDS: Record<SectorSlug, string[]> = {
   agriculture: [
     "agricultur", "farm", "livestock", "crop", "irrigation", "fisher",
     "aquaculture", "food security", "rural develop",
+    // Agri-inputs & commodity supply. NULL-sector "Procurement of Fertilizers"
+    // / "Fish Feed" tenders scored 0 and never surfaced for agri-commodity
+    // traders (Fortuna DMCC walkthrough, 2026-06). "feed"/"seed" stay as
+    // specific phrases — bare tokens substring-hit "feedback"/"seed funding".
+    "fertiliz", "agrochemical", "pesticide", "herbicide", "seeds", "seedling",
+    "oilseed", "fodder", "feedstock", "animal feed", "fish feed", "poultry feed",
+    "livestock feed", "agro-process", "agribusiness", "agro-industr",
   ],
   water_sanitation: [
     "water", "sanitation", "wash ", "hygiene", "sewer", "latrine",

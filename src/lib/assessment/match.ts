@@ -1021,7 +1021,14 @@ export async function matchTenders(
       "mechanical spare",
     ],
     environment: ["environment", "climate", "biodiversity", "pollution", "waste management", "cleaning service", "janitorial", "sanitation service", "recycling"],
-    agriculture: ["agriculture", "agricultural", "farming", "livestock", "crop", "irrigation"],
+    agriculture: [
+      "agriculture", "agricultural", "farming", "livestock", "crop", "irrigation",
+      // Agri-inputs & commodity supply — fertilizer/feed/seed tenders (often
+      // NULL-sector) must enter the agriculture candidate pool (Fortuna DMCC).
+      "fertiliz", "agrochemical", "pesticide", "seeds", "seedling", "oilseed",
+      "fodder", "animal feed", "fish feed", "poultry feed", "livestock feed",
+      "agro-process", "agribusiness",
+    ],
     water_sanitation: [
       "water", "sanitation", "wash", "hygiene", "sewage", "latrine",
       "borehole", "boreholes", "wastewater", "water network",
@@ -1172,7 +1179,13 @@ export async function matchTenders(
     ...(analysis.services ?? []),
     ...(analysis.capabilities ?? []),
     ...(analysis.strengths ?? []),
-    analysis.summary,
+    // NB: analysis.summary is deliberately excluded. The narrative summary
+    // carries readiness caveats and negations ("no documented food safety
+    // certifications") whose bare substrings trip niche-domain gates
+    // (food_safety / M&E / health-systems) and silently zero out a profile's
+    // matches. Gate on hard structured evidence only — not narrative prose.
+    // (Discovered on Fortuna DMCC, an agri-commodity trader gated as a
+    // food-safety lab via a negated phrase, 2026-06.)
   ].filter(Boolean).join(" ");
   const profileDomains = detectMatchDomains(profileDomainText);
   const profileHasNicheDomainGate = NICHE_DOMAIN_GATES.some((domain) => profileDomains.has(domain));

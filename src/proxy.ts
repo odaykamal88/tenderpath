@@ -16,6 +16,12 @@ const PUBLIC_PATHS = new Set([
   "/api/cron/weekly-digest",
   "/api/cron/daily-digest",
   "/api/cron/bot-nudges",
+  // Vercel cron requests arrive as plain HTTP GETs with Bearer CRON_SECRET
+  // (not a JWT), so they must be allowlisted here or the proxy 401s them
+  // before the handler runs. The routes self-authorize via CRON_SECRET, same
+  // as the crons above. Both are registered in vercel.json.
+  "/api/cron/trial-reminders",
+  "/api/cron/network-match",
   "/api/assessment/public",
   "/api/assessment/preview",
   // Live "opportunity signal" counts shown in the public assessment wizard
@@ -28,14 +34,17 @@ const PUBLIC_PATHS = new Set([
   "/api/report",
   "/api/pay/checkout",
   "/api/pay/readiness",
+  "/api/pay/verify-usdt",
+  "/api/pay/wire-proof",
   "/api/telegram/webhook",
   // WhatsApp Business Cloud API webhook — Meta posts inbound messages here and
   // hits GET for the verification handshake; neither can carry a Bearer header.
   // The route verifies the X-Hub-Signature-256 HMAC itself.
   "/api/whatsapp/webhook",
-  // Vault upload token endpoint — called by @vercel/blob/client's `upload()`.
-  // The route authorizes same-origin tp_session cookies itself and accepts a
-  // legacy clientPayload JWT only as fallback, so the proxy gate is bypassed.
+  // Vault upload token endpoint — called by @vercel/blob/client's `upload()`
+  // on the browser, which cannot attach a Bearer header. The route itself
+  // verifies the tp_session JWT via clientPayload inside
+  // onBeforeGenerateToken, so the proxy gate is intentionally bypassed.
   // Also receives the post-upload webhook from Vercel Blob (signature
   // verified by handleUpload()).
   "/api/dashboard/vault/upload-token",
@@ -107,33 +116,26 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // API routes: authenticate via Authorization header or the httpOnly session
-  // cookie. Prefer trying every available token so stale localStorage does not
-  // break a valid cookie-backed session.
+  // API routes: authenticate via Authorization header
   const authHeader = request.headers.get("authorization");
-  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-  const cookieToken = request.cookies.get("tp_session")?.value?.trim() ?? "";
-  const tokens = [bearerToken, cookieToken].filter(Boolean);
-  if (tokens.length === 0) {
+  if (!authHeader?.startsWith("Bearer ")) {
     return NextResponse.json(
       { error: "Authentication required", code: "AUTH_REQUIRED" },
       { status: 401 }
     );
   }
 
-  for (const token of tokens) {
-    try {
-      await jwtVerify(token, new TextEncoder().encode(secret));
-      return NextResponse.next();
-    } catch {
-      // Try the next token candidate.
-    }
-  }
+  const token = authHeader.slice(7);
 
-  return NextResponse.json(
-    { error: "Invalid or expired token", code: "AUTH_INVALID" },
-    { status: 401 }
-  );
+  try {
+    await jwtVerify(token, new TextEncoder().encode(secret));
+    return NextResponse.next();
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid or expired token", code: "AUTH_INVALID" },
+      { status: 401 }
+    );
+  }
 }
 
 export const config = {

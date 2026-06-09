@@ -61,6 +61,7 @@ export async function GET(request: Request) {
         FROM network_company_matches m
         JOIN tenders t ON t.id = m.tender_id
         WHERE t.status = 'open' AND COALESCE(t.has_broken_link, false) = false
+          AND t.deadline >= CURRENT_DATE
         GROUP BY m.network_company_id
       ) mc ON mc.network_company_id = c.id
       ORDER BY c.is_active DESC, COALESCE(mc.fresh, 0) DESC, c.created_at DESC
@@ -71,12 +72,14 @@ export async function GET(request: Request) {
         c.id AS company_id, c.name AS company_name, c.contact_name, c.contact_email, c.contact_linkedin,
         t.id AS tender_id, t.title AS tender_title, t.agency AS tender_agency,
         t.country AS tender_country, t.sector AS tender_sector, t.deadline AS tender_deadline,
-        t.estimated_value AS tender_value, t.source_url AS tender_source_url, t.reference_id AS tender_reference
+        t.estimated_value AS tender_value, t.source_url AS tender_source_url, t.reference_id AS tender_reference,
+        t.opportunity_type AS tender_type
       FROM network_company_matches m
       JOIN network_companies c ON c.id = m.network_company_id
       JOIN tenders t ON t.id = m.tender_id
       WHERE m.status = 'new' AND c.is_active = TRUE
         AND t.status = 'open' AND COALESCE(t.has_broken_link, false) = false
+        AND t.deadline >= CURRENT_DATE
         AND (
           ${minDays} <= 0
           OR (t.deadline IS NOT NULL AND t.deadline >= CURRENT_DATE + (${minDays})::int)

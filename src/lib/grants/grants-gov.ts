@@ -209,15 +209,26 @@ async function collectHits(rows: number): Promise<SearchHit[]> {
   return [...byId.values()];
 }
 
-export async function toGrant(hit: SearchHit): Promise<GrantsGovGrant | null> {
+// Wall-clock budget: the grant cron passes a shared fetch deadline so per-row detail
+// enrichment stops before the 300s lambda limit instead of 504-ing it. fetchGrantsGovDetail
+// has no timeout of its own, so when we do call it we also bound it to the remaining budget.
+const overBudget = (deadlineAt?: number): boolean => deadlineAt !== undefined && Date.now() >= deadlineAt;
+const detailTimeoutMs = (deadlineAt?: number): number =>
+  deadlineAt === undefined ? 10000 : Math.max(1000, Math.min(10000, deadlineAt - Date.now()));
+
+export async function toGrant(hit: SearchHit, opts: { deadlineAt?: number } = {}): Promise<GrantsGovGrant | null> {
   if (!hit.id || !hit.title) return null;
   const listDeadline = listDate(hit.closeDate);
 
+  // Past the shared budget, skip the detail call and fall back to list data (close date
+  // + title/agency geo). The row still imports; it just isn't enriched this run.
   let patch: ReturnType<typeof grantsGovDetailPatch> | null = null;
-  try {
-    patch = grantsGovDetailPatch(await fetchGrantsGovDetail(hit.id));
-  } catch (err) {
-    console.warn("[tp:grants:grants_gov:detail_failed]", { oppId: hit.id, error: err instanceof Error ? err.message : String(err) });
+  if (!overBudget(opts.deadlineAt)) {
+    try {
+      patch = grantsGovDetailPatch(await fetchGrantsGovDetail(hit.id, AbortSignal.timeout(detailTimeoutMs(opts.deadlineAt))));
+    } catch (err) {
+      console.warn("[tp:grants:grants_gov:detail_failed]", { oppId: hit.id, error: err instanceof Error ? err.message : String(err) });
+    }
   }
 
   const deadline = patch?.deadline ?? listDeadline;
@@ -256,14 +267,23 @@ async function mapPool<T, R>(items: T[], concurrency: number, fn: (item: T) => P
   return out;
 }
 
-export async function fetchGrantsGovGrants(limit = 100): Promise<{ grants: GrantsGovGrant[]; totalScanned: number }> {
+export async function fetchGrantsGovGrants(
+  limit = 100,
+  opts: { deadlineAt?: number } = {},
+): Promise<{ grants: GrantsGovGrant[]; totalScanned: number; detailSkipped: number }> {
   const hits = await collectHits(300);
   // Hard geo gate up front on the cheap title+agency signal, before any detail call.
   const foreign = hits.filter((h) => internationallyRelevant(resolveGeo(`${h.title ?? ""} ${h.agency ?? ""}`, "")));
   const ranked = foreign.sort((a, b) => openDateValue(b) - openDateValue(a)).slice(0, limit);
-  const mapped = await mapPool(ranked, 6, toGrant);
+  let detailSkipped = 0;
+  const mapped = await mapPool(ranked, 6, (hit) => {
+    if (overBudget(opts.deadlineAt)) detailSkipped++;
+    return toGrant(hit, opts);
+  });
+  if (detailSkipped) console.warn("[tp:grants:grants_gov:budget_truncated]", { detailSkipped, ranked: ranked.length });
   return {
     grants: mapped.filter((g): g is GrantsGovGrant => !!g),
     totalScanned: hits.length,
+    detailSkipped,
   };
 }
