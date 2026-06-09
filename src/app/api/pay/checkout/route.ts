@@ -9,6 +9,7 @@ import { resolveTierSlug, isComingSoonTier } from "@/lib/pricing";
 import { TRIAL_DAYS } from "@/lib/access";
 import { PROPOSAL_PLAN, ROSTER_PLAN } from "@/lib/proposal-package/types";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { consumeFreeSubmissionForProposal } from "@/lib/free-submission";
 
 const SLUG_TO_PRICE_ENV: Record<string, string> = {
   "bid-no-bid":              "STRIPE_BIDNOBID_PRICE_ID",
@@ -191,6 +192,30 @@ export async function POST(request: Request) {
         },
         { status: 409 },
       );
+    }
+
+    // First-proposal-free credit: a trial user's first proposal submission is
+    // fulfilled without payment (the promise the landing pricing card makes).
+    // Applies only to proposal-draft with a work order owned by the signed-in
+    // user; the claim is atomic (no double-spend) and falls through to paid
+    // checkout when the credit isn't available. Runs AFTER the deadline + gate
+    // checks so a free order is held to the same fulfillment bar as a paid one.
+    if (plan === "proposal-draft" && parsedWorkOrderId && checkoutUser) {
+      const free = await consumeFreeSubmissionForProposal({
+        user: checkoutUser,
+        workOrderId: parsedWorkOrderId,
+        pipelineItemId: pipelineItemId || null,
+        tenderTitle: tender || null,
+        agency: agency || null,
+      });
+      if (free.applied && free.redirectUrl) {
+        await track(
+          "free_submission_redeemed",
+          { plan, work_order_id: workOrderId || null, pipeline_item_id: pipelineItemId || null },
+          { userId: checkoutUser.id },
+        );
+        return NextResponse.json({ free: true, url: `${origin}${free.redirectUrl}` });
+      }
     }
 
     const returnParams = new URLSearchParams({ plan });

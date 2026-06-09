@@ -107,7 +107,7 @@ function ReadinessCard({ readiness }: { readiness: FulfillmentReadiness | null }
   );
 }
 
-function CardTab({ plan, context, disabledReason }: { plan: string | null; context: PayContext; disabledReason?: string }) {
+function CardTab({ plan, context, disabledReason, freeEligible }: { plan: string | null; context: PayContext; disabledReason?: string; freeEligible?: boolean }) {
   const [status, setStatus] = useState<"idle" | "loading" | "mounted" | "error">("idle");
   const [error, setError] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -135,7 +135,13 @@ function CardTab({ plan, context, disabledReason }: { plan: string | null; conte
           work_order_id: context.workOrderId,
         }),
       });
-      const data = (await res.json()) as { clientSecret?: string; error?: string };
+      const data = (await res.json()) as { clientSecret?: string; free?: boolean; url?: string; error?: string };
+      // Free first submission: the checkout route fulfilled it for $0 and hands
+      // back a redirect to the (now generating) work order — no Stripe to mount.
+      if (data.free && data.url) {
+        window.location.href = data.url;
+        return;
+      }
       if (!data.clientSecret) {
         setError(data.error ?? "Something went wrong. Please try another payment method.");
         setStatus("error");
@@ -168,7 +174,9 @@ function CardTab({ plan, context, disabledReason }: { plan: string | null; conte
             disabled={status === "loading" || !plan || Boolean(disabledReason)}
             className="w-full rounded-sm bg-stone-900 px-4 py-3 text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {status === "loading" ? "Loading secure checkout…" : "Pay with card →"}
+            {status === "loading"
+              ? (freeEligible ? "Claiming…" : "Loading secure checkout…")
+              : (freeEligible ? "Claim free submission →" : "Pay with card →")}
           </button>
         </div>
       )}
@@ -577,6 +585,7 @@ function PayPage() {
   const [storedTab, setStoredTab] = useState<Tab>("card");
   const [readiness, setReadiness] = useState<FulfillmentReadiness | null>(null);
   const [readinessError, setReadinessError] = useState<string | null>(null);
+  const [freeEligible, setFreeEligible] = useState(false);
 
   // PR-I (2026-05-23): when a user arrives from a service intake (e.g.
   // /dashboard/services/bid-no-bid) they've ALREADY chosen the service —
@@ -591,21 +600,24 @@ function PayPage() {
     let cancelled = false;
     const params = new URLSearchParams({ plan: selectedSlug });
     if (context.workOrderId) params.set("work_order_id", context.workOrderId);
-    fetch(`/api/pay/readiness?${params.toString()}`)
+    fetch(`/api/pay/readiness?${params.toString()}`, { headers: authHeaders() })
       .then(async (res) => {
         const data = (await res.json().catch(() => ({}))) as {
           readiness?: FulfillmentReadiness;
+          free_submission_eligible?: boolean;
           error?: string;
         };
         if (!res.ok || !data.readiness) throw new Error(data.error ?? "Could not check fulfillment readiness.");
         if (!cancelled) {
           setReadiness(data.readiness);
+          setFreeEligible(Boolean(data.free_submission_eligible));
           setReadinessError(null);
         }
       })
       .catch((err) => {
         if (!cancelled) {
           setReadiness(null);
+          setFreeEligible(false);
           setReadinessError(err instanceof Error ? err.message : "Could not check fulfillment readiness.");
         }
       });
@@ -623,14 +635,18 @@ function PayPage() {
 
   // Derive the rendered tab so a plan change can never leave the user on a
   // hidden tab — no useEffect ping-pong required.
-  const activeTab: Tab = hideWire && storedTab === "wire" ? "card" : storedTab;
+  const activeTab: Tab = freeEligible ? "card" : hideWire && storedTab === "wire" ? "card" : storedTab;
   const setActiveTab = setStoredTab;
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "card", label: "Card" },
-    { id: "usdt", label: "USDT" },
-    ...(hideWire ? [] : [{ id: "wire" as Tab, label: "Wire" }]),
-  ];
+  // When the first submission is free, collapse the payment methods to a single
+  // "claim" path — paying via USDT/wire would charge for something that's free.
+  const tabs: { id: Tab; label: string }[] = freeEligible
+    ? [{ id: "card", label: "Free" }]
+    : [
+        { id: "card", label: "Card" },
+        { id: "usdt", label: "USDT" },
+        ...(hideWire ? [] : [{ id: "wire" as Tab, label: "Wire" }]),
+      ];
   // Product-wide "coming soon" gate (e.g. Roster/LTA). When the selected plan
   // is held back, disabledReason flows into CardTab (button disabled) and
   // UsdtTab (renders the gate notice instead of the address/form); Wire is
@@ -696,6 +712,19 @@ function PayPage() {
             </div>
             <p className="mt-1 text-[13px] leading-relaxed text-amber-950">
               {preselectedTier?.name ?? "This service"} isn&rsquo;t available for purchase yet — we&rsquo;ve paused checkout. Explore the other services in the meantime, and we&rsquo;ll announce when this one opens.
+            </p>
+          </div>
+        )}
+        {freeEligible && !planComingSoon && (
+          <div className="rounded-md border-l-2 border-emerald-600 bg-emerald-50/60 px-4 py-3.5">
+            <div
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700"
+              style={{ fontFamily: MONO }}
+            >
+              First submission · on us
+            </div>
+            <p className="mt-1 text-[13px] leading-relaxed text-emerald-950">
+              Your first proposal submission is free while you&rsquo;re on trial — no card needed. Claim it below and we&rsquo;ll start assembling it right away.
             </p>
           </div>
         )}
@@ -860,7 +889,7 @@ function PayPage() {
               stale "Unknown plan" error state from a previous selection and
               tears down any half-mounted Stripe checkout iframe. Audit
               2026-05-19 P0 #2. */}
-          {activeTab === "card" && <CardTab key={selectedSlug ?? "no-plan"} plan={selectedSlug} context={context} disabledReason={disabledReason} />}
+          {activeTab === "card" && <CardTab key={selectedSlug ?? "no-plan"} plan={selectedSlug} context={context} disabledReason={disabledReason} freeEligible={freeEligible} />}
           {activeTab === "usdt" && <UsdtTab plan={selectedSlug} context={context} disabledReason={disabledReason} />}
           {activeTab === "wire" && <WireTab plan={selectedSlug} context={context} />}
         </div>

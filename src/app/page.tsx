@@ -1,65 +1,36 @@
-import Navbar from "@/components/landing/Navbar";
+import Nav from "@/components/landing/Nav";
 import Hero from "@/components/landing/Hero";
-import Challenge from "@/components/landing/Challenge";
+import Problem from "@/components/landing/Problem";
 import HowItWorks from "@/components/landing/HowItWorks";
-import Services from "@/components/landing/Services";
-import Accountability from "@/components/landing/Accountability";
-import WhyUs from "@/components/landing/WhyUs";
-import MENACoverage from "@/components/landing/MENACoverage";
-import CTA from "@/components/landing/CTA";
+import Features from "@/components/landing/Features";
+import SocialProof from "@/components/landing/SocialProof";
+import Pricing from "@/components/landing/Pricing";
+import FinalCTA from "@/components/landing/FinalCTA";
 import Footer from "@/components/landing/Footer";
-import { getLandingTenders } from "@/lib/landing/recent-tenders";
 import { getViewerHero } from "@/lib/assessment";
+import { getLiveTenderCount } from "@/lib/landing/recent-tenders";
 
 export const dynamic = "force-dynamic";
 
-const STAT_BAR = [
-  { value: "$25.7B", label: "UN procurement spend, 2024", source: "UN ASR" },
-  { value: "222", label: "countries with eligible suppliers", source: "UNGM" },
-  { value: "32", label: "active UN agencies buying", source: "UN ASR" },
-];
-
 export default async function Home() {
-  const [tenders, viewer] = await Promise.all([
-    getLandingTenders(),
+  // Real wiring: welcome-back state + the live tender count behind the stat bar.
+  // Both fail open (null) so the homepage never 500s on a DB hiccup.
+  const [viewer, liveTenderCount] = await Promise.all([
     getViewerHero(),
+    getLiveTenderCount(),
   ]);
 
   return (
-    <>
-      <Navbar />
-      <Hero tenders={tenders} viewer={viewer} />
-
-      {/* Stat bar — editorial, three columns, with sources */}
-      <section className="bg-paper-2 border-y border-rule">
-        <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8 py-8 sm:py-10">
-          <p className="font-mono text-[10px] tracking-[0.14em] sm:tracking-[0.16em] uppercase text-mute mb-5 sm:mb-6 leading-snug">
-            By the numbers · UN Procurement, 2024
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-y-7 sm:gap-y-8 gap-x-12">
-            {STAT_BAR.map((s) => (
-              <div key={s.label} className="border-l border-ink pl-4 sm:pl-5">
-                <p className="font-serif text-[40px] sm:text-[44px] lg:text-[52px] font-normal leading-none tracking-[-0.02em] text-ink tabular-nums">
-                  {s.value}
-                </p>
-                <p className="text-[13px] text-ink-2 mt-2 leading-snug">{s.label}</p>
-                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-mute mt-2">
-                  Source · {s.source}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <Challenge />
+    <div style={{ background: "#f6f3ec", minHeight: "100vh" }}>
+      <Nav viewer={viewer} />
+      <Hero viewer={viewer} />
+      <Problem />
       <HowItWorks />
-      <Services />
-      <Accountability />
-      <WhyUs />
-      <MENACoverage />
-      <CTA />
+      <Features />
+      <SocialProof liveTenderCount={liveTenderCount} />
+      <Pricing />
+      <FinalCTA />
       <Footer />
-    </>
+    </div>
   );
 }

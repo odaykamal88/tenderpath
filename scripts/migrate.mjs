@@ -39,6 +39,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS org_type TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_description TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_source TEXT DEFAULT 'unset';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS mined_profile_facts JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS free_submission_used_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS free_submission_used_work_order_id INTEGER;
 
 CREATE TABLE IF NOT EXISTS subscriptions (
   id SERIAL PRIMARY KEY,

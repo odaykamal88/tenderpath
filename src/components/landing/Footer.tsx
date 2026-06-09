@@ -1,124 +1,85 @@
-/* Footer — paper-toned, editorial colophon */
+"use client";
+
 import Link from "next/link";
+import type { ReactNode } from "react";
+import { LC, LF } from "./kit";
+import { useMedia } from "@/components/workbench/useMedia";
+
+function FLink({ href, children }: { href: string; children: ReactNode }) {
+  const style = { fontFamily: LF.sans, fontSize: 13.5, color: LC.ink2, textDecoration: "none" } as const;
+  if (href.startsWith("#")) {
+    return <a href={href} style={style}>{children}</a>;
+  }
+  return <Link href={href} style={style}>{children}</Link>;
+}
+
+const COLS: Array<[string, Array<[string, string]>]> = [
+  ["Product", [
+    ["Matched tenders", "#f-matches"],
+    ["Bid / no-bid", "#f-verdict"],
+    ["Gap Navigator", "#f-navigator"],
+    ["Proposals", "#f-proposal"],
+  ]],
+  ["Company", [
+    ["Pricing", "#pricing"],
+    ["Contact", "/contact"],
+    ["Free assessment", "/assessment"],
+  ]],
+  ["Resources", [
+    ["FAQ", "/faq"],
+    ["Security", "/security"],
+    ["Privacy", "/privacy"],
+  ]],
+];
 
 export default function Footer() {
-  // Audit 2026-05-19 P2 #14: deep-link each service link to the matching
-  // wizard intent so Step 1 pre-selects the corresponding chip.
-  // PR-K (2026-05-23): "Weekly digest · $49/mo" link removed from the
-  // product cluster — the digest subscription is going away.
-  // Roster fast-track is held back as "Coming soon" across the product (see
-  // isComingSoonTier in pricing.ts). No href → renders as muted text, not a
-  // purchase link.
-  const product: Array<{ label: string; href?: string }> = [
-    { label: "Free assessment", href: "/assessment" },
-    { label: "Bid/no-bid analysis · $39", href: "/assessment?goal=evaluate-tender" },
-    { label: "Proposal draft · $299", href: "/assessment?goal=prepare-proposal" },
-    { label: "Roster fast-track · Coming soon" },
-  ];
-
-  const resources = [
-    { label: "UN procurement guide", href: "/faq" },
-    { label: "UNGM registration", href: "https://www.ungm.org/Account/Registration" },
-    { label: "FAQ", href: "/faq" },
-  ];
-
-  const company = [
-    { label: "Contact", href: "/contact" },
-    { label: "Disclaimer", href: "/disclaimer" },
-    { label: "Security", href: "/security" },
-  ];
-
-  const legal = [
-    { label: "Privacy Policy", href: "/privacy" },
-    { label: "Terms", href: "/terms" },
-    { label: "Cookie Policy", href: "/cookie-policy" },
-    { label: "Disclaimer", href: "/disclaimer" },
-    { label: "Security", href: "/security" },
-  ];
-
+  const mobile = useMedia("(max-width: 767px)");
   return (
-    <footer className="bg-paper-2 border-t border-rule">
-      <div className="mx-auto max-w-7xl px-6 lg:px-8 py-16">
-        {/* Top: editorial colophon */}
-        <div className="grid lg:grid-cols-[1.5fr_1fr_1fr_1fr] gap-10 lg:gap-14 pb-12 border-b border-rule">
+    <footer style={{ background: LC.paper, borderTop: `1px solid ${LC.rule}`, padding: mobile ? "40px 0 28px" : "56px 0 32px" }}>
+      <div className="lk-container" style={{ maxWidth: 1180, margin: "0 auto", padding: "0 24px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1.4fr 1fr 1fr 1fr", gap: mobile ? 28 : 40 }}>
           <div>
-            <Link href="/" className="font-serif text-[26px] font-medium tracking-[-0.01em] text-ink">
-              Tender<span className="text-accent">·</span>Path
-            </Link>
-            <p className="mt-5 text-[14px] text-ink-2 leading-[1.6] max-w-sm">
-              UN procurement readiness, scored. Decoding the maze for vendors
-              across the global south.
-            </p>
-            <p className="mt-5 font-mono text-[10px] tracking-[0.08em] uppercase text-mute leading-relaxed">
-              Cairo, Egypt<br />
-              Built {new Date().getFullYear()}
+            <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+              <span style={{ fontFamily: LF.display, fontSize: 22, fontWeight: 500, color: LC.ink }}>TenderPath</span>
+              <span style={{ color: LC.accent, fontFamily: LF.display, fontSize: 22 }}>·</span>
+            </div>
+            <p style={{ fontFamily: LF.sans, fontSize: 13.5, color: LC.mute, margin: "12px 0 0", maxWidth: 280, lineHeight: 1.6 }}>
+              The bid desk for UN &amp; donor procurement. Match, qualify, comply, and then win.
             </p>
           </div>
-
-          <FooterColumn title="Services" links={product} />
-          <FooterColumn title="Resources" links={resources} />
-          <FooterColumn title="Company" links={company} />
+          {COLS.map(([h, items]) => (
+            <div key={h}>
+              <div style={{ fontFamily: LF.mono, fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: LC.faint, marginBottom: 14 }}>{h}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+                {items.map(([it, href]) => (
+                  <FLink key={it} href={href}>{it}</FLink>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
-
-        {/* Bottom: legal strip */}
-        <div className="mt-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <p className="font-mono text-[10px] tracking-[0.08em] text-mute">
-            © {new Date().getFullYear()} TenderPath. All rights reserved.
-          </p>
-          <div className="flex flex-wrap gap-x-5 gap-y-1">
-            {legal.map((l) => (
-              <Link
-                key={l.label}
-                href={l.href}
-                className="font-mono text-[10px] tracking-[0.06em] uppercase text-ink-3 hover:text-ink transition-colors"
-              >
-                {l.label}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 12,
+            marginTop: 40,
+            paddingTop: 20,
+            borderTop: `1px solid ${LC.ruleSoft}`,
+          }}
+        >
+          <span style={{ fontFamily: LF.mono, fontSize: 10.5, color: LC.faint, letterSpacing: "0.04em" }}>© 2026 TenderPath · UN procurement intelligence</span>
+          <div style={{ display: "flex", gap: 18 }}>
+            {([["Terms", "/terms"], ["Privacy", "/privacy"], ["Security", "/security"]] as const).map(([l, href]) => (
+              <Link key={l} href={href} style={{ fontFamily: LF.mono, fontSize: 10.5, color: LC.mute, textDecoration: "none", letterSpacing: "0.04em" }}>
+                {l}
               </Link>
             ))}
           </div>
         </div>
       </div>
     </footer>
-  );
-}
-
-function FooterColumn({
-  title,
-  links,
-}: {
-  title: string;
-  links: Array<{ label: string; href?: string }>;
-}) {
-  return (
-    <div>
-      <h4 className="font-mono text-[10px] tracking-[0.16em] uppercase text-accent mb-5">
-        {title}
-      </h4>
-      <ul className="space-y-3">
-        {links.map((link) => (
-          <li key={link.label}>
-            {!link.href ? (
-              <span className="text-[13px] text-mute">{link.label}</span>
-            ) : link.href.startsWith("http") ? (
-              <a
-                href={link.href}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[13px] text-ink-2 hover:text-ink transition-colors"
-              >
-                {link.label}
-              </a>
-            ) : (
-              <Link
-                href={link.href}
-                className="text-[13px] text-ink-2 hover:text-ink transition-colors"
-              >
-                {link.label}
-              </Link>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }
