@@ -1,10 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import Link from "next/link";
-import styles from "./AssessmentChrome.module.css";
+import { C, F } from "@/components/workbench/tokens";
 
 type Status = "idle" | "sending" | "sent" | "error";
+
+const linkStyle: CSSProperties = {
+  fontFamily: F.mono,
+  fontSize: 10,
+  letterSpacing: "0.1em",
+  textTransform: "uppercase",
+  color: C.mute,
+  background: "none",
+  border: 0,
+  borderBottom: `1px solid ${C.rule}`,
+  cursor: "pointer",
+  padding: "0 0 2px",
+  textDecoration: "none",
+  whiteSpace: "nowrap",
+};
 
 export function AssessmentActions({ reportId }: { reportId: string }) {
   const [status, setStatus] = useState<Status>("idle");
@@ -48,35 +63,36 @@ export function AssessmentActions({ reportId }: { reportId: string }) {
     : "Email ↗";
 
   return (
-    <>
-      <span className={styles.actionButtons}>
-        <a
-          href={`/api/report?id=${reportId}`}
-          target="_blank"
-          rel="noopener"
-        >
-          PDF ↓
-        </a>
-        <button
-          type="button"
-          onClick={sendEmail}
-          disabled={status === "sending"}
-          aria-live="polite"
-          title={message ?? "Email this report to your registered address"}
-        >
-          {emailLabel}
-        </button>
-        <Link href="/assessment">Run again →</Link>
-      </span>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 16 }}>
+      <a href={`/api/report?id=${reportId}`} target="_blank" rel="noopener" style={linkStyle}>
+        PDF ↓
+      </a>
+      <button
+        type="button"
+        onClick={sendEmail}
+        disabled={status === "sending"}
+        aria-live="polite"
+        title={message ?? "Email this report to your registered address"}
+        style={{ ...linkStyle, opacity: status === "sending" ? 0.5 : 1 }}
+      >
+        {emailLabel}
+      </button>
+      <Link href="/assessment" style={linkStyle}>
+        Run again →
+      </Link>
       {message && status !== "idle" && (
         <span
-          className={styles.actionToast}
           role="status"
-          data-state={status}
+          style={{
+            fontFamily: F.mono,
+            fontSize: 9.5,
+            color: status === "error" ? C.neg : C.pos,
+            letterSpacing: "0.04em",
+          }}
         >
           {message}
         </span>
       )}
-    </>
+    </span>
   );
 }

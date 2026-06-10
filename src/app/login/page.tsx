@@ -155,14 +155,14 @@ function LoginForm() {
 
   const formCard = (
     <div style={{ width: "100%", maxWidth: 372 }}>
-      <div style={{ fontFamily: F.mono, fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: C.accent }}>Sign in · workspace</div>
-      <h1 style={{ fontFamily: F.display, fontSize: 33, fontWeight: 400, letterSpacing: "-0.02em", color: C.ink, lineHeight: 1.08, margin: "6px 0 0" }}>Open your Workbench</h1>
-      <p style={{ fontFamily: F.sans, fontSize: 13.5, lineHeight: 1.55, color: C.ink2, margin: "10px 0 0" }}>
+      <div style={{ fontFamily: F.mono, fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: C.accent, textAlign: mobile ? "center" : undefined }}>Sign in · workspace</div>
+      <h1 style={{ fontFamily: F.display, fontSize: 33, fontWeight: 400, letterSpacing: "-0.02em", color: C.ink, lineHeight: 1.08, margin: "6px 0 0", textAlign: mobile ? "center" : undefined }}>Open your Workbench</h1>
+      <p style={{ fontFamily: F.sans, fontSize: 13.5, lineHeight: 1.55, color: C.ink2, margin: "10px 0 0", textAlign: mobile ? "center" : undefined }}>
         30-day free trial — no card required. We&apos;ll email a secure sign-in link, or use a password for the demo workspace.
       </p>
 
       {/* mode toggle */}
-      <div style={{ display: "inline-flex", border: `1px solid ${C.rule}`, margin: "20px 0 18px" }}>
+      <div style={{ display: mobile ? "flex" : "inline-flex", width: mobile ? "fit-content" : undefined, margin: mobile ? "20px auto 18px" : "20px 0 18px", border: `1px solid ${C.rule}` }}>
         <button type="button" onClick={() => { setLoginMode("magic"); setStep("request"); setError(null); setMagicNudge(null); }} style={toggleBtn(loginMode === "magic")}>Magic link</button>
         <button type="button" onClick={() => { setLoginMode("password"); setStep("request"); setError(null); }} style={toggleBtn(loginMode === "password")}>Password</button>
       </div>
@@ -272,38 +272,48 @@ function LoginForm() {
               <span style={{ fontFamily: F.display, fontSize: 24, fontWeight: 500, color: C.white }}>TenderPath</span>
               <span style={{ fontFamily: F.display, fontSize: 24, color: C.accent }}>·</span>
             </div>
-            <div style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.18em", textTransform: "uppercase", color: C.spineDim, marginTop: 4 }}>The Workbench</div>
+            <div style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.18em", textTransform: "uppercase", color: C.spineDim, marginTop: 4 }}>The Workbench · UN &amp; donor procurement</div>
           </div>
           <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", maxWidth: 440 }}>
-            <h2 style={{ fontFamily: F.display, fontSize: 38, fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.06, color: C.white, margin: 0 }}>Your bid desk for UN &amp; donor tenders.</h2>
+            <h2 style={{ fontFamily: F.display, fontSize: 38, fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.06, color: C.white, margin: 0 }}>Your bid desk for <em style={{ fontStyle: "italic", color: C.accent2 }}>UN &amp; donor</em> tenders.</h2>
             <p style={{ fontFamily: F.sans, fontSize: 14.5, lineHeight: 1.6, color: "#cdc6b3", margin: "18px 0 24px" }}>
               One operating surface that scores your readiness, ranks live tenders by fit, walks you through every gap, and turns a bid decision into a submission.
             </p>
             <div style={{ borderTop: `1px solid ${C.spineLine}` }}>
               {[
-                ["01", "Readiness score & the gap Navigator"],
-                ["02", "Live tender matches, ranked by fit"],
-                ["03", "Paste any tender → instant bid / no-bid"],
-                ["04", "Submission-ready proposals on demand"],
-              ].map(([n, t]) => (
+                ["01", "Readiness score & the gap Navigator", " — close every blocker with your hand held."],
+                ["02", "Live tender matches", " ranked by fit, refreshed daily."],
+                ["03", "Paste any tender", " for an instant bid / no-bid call."],
+                ["04", "Submission-ready proposals", " — EOI, RFQ, RFP, mapped to the matrix."],
+              ].map(([n, lead, tail]) => (
                 <div key={n} style={{ display: "flex", gap: 14, alignItems: "baseline", padding: "13px 0", borderBottom: `1px solid ${C.spineLine}` }}>
-                  <span style={{ fontFamily: F.mono, fontSize: 10, color: C.accent2, letterSpacing: "0.1em" }}>{n}</span>
-                  <span style={{ fontFamily: F.sans, fontSize: 13.5, color: "#e4ddcb" }}>{t}</span>
+                  <span style={{ fontFamily: F.mono, fontSize: 10, color: C.accent2, letterSpacing: "0.1em", flexShrink: 0 }}>{n}</span>
+                  <span style={{ fontFamily: F.sans, fontSize: 13.5, lineHeight: 1.45, color: "#e4ddcb" }}><b style={{ color: C.white, fontWeight: 500 }}>{lead}</b>{tail}</span>
                 </div>
               ))}
             </div>
           </div>
-          <div style={{ position: "relative", fontFamily: F.mono, fontSize: 10, letterSpacing: "0.08em", color: C.spineDim }}>1,200+ assessments · 15+ UN agencies · est. 2024</div>
+          <div style={{ position: "relative", fontFamily: F.mono, fontSize: 10, letterSpacing: "0.08em", color: C.spineDim }}>30+ UN agencies · EU &amp; donor feeds · est. 2024</div>
         </div>
       )}
 
       {/* right form panel */}
-      <div style={{ display: "flex", flexDirection: "column", padding: mobile ? "28px 22px" : "36px 48px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <Link href="/" style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: C.mute, textDecoration: "none" }}>← TenderPath</Link>
-          <a href="mailto:info@tenderpath.me" style={{ fontFamily: F.mono, fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: C.faint, textDecoration: "none" }}>Need help?</a>
-        </div>
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "32px 0" }}>{formCard}</div>
+      <div style={{ display: "flex", flexDirection: "column", padding: mobile ? "0 22px 24px" : "36px 48px" }}>
+        {mobile ? (
+          <Link href="/" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "34px 0 0", textDecoration: "none" }}>
+            <span style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+              <span style={{ fontFamily: F.display, fontSize: 24, fontWeight: 500, color: C.ink }}>TenderPath</span>
+              <span style={{ fontFamily: F.display, fontSize: 24, color: C.accent }}>·</span>
+            </span>
+            <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.faint }}>The Workbench</span>
+          </Link>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <Link href="/" style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: C.mute, textDecoration: "none" }}>← TenderPath</Link>
+            <a href="mailto:info@tenderpath.me" style={{ fontFamily: F.mono, fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: C.faint, textDecoration: "none" }}>Need help?</a>
+          </div>
+        )}
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: mobile ? "22px 0 10px" : "32px 0" }}>{formCard}</div>
         <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: C.faint, textAlign: "center" }}>TenderPath · UN procurement intelligence</div>
       </div>
     </div>
