@@ -176,6 +176,37 @@ html {
 .legal-body .hover\:border-gray-400:hover { border-color: #9c6b1f; }
 .legal-body code { font-family: var(--font-mono); font-size: 0.88em; background: #ece6d5; padding: 1px 5px; }
 
+/* ============================================================
+   .d2-scope — shift a subtree built on the warm @theme tokens
+   (text-ink #1a1a1a, bright red/amber, rounded corners) onto the
+   cool D2 dossier palette. Descendant selectors beat the inlined
+   Tailwind utilities; the paper/rule families are already ~D2 so
+   they're left alone. Reusable for legacy dashboard pages still on
+   @theme tokens (vault now; work-orders/services intake later).
+   Pure presentational — wrap a page root and nothing else changes.
+   ============================================================ */
+.d2-scope .text-ink { color: #0f1620; }
+.d2-scope .text-ink-2 { color: #2b3543; }
+.d2-scope .text-ink-3 { color: #6b6557; }
+.d2-scope .text-mute { color: #8c8676; }
+.d2-scope .text-accent { color: #9c6b1f; }
+.d2-scope .border-accent { border-color: #9c6b1f; }
+.d2-scope .bg-accent { background-color: #9c6b1f; }
+.d2-scope .hover\:bg-accent:hover { background-color: #9c6b1f; }
+.d2-scope .hover\:text-accent:hover { color: #9c6b1f; }
+.d2-scope .hover\:border-accent:hover { border-color: #9c6b1f; }
+.d2-scope .focus\:border-accent:focus { border-color: #9c6b1f; }
+.d2-scope .border-ink { border-color: #0f1620; }
+.d2-scope .text-amber-600, .d2-scope .text-amber-700 { color: #b3691a; }
+.d2-scope .text-amber-900 { color: #7a4a12; }
+.d2-scope .border-amber-600 { border-color: #b3691a; }
+.d2-scope .text-red-600, .d2-scope .text-red-700 { color: #9c2a2a; }
+.d2-scope .text-red-900 { color: #6e1f1f; }
+.d2-scope .border-red-600 { border-color: #9c2a2a; }
+.d2-scope .hover\:text-red-600:hover { color: #9c2a2a; }
+.d2-scope .rounded, .d2-scope .rounded-sm, .d2-scope .rounded-md, .d2-scope .rounded-lg, .d2-scope .rounded-xl { border-radius: 0; }
+.d2-scope .shadow, .d2-scope .shadow-sm, .d2-scope .shadow-md { box-shadow: none; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

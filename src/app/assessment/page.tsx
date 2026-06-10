@@ -470,7 +470,7 @@ function AssessmentWizard() {
         )}
 
         {(phase === "crawling" || isWizardStep) && (
-          <div style={{ maxWidth: 720, margin: "0 auto", paddingTop: mobile ? 24 : 40 }}>
+          <div className="d2-scope" style={{ maxWidth: 720, margin: "0 auto", paddingTop: mobile ? 24 : 40 }}>
             {error && <ErrorBanner>{error}</ErrorBanner>}
 
             {phase === "crawling" && <CrawlingBeat site={entryUrl} />}
