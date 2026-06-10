@@ -8,11 +8,11 @@ export const metadata = {
 const faqs = [
   {
     q: "What is TenderPath?",
-    a: "TenderPath is a procurement intelligence platform that helps businesses find, assess, and win UN contracts and grants. We crawl 15+ UN agency portals in real time, match opportunities to your profile, and provide the readiness analysis and proposal support you need to compete.",
+    a: "TenderPath is a procurement intelligence platform that helps businesses find, assess, and win UN contracts and grants. We crawl 30+ UN agency portals in real time, match opportunities to your profile, and provide the readiness analysis and proposal support you need to compete.",
   },
   {
     q: "How does the free assessment work?",
-    a: "Enter your company name, email, and either your website or a short description of what you do. Our AI crawls your website, extracts your capabilities, matches you against active tenders and grants from 15+ UN agencies, and scores your readiness across 4 dimensions — usually in about a minute. The report is free and sent to your email.",
+    a: "Enter your company name, email, and either your website or a short description of what you do. Our AI crawls your website, extracts your capabilities, matches you against active tenders and grants from 30+ UN agencies, and scores your readiness across 4 dimensions — usually in about a minute. The report is free and sent to your email.",
   },
   {
     q: "What is UNGM and do I need to register?",
