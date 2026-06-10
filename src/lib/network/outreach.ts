@@ -265,15 +265,23 @@ export interface ShortlistOptions {
 }
 
 export const OUTREACH_DEFAULTS = {
-  minBusinessDays: 10,
+  // 0 = no client-side lead-time floor by default. Lead time is governed
+  // server-side by the page-level "Min lead time" control (?min_days, applied
+  // BEFORE the row cap in network-companies/route.ts). A second client-side
+  // floor here double-filtered in mismatched units (this is BUSINESS days; the
+  // server is CALENDAR days) and silently emptied the worklist. Operators can
+  // still set a business-days floor manually; it just no longer fights the
+  // server control out of the box.
+  minBusinessDays: 0,
   minScore: 70,
   excludeConsultancies: true,
 } as const;
 
 /**
  * Apply the operator's filters then sort soonest-deadline-first, then fit.
- * Defaults enforce the launch rules: ≥10 business days to deadline, high fit,
- * no consultancies. Each is adjustable from the UI.
+ * Lead time is enforced server-side (page "Min lead time" → ?min_days, before
+ * the row cap); the optional minBusinessDays here is an extra manual floor,
+ * off by default. High fit + no consultancies stay on by default.
  */
 export function rankForOutreach(matches: OutreachMatch[], opts: ShortlistOptions = {}): OutreachMatch[] {
   const minBusinessDays = opts.minBusinessDays ?? OUTREACH_DEFAULTS.minBusinessDays;

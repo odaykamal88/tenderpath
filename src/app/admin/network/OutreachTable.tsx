@@ -18,7 +18,9 @@ import {
 } from "@/lib/network/outreach";
 
 const SIGNOFF_KEY = "tp_outreach_signoff";
-const FILTERS_KEY = "tp_outreach_filters_v1";
+// v2: resets a stale persisted minBusinessDays=10 that (combined with the new
+// server-side "Min lead time" floor) silently emptied the outreach worklist.
+const FILTERS_KEY = "tp_outreach_filters_v2";
 const DEFAULT_SIGNOFF = "[Your name]\nTenderPath";
 
 interface Filters {
