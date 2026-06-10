@@ -142,6 +142,40 @@ html {
   to { transform: rotate(360deg); }
 }
 
+/* ============================================================
+   .legal-body — D2 migration shim for the legal/resource pages
+   (privacy, terms, cookie-policy, disclaimer, security, contact, faq).
+   These pages were authored on the older generic-SaaS palette
+   (gray-* text, amber-* accents, rounded corners, shadows). Rather
+   than hand-edit ~700 lines of policy prose, this scoped block maps
+   those legacy utilities onto the D2 dossier palette. Frames
+   (nav/header/footer) are proper inline C/F; this only reskins body
+   prose + cards. Remove if/when the pages are rewritten to inline C/F.
+   ============================================================ */
+.legal-body { color: #2b3543; font-family: var(--font-sans); }
+.legal-body .text-gray-900, .legal-body .text-gray-800 { color: #0f1620; }
+.legal-body .text-gray-700, .legal-body .text-gray-600 { color: #2b3543; }
+.legal-body .text-gray-500 { color: #6b6557; }
+.legal-body .text-gray-400 { color: #8c8676; }
+.legal-body .text-amber-500, .legal-body .text-amber-600, .legal-body .text-amber-800 { color: #9c6b1f; }
+.legal-body .bg-gray-50, .legal-body .bg-amber-50, .legal-body .bg-amber-100 { background: #ece6d5; }
+.legal-body .border-gray-200, .legal-body .border-gray-100 { border-color: #d8d1bf; }
+.legal-body .rounded, .legal-body .rounded-sm, .legal-body .rounded-md, .legal-body .rounded-lg, .legal-body .rounded-xl { border-radius: 0; }
+.legal-body .shadow, .legal-body .shadow-sm, .legal-body .shadow-md { box-shadow: none; }
+/* faq/page.tsx is on a stone-* + orange variant — map it too */
+.legal-body .text-stone-900 { color: #0f1620; }
+.legal-body .text-stone-700, .legal-body .text-stone-600 { color: #2b3543; }
+.legal-body .text-stone-500 { color: #6b6557; }
+.legal-body .text-stone-400 { color: #8c8676; }
+.legal-body .border-stone-200, .legal-body .border-stone-200\/70, .legal-body .border-stone-300 { border-color: #d8d1bf; }
+.legal-body .bg-stone-900 { background: #0f1620; }
+.legal-body .hover\:bg-stone-800:hover { background: #2b3543; }
+.legal-body .hover\:text-stone-900:hover, .legal-body .hover\:text-stone-700:hover { color: #0f1620; }
+.legal-body .hover\:border-stone-700:hover { border-color: #9c6b1f; }
+.legal-body a:hover { color: #0f1620; }
+.legal-body .hover\:border-gray-400:hover { border-color: #9c6b1f; }
+.legal-body code { font-family: var(--font-mono); font-size: 0.88em; background: #ece6d5; padding: 1px 5px; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
