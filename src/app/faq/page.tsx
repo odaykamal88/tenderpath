@@ -8,11 +8,11 @@ export const metadata = {
 const faqs = [
   {
     q: "What is TenderPath?",
-    a: "TenderPath is a procurement intelligence platform that helps businesses find, assess, and win UN contracts and grants. We crawl 15+ UN agency portals in real time, match opportunities to your profile, and provide the readiness analysis and proposal support you need to compete.",
+    a: "TenderPath is a procurement intelligence platform that helps businesses find, assess, and win UN contracts and grants. We crawl 30+ UN agency portals in real time, match opportunities to your profile, and provide the readiness analysis and proposal support you need to compete.",
   },
   {
     q: "How does the free assessment work?",
-    a: "Enter your company name, email, and either your website or a short description of what you do. Our AI crawls your website, extracts your capabilities, matches you against active tenders and grants from 15+ UN agencies, and scores your readiness across 5 dimensions — all in under 30 seconds. The report is free and sent to your email.",
+    a: "Enter your company name, email, and either your website or a short description of what you do. Our AI crawls your website, extracts your capabilities, matches you against active tenders and grants from 30+ UN agencies, and scores your readiness across 4 dimensions — usually in about a minute. The report is free and sent to your email.",
   },
   {
     q: "What is UNGM and do I need to register?",
@@ -48,12 +48,12 @@ const faqs = [
   },
 ];
 
-const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
-const SERIF = "'Fraunces', 'Times New Roman', serif";
+const MONO = "var(--font-mono), ui-monospace, monospace";
+const SERIF = "var(--font-serif), Georgia, serif";
 
 export default function FAQPage() {
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#fafaf7" }}>
+    <div className="min-h-screen legal-body" style={{ backgroundColor: "#f6f3ec" }}>
       {/* Nav */}
       <nav className="border-b border-stone-200/70 bg-white/95 backdrop-blur-sm sticky top-0 z-50">
         <div className="mx-auto max-w-5xl px-5 sm:px-6 flex h-14 items-center justify-between">
@@ -62,7 +62,7 @@ export default function FAQPage() {
             className="text-[15px] font-semibold text-stone-900"
             style={{ fontFamily: SERIF }}
           >
-            Tender<span style={{ color: "#ea580c" }}>·</span>Path
+            Tender<span style={{ color: "#9c6b1f" }}>·</span>Path
           </Link>
           <Link
             href="/"
@@ -92,7 +92,7 @@ export default function FAQPage() {
           <p className="mt-3 text-[14.5px] sm:text-[15px] leading-relaxed text-stone-600 max-w-2xl">
             Everything you need to know about TenderPath and UN procurement. Can&apos;t find your answer?{" "}
             <a
-              href="mailto:hello@tenderpath.co"
+              href="mailto:info@tenderpath.me"
               className="text-stone-900 underline underline-offset-2 hover:text-stone-700"
             >
               Email us
@@ -156,7 +156,7 @@ export default function FAQPage() {
           </p>
           <div className="mt-5 flex flex-col sm:flex-row flex-wrap gap-3">
             <a
-              href="mailto:hello@tenderpath.co"
+              href="mailto:info@tenderpath.me"
               className="rounded-sm bg-stone-900 px-4 py-3 sm:py-2.5 text-center sm:text-left text-[12.5px] font-semibold text-white hover:bg-stone-800 transition-colors"
             >
               Email us

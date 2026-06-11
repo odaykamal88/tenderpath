@@ -259,6 +259,12 @@ function mapTendersForUI(tenders: MatchedTender[]): Tender[] {
     sourceProvenance: t.structured_reasons?.procurement?.sourceProvenance ?? t.source_provenance ?? "unknown",
     confidence: confidenceFrom(t),
     bucketLabel: t.opportunity_bucket_label ?? null,
+    // Bucket KEY (act_now/strong_fit/…) drives the colored dot in the re-ported
+    // feed; bucketLabel is the human text. Both come straight off the row.
+    bucket: t.opportunity_bucket ?? null,
+    // Opportunity type (RFP/ITB/EOI/…) for the feed's Type column. Real fields
+    // only — null when the source didn't classify it.
+    type: t.opportunity_type ?? t.procurement_category ?? null,
     matchReasons: pickReasons(t),
     caveats: t.structured_reasons?.caveats ?? [],
     decisionHeadline: t.decision_brief?.headline ?? t.opportunity_bucket_reason ?? null,
@@ -282,10 +288,22 @@ function mapGrantsForUI(grants: MatchedGrant[]): Grant[] {
     eligibility: g.sector,
     effort: "Medium",
     fit: g.score,
+    // Closing date for the "Closes" column in the re-ported grants table.
+    // Many grant feeds omit it — the DeadlinePill degrades to "No deadline".
+    deadline: g.deadline ?? null,
     // Funding geography for the country filter pills. Many grants are global
     // (null) — those always show; the pills only filter the country-bound ones.
     country: g.country ?? g.geography_alignment?.grantCountry ?? null,
     sourceUrl: g.source_url ?? null,
+    // Honest editorial line — the match reason / description the engine
+    // produced, never a fabricated eligibility verdict. Decoded for entities.
+    note: g.match_reasons?.[0]
+      ? decodeHtmlEntities(g.match_reasons[0])
+      : g.match_reason
+      ? decodeHtmlEntities(g.match_reason)
+      : g.description
+      ? decodeHtmlEntities(g.description)
+      : null,
   }));
 }
 

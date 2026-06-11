@@ -125,6 +125,88 @@ html {
   to   { opacity: 1; }
 }
 
+/* D2 assessment flow + report ornaments */
+@keyframes tpSheetIn {
+  from { transform: translateX(24px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes tpBlink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+@keyframes tpFade {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   .legal-body — D2 migration shim for the legal/resource pages
+   (privacy, terms, cookie-policy, disclaimer, security, contact, faq).
+   These pages were authored on the older generic-SaaS palette
+   (gray-* text, amber-* accents, rounded corners, shadows). Rather
+   than hand-edit ~700 lines of policy prose, this scoped block maps
+   those legacy utilities onto the D2 dossier palette. Frames
+   (nav/header/footer) are proper inline C/F; this only reskins body
+   prose + cards. Remove if/when the pages are rewritten to inline C/F.
+   ============================================================ */
+.legal-body { color: #2b3543; font-family: var(--font-sans); }
+.legal-body .text-gray-900, .legal-body .text-gray-800 { color: #0f1620; }
+.legal-body .text-gray-700, .legal-body .text-gray-600 { color: #2b3543; }
+.legal-body .text-gray-500 { color: #6b6557; }
+.legal-body .text-gray-400 { color: #8c8676; }
+.legal-body .text-amber-500, .legal-body .text-amber-600, .legal-body .text-amber-800 { color: #9c6b1f; }
+.legal-body .bg-gray-50, .legal-body .bg-amber-50, .legal-body .bg-amber-100 { background: #ece6d5; }
+.legal-body .border-gray-200, .legal-body .border-gray-100 { border-color: #d8d1bf; }
+.legal-body .rounded, .legal-body .rounded-sm, .legal-body .rounded-md, .legal-body .rounded-lg, .legal-body .rounded-xl { border-radius: 0; }
+.legal-body .shadow, .legal-body .shadow-sm, .legal-body .shadow-md { box-shadow: none; }
+/* faq/page.tsx is on a stone-* + orange variant — map it too */
+.legal-body .text-stone-900 { color: #0f1620; }
+.legal-body .text-stone-700, .legal-body .text-stone-600 { color: #2b3543; }
+.legal-body .text-stone-500 { color: #6b6557; }
+.legal-body .text-stone-400 { color: #8c8676; }
+.legal-body .border-stone-200, .legal-body .border-stone-200\/70, .legal-body .border-stone-300 { border-color: #d8d1bf; }
+.legal-body .bg-stone-900 { background: #0f1620; }
+.legal-body .hover\:bg-stone-800:hover { background: #2b3543; }
+.legal-body .hover\:text-stone-900:hover, .legal-body .hover\:text-stone-700:hover { color: #0f1620; }
+.legal-body .hover\:border-stone-700:hover { border-color: #9c6b1f; }
+.legal-body a:hover { color: #0f1620; }
+.legal-body .hover\:border-gray-400:hover { border-color: #9c6b1f; }
+.legal-body code { font-family: var(--font-mono); font-size: 0.88em; background: #ece6d5; padding: 1px 5px; }
+
+/* ============================================================
+   .d2-scope — shift a subtree built on the warm @theme tokens
+   (text-ink #1a1a1a, bright red/amber, rounded corners) onto the
+   cool D2 dossier palette. Descendant selectors beat the inlined
+   Tailwind utilities; the paper/rule families are already ~D2 so
+   they're left alone. Reusable for legacy dashboard pages still on
+   @theme tokens (vault now; work-orders/services intake later).
+   Pure presentational — wrap a page root and nothing else changes.
+   ============================================================ */
+.d2-scope .text-ink { color: #0f1620; }
+.d2-scope .text-ink-2 { color: #2b3543; }
+.d2-scope .text-ink-3 { color: #6b6557; }
+.d2-scope .text-mute { color: #8c8676; }
+.d2-scope .text-accent { color: #9c6b1f; }
+.d2-scope .border-accent { border-color: #9c6b1f; }
+.d2-scope .bg-accent { background-color: #9c6b1f; }
+.d2-scope .hover\:bg-accent:hover { background-color: #9c6b1f; }
+.d2-scope .hover\:text-accent:hover { color: #9c6b1f; }
+.d2-scope .hover\:border-accent:hover { border-color: #9c6b1f; }
+.d2-scope .focus\:border-accent:focus { border-color: #9c6b1f; }
+.d2-scope .border-ink { border-color: #0f1620; }
+.d2-scope .text-amber-600, .d2-scope .text-amber-700 { color: #b3691a; }
+.d2-scope .text-amber-900 { color: #7a4a12; }
+.d2-scope .border-amber-600 { border-color: #b3691a; }
+.d2-scope .text-red-600, .d2-scope .text-red-700 { color: #9c2a2a; }
+.d2-scope .text-red-900 { color: #6e1f1f; }
+.d2-scope .border-red-600 { border-color: #9c2a2a; }
+.d2-scope .hover\:text-red-600:hover { color: #9c2a2a; }
+.d2-scope .rounded, .d2-scope .rounded-sm, .d2-scope .rounded-md, .d2-scope .rounded-lg, .d2-scope .rounded-xl { border-radius: 0; }
+.d2-scope .shadow, .d2-scope .shadow-sm, .d2-scope .shadow-md { box-shadow: none; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

@@ -6,6 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { AssessmentInput, TierSlug, Gap, MatchedTender, MatchedGrant, ReadinessDimensions } from "@/lib/types";
 import { Step1, Step2, Step3, type WizardData, type CrawlPreview } from "./WizardSteps";
 import OpportunitySignal from "@/components/assessment/OpportunitySignal";
+import { C, F } from "@/components/workbench/tokens";
+import { useMedia } from "@/components/workbench/useMedia";
+import { FlowChrome } from "@/components/assessment/flow/FlowChrome";
+import { EntryScreen } from "@/components/assessment/flow/EntryScreen";
+import { AnalyzingScreen } from "@/components/assessment/flow/AnalyzingScreen";
 
 // Audit 2026-05-19 P2 #14: landing-page CTAs pass ?goal=<intent> so the
 // wizard pre-selects the intent chip in Step 1. Saves a click and gives us
@@ -86,14 +91,6 @@ type WizardPhase = "entry" | "crawling" | "step1" | "step2" | "step3" | "analyzi
 
 const STEP_LABELS = ["Company basics", "What you do", "Experience"];
 const STEP_TIME_REMAINING = ["~120s left", "~80s left", "~30s left"];
-
-const ANALYZING_MESSAGES = [
-  "Crawling your website and confirming your profile",
-  "Classifying your sectors and capabilities",
-  "Scanning 2,000+ live tenders across 15+ UN agencies",
-  "Matching tenders to your confirmed capabilities",
-  "Scoring readiness dimensions and identifying gaps",
-];
 
 const ASSESSMENT_POLL_INTERVAL_MS = 2500;
 const ASSESSMENT_POLL_TIMEOUT_MS = 240000;
@@ -222,41 +219,32 @@ function isQueuedAssessmentResponse(data: unknown): data is QueuedAssessmentResp
   );
 }
 
-/* ── Typographic progress strip ────────────────────────────────────────── */
+/* ── Per-step progress strip (within the Profile stage) ─────────────────── */
 function WizardProgress({ phase }: { phase: WizardPhase }) {
   const stepPhases: WizardPhase[] = ["step1", "step2", "step3"];
   const activeIdx = stepPhases.indexOf(phase);
   if (activeIdx === -1) return null;
 
   return (
-    <div className="mb-12 pb-6 border-b border-rule">
-      <div className="flex items-baseline justify-between mb-4">
-        <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-accent">
+    <div style={{ marginBottom: 40, paddingBottom: 24, borderBottom: `1px solid ${C.rule}` }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 16 }}>
+        <span style={{ fontFamily: F.mono, fontSize: 11, letterSpacing: "0.18em", textTransform: "uppercase", color: C.accent }}>
           Step {String(activeIdx + 1).padStart(2, "0")} of 03
-        </p>
-        <p className="font-mono text-[10px] tracking-[0.06em] uppercase text-mute tabular-nums">
+        </span>
+        <span style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: C.mute, fontVariantNumeric: "tabular-nums" }}>
           {STEP_TIME_REMAINING[activeIdx]}
-        </p>
+        </span>
       </div>
-      <h2 className="font-serif text-[32px] lg:text-[38px] font-normal leading-[1.05] tracking-[-0.02em] text-ink mb-5">
+      <h2 style={{ fontFamily: F.display, fontSize: 34, fontWeight: 400, lineHeight: 1.05, letterSpacing: "-0.02em", color: C.ink, margin: "0 0 20px" }}>
         {STEP_LABELS[activeIdx]}
       </h2>
-      {/* Segmented progress bar */}
-      <div className="grid grid-cols-3 gap-1.5">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
         {STEP_LABELS.map((label, i) => (
-          <div key={label} className="flex flex-col gap-2">
-            <div
-              className={`h-[3px] transition-colors ${
-                i <= activeIdx ? "bg-accent" : "bg-rule"
-              }`}
-            />
-            <p
-              className={`font-mono text-[10px] tracking-[0.06em] uppercase ${
-                i === activeIdx ? "text-ink" : i < activeIdx ? "text-ink-3" : "text-mute"
-              }`}
-            >
+          <div key={label} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ height: 3, background: i <= activeIdx ? C.accent : C.rule }} />
+            <span style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: i === activeIdx ? C.ink : i < activeIdx ? C.mute : C.faint }}>
               {String(i + 1).padStart(2, "0")} · {label}
-            </p>
+            </span>
           </div>
         ))}
       </div>
@@ -264,71 +252,54 @@ function WizardProgress({ phase }: { phase: WizardPhase }) {
   );
 }
 
-/* ── Sample readiness card (shown on entry — "you'll get this") ────────── */
-function SampleReadinessCard() {
-  const dims = [
-    { label: "Sector fit", score: 82 },
-    { label: "Geography", score: 91 },
-    { label: "Compliance", score: 58 },
-    { label: "Track record", score: 64 },
-    { label: "Documentation", score: 71 },
-  ];
+function ErrorBanner({ children }: { children: React.ReactNode }) {
   return (
-    <aside className="border border-ink bg-paper-2 p-6 lg:p-7">
-      <div className="flex items-baseline justify-between mb-5 pb-4 border-b border-rule">
-        <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-mute">
-          Sample report
-        </p>
-        <p className="font-mono text-[10px] tracking-[0.06em] uppercase text-mute">
-          Mwamba Consulting
-        </p>
-      </div>
+    <div
+      style={{
+        marginBottom: 24,
+        border: `1px solid ${C.neg}`,
+        background: "rgba(156,42,42,0.06)",
+        padding: "12px 16px",
+        fontFamily: F.mono,
+        fontSize: 12,
+        color: C.neg,
+        lineHeight: 1.5,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
 
-      {/* Big score */}
-      <div className="flex items-baseline gap-2 mb-1">
-        <span className="font-serif text-[80px] lg:text-[96px] font-normal leading-none tracking-[-0.03em] text-ink tabular-nums">
-          74
-        </span>
-        <span className="font-serif text-[28px] text-ink-3 leading-none">/100</span>
+function CrawlingBeat({ site }: { site: string }) {
+  return (
+    <div style={{ paddingTop: 32 }}>
+      <div style={{ fontFamily: F.mono, fontSize: 11, letterSpacing: "0.18em", textTransform: "uppercase", color: C.accent, marginBottom: 14 }}>
+        Reading your website
       </div>
-      <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-accent mb-6">
-        Strong fit · Bid-ready in 14 days
+      <h2 style={{ fontFamily: F.display, fontSize: 34, fontWeight: 400, lineHeight: 1.05, letterSpacing: "-0.02em", color: C.ink, margin: "0 0 12px" }}>
+        Detecting your business profile…
+      </h2>
+      <p style={{ fontFamily: F.sans, fontSize: 14, color: C.ink2, marginBottom: 30 }}>
+        5–10 seconds. We&rsquo;ll pre-fill the form with what we read.
       </p>
-
-      {/* Dimensions */}
-      <div className="space-y-3 pt-5 border-t border-rule">
-        {dims.map((d) => (
-          <div key={d.label} className="grid grid-cols-[1fr_auto] items-baseline gap-3">
-            <div>
-              <p className="text-[12px] text-ink mb-1.5">{d.label}</p>
-              <div className="h-[2px] bg-rule">
-                <div
-                  className={d.score < 60 ? "h-full bg-red-700" : d.score < 75 ? "h-full bg-accent" : "h-full bg-ink"}
-                  style={{ width: `${d.score}%` }}
-                />
-              </div>
-            </div>
-            <span className="font-mono text-[11px] text-ink-2 tabular-nums">{d.score}</span>
-          </div>
-        ))}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <span
+          style={{
+            width: 16,
+            height: 16,
+            border: `2px solid ${C.rule}`,
+            borderTopColor: C.accent,
+            borderRadius: 999,
+            display: "inline-block",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+        <span style={{ fontFamily: F.mono, fontSize: 11, letterSpacing: "0.06em", color: C.mute }}>
+          Crawling {site.replace(/^https?:\/\//, "")}…
+        </span>
       </div>
-
-      {/* Bottom strip */}
-      <div className="grid grid-cols-2 gap-4 mt-6 pt-5 border-t border-rule">
-        <div>
-          <p className="font-serif text-[28px] leading-none text-ink tabular-nums">12</p>
-          <p className="font-mono text-[9px] tracking-[0.08em] uppercase text-mute mt-1.5">
-            Matched tenders
-          </p>
-        </div>
-        <div>
-          <p className="font-serif text-[28px] leading-none text-ink tabular-nums">3</p>
-          <p className="font-mono text-[9px] tracking-[0.08em] uppercase text-mute mt-1.5">
-            Compliance gaps
-          </p>
-        </div>
-      </div>
-    </aside>
+    </div>
   );
 }
 
@@ -345,6 +316,7 @@ export default function AssessmentPage() {
 function AssessmentWizard() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const mobile = useMedia("(max-width: 860px)");
   const goalParam = searchParams.get("goal");
   const initialIntent =
     goalParam && VALID_GOAL_PARAMS.has(goalParam) ? goalParam : "";
@@ -357,13 +329,11 @@ function AssessmentWizard() {
     intent: initialIntent,
   });
   const [error, setError] = useState<string | null>(null);
-  const [analysisMsg, setAnalysisMsg] = useState(0);
   const [authedEmail, setAuthedEmail] = useState<string | null>(null);
-  const msgTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   // Guards the landing ?site= hand-off so the auto-crawl fires exactly once.
   const autoCrawlStarted = useRef(false);
 
-  // Detect signed-in users so the page can show its auth state instead of
+  // Detect signed-in users so the chrome can show its auth state instead of
   // looking like an anonymous landing — otherwise users bounced here from
   // /dashboard (when they have no assessment yet) assume they're signed out.
   useEffect(() => {
@@ -384,24 +354,13 @@ function AssessmentWizard() {
 
   const patch = useCallback((p: Partial<WizardData>) => setWizard((d) => ({ ...d, ...p })), []);
 
-  useEffect(() => {
-    if (phase === "analyzing") {
-      setAnalysisMsg(0);
-      msgTimer.current = setInterval(() => {
-        setAnalysisMsg((n) => Math.min(n + 1, ANALYZING_MESSAGES.length - 1));
-      }, 4000);
-    } else if (msgTimer.current) {
-      clearInterval(msgTimer.current);
-    }
-    return () => { if (msgTimer.current) clearInterval(msgTimer.current); };
-  }, [phase]);
-
   const startCrawl = useCallback(async (explicitUrl?: string) => {
     // explicitUrl lets the landing paste-box hand-off (?site=) crawl without
     // waiting for entryUrl state to settle. Guard the type so an onClick event
     // object can never be mistaken for a URL.
     const url = (typeof explicitUrl === "string" ? explicitUrl : entryUrl).trim();
     if (!url) { setPhase("step1"); return; }
+    setEntryUrl(url);
     setPhase("crawling");
     setError(null);
     try {
@@ -461,12 +420,11 @@ function AssessmentWizard() {
       if (!isQueuedAssessmentResponse(data)) {
         throw new Error("Assessment failed");
       }
-      // Wait for the pipeline to finish before handing off, so the
-      // destination renders the ready report rather than a computing state
-      // that doesn't self-refresh. Then route to the canonical
-      // /assessment/[id] view — the same AssessmentChrome the dashboard
-      // renders, so the post-wizard result matches it exactly. The keep-alive
-      // analyzing screen stays up until the navigation resolves.
+      // Wait for the pipeline to finish before handing off, so the destination
+      // renders the ready report rather than a computing state that doesn't
+      // self-refresh. Then route to the canonical /assessment/[id] view — the
+      // same AssessmentChrome the dashboard renders. The analyzing screen stays
+      // up (animating) until the navigation resolves.
       await pollAssessment(data.poll_url);
       router.push(`/assessment/${data.public_id}`);
     } catch (err) {
@@ -478,232 +436,70 @@ function AssessmentWizard() {
   const isWizardStep = (["step1", "step2", "step3"] as WizardPhase[]).includes(phase);
 
   return (
-    <div className="min-h-screen bg-paper text-ink">
-      {/* Editorial header */}
-      <nav className="border-b border-rule bg-paper">
-        <div className="mx-auto max-w-6xl px-6 lg:px-8 flex h-16 items-center justify-between gap-4">
-          <Link href="/" className="font-serif text-[22px] font-medium tracking-[-0.01em] text-ink">
-            Tender<span className="text-accent">·</span>Path
-          </Link>
-          {authedEmail ? (
-            <div className="flex items-center gap-4 sm:gap-6 min-w-0">
-              <span className="hidden sm:inline font-mono text-[10px] tracking-[0.12em] uppercase text-ink-3 truncate max-w-[180px]">
-                {authedEmail}
-              </span>
-              <Link
-                href="/dashboard"
-                className="bg-ink text-paper font-mono text-[11px] tracking-[0.12em] uppercase px-4 py-2 hover:bg-accent transition-colors whitespace-nowrap"
-              >
-                Open dashboard →
-              </Link>
-            </div>
-          ) : (
-            <Link
-              href="/"
-              className="font-mono text-[11px] tracking-[0.12em] uppercase text-ink-3 hover:text-ink transition-colors"
-            >
-              ← Back to home
-            </Link>
-          )}
-        </div>
-      </nav>
+    <div style={{ minHeight: "100vh", background: C.paper, color: C.ink, display: "flex", flexDirection: "column", fontFamily: F.sans }}>
+      <FlowChrome phase={phase} authedEmail={authedEmail} />
 
-      {/* ── ENTRY: hero + sample card right rail ─────────────────────────── */}
-      {phase === "entry" && (
-        <div className="mx-auto max-w-6xl px-6 lg:px-8 py-14 lg:py-20">
-          <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-accent mb-6">
-            {authedEmail ? `Signed in · Start a new assessment · 3 minutes` : `Free · No login · 3 minutes`}
-          </p>
-          <div className="grid lg:grid-cols-[1.2fr_1fr] gap-10 lg:gap-16 items-start">
-            {/* Left — pitch + form */}
-            <div>
-              <h1 className="font-serif text-[44px] sm:text-[56px] lg:text-[68px] font-normal leading-[0.98] tracking-[-0.025em] text-ink text-balance mb-6">
-                See your <em className="italic text-accent">readiness</em><br />
-                before you draft<br />
-                a single proposal.
-              </h1>
-              <p className="text-[16px] lg:text-[17px] text-ink-2 leading-[1.55] max-w-xl mb-10">
-                Match your business to 2,000+ live UN tenders across 15+ agencies.
-                Get a 5-dimension readiness score, gap analysis, and the specific
-                opportunities worth your week of evenings.
-              </p>
+      <main
+        style={{
+          flex: 1,
+          width: "100%",
+          maxWidth: 1200,
+          margin: "0 auto",
+          padding: mobile ? "0 18px 64px" : "0 56px 80px",
+          boxSizing: "border-box",
+        }}
+      >
+        {phase === "entry" && (
+          <EntryScreen
+            initialUrl={entryUrl}
+            authedEmail={authedEmail}
+            onReadSite={(url) => void startCrawl(url)}
+            onStartScratch={() => setPhase("step1")}
+          />
+        )}
 
-              {/* URL form */}
-              <div className="border-t border-ink pt-8 mb-6">
-                <label className="font-mono text-[10px] tracking-[0.16em] uppercase text-mute mb-3 block">
-                  Step 00 · Your website (optional)
-                </label>
-                <div className="grid grid-cols-[1fr_auto] gap-0">
-                  <input
-                    type="text"
-                    value={entryUrl}
-                    onChange={(e) => setEntryUrl(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && entryUrl.trim() && startCrawl()}
-                    placeholder="yourcompany.com"
-                    className="bg-transparent border-b border-ink px-0 py-3 font-serif text-[22px] text-ink placeholder:text-mute focus:outline-none focus:border-accent"
-                  />
-                  <button
-                    onClick={() => startCrawl()}
-                    disabled={!entryUrl.trim()}
-                    className="bg-ink text-paper font-mono text-[11px] tracking-[0.12em] uppercase px-6 hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    Read site →
-                  </button>
-                </div>
-                <p className="font-mono text-[10px] tracking-[0.04em] text-mute mt-3">
-                  We&rsquo;ll crawl your site, detect sectors and capabilities, and pre-fill the form.
-                </p>
+        {phase === "analyzing" && (
+          <>
+            {error && (
+              <div style={{ maxWidth: 720, margin: "0 auto", paddingTop: 28 }}>
+                <ErrorBanner>{error}</ErrorBanner>
               </div>
+            )}
+            <AnalyzingScreen site={wizard.website || entryUrl} wizard={wizard} />
+          </>
+        )}
 
-              <div className="flex items-center gap-4">
-                <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-mute">or</span>
-                <button
-                  onClick={() => setPhase("step1")}
-                  className="font-mono text-[11px] tracking-[0.12em] uppercase text-ink border-b border-ink hover:text-accent hover:border-accent pb-1"
-                >
-                  Start from scratch · 3 min →
-                </button>
-              </div>
+        {(phase === "crawling" || isWizardStep) && (
+          <div className="d2-scope" style={{ maxWidth: 720, margin: "0 auto", paddingTop: mobile ? 24 : 40 }}>
+            {error && <ErrorBanner>{error}</ErrorBanner>}
 
-              {/* Bottom: what you get */}
-              <ul className="grid sm:grid-cols-2 gap-x-8 gap-y-3 mt-12 pt-8 border-t border-rule">
-                {[
-                  "Vendor readiness score across 5 dimensions",
-                  "Live tender + grant matches from 15+ agencies",
-                  "Compliance gap analysis with specific fixes",
-                  "Recommended next step based on your profile",
-                ].map((item, i) => (
-                  <li key={item} className="flex items-baseline gap-3">
-                    <span className="font-mono text-[10px] tracking-[0.06em] text-mute tabular-nums">
-                      0{i + 1}
-                    </span>
-                    <span className="text-[13px] text-ink-2 leading-snug">{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {phase === "crawling" && <CrawlingBeat site={entryUrl} />}
 
-            {/* Right — sample readiness card */}
-            <div className="lg:sticky lg:top-24">
-              <SampleReadinessCard />
-              <p className="font-mono text-[10px] tracking-[0.06em] text-mute mt-4 text-center">
-                You&rsquo;ll get a report like this · sample data shown
-              </p>
-            </div>
+            {isWizardStep && <WizardProgress phase={phase} />}
+
+            {/* Live opportunity signal — appears once sector (Step 2) and
+                country (Step 1) are both selected. */}
+            {(phase === "step2" || phase === "step3") && (
+              <OpportunitySignal sectors={wizard.sectors} countries={wizard.operatingCountries} />
+            )}
+
+            {phase === "step1" && (
+              <Step1 data={wizard} preview={preview} onChange={patch} onNext={() => setPhase("step2")} />
+            )}
+            {phase === "step2" && (
+              <Step2 data={wizard} preview={preview} onChange={patch} onBack={() => setPhase("step1")} onNext={() => setPhase("step3")} />
+            )}
+            {phase === "step3" && (
+              <Step3 data={wizard} onChange={patch} onBack={() => setPhase("step2")} onNext={runAssessment} />
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </main>
 
-      {/* ── CRAWLING / WIZARD / ANALYZING / RESULTS ──────────────────────── */}
-      {phase !== "entry" && (
-        <div className="mx-auto max-w-3xl px-6 lg:px-8 py-12 lg:py-16">
-          {error && (
-            <div className="mb-6 border border-red-700 bg-red-50 px-4 py-3 font-mono text-[12px] text-red-900">
-              {error}
-            </div>
-          )}
-
-          {phase === "crawling" && (
-            <div className="py-20">
-              <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-accent mb-4">
-                Reading your website
-              </p>
-              <h2 className="font-serif text-[28px] sm:text-[32px] lg:text-[40px] font-normal leading-[1.05] tracking-[-0.02em] text-ink mb-3">
-                Detecting your business profile…
-              </h2>
-              <p className="text-[14px] text-ink-2 mb-10">
-                5–10 seconds. We&rsquo;ll pre-fill the form with what we read.
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="w-4 h-4 border-2 border-rule border-t-accent rounded-full animate-spin" />
-                <p className="font-mono text-[11px] tracking-[0.06em] text-ink-3">
-                  Crawling {entryUrl.replace(/^https?:\/\//, "")}…
-                </p>
-              </div>
-            </div>
-          )}
-
-          {isWizardStep && <WizardProgress phase={phase} />}
-
-          {/* Live opportunity signal — appears once sector (Step 2) and country
-              (Step 1) are both selected, giving an early sense of how big the
-              user's opportunity pool is before they finish. */}
-          {(phase === "step2" || phase === "step3") && (
-            <OpportunitySignal
-              sectors={wizard.sectors}
-              countries={wizard.operatingCountries}
-            />
-          )}
-
-          {phase === "step1" && (
-            <Step1 data={wizard} preview={preview} onChange={patch} onNext={() => setPhase("step2")} />
-          )}
-          {phase === "step2" && (
-            <Step2
-              data={wizard}
-              preview={preview}
-              onChange={patch}
-              onBack={() => setPhase("step1")}
-              onNext={() => setPhase("step3")}
-            />
-          )}
-          {phase === "step3" && (
-            <Step3 data={wizard} onChange={patch} onBack={() => setPhase("step2")} onNext={runAssessment} />
-          )}
-
-          {phase === "analyzing" && (
-            <div className="py-12">
-              <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-accent mb-4">
-                Running your assessment
-              </p>
-              <h2 className="font-serif text-[28px] sm:text-[32px] lg:text-[40px] font-normal leading-[1.05] tracking-[-0.02em] text-ink mb-3">
-                Scoring readiness and matching tenders…
-              </h2>
-              <p className="text-[14px] text-ink-2 mb-10">15–30 seconds.</p>
-
-              <ol className="space-y-0 border-t border-rule">
-                {ANALYZING_MESSAGES.map((msg, i) => {
-                  const done = analysisMsg > i;
-                  const active = analysisMsg === i;
-                  return (
-                    <li
-                      key={msg}
-                      className="grid grid-cols-[44px_1fr_auto] gap-4 py-4 border-b border-rule items-baseline"
-                    >
-                      <span
-                        className={`font-mono text-[11px] tracking-[0.06em] tabular-nums ${
-                          done ? "text-accent" : active ? "text-ink" : "text-mute"
-                        }`}
-                      >
-                        0{i + 1}
-                      </span>
-                      <span
-                        className={`text-[14px] leading-snug ${
-                          done ? "text-ink-3" : active ? "text-ink font-medium" : "text-mute"
-                        }`}
-                      >
-                        {msg}
-                      </span>
-                      <span
-                        className={`font-mono text-[10px] tracking-[0.1em] uppercase ${
-                          done ? "text-accent" : active ? "text-ink-2" : "text-mute"
-                        }`}
-                      >
-                        {done ? "Done" : active ? "Running…" : "Queued"}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ol>
-            </div>
-          )}
-        </div>
-      )}
-
-      <footer className="border-t border-rule py-8 text-center">
-        <p className="font-mono text-[10px] tracking-[0.08em] uppercase text-mute">
+      <footer style={{ borderTop: `1px solid ${C.rule}`, padding: "32px 0", textAlign: "center" }}>
+        <p style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: C.mute, margin: 0 }}>
           © {new Date().getFullYear()} TenderPath ·{" "}
-          <Link href="/" className="border-b border-mute hover:text-ink hover:border-ink">
+          <Link href="/" style={{ color: C.mute, borderBottom: `1px solid ${C.rule}`, textDecoration: "none" }}>
             Back to home
           </Link>
         </p>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { C, F } from "@/components/workbench/tokens";
 
 export const metadata = {
   title: "Contact — TenderPath",
@@ -7,21 +8,37 @@ export const metadata = {
 
 export default function ContactPage() {
   return (
-    <div className="min-h-screen bg-white">
+    <div style={{ minHeight: "100vh", background: C.paper, color: C.ink, fontFamily: F.sans }}>
       {/* Nav */}
-      <nav className="border-b border-gray-100 bg-white/95 backdrop-blur-sm sticky top-0 z-50">
-        <div className="mx-auto max-w-7xl px-6 flex h-14 items-center justify-between">
-          <Link href="/" className="text-lg font-semibold text-gray-900">
-            Tender<span className="text-amber-500">Path</span>
+      <nav
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 50,
+          background: "rgba(246,243,236,0.9)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          borderBottom: `1px solid ${C.rule}`,
+        }}
+      >
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Link href="/" style={{ display: "flex", alignItems: "baseline", gap: 6, textDecoration: "none" }}>
+            <span style={{ fontFamily: F.display, fontSize: 20, fontWeight: 500, color: C.ink, letterSpacing: "-0.01em" }}>TenderPath</span>
+            <span style={{ color: C.accent, fontFamily: F.display, fontSize: 20 }}>·</span>
           </Link>
-          <Link href="/" className="text-sm text-gray-500 hover:text-gray-900">← Back to home</Link>
+          <Link href="/" style={{ fontFamily: F.mono, fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: C.mute, textDecoration: "none" }}>
+            ← Back to home
+          </Link>
         </div>
       </nav>
 
-      <div className="mx-auto max-w-4xl px-6 py-16">
-        <div className="mb-12">
-          <h1 className="font-serif text-4xl font-bold text-gray-900 mb-4">Get in Touch</h1>
-          <p className="text-gray-500 text-lg">
+      <div className="legal-body mx-auto max-w-4xl px-6 py-16">
+        <div className="mb-12" style={{ borderBottom: `1px solid ${C.ink}`, paddingBottom: 20 }}>
+          <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase", color: C.accent, marginBottom: 12 }}>
+            TenderPath · Support
+          </div>
+          <h1 style={{ fontFamily: F.display, fontSize: 44, fontWeight: 400, letterSpacing: "-0.025em", lineHeight: 1.02, color: C.ink, margin: 0 }}>Get in touch</h1>
+          <p style={{ fontFamily: F.sans, fontSize: 16, color: C.ink2, lineHeight: 1.55, margin: "14px 0 0" }}>
             We&apos;re here to help you navigate UN procurement. Reach out anytime.
           </p>
         </div>
@@ -98,9 +115,11 @@ export default function ContactPage() {
         </div>
       </div>
 
-      <footer className="border-t border-gray-100 py-8 text-center text-xs text-gray-400">
-        © {new Date().getFullYear()} TenderPath. All rights reserved. |{" "}
-        <Link href="/" className="underline hover:text-gray-600">Home</Link>
+      <footer style={{ borderTop: `1px solid ${C.rule}`, padding: "32px 0", textAlign: "center" }}>
+        <p style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: C.faint, margin: 0 }}>
+          © {new Date().getFullYear()} TenderPath. All rights reserved. ·{" "}
+          <Link href="/" style={{ color: C.mute, textDecoration: "none", borderBottom: `1px solid ${C.rule}`, paddingBottom: 1 }}>Home</Link>
+        </p>
       </footer>
     </div>
   );

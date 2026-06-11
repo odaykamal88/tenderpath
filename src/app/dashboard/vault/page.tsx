@@ -29,8 +29,8 @@ const TYPES: { value: DocType; label: string }[] = [
 
 const EXPIRY_WARN_DAYS = 60;
 
-const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
-const SERIF = "'Fraunces', 'Times New Roman', serif";
+const MONO = "var(--font-mono), ui-monospace, monospace";
+const SERIF = "var(--font-serif), Georgia, serif";
 
 function authHeaders(): HeadersInit {
   const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
@@ -227,7 +227,7 @@ export default function VaultPage() {
       title="Unlock the document vault"
       description="Preview the compliance library and expiry tracking. A subscription lets you store reusable bid documents and connect them to readiness gaps."
     >
-      <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-[1400px]">
+      <div className="d2-scope px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-[1400px]">
         {/* Header */}
         <header className="flex items-end justify-between gap-6 mb-2">
           <div>
