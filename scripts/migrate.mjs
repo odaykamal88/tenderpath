@@ -592,6 +592,59 @@ CREATE INDEX IF NOT EXISTS messaging_identities_user_idx ON messaging_identities
 -- One-time deep-link token for bot account linking (separate from login magic_token).
 ALTER TABLE users ADD COLUMN IF NOT EXISTS bot_link_token TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS bot_link_token_expires_at TIMESTAMPTZ;
+
+-- Submissions workflow (EOI/RFQ/ITB/RFP paid orders). One shared order object
+-- drives the vendor dashboard and the ops queue; events[] is the truth log.
+-- Mirrored by ensureSubmissionsSchema() in src/lib/submissions/store.ts.
+CREATE TABLE IF NOT EXISTS submission_orders (
+  id SERIAL PRIMARY KEY,
+  ref TEXT UNIQUE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  work_order_id INTEGER,
+  type TEXT NOT NULL,
+  price_cents INTEGER NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'usd',
+  tender TEXT NOT NULL,
+  agency TEXT,
+  source TEXT,
+  portal TEXT,
+  tender_id INTEGER,
+  pipeline_item_id INTEGER,
+  due DATE,
+  value TEXT,
+  fit INTEGER,
+  stage TEXT NOT NULL DEFAULT 'intake',
+  pct INTEGER NOT NULL DEFAULT 0,
+  round INTEGER NOT NULL DEFAULT 0,
+  stage_note TEXT,
+  sla_mins INTEGER NOT NULL DEFAULT 60,
+  completeness INTEGER NOT NULL DEFAULT 0,
+  blockers JSONB NOT NULL DEFAULT '[]'::jsonb,
+  intake JSONB NOT NULL DEFAULT '[]'::jsonb,
+  intake_fields JSONB NOT NULL DEFAULT '{}'::jsonb,
+  deliverables JSONB NOT NULL DEFAULT '[]'::jsonb,
+  events JSONB NOT NULL DEFAULT '[]'::jsonb,
+  revision_notes TEXT,
+  amendments JSONB NOT NULL DEFAULT '[]'::jsonb,
+  qna JSONB NOT NULL DEFAULT '[]'::jsonb,
+  outcome JSONB NOT NULL DEFAULT '{"state":"pending"}'::jsonb,
+  shepherd JSONB NOT NULL DEFAULT '{"checked":[]}'::jsonb,
+  paid_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS submission_orders_user_idx ON submission_orders (user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS submission_orders_stage_idx ON submission_orders (stage, updated_at DESC);
+CREATE INDEX IF NOT EXISTS submission_orders_wo_idx ON submission_orders (work_order_id);
+
+-- Server-side wizard autosave: one draft per user x format.
+CREATE TABLE IF NOT EXISTS submission_drafts (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  draft JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (user_id, type)
+);
 `;
 
 async function migrate() {
