@@ -41,6 +41,8 @@ interface PayContext {
   pipelineItemId: string | null;
   workOrderId: string | null;
   submissionType: string | null;
+  /** Submissions-workflow order attached to this checkout (EOI/RFQ/ITB/RFP wizard). */
+  submissionOrderId: string | null;
 }
 
 interface FulfillmentReadiness {
@@ -135,6 +137,7 @@ function CardTab({ plan, context, disabledReason, freeEligible }: { plan: string
           pipeline_item_id: context.pipelineItemId,
           work_order_id: context.workOrderId,
           submission_type: context.submissionType,
+          submission_order_id: context.submissionOrderId,
         }),
       });
       const data = (await res.json()) as { clientSecret?: string; free?: boolean; url?: string; error?: string };
@@ -583,6 +586,7 @@ function PayPage() {
     pipelineItemId: searchParams.get("pipeline_item_id"),
     workOrderId: searchParams.get("work_order_id"),
     submissionType: searchParams.get("submission_type"),
+    submissionOrderId: searchParams.get("submission_order_id"),
   };
   const [selectedSlug, setSelectedSlug] = useState<string | null>(planSlug);
   const [storedTab, setStoredTab] = useState<Tab>("card");

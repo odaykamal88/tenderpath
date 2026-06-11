@@ -11,6 +11,10 @@ import {
   evaluateServiceFulfillmentGate,
   markWorkOrderForFulfillmentGate,
 } from "@/lib/service-fulfillment-gates";
+import {
+  getOrderByWorkOrder,
+  markSubmissionOrderPaidByWorkOrder,
+} from "@/lib/submissions/store";
 
 export const WORK_ORDER_PLANS = new Set([
   "bid-no-bid",
@@ -162,6 +166,57 @@ export async function createWorkOrderFromCheckout(
     });
     return;
   }
+  // Submissions workflow (EOI/RFQ/ITB/RFP): a work order linked to a
+  // submission_orders row is fulfilled by the ops drafting queue, NOT the LLM
+  // proposal generator — the wizard already gated intake at ≥80%, so the
+  // service-fulfillment gate is skipped too. Payment here just flips the order
+  // live (paid_at starts the SLA clock) and sends the order-received email.
+  if (order) {
+    let submissionOrder = null;
+    try {
+      submissionOrder = await getOrderByWorkOrder(order.id as number);
+    } catch (err) {
+      console.error("[tp:submissions:paid_lookup_failed]", {
+        workOrderId: order.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    if (submissionOrder) {
+      const previousStatus = order.previous_payment_status as string | null | undefined;
+      if (session.payment_status === "paid" && previousStatus !== "paid") {
+        const live = await markSubmissionOrderPaidByWorkOrder(
+          order.id as number,
+          (session.amount_total as number | null) ?? null,
+          (session.currency as string | null) ?? null,
+        );
+        console.info("[tp:submissions:order_paid]", {
+          workOrderId: order.id,
+          submissionOrderId: submissionOrder.id,
+          ref: submissionOrder.ref,
+          type: submissionOrder.type,
+          alreadyPaid: live === null,
+        });
+        sendWorkOrderPaidNotifications({
+          id: order.id as number,
+          plan: order.plan as string,
+          serviceSlug: (order.service_slug as string | null) ?? `submission-${submissionOrder.type.toLowerCase()}`,
+          email: (order.email as string | null) ?? email,
+          tenderTitle: order.tender_title as string | null,
+          agency: order.agency as string | null,
+          paymentStatus: order.payment_status as string | null,
+          amountCents: order.amount_cents as number | null,
+          currency: order.currency as string | null,
+        }).catch((err) => {
+          console.error("[tp:work_order_email:failed]", {
+            workOrderId: order.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
+      return;
+    }
+  }
+
   let fulfillmentGate: Awaited<ReturnType<typeof evaluateServiceFulfillmentGate>> | null = null;
   if (order) {
     try {

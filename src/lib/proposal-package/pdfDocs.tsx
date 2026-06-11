@@ -13,6 +13,7 @@ import type {
 import { getLeafCriteria } from "./gap-routing";
 import type { ApplicantContext } from "./applicant-context";
 import type { RevisionAttemptSummary } from "./revision-loop";
+import type { DeliverableDoc, DocBlock } from "@/lib/submissions/doc-content";
 
 const GOLD = "#b08530";
 const INK = "#1a1a1a";
@@ -773,6 +774,131 @@ export async function renderSubmissionInstructionsPdf(
         <View style={{ position: "absolute", bottom: 28, left: 48, right: 48, flexDirection: "row", justifyContent: "space-between" }}>
           <Text style={[styles.mono, { fontSize: 7, color: INK3 }]}>Generated {ctx.generatedAt}</Text>
           <Text style={[styles.mono, { fontSize: 7, color: INK3 }]}>tenderpath.me · {tag}</Text>
+        </View>
+      </Page>
+    </Document>
+  );
+  const blob = await pdf(Doc).toBlob();
+  return Buffer.from(await blob.arrayBuffer());
+}
+
+/* ── Submissions workflow (EOI/RFQ/ITB/RFP) deliverable renderer ──────────
+ *
+ * Renders the reader's block model (src/lib/submissions/doc-content.ts) so the
+ * exported PDF is byte-for-byte the document the client approved in-app. Lives
+ * here per the AGENTS.md Golden Rule: shareable artefacts exit only through
+ * pdfDocs.tsx. */
+
+
+function SubmissionBlock({ block }: { block: DocBlock }) {
+  switch (block.b) {
+    case "h1":
+      return (
+        <Text style={{ fontSize: 20, fontFamily: "Helvetica-Bold", letterSpacing: -0.3, color: INK, marginBottom: 10, paddingBottom: 8, borderBottomWidth: 2, borderBottomColor: INK }}>
+          {block.text}
+        </Text>
+      );
+    case "h2":
+      return (
+        <Text style={{ fontSize: 13, fontFamily: "Helvetica-Bold", color: INK, marginTop: 14, marginBottom: 6 }}>
+          {block.text}
+        </Text>
+      );
+    case "p":
+      return <Text style={{ fontSize: 10.5, color: INK, lineHeight: 1.55, marginBottom: 8 }}>{block.text}</Text>;
+    case "kv":
+      return (
+        <View style={{ marginVertical: 8, borderTopWidth: 1, borderTopColor: RULE }}>
+          {block.rows.map(([k, v], i) => (
+            <View key={i} style={{ flexDirection: "row", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: RULE }}>
+              <Text style={[styles.label, { width: 130 }]}>{k}</Text>
+              <Text style={{ fontSize: 10, color: INK, flex: 1, lineHeight: 1.4 }}>{v}</Text>
+            </View>
+          ))}
+        </View>
+      );
+    case "list":
+      return (
+        <View style={{ marginBottom: 8 }}>
+          {block.items.map((item, i) => (
+            <Text key={i} style={[styles.bullet, { color: INK2 }]}>· {item}</Text>
+          ))}
+        </View>
+      );
+    case "table":
+      return (
+        <View style={{ marginVertical: 8 }}>
+          <View style={{ flexDirection: "row", paddingBottom: 5, borderBottomWidth: 1, borderBottomColor: INK }}>
+            {block.head.map((h, i) => (
+              <Text key={i} style={[styles.label, { flex: i === 0 ? 2.4 : 1, textAlign: block.align?.[i] === "r" ? "right" : "left" }]}>
+                {h}
+              </Text>
+            ))}
+          </View>
+          {block.rows.map((row, ri) => (
+            <View key={ri} style={{ flexDirection: "row", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: RULE }}>
+              {row.map((cell, ci) => (
+                <Text
+                  key={ci}
+                  style={{
+                    fontSize: 9.5,
+                    color: ci === 0 ? INK : INK2,
+                    flex: ci === 0 ? 2.4 : 1,
+                    lineHeight: 1.4,
+                    paddingRight: 6,
+                    textAlign: block.align?.[ci] === "r" ? "right" : "left",
+                  }}
+                >
+                  {cell}
+                </Text>
+              ))}
+            </View>
+          ))}
+        </View>
+      );
+    case "note":
+      return (
+        <View style={{ marginVertical: 8, borderLeftWidth: 2, borderLeftColor: GOLD, paddingLeft: 10 }}>
+          <Text style={{ fontSize: 9.5, color: INK2, lineHeight: 1.5 }}>{block.text}</Text>
+        </View>
+      );
+    case "sig":
+      return (
+        <View style={{ marginTop: 22 }}>
+          <View style={{ width: 220, borderBottomWidth: 1, borderBottomColor: INK, height: 26 }} />
+          <Text style={[styles.label, { marginTop: 4, color: GOLD }]}>{block.label}</Text>
+        </View>
+      );
+    default:
+      return null;
+  }
+}
+
+/**
+ * One submission deliverable → PDF. `stamp` mirrors the reader:
+ * "DRAFT · QA PASSED" until approval, then "FINAL · SUBMISSION COPY".
+ */
+export async function renderSubmissionDeliverablePdf(
+  doc: DeliverableDoc,
+  opts: { companyName: string; ref: string; stamp: string; generatedAt: string },
+): Promise<Buffer> {
+  const Doc = (
+    <Document title={`${doc.name} · ${opts.ref}`} author="TenderPath">
+      <Page size="A4" style={styles.page}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 14 }}>
+          <Text style={[styles.mono, { fontSize: 7, letterSpacing: 1.5, color: GOLD, textTransform: "uppercase" }]}>
+            {opts.companyName} · prepared by TenderPath · {opts.ref}
+          </Text>
+          <Text style={[styles.mono, { fontSize: 7, letterSpacing: 1.5, color: opts.stamp.startsWith("FINAL") ? GREEN : GOLD, textTransform: "uppercase" }]}>
+            {opts.stamp}
+          </Text>
+        </View>
+        {doc.blocks.map((b, i) => (
+          <SubmissionBlock key={i} block={b} />
+        ))}
+        <View style={{ position: "absolute", bottom: 28, left: 48, right: 48, flexDirection: "row", justifyContent: "space-between" }}>
+          <Text style={[styles.mono, { fontSize: 7, color: INK3 }]}>Generated {opts.generatedAt}</Text>
+          <Text style={[styles.mono, { fontSize: 7, color: INK3 }]}>tenderpath.me · {opts.ref}</Text>
         </View>
       </Page>
     </Document>

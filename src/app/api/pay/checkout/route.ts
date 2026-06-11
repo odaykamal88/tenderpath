@@ -11,6 +11,7 @@ import { PROPOSAL_PLAN, ROSTER_PLAN } from "@/lib/proposal-package/types";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { consumeFreeSubmissionForProposal } from "@/lib/free-submission";
 import { configuredSubmissionPriceId } from "@/lib/workbench/pricing";
+import { getOrderForUser } from "@/lib/submissions/store";
 
 const SLUG_TO_PRICE_ENV: Record<string, string> = {
   "bid-no-bid":              "STRIPE_BIDNOBID_PRICE_ID",
@@ -72,6 +73,9 @@ export async function POST(request: Request) {
     pipeline_item_id?: string | number | null;
     work_order_id?: string | number | null;
     submission_type?: string | null;
+    /** Submissions-workflow order (EOI/RFQ/ITB/RFP wizard) attached to this
+     *  checkout — fulfilled by the ops queue, not the LLM generator. */
+    submission_order_id?: string | number | null;
   };
   const requestedPlan = body.plan;
 
@@ -149,7 +153,34 @@ export async function POST(request: Request) {
     const pipelineItemId = metadataValue(String(body.pipeline_item_id ?? ""));
     const workOrderId = metadataValue(String(body.work_order_id ?? ""));
     const parsedWorkOrderId = workOrderId && /^\d+$/.test(workOrderId) ? Number(workOrderId) : null;
+    const submissionOrderIdRaw = metadataValue(String(body.submission_order_id ?? ""));
+    const parsedSubmissionOrderId =
+      submissionOrderIdRaw && /^\d+$/.test(submissionOrderIdRaw) ? Number(submissionOrderIdRaw) : null;
     const checkoutUser = await getUserFromRequest(request);
+
+    // Submissions-workflow checkout: verify the order exists, belongs to the
+    // signed-in user, and is linked to this work order. The wizard's ≥80%
+    // intake gate already passed at commission — that gate is authoritative
+    // for this flow, so the proposal-draft fulfillment gate is skipped below.
+    let submissionWorkflow = false;
+    if (parsedSubmissionOrderId) {
+      if (!checkoutUser) {
+        return NextResponse.json(
+          { error: "Sign in before paying for a submission.", code: "AUTH_REQUIRED" },
+          { status: 401 },
+        );
+      }
+      const subOrder = await getOrderForUser(checkoutUser.id, parsedSubmissionOrderId);
+      if (!subOrder || (parsedWorkOrderId && subOrder.workOrderId !== parsedWorkOrderId)) {
+        console.warn("[pay:checkout:submission_order_mismatch]", {
+          submissionOrderId: parsedSubmissionOrderId,
+          workOrderId: parsedWorkOrderId,
+          userId: checkoutUser.id,
+        });
+        return NextResponse.json({ error: "Submission order not found." }, { status: 404 });
+      }
+      submissionWorkflow = true;
+    }
 
     if (parsedWorkOrderId) {
       if (!checkoutUser) {
@@ -201,11 +232,13 @@ export async function POST(request: Request) {
       }
     }
 
-    const gate = await evaluateServiceFulfillmentGate({
-      plan,
-      workOrderId: parsedWorkOrderId,
-    });
-    if (!gate.payment_allowed) {
+    const gate = submissionWorkflow
+      ? null
+      : await evaluateServiceFulfillmentGate({
+          plan,
+          workOrderId: parsedWorkOrderId,
+        });
+    if (gate && !gate.payment_allowed) {
       return NextResponse.json(
         {
           error: gate.message,
@@ -230,6 +263,9 @@ export async function POST(request: Request) {
         pipelineItemId: pipelineItemId || null,
         tenderTitle: tender || null,
         agency: agency || null,
+        successRedirect: submissionWorkflow
+          ? `/dashboard/proposals?placed=${parsedSubmissionOrderId}&free=1`
+          : undefined,
       });
       if (free.applied && free.redirectUrl) {
         await track(
@@ -253,8 +289,11 @@ export async function POST(request: Request) {
     // see generation progress immediately — no intermediate /pay/success
     // page. Subscription tiers + standalone purchases keep the existing
     // /pay/success landing for receipt + activation messaging.
-    const returnUrl =
-      parsedWorkOrderId && !SUBSCRIPTION_PLANS.has(plan)
+    // Submissions-workflow orders land back on the Submissions page where the
+    // "Order placed" confirmation + live order drawer take over.
+    const returnUrl = submissionWorkflow
+      ? `${origin}/dashboard/proposals?placed=${parsedSubmissionOrderId}`
+      : parsedWorkOrderId && !SUBSCRIPTION_PLANS.has(plan)
         ? `${origin}/dashboard/work-orders/${parsedWorkOrderId}?paid=1`
         : `${origin}/pay/success?${returnParams.toString()}`;
 
@@ -321,7 +360,8 @@ export async function POST(request: Request) {
         pipeline_item_id: pipelineItemId,
         work_order_id: workOrderId,
         submission_type: submissionTypeRaw,
-        ...gate.metadata,
+        submission_order_id: submissionOrderIdRaw,
+        ...(gate?.metadata ?? {}),
       },
     });
 
@@ -334,10 +374,11 @@ export async function POST(request: Request) {
         is_subscription: SUBSCRIPTION_PLANS.has(plan),
         work_order_id: workOrderId || null,
         pipeline_item_id: pipelineItemId || null,
+        submission_order_id: submissionOrderIdRaw || null,
         stripe_session_id: session.id,
-        fulfillment_mode: gate.mode,
-        readiness_code: gate.code,
-        readiness_score: gate.score_0_10,
+        fulfillment_mode: gate?.mode ?? "submission_workflow",
+        readiness_code: gate?.code ?? null,
+        readiness_score: gate?.score_0_10 ?? null,
         trial_days_remaining: trialDaysRemaining,
       },
       { userId: checkoutUser?.id ?? null },
