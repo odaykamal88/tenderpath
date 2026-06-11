@@ -204,6 +204,13 @@ html {
 .d2-scope .text-red-900 { color: #6e1f1f; }
 .d2-scope .border-red-600 { border-color: #9c2a2a; }
 .d2-scope .hover\:text-red-600:hover { color: #9c2a2a; }
+.d2-scope .text-emerald-600, .d2-scope .text-emerald-700 { color: #1f6b3d; }
+.d2-scope .bg-emerald-500 { background-color: #1f6b3d; }
+.d2-scope .border-emerald-300, .d2-scope .border-emerald-600 { border-color: #1f6b3d; }
+.d2-scope .hover\:border-emerald-600:hover { border-color: #1f6b3d; }
+.d2-scope .bg-sky-500 { background-color: #1c3a5f; }
+.d2-scope .text-sky-700 { color: #1c3a5f; }
+.d2-scope .bg-amber-500 { background-color: #b3691a; }
 .d2-scope .rounded, .d2-scope .rounded-sm, .d2-scope .rounded-md, .d2-scope .rounded-lg, .d2-scope .rounded-xl { border-radius: 0; }
 .d2-scope .shadow, .d2-scope .shadow-sm, .d2-scope .shadow-md { box-shadow: none; }
 

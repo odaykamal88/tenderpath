@@ -205,7 +205,7 @@ export default async function ServiceDetailPage({
     : null;
 
   return (
-    <div className="px-8 py-8 max-w-[1400px]">
+    <div className="d2-scope px-8 py-8 max-w-[1400px]">
       {/* Back link */}
       <Link
         href="/dashboard/services"

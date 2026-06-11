@@ -28,8 +28,8 @@ interface WorkOrder {
   updated_at: string;
 }
 
-const MONO = "'IBM Plex Mono', 'SF Mono', ui-monospace, monospace";
-const SERIF = "'Fraunces', 'Times New Roman', serif";
+const MONO = "var(--font-mono), ui-monospace, monospace";
+const SERIF = "var(--font-serif), Georgia, serif";
 
 function authHeaders(): HeadersInit {
   const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
@@ -108,7 +108,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
 
   if (loading) {
     return (
-      <div className="px-8 py-16 text-[13px] text-ink-3" style={{ fontFamily: MONO }}>
+      <div className="d2-scope px-8 py-16 text-[13px] text-ink-3" style={{ fontFamily: MONO }}>
         Loading work order…
       </div>
     );
@@ -116,7 +116,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
 
   if (error || !order) {
     return (
-      <div className="px-8 py-8 max-w-[1400px]">
+      <div className="d2-scope px-8 py-8 max-w-[1400px]">
         <div className="rounded-md border-l-2 border-red-600 bg-red-50/40 p-5 text-[14px] text-red-700">
           {error ?? "Work order not found"}
         </div>
@@ -125,7 +125,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   }
 
   return (
-    <div className="px-8 py-8 max-w-[1400px]">
+    <div className="d2-scope px-8 py-8 max-w-[1400px]">
       {/* Back link */}
       <Link
         href="/dashboard/work-orders"
