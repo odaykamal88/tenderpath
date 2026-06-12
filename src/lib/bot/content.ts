@@ -82,14 +82,14 @@ export const FAQ_ANSWERS: Record<string, string> = {
   faq_what_is:
     `<b>What is TenderPath?</b>\n\n` +
     `TenderPath is a procurement intelligence platform that helps businesses find, assess, and win UN contracts and grants.\n\n` +
-    `We crawl 15+ UN agency portals in real time, match opportunities to your company profile, and provide readiness analysis and proposal support.`,
+    `We crawl 30+ UN agency portals in real time, match opportunities to your company profile, and provide readiness analysis and proposal support.`,
 
   faq_assessment:
     `<b>How does the free assessment work?</b>\n\n` +
     `Enter your company name, email, and website (or a short description). Our AI:\n` +
     `• Crawls your website and extracts capabilities\n` +
-    `• Matches you against active tenders from 15+ UN agencies\n` +
-    `• Scores your readiness across 5 dimensions\n\n` +
+    `• Matches you against active tenders from 30+ UN agencies\n` +
+    `• Scores your readiness across 4 dimensions\n\n` +
     `All in under 30 seconds. The report is free and sent to your email.`,
 
   faq_agencies:

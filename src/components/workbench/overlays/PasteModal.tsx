@@ -354,7 +354,12 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
                 price={subType.price}
                 code={subType.code}
                 asksAnswered={asksAnswered}
-                onCommission={() => { onClose(); go("proposals"); }}
+                onCommission={() => {
+                  onClose();
+                  // Deep-link straight into the intake wizard with the detected
+                  // format + this opportunity preselected.
+                  router.push(`/dashboard/proposals?start=${subType.code}${seed ? `&match=${seed.id}` : ""}`);
+                }}
                 onPipelineOnly={() => { onClose(); go("matches"); }}
               />
             )}
@@ -396,7 +401,7 @@ function UpsellBlock({
         <div style={{ flex: 1 }} />
         <Btn kind="ghost" size="sm" onClick={onPipelineOnly} style={{ color: C.paper, borderColor: "#3a4654" }}>Add to pipeline only</Btn>
         <button onClick={onCommission} style={{ background: C.accent, color: C.white, border: 0, padding: "11px 18px", cursor: "pointer", fontFamily: F.mono, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-          Commission proposal →
+          Start the {code} →
         </button>
       </div>
     </>

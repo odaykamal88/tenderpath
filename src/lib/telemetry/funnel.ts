@@ -25,6 +25,9 @@ export const FUNNEL_EVENTS = [
   // First-proposal-free credit redeemed: a trial user's first proposal
   // submission was fulfilled for $0 instead of going through paid checkout.
   "free_submission_redeemed",
+  // Submissions workflow: the intake wizard passed its ≥80% gate and the
+  // pending order + billing work order were created (pre-payment).
+  "submission_commissioned",
 ] as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[number];

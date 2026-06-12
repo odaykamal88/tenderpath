@@ -107,10 +107,18 @@ export default function TermsPage() {
           <li>We will send a renewal reminder at least <strong>30 days</strong> before the next charge.</li>
           <li>You may cancel at any time; cancellation takes effect at the end of the current billing period and you retain access until then.</li>
         </ul>
-        <p className="text-sm font-medium text-gray-800 mt-2 mb-1">Refunds:</p>
+        <p id="refunds" className="text-sm font-medium text-gray-800 mt-2 mb-1">Refunds:</p>
         <ul className="list-disc pl-5 space-y-1 text-sm">
           <li><strong>Subscription fees</strong> paid beyond the current billing period are refunded on a pro-rated basis.</li>
           <li><strong>One-off service fees</strong> (bid/no-bid analysis, proposal packages, roster fast-track) are non-refundable once the service has been delivered.</li>
+          <li>
+            <strong>Submission drafting guarantee (EOI / RFQ / ITB / RFP orders).</strong> If we
+            deliver your draft pack late against the promise shown at checkout, or your submission
+            is rejected by the agency for a compliance error that we made in the documents we
+            drafted, we refund the order in full — no questions. Email{" "}
+            <a href="mailto:info@tenderpath.me" className="underline">info@tenderpath.me</a> with
+            your order reference (TP-…).
+          </li>
           <li>
             <strong>Tender already closed.</strong> If you paid for a Bid/No-Bid or Proposal Package
             tied to a tender whose deadline had passed at checkout — and we failed to block the

@@ -81,6 +81,10 @@ export interface ConsumeFreeSubmissionInput {
   pipelineItemId?: string | number | null;
   tenderTitle?: string | null;
   agency?: string | null;
+  /** Where to land after a successful free fulfillment (relative). Defaults to
+   *  the work-order page; the submissions workflow sends users back to the
+   *  Submissions page where the live order takes over. */
+  successRedirect?: string;
 }
 
 export interface ConsumeFreeSubmissionResult {
@@ -162,7 +166,10 @@ export async function consumeFreeSubmissionForProposal(
     `;
 
     console.info("[tp:free_submission:redeemed]", { userId: user.id, workOrderId });
-    return { applied: true, redirectUrl: `/dashboard/work-orders/${workOrderId}?paid=1&free=1` };
+    return {
+      applied: true,
+      redirectUrl: input.successRedirect ?? `/dashboard/work-orders/${workOrderId}?paid=1&free=1`,
+    };
   } catch (err) {
     // Roll the claim back so the user keeps their credit and can pay or retry.
     await sql`

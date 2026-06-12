@@ -1,13 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
-import styles from "./AssessmentTabs.module.css";
+import { C, F } from "@/components/workbench/tokens";
+import { useMedia } from "@/components/workbench/useMedia";
+import { Eyebrow } from "@/components/workbench/ui";
 
-// Sprint 24 (audit 2026-05-20 UX): action items are now toggleable to-dos.
-// scoreDelta is the share of the parent gap's projected uplift attributed to
-// this step (even split across the gap's effective steps). stepKey is the
-// opaque persistence id sent to /api/assessment/[id]/step-toggle — currently
-// `g{gapIdx}-s{stepIdx}` against the assessment's raw gaps[i].action_steps[j].
+// action items are toggleable to-dos. scoreDelta is the share of the parent
+// gap's projected uplift attributed to this step. stepKey is the persistence id
+// sent to /api/assessment/[id]/step-toggle (`g{gapIdx}-s{stepIdx}`).
 export type Move = {
   title: string;
   why: string;
@@ -30,44 +31,73 @@ export function NextStepsTab({
   /** UUID (assessment public_id) — used to POST step-toggle from the client. */
   assessmentRef: string;
 }) {
+  const mobile = useMedia("(max-width: 860px)");
   const empty = totalSteps === 0 || groups.length === 0;
+
   return (
-    <>
-      <div className={styles.eyebrow}>
+    <div>
+      <p style={{ fontFamily: F.sans, fontSize: 14, color: C.ink2, lineHeight: 1.55, maxWidth: 620, margin: "0 0 4px" }}>
         {empty
-          ? "All identified gaps covered — no scheduled remediation"
-          : `${totalSteps} step${totalSteps === 1 ? "" : "s"} · sequenced · estimated +${projectedDelta} score`}
+          ? "We didn’t find any open readiness gaps for the next 90 days. If new evidence drops out of your vault, or a fresh assessment surfaces a gap, this view refills automatically."
+          : "The order to work in — sequenced by leverage and lead time. Check items off as you complete them; the Navigator walks you through each one, pre-filled, inside the Workbench."}
+      </p>
+      <div style={{ marginBottom: 22 }}>
+        <Eyebrow>
+          {empty
+            ? "All identified gaps covered"
+            : `${totalSteps} step${totalSteps === 1 ? "" : "s"} · projected +${projectedDelta} score`}
+        </Eyebrow>
       </div>
-      <h2 className={styles.sectionTitle}>
-        {empty ? "Nothing in the 90-day queue." : "A 90-day plan, not a checklist."}
-      </h2>
-      {empty ? (
-        <p className={styles.nextWhy} style={{ maxWidth: 560 }}>
-          We did not detect any open readiness gaps for the next 90 days. If new
-          evidence drops out of your vault, or a new assessment surfaces a gap,
-          this view will refill automatically.
-        </p>
-      ) : (
-        groups.map((g, i) => (
-          <div key={i} className={styles.nextGroup}>
-            <span className={`${styles.nextWhen} tp-mono`}>{g.when}</span>
-            <ol className={styles.nextItems}>
-              {g.items.map((m) => (
-                <StepRow key={m.stepKey} move={m} assessmentRef={assessmentRef} />
-              ))}
-            </ol>
-          </div>
-        ))
+
+      {!empty && (
+        <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : `repeat(${Math.min(groups.length, 3)}, 1fr)`, gap: mobile ? 22 : 28 }}>
+          {groups.map((g, gi) => (
+            <div key={gi}>
+              <div style={{ borderTop: `2px solid ${C.ink}`, paddingTop: 10, marginBottom: 6 }}>
+                <div style={{ fontFamily: F.display, fontSize: 18, color: C.ink }}>{g.when}</div>
+                <div style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase", color: C.accent, marginTop: 4 }}>
+                  {g.items.length} {g.items.length === 1 ? "step" : "steps"}
+                </div>
+              </div>
+              <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                {g.items.map((m) => (
+                  <StepRow key={m.stepKey} move={m} assessmentRef={assessmentRef} />
+                ))}
+              </ol>
+            </div>
+          ))}
+        </div>
       )}
-    </>
+
+      {!empty && (
+        <Link
+          href="/dashboard"
+          style={{
+            display: "inline-flex",
+            marginTop: 26,
+            background: C.ink,
+            color: C.paper,
+            border: `1px solid ${C.ink}`,
+            fontFamily: F.mono,
+            fontSize: 11.5,
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            padding: "11px 18px",
+            textDecoration: "none",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          Open the Navigator in your Workbench →
+        </Link>
+      )}
+    </div>
   );
 }
 
 function StepRow({ move, assessmentRef }: { move: Move; assessmentRef: string }) {
-  // Optimistic UI: flip local state immediately, await API roundtrip, revert
-  // on failure. The server is authoritative on next page load (force-dynamic
-  // refetch), so we don't sync back from server on success — the local state
-  // already matches.
+  // Optimistic UI: flip local state immediately, revert on failure. The server
+  // is authoritative on next page load (force-dynamic refetch).
   const [done, setDone] = useState(move.done);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -79,14 +109,11 @@ function StepRow({ move, assessmentRef }: { move: Move; assessmentRef: string })
     setError(null);
     startTransition(async () => {
       try {
-        const res = await fetch(
-          `/api/assessment/${encodeURIComponent(assessmentRef)}/step-toggle`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ stepKey: move.stepKey, done: next }),
-          },
-        );
+        const res = await fetch(`/api/assessment/${encodeURIComponent(assessmentRef)}/step-toggle`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stepKey: move.stepKey, done: next }),
+        });
         if (!res.ok) {
           setDone(prev);
           setError(res.status === 404 ? "Not found" : "Could not save");
@@ -99,33 +126,66 @@ function StepRow({ move, assessmentRef }: { move: Move; assessmentRef: string })
   };
 
   return (
-    <li className={styles.nextRow} data-done={done ? "true" : undefined}>
+    <li style={{ padding: "13px 0", borderBottom: `1px dashed ${C.ruleSoft}` }}>
       <button
         type="button"
         onClick={toggle}
         disabled={pending}
-        className={styles.todoCheckbox}
         aria-pressed={done}
         aria-label={done ? "Mark as not done" : "Mark as done"}
-        title={done ? "Mark as not done" : "Mark as done"}
+        style={{
+          display: "flex",
+          gap: 10,
+          alignItems: "flex-start",
+          width: "100%",
+          textAlign: "left",
+          background: "none",
+          border: 0,
+          padding: 0,
+          cursor: pending ? "default" : "pointer",
+          opacity: done ? 0.6 : 1,
+        }}
       >
-        <span className={styles.todoCheckboxBox} data-checked={done ? "true" : undefined}>
+        <span
+          style={{
+            width: 15,
+            height: 15,
+            flexShrink: 0,
+            marginTop: 2,
+            border: `1px solid ${done ? C.ink : C.rule}`,
+            background: done ? C.ink : "transparent",
+            color: C.paper,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 10,
+            fontFamily: F.mono,
+          }}
+        >
           {done ? "✓" : ""}
         </span>
-        <span className={styles.todoCheckboxBody}>
-          <span className={styles.nextTitle}>{move.title}</span>
-          <span className={styles.nextWhy}>{move.why}</span>
-          {error && <span className={styles.todoError}>{error}</span>}
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+            <span style={{ fontFamily: F.sans, fontSize: 13.5, color: C.ink, fontWeight: 500, lineHeight: 1.3, textDecoration: done ? "line-through" : "none" }}>
+              {move.title}
+            </span>
+            {move.scoreDelta > 0 && (
+              <span style={{ fontFamily: F.mono, fontSize: 11, color: done ? C.faint : C.pos, fontWeight: 600, whiteSpace: "nowrap" }}>
+                +{move.scoreDelta} pts
+              </span>
+            )}
+          </span>
+          {move.why && (
+            <span style={{ display: "block", fontFamily: F.sans, fontSize: 12, color: C.ink2, marginTop: 4, lineHeight: 1.5 }}>
+              {move.why}
+            </span>
+          )}
+          <span style={{ display: "block", fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.08em", textTransform: "uppercase", color: C.mute, marginTop: 6 }}>
+            {move.eta}
+            {error && <span style={{ color: C.neg, marginLeft: 8 }}>{error}</span>}
+          </span>
         </span>
       </button>
-      <span className={`${styles.nextEta} tp-mono`}>{move.eta}</span>
-      <span
-        className={`${styles.stepPoints} tp-mono`}
-        data-state={done ? "earned" : undefined}
-        title={done ? "Counted toward your projected score" : "Pending — check to earn"}
-      >
-        {done ? "+" : "+"}{move.scoreDelta} pts
-      </span>
     </li>
   );
 }

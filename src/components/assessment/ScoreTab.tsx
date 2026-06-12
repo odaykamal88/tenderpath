@@ -1,10 +1,16 @@
-import Link from "next/link";
-import styles from "./AssessmentTabs.module.css";
+"use client";
 
-export type Dimension = { label: string; value: number };
+import Link from "next/link";
+import { useState, type CSSProperties } from "react";
+import { C, F } from "@/components/workbench/tokens";
+import { useMedia } from "@/components/workbench/useMedia";
+import { Eyebrow, Bar, FitBadge, DeadlinePill } from "@/components/workbench/ui";
+import { HowWeCalculate } from "./trust/HowWeCalculateSheet";
+import SignupSheet from "@/app/assessment/SignupSheet";
+
+export type Dimension = { label: string; value: number; peer?: number };
+
 // Kept exported for the email-completion template — see src/lib/email/sendAssessment.ts.
-// ScoreTab itself no longer renders a top-tenders peek (audit 2026-05-21 UX);
-// the Tenders tab and dashboard pipeline cover that intent better.
 export type TenderPeek = {
   code: string;
   title: string;
@@ -20,41 +26,27 @@ export type TenderPeek = {
 
 export type ViewerActivity = {
   pipeline: { total: number; applied: number; inProgress: number; saved: number };
-  // PR-N (2026-05-23): added tender_title so the score-tab "Services in
-  // flight" card can render "Service · Tender name · Status". Stays
-  // optional so older callers / cached responses don't break.
   services: {
-    active: {
-      id: number;
-      service: string;
-      status: string;
-      tender_title?: string | null;
-    }[];
+    active: { id: number; service: string; status: string; tender_title?: string | null }[];
     activeCount: number;
   };
 };
 
-function prettyService(slug: string): string {
-  if (slug === "bid-no-bid") return "Bid-no-bid";
-  if (slug === "proposal-draft" || slug === "proposal") return "Proposal draft";
-  if (slug === "roster-fast-track" || slug === "lta-roster") return "Roster fast-track";
-  if (slug === "grants-tenders-matching" || slug === "digest") return "Tender intelligence";
-  return slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function prettyStatus(status: string): string {
-  if (status === "new") return "queued";
-  if (status === "in_progress") return "in progress";
-  if (status === "waiting_on_client") return "waiting on you";
-  if (status === "delivered") return "ready";
-  return status.replace(/_/g, " ");
+function dimTag(v: number): [string, string] {
+  if (v >= 75) return ["Strong", C.pos];
+  if (v >= 60) return ["Workable", C.mute];
+  return ["Gap", C.neg];
 }
 
 export function ScoreTab({
   score,
   delta,
+  tier,
   summary,
   dimensions,
+  topTenders = [],
+  matchedCount = 0,
+  viewerSignedIn = false,
   activity,
 }: {
   score: number;
@@ -62,108 +54,257 @@ export function ScoreTab({
   tier: string;
   summary: string;
   dimensions: Dimension[];
-  // PR-K (2026-05-23): `recommendedTier` is still accepted by callers but
-  // ignored — the digest "Subscribe →" CTA was removed in favor of a
-  // seamless "Sign in" / "Open dashboard" affordance based on the viewer's
-  // auth state. Keep the prop accepted so /assessment/[id] + /dashboard
-  // can pass it without a type break while we decide what (if any)
-  // tier-recommendation surface replaces it.
-  recommendedTier?: { name: string; price: string; pitch: string };
-  activity?: ViewerActivity | null;
-  // PR-N (2026-05-23): same backward-compat treatment as recommendedTier —
-  // we removed the "Open Dashboard / Sign in" CTA at the bottom of the
-  // aside, so this prop is no longer read. Accept it so callers in
-  // /dashboard and /assessment/[id] keep type-checking without a coordinated
-  // edit.
+  topTenders?: TenderPeek[];
+  matchedCount?: number;
   viewerSignedIn?: boolean;
+  activity?: ViewerActivity | null;
+  recommendedTier?: { name: string; price: string; pitch: string };
 }) {
-  return (
-    <div className={styles.scoreGrid}>
-      <section>
-        <div className={styles.heroRow}>
-          <span className={styles.hero}>{score}</span>
-          <div>
-            <div className={styles.heroDenom}>/100</div>
-            <div className={styles.deltaPos}>
-              {delta >= 0 ? "↑" : "↓"} {delta >= 0 ? "+" : ""}
-              {delta} since last run
-            </div>
-          </div>
-        </div>
-        <ul className={styles.dimList}>
-          {dimensions.map((d) => (
-            <li key={d.label} className={styles.dimRow}>
-              <span>{d.label}</span>
-              <span className={styles.dimBar}>
-                <span
-                  style={{
-                    width: `${d.value}%`,
-                    background:
-                      d.value < 60
-                        ? "var(--tp2-neg)"
-                        : d.value < 75
-                        ? "var(--tp2-warn)"
-                        : "var(--tp2-ink)",
-                  }}
-                />
-              </span>
-              <span className={`${styles.dimVal} tp-mono tp-tabular`}>{d.value}</span>
-            </li>
-          ))}
-        </ul>
-        <p className={styles.summary}>{"“"}{summary}{"”"}</p>
-      </section>
+  const mobile = useMedia("(max-width: 860px)");
+  const [signupOpen, setSignupOpen] = useState(false);
+  const peek = topTenders.slice(0, 4);
+  const activeCount = activity?.services.activeCount ?? 0;
 
-      <aside>
-        {/* PR-N (2026-05-23): "Your pipeline" card removed entirely — the
-            sidebar already exposes pipeline depth, and the empty-state
-            for a fresh user was reading as filler. The "Open dashboard /
-            Sign in" CTA is also gone: signed-in viewers are already on
-            the dashboard. Only "Services in flight" stays, enriched with
-            tender title + status. */}
-        {activity && (
-          <div className={styles.activityCard}>
-            <div className={styles.activityHead}>
-              <span className={styles.eyebrow}>Services in flight</span>
-              <Link href="/dashboard/work-orders" className={styles.activityLink}>
-                View all ↗
-              </Link>
-            </div>
-            <div className={styles.activityCount}>
-              <span className={`${styles.activityNumber} tp-tabular`}>{activity.services.activeCount}</span>
-              <span className={styles.activityNumberSub}>
-                {activity.services.activeCount === 1 ? "active" : "active"}
-              </span>
-            </div>
-            {activity.services.active.length > 0 ? (
-              <ul className={styles.activityList}>
-                {activity.services.active.map((s) => (
-                  <li key={s.id}>
-                    <Link
-                      href={`/dashboard/work-orders/${s.id}`}
-                      className={styles.activityLink}
-                    >
-                      {/* PR-N: Service · Tender · Status per spec. Tender
-                          title omitted when missing — keeps the row short
-                          rather than rendering "Service · — · Status". */}
-                      {prettyService(s.service)}
-                      {s.tender_title ? <> · <span>{s.tender_title}</span></> : null}
-                      {" · "}
-                      {prettyStatus(s.status)}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className={styles.activityEmpty}>
-                <Link href="/dashboard/services" className={styles.activityLink}>
-                  Buy your first service →
-                </Link>
-              </p>
+  const ctaLinkStyle: CSSProperties = {
+    background: C.accent,
+    color: C.white,
+    border: `1px solid ${C.accent}`,
+    fontFamily: F.mono,
+    fontSize: 11.5,
+    letterSpacing: "0.1em",
+    textTransform: "uppercase",
+    padding: "11px 18px",
+    marginTop: 16,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    textDecoration: "none",
+    cursor: "pointer",
+    width: "100%",
+    boxSizing: "border-box",
+  };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1.05fr 0.95fr", gap: mobile ? 28 : 52 }}>
+      {/* left — score + dimensions */}
+      <div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
+          <span
+            role="meter"
+            aria-label={`Readiness score ${score} of 100`}
+            aria-valuenow={score}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            style={{
+              fontFamily: F.display,
+              fontSize: mobile ? 104 : 150,
+              fontWeight: 400,
+              lineHeight: 0.82,
+              letterSpacing: "-0.045em",
+              color: C.ink,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {score}
+          </span>
+          <div>
+            <div style={{ fontFamily: F.display, fontSize: mobile ? 24 : 32, color: C.faint }}>/100</div>
+            {delta > 0 && (
+              <div
+                style={{
+                  fontFamily: F.mono,
+                  fontSize: 10.5,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  color: C.pos,
+                  marginTop: 8,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ↑ +{delta} from resolved gaps
+              </div>
             )}
           </div>
+        </div>
+        <div
+          style={{
+            fontFamily: F.mono,
+            fontSize: 11,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            color: C.accent,
+            marginTop: 12,
+          }}
+        >
+          {tier}
+        </div>
+        <p style={{ fontFamily: F.sans, fontSize: 14, color: C.ink2, lineHeight: 1.55, marginTop: 10, maxWidth: 500 }}>
+          {summary}
+        </p>
+
+        <div style={{ marginTop: 26, paddingTop: 8, borderTop: `1px solid ${C.rule}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+            <Eyebrow>By dimension</Eyebrow>
+            <HowWeCalculate label="How scored?" color={C.faint} withGlyph={false} />
+          </div>
+          {dimensions.map((d) => {
+            const [tag, tagColor] = dimTag(d.value);
+            return (
+              <div
+                key={d.label}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "130px 1fr 36px 64px",
+                  gap: 12,
+                  alignItems: "center",
+                  padding: "9px 0",
+                  borderBottom: `1px dashed ${C.ruleSoft}`,
+                }}
+              >
+                <span style={{ fontFamily: F.sans, fontSize: 13, color: C.ink }}>{d.label}</span>
+                <Bar value={d.value} />
+                <span
+                  style={{
+                    fontFamily: F.mono,
+                    fontSize: 12.5,
+                    color: C.ink,
+                    textAlign: "right",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {d.value}
+                </span>
+                <span
+                  style={{
+                    fontFamily: F.mono,
+                    fontSize: 9,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: tagColor,
+                    textAlign: "right",
+                  }}
+                >
+                  {tag}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* right — tender peek + enter CTA */}
+      <div>
+        {peek.length > 0 && (
+          <>
+            <Eyebrow style={{ marginBottom: 10 }}>Peek · top matched tenders</Eyebrow>
+            <div style={{ background: C.white, border: `1px solid ${C.rule}` }}>
+              {peek.map((m, i) => (
+                <div
+                  key={m.code}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 36px 54px",
+                    gap: 10,
+                    padding: "11px 14px",
+                    borderBottom: i < peek.length - 1 ? `1px solid ${C.ruleSoft}` : "none",
+                    alignItems: "center",
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontFamily: F.mono,
+                        fontSize: 9.5,
+                        color: C.faint,
+                        letterSpacing: "0.04em",
+                        marginBottom: 2,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {m.code} · {m.agency.split("—")[0].trim()}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: F.sans,
+                        fontSize: 12.5,
+                        color: C.ink,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {m.title}
+                    </div>
+                  </div>
+                  <FitBadge score={m.fit} size={12.5} />
+                  <span style={{ textAlign: "right" }}>
+                    <DeadlinePill deadline={m.deadline} />
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <span style={{ fontFamily: F.mono, fontSize: 9.5, color: C.faint }}>
+                {peek.length} of {matchedCount || peek.length} matched
+              </span>
+            </div>
+          </>
         )}
-      </aside>
+
+        {/* CTA → workbench (signed-in) or sign-up (anonymous) */}
+        <div style={{ marginTop: peek.length > 0 ? 22 : 0, padding: 22, background: C.ink, color: C.paper }}>
+          <Eyebrow color={C.accent2}>Your report is ready</Eyebrow>
+          <div
+            style={{
+              fontFamily: F.display,
+              fontSize: 22,
+              fontWeight: 400,
+              lineHeight: 1.15,
+              color: C.paper,
+              margin: "10px 0 6px",
+            }}
+          >
+            {viewerSignedIn ? "Open the Workbench to act on it." : "Open your Workbench to act on it."}
+          </div>
+          <p style={{ fontFamily: F.sans, fontSize: 12.5, color: "#cdc6b3", lineHeight: 1.5, margin: 0 }}>
+            {viewerSignedIn
+              ? `Your score, ${matchedCount || peek.length} live matches, and a guided path through every gap.`
+              : `Your score, ${matchedCount || peek.length} live matches, and a guided path through every gap — your 30-day trial starts when you do, no card.`}
+          </p>
+
+          {viewerSignedIn ? (
+            <Link href="/dashboard" style={ctaLinkStyle}>
+              Enter your Workbench →
+            </Link>
+          ) : (
+            <button type="button" onClick={() => setSignupOpen(true)} style={ctaLinkStyle}>
+              Save report → sign up
+            </button>
+          )}
+
+          {viewerSignedIn && activeCount > 0 && (
+            <Link
+              href="/dashboard/work-orders"
+              style={{
+                display: "block",
+                marginTop: 12,
+                fontFamily: F.mono,
+                fontSize: 9.5,
+                letterSpacing: "0.06em",
+                color: "rgba(246,243,236,0.62)",
+                textDecoration: "none",
+              }}
+            >
+              {activeCount} {activeCount === 1 ? "service" : "services"} in flight ↗
+            </Link>
+          )}
+        </div>
+      </div>
+
+      {!viewerSignedIn && <SignupSheet open={signupOpen} onClose={() => setSignupOpen(false)} />}
     </div>
   );
 }
