@@ -41,6 +41,10 @@ const PUBLIC_PATHS = new Set([
   // hits GET for the verification handshake; neither can carry a Bearer header.
   // The route verifies the X-Hub-Signature-256 HMAC itself.
   "/api/whatsapp/webhook",
+  // Inbound agency mail for submission orders ({ref}@in.tenderpath.me) — the
+  // mail provider's webhook can't carry a Bearer header. DORMANT until
+  // INBOUND_MAIL_SECRET is set; the route enforces that shared secret itself.
+  "/api/inbound/agency-mail",
   // Vault upload token endpoint — called by @vercel/blob/client's `upload()`
   // on the browser, which cannot attach a Bearer header. The route itself
   // verifies the tp_session JWT via clientPayload inside

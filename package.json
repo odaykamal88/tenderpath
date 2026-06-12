@@ -21,7 +21,7 @@
     "@sparticuz/chromium": "^148.0.0",
     "@stripe/stripe-js": "^9.4.0",
     "@vercel/blob": "^2.3.3",
-    "docx": "^9.6.1",
+    "docx": "^9.7.1",
     "exceljs": "^4.4.0",
     "https-proxy-agent": "^9.0.0",
     "jose": "^6.2.2",

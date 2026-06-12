@@ -5,13 +5,16 @@
  *                    only ("Export — envelopes stay separate"). "all" nests the
  *                    per-envelope ZIPs in one wrapper — never a merged document.
  * Deliverables whose fmt includes XLSX (priced line schedule / BoQ) get a real
- * workbook alongside the PDF, built from the same intake lines. */
+ * workbook alongside the PDF, built from the same intake lines; fmt DOCX
+ * deliverables (EOI cover letter, RFP technical) get a real .docx from the
+ * same block model. */
 
 import { NextResponse } from "next/server";
 import JSZip from "jszip";
 import { requireAuth } from "@/lib/subscription-guard";
 import { getOrderForUser } from "@/lib/submissions/store";
 import { docContent, type DeliverableDoc, type DocCompany } from "@/lib/submissions/doc-content";
+import { renderSubmissionDeliverableDocx } from "@/lib/submissions/docx";
 import { renderSubmissionDeliverablePdf } from "@/lib/proposal-package/pdfDocs";
 import type { EnvelopeKey, PricedLine, SubmissionOrder } from "@/lib/submissions/types";
 
@@ -80,6 +83,10 @@ async function envelopeZip(
     zip.file(`${base}.pdf`, pdf);
     const xlsx = await renderLinesXlsx(order, doc);
     if (xlsx) zip.file(`${base}.xlsx`, xlsx);
+    if (/docx/i.test(doc.fmt)) {
+      const docxBuf = await renderSubmissionDeliverableDocx(doc, { companyName: company.name, ref: order.ref, stamp });
+      zip.file(`${base}.docx`, docxBuf);
+    }
   }
   const buf = await zip.generateAsync({ type: "nodebuffer" });
   return { zip: buf, count: inEnvelope.length };
@@ -113,12 +120,28 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       const i = /^\d+$/.test(deliverableRaw) ? Number(deliverableRaw) : -1;
       const doc = docs[i];
       if (!doc) return NextResponse.json({ error: "Unknown deliverable." }, { status: 404 });
-      const pdf = await renderSubmissionDeliverablePdf(doc, {
-        companyName: company.name,
-        ref: order.ref,
-        stamp: stampFor(order),
-        generatedAt: new Date().toISOString().slice(0, 10),
-      });
+      const stamp = stampFor(order);
+      const generatedAt = new Date().toISOString().slice(0, 10);
+      const pdf = await renderSubmissionDeliverablePdf(doc, { companyName: company.name, ref: order.ref, stamp, generatedAt });
+      const xlsx = await renderLinesXlsx(order, doc);
+      const docxBuf = /docx/i.test(doc.fmt)
+        ? await renderSubmissionDeliverableDocx(doc, { companyName: company.name, ref: order.ref, stamp })
+        : null;
+      // Multi-format deliverables ship every format together; PDF-only stays bare.
+      if (xlsx || docxBuf) {
+        const zip = new JSZip();
+        const base = `${order.ref}_${slug(doc.name)}`;
+        zip.file(`${base}.pdf`, pdf);
+        if (xlsx) zip.file(`${base}.xlsx`, xlsx);
+        if (docxBuf) zip.file(`${base}.docx`, docxBuf);
+        const buf = await zip.generateAsync({ type: "nodebuffer" });
+        return new NextResponse(new Uint8Array(buf), {
+          headers: {
+            "content-type": "application/zip",
+            "content-disposition": `attachment; filename="${base}.zip"`,
+          },
+        });
+      }
       return new NextResponse(new Uint8Array(pdf), {
         headers: {
           "content-type": "application/pdf",
