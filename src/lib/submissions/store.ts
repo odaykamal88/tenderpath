@@ -320,6 +320,7 @@ export async function listOrdersForAdmin(): Promise<AdminOrderRow[]> {
   await ensureSubmissionsSchema();
   const rows = await sql`
     SELECT so.*, u.email AS user_email, u.business_name AS user_business
+    SELECT so.*, u.email AS user_email
     FROM submission_orders so
     LEFT JOIN users u ON u.id = so.user_id
     WHERE so.paid_at IS NOT NULL
@@ -331,6 +332,7 @@ export async function listOrdersForAdmin(): Promise<AdminOrderRow[]> {
     userEmail: (r.user_email as string | null) ?? null,
     userBusiness: (r.user_business as string | null) ?? null,
   }));
+  return rows.map((r) => ({ ...rowToOrder(r), userEmail: (r.user_email as string | null) ?? null }));
 }
 
 /* ── Guarded transitions ───────────────────────────────────────────────── */

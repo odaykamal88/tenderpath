@@ -16,6 +16,9 @@ import { buildRequestLetters, chaseDue } from "@/lib/submissions/request-letters
 interface AdminOrder extends SubmissionOrder {
   userEmail: string | null;
   userBusiness: string | null;
+
+interface AdminOrder extends SubmissionOrder {
+  userEmail: string | null;
 }
 
 interface QueuePayload {
@@ -296,6 +299,9 @@ function OrderCard({
   const openBlockers = order.blockers.filter((b) => b.state === "requested" || b.state === "open");
   const letters = buildRequestLetters(order, order.userBusiness ?? order.userEmail ?? "The vendor");
   const needsChase = now > 0 && chaseDue(order, now);
+  const meta = STAGE_META[order.stage];
+  const openQna = order.qna.map((q, i) => ({ ...q, i })).filter((q) => !q.a);
+  const openBlockers = order.blockers.filter((b) => b.state === "requested" || b.state === "open");
   // Prototype stage colors: submitted = pos, with-client = warn, in production = accent.
   const dot =
     order.stage === "submitted"
