@@ -19,6 +19,8 @@ export interface DocGen {
   ask?: { label: string; long?: boolean };
   /** Status line shown once drafted/requested. */
   result?: string;
+  /** For mode "request": who issues the paper (drives the request letter). */
+  requestTarget?: "auditor" | "supplier" | "bank" | "client";
 }
 
 export interface DocSpec {
@@ -57,6 +59,7 @@ export const DOCS_CATALOG: Record<string, DocSpec> = {
     label: "Bank reference letter",
     gen: {
       mode: "request",
+      requestTarget: "bank",
       cta: "Draft the bank request",
       blurb: "We draft the standard reference-letter request to your bank, on the agency's wording.",
       ask: { label: "Send to" },
@@ -128,6 +131,7 @@ export const DOCS_CATALOG: Record<string, DocSpec> = {
     label: "Audited financials (last 3 years)",
     gen: {
       mode: "request",
+      requestTarget: "auditor",
       cta: "Draft the auditor request",
       blurb:
         "Audited statements can only come from your auditor — we can't fabricate them. We draft the formal request (ISA format, all three years), send it, and chase until they land.",
@@ -143,6 +147,7 @@ export const DOCS_CATALOG: Record<string, DocSpec> = {
     label: "Manufacturer authorization letter",
     gen: {
       mode: "request",
+      requestTarget: "supplier",
       cta: "Draft the supplier letter",
       blurb:
         "Must come from the manufacturer — we draft it on the agency's required template (naming this tender, your company, and territory) so your supplier only has to sign and stamp.",
@@ -157,6 +162,7 @@ export const DOCS_CATALOG: Record<string, DocSpec> = {
     label: "Product catalogue / technical literature",
     gen: {
       mode: "request",
+      requestTarget: "supplier",
       cta: "Request from supplier",
       blurb:
         "Spec sheets must be the manufacturer's own. We request exactly the models in your line schedule — nothing extra for evaluators to trip on.",

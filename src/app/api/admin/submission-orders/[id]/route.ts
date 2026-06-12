@@ -5,6 +5,10 @@
 
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/subscription-guard";
+import { sql } from "@/lib/db";
+import type { AdminOrderAction } from "@/lib/submissions/types";
+import { applyAdminAction, OrderStateError } from "@/lib/submissions/store";
+import { sendSubmissionReviewReadyEmail } from "@/lib/submissions/notify";
 import type { AdminOrderAction } from "@/lib/submissions/types";
 import { applyAdminAction, OrderStateError } from "@/lib/submissions/store";
 
@@ -36,6 +40,23 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       return NextResponse.json({ error: "Unknown action." }, { status: 400 });
     }
     const order = await applyAdminAction(id, body);
+
+    // Draft ready for review → immediate client email (SPEC §5 contract 6).
+    // Fire-and-forget: a mail failure never fails the stage advance.
+    if (body.action === "advance" && body.to === "review") {
+      void (async () => {
+        try {
+          const rows = await sql`SELECT email FROM users WHERE id = ${order.userId} LIMIT 1`;
+          await sendSubmissionReviewReadyEmail(order, (rows[0]?.email as string | null) ?? null);
+        } catch (err) {
+          console.error("[tp:submissions:review_email_failed]", {
+            orderId: order.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })();
+    }
+
     return NextResponse.json({ order });
   } catch (err) {
     if (err instanceof OrderStateError) {

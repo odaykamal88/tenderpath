@@ -14,7 +14,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { C, F } from "../tokens";
-import { Eyebrow, Btn, fitColor } from "../ui";
+import { Eyebrow, Btn, daysUntil, fitColor, shortDate } from "../ui";
 import { Icon } from "../icons";
 import { useMedia } from "../useMedia";
 import { useWorkbench } from "../WorkbenchProvider";
@@ -67,7 +67,32 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
   const [decided, setDecided] = useState<"bid" | "pass" | null>(null);
   const [analysis, setAnalysis] = useState<PasteVerdict | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  /** Real win/loss record from submission outcomes — the calibration line only
+   *  speaks when history exists (SPEC §6: never invent a record). */
+  const [history, setHistory] = useState<{ wins: number; losses: number; lessonsApplied: boolean } | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (stage !== "verdict" || history !== null) return;
+    let live = true;
+    fetch("/api/dashboard/submission-orders", { headers: authHeaders, cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { orders?: { outcome?: { state?: string; debrief?: { state?: string } | null } }[] } | null) => {
+        if (!live) return;
+        const orders = d?.orders ?? [];
+        const wins = orders.filter((o) => o.outcome?.state === "won").length;
+        const losses = orders.filter((o) => o.outcome?.state === "lost").length;
+        const lessonsApplied = orders.some((o) => o.outcome?.debrief?.state === "received");
+        setHistory({ wins, losses, lessonsApplied });
+      })
+      .catch(() => {
+        if (live) setHistory({ wins: 0, losses: 0, lessonsApplied: false });
+      });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, history]);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -142,10 +167,26 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
         { id: "method", label: "Technical methodology note", field: "Briefly, your delivery approach for this scope…" },
         { id: "team", label: "Proposed team / key CVs", field: "Key personnel you'd assign (names or roles)…" },
       ];
-  const recommend = analysis ? analysis.recommend : fit >= 70 && openGaps.length <= 2;
+  // SPEC §6 verdict tiers — deterministic: fit ≥70 ∧ ≤2 open gaps → BID ·
+  // fit ≥55 → CAUTION · else NO-BID ("save the effort" — passing is a win).
+  const verdict: "bid" | "caution" | "pass" =
+    fit >= 70 && openGaps.length <= 2 ? "bid" : fit >= 55 ? "caution" : "pass";
   const asksAnswered = asks.filter((a) => (answers[a.id] || "").trim().length > 4).length;
   const bidTitle = seed?.title ?? analysis?.tender.title ?? "Pasted tender";
   const subType = submissionType(detectSubmissionType(seed?.type ?? analysis?.tender.title));
+
+  // The honest math (SPEC §6). Effort by format; odds modeled from fit + open
+  // gaps; +4 pts only when a real received debrief exists (lessons applied).
+  const effortDays = { EOI: 1.5, RFQ: 2, ITB: 5, RFP: 6 }[subType.code] ?? 6;
+  const debriefBonus = history?.lessonsApplied ? 4 : 0;
+  const odds = Math.max(4, Math.min(40, Math.round((fit - 28) / 2) - openGaps.length * 3 + debriefBonus));
+  // Field-size norms by format — a statement about the format, not this tender.
+  const typicalField = { EOI: "10–20 typical", RFQ: "8–15 typical", ITB: "6–12 typical", RFP: "5–10 typical" }[subType.code] ?? "5–12 typical";
+  // The best alternative an open match offers (no-bid verdicts must name one).
+  const seedKey = seed?.id ?? null;
+  const bestAlt = data.matches
+    .filter((m) => m.id !== seedKey && m.fit > 0 && (!m.deadline || daysUntil(m.deadline) == null || (daysUntil(m.deadline) ?? 0) >= 0))
+    .reduce<WbMatch | null>((best, m) => (best == null || m.fit > best.fit ? m : best), null);
 
   const onBid = () => {
     setDecided("bid");
@@ -277,17 +318,52 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
                 <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", color: C.faint }}>Fit score</div>
               </div>
               <div style={{ flex: 1, minWidth: 240 }}>
-                <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: recommend ? C.pos : C.warn }}>
-                  {recommend ? "● Recommended: BID" : "● Recommended: PROCEED WITH CAUTION"}
+                <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: verdict === "bid" ? C.pos : verdict === "caution" ? C.warn : C.neg }}>
+                  {verdict === "bid"
+                    ? "● Recommended: BID"
+                    : verdict === "caution"
+                      ? "● Recommended: PROCEED WITH CAUTION"
+                      : "● Recommended: NO-BID — save the effort"}
                 </div>
                 <p style={{ fontFamily: F.sans, fontSize: 14, lineHeight: 1.55, color: C.ink2, margin: "8px 0 0" }}>
                   {analysis?.summary
                     ? analysis.summary
-                    : recommend
+                    : verdict === "bid"
                       ? `Strong alignment on sector and track record. ${openGaps.length === 0 ? "Every eligibility item you'd typically need is covered." : `${openGaps.length} open gap${openGaps.length === 1 ? "" : "s"} to close before the deadline.`} We need ${asks.length} inputs from you to complete the picture.`
-                      : "Adjacent fit. Winnable with the right partner or once your gaps close, but weigh the effort against your stronger matches."}
+                      : verdict === "caution"
+                        ? "Adjacent fit. Winnable with the right partner or once gaps close, but weigh the effort against your stronger matches — the math below is the real decision."
+                        : `The numbers say walk away: low alignment, ${openGaps.length} open gap${openGaps.length === 1 ? "" : "s"}, and a field that likely includes incumbents. Passing costs nothing — bidding costs ≈${effortDays} person-days at long odds. We'd rather you spend them where you can win.`}
                 </p>
               </div>
+            </div>
+
+            {/* the honest math (SPEC §6) */}
+            <div style={{ padding: "16px 26px 18px", borderBottom: `1px solid ${C.rule}`, background: "#fbf9f3" }}>
+              <Eyebrow color={C.accent}>The honest math</Eyebrow>
+              <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 14, marginTop: 12 }}>
+                {([
+                  ["Effort to bid", `≈ ${effortDays} person-days`],
+                  ["Likely field", `${typicalField} for ${subType.code}s`],
+                  ["Modeled win odds", `~${odds}%`],
+                  ["Call", verdict === "bid" ? "Worth the days" : verdict === "caution" ? "Marginal" : "Walk away"],
+                ] as [string, string][]).map(([k, v]) => (
+                  <div key={k}>
+                    <div style={{ fontFamily: F.mono, fontSize: 8.5, letterSpacing: "0.1em", textTransform: "uppercase", color: C.faint }}>{k}</div>
+                    <div style={{ fontFamily: F.sans, fontSize: 14, fontWeight: 600, color: k === "Call" ? (verdict === "bid" ? C.pos : verdict === "caution" ? C.warn : C.neg) : C.ink, marginTop: 3 }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontFamily: F.sans, fontSize: 11.5, color: C.mute, lineHeight: 1.55, marginTop: 12, borderTop: `1px dashed ${C.ruleSoft}`, paddingTop: 10 }}>
+                {history && history.wins + history.losses > 0
+                  ? `Calibrated on your record — ${history.wins} win${history.wins === 1 ? "" : "s"}, ${history.losses} loss${history.losses === 1 ? "" : "es"}${history.lessonsApplied ? " · debrief lessons applied, +4 pts to your modeled odds" : ""}. Odds are modeled from fit and open gaps and calibrate as outcomes land.`
+                  : "No win/loss record on file yet — odds are modeled from fit and open gaps only, and calibrate as your submission outcomes land."}
+              </div>
+              {verdict !== "bid" && bestAlt && (
+                <div style={{ fontFamily: F.sans, fontSize: 12, color: C.ink2, lineHeight: 1.55, marginTop: 8 }}>
+                  <b>Where those {effortDays} days work harder:</b> your {bestAlt.fit}-fit {bestAlt.title} match
+                  {bestAlt.deadline ? `, closing ${shortDate(bestAlt.deadline)}` : ""}. Passing here isn&apos;t a loss — it&apos;s budget for that one.
+                </div>
+              )}
             </div>
 
             <div style={{ padding: "20px 26px" }}>
@@ -334,7 +410,9 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
 
             {decided !== "bid" && (
               <div style={{ padding: "4px 26px 0", display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <Btn kind="danger" onClick={onNoBid} style={{ flex: mobile ? "1 1 100%" : "0 0 auto" }}>✕ No-bid · archive</Btn>
+                <Btn kind="danger" onClick={onNoBid} style={{ flex: mobile ? "1 1 100%" : "0 0 auto" }}>
+                  {verdict === "pass" ? "✓ Pass — bank the effort" : "✕ No-bid · archive"}
+                </Btn>
                 <div style={{ flex: 1 }} />
                 <Btn kind="primary" onClick={onBid}>✓ Decide to bid →</Btn>
               </div>
@@ -343,7 +421,8 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
             {decided === "pass" && (
               <div style={{ margin: "12px 26px 0", padding: "14px 16px", background: C.white, border: `1px solid ${C.rule}` }}>
                 <div style={{ fontFamily: F.sans, fontSize: 13.5, color: C.ink }}>
-                  Archived as <b>no-bid</b>. We&apos;ll stop surfacing similar low-fit tenders.{" "}
+                  Archived as <b>no-bid</b> — a smart pass. We log the reason, tune your matches, and the
+                  ≈{effortDays} saved days go to your stronger pipeline.{" "}
                   <button onClick={onClose} style={{ fontFamily: F.mono, fontSize: 10.5, letterSpacing: "0.06em", textTransform: "uppercase", color: C.ink, background: "none", border: 0, borderBottom: `1px solid ${C.ink}`, cursor: "pointer" }}>Done</button>
                 </div>
               </div>

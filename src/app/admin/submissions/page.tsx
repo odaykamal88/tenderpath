@@ -11,6 +11,11 @@ import styles from "../admin.module.css";
 import type { SubmissionOrder, SubmissionStage } from "@/lib/submissions/types";
 import { ADMIN_QA_CHECKLIST } from "@/lib/submissions/flows";
 import { OPS_ACTIONS, OPS_WAITING, STAGE_META } from "@/lib/submissions/stages";
+import { buildRequestLetters, chaseDue } from "@/lib/submissions/request-letters";
+
+interface AdminOrder extends SubmissionOrder {
+  userEmail: string | null;
+  userBusiness: string | null;
 
 interface AdminOrder extends SubmissionOrder {
   userEmail: string | null;
@@ -288,6 +293,12 @@ function OrderCard({
   const [amdAction, setAmdAction] = useState("");
   const [amdDue, setAmdDue] = useState("");
   const [qnaAnswers, setQnaAnswers] = useState<Record<number, string>>({});
+  const [lettersOpen, setLettersOpen] = useState(false);
+  const meta = STAGE_META[order.stage];
+  const openQna = order.qna.map((q, i) => ({ ...q, i })).filter((q) => !q.a);
+  const openBlockers = order.blockers.filter((b) => b.state === "requested" || b.state === "open");
+  const letters = buildRequestLetters(order, order.userBusiness ?? order.userEmail ?? "The vendor");
+  const needsChase = now > 0 && chaseDue(order, now);
   const meta = STAGE_META[order.stage];
   const openQna = order.qna.map((q, i) => ({ ...q, i })).filter((q) => !q.a);
   const openBlockers = order.blockers.filter((b) => b.state === "requested" || b.state === "open");
@@ -325,6 +336,7 @@ function OrderCard({
             <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
               <SlaChip order={order} now={now} />
               {order.round > 0 && <span className={`${styles.tag} ${styles.tagMute}`}>round {order.round}</span>}
+              {needsChase && <span className={`${styles.tag} ${styles.tagNeg}`}>chase due — requested &gt;48h ago</span>}
               {openBlockers.map((b) => (
                 <span key={b.id} className={`${styles.tag} ${b.state === "open" ? styles.tagNeg : styles.tagWarn}`}>
                   {b.label} · {b.state}
@@ -360,6 +372,30 @@ function OrderCard({
               ))}
               {order.intake.length === 0 && <span className={styles.mute} style={{ fontSize: 12 }}>No intake summary.</span>}
             </div>
+            {letters.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => setLettersOpen((v) => !v)}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: needsChase ? "var(--color-red)" : "var(--color-ink-3)", padding: 0 }}
+                >
+                  {lettersOpen ? "− Hide request letters" : `+ Request letters (${letters.length}) — send & chase from the ops mailbox`}
+                </button>
+                {lettersOpen && (
+                  <div style={{ display: "grid", gap: 10, marginTop: 8 }}>
+                    {letters.map((l) => (
+                      <div key={l.docId} style={{ border: "1px solid var(--color-rule)", padding: "10px 12px", background: "var(--color-paper-3)" }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--color-ink)" }}>{l.docLabel}</div>
+                        <div className={styles.mute} style={{ fontSize: 11.5, margin: "3px 0 7px" }}>
+                          To: {l.sendTo ?? "no contact given — ask the client"} · Subject: {l.subject}
+                        </div>
+                        <textarea readOnly value={l.body} rows={6} onFocus={(e) => e.target.select()} style={{ ...inputStyle, resize: "vertical", fontSize: 12, lineHeight: 1.5 }} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {openQna.length > 0 && (
               <div style={{ marginTop: 12 }}>
                 <div className={styles.eyebrow} style={{ marginBottom: 6 }}>Open Q&A — answer + draft-impact verdict</div>

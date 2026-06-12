@@ -312,12 +312,14 @@ export async function listOrdersForUser(userId: number): Promise<SubmissionOrder
 
 export interface AdminOrderRow extends SubmissionOrder {
   userEmail: string | null;
+  userBusiness: string | null;
 }
 
 /** Ops queue — paid orders only ("NEW INTAKES: paid — drafting not started"). */
 export async function listOrdersForAdmin(): Promise<AdminOrderRow[]> {
   await ensureSubmissionsSchema();
   const rows = await sql`
+    SELECT so.*, u.email AS user_email, u.business_name AS user_business
     SELECT so.*, u.email AS user_email
     FROM submission_orders so
     LEFT JOIN users u ON u.id = so.user_id
@@ -325,6 +327,11 @@ export async function listOrdersForAdmin(): Promise<AdminOrderRow[]> {
     ORDER BY (so.stage = 'submitted') ASC, so.paid_at DESC
     LIMIT 200
   `;
+  return rows.map((r) => ({
+    ...rowToOrder(r),
+    userEmail: (r.user_email as string | null) ?? null,
+    userBusiness: (r.user_business as string | null) ?? null,
+  }));
   return rows.map((r) => ({ ...rowToOrder(r), userEmail: (r.user_email as string | null) ?? null }));
 }
 

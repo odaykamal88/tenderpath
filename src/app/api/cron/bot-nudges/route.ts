@@ -5,6 +5,8 @@ import { telegramAdapter } from "@/lib/bot/channels/telegram";
 import { whatsappAdapter } from "@/lib/bot/channels/whatsapp";
 import { buildUserNudge, renderNudgeText, nudgeButtons, whatsappNudgeTemplate } from "@/lib/bot/proactive";
 import { botDisplayName } from "@/lib/bot/identity";
+import { sendSubmissionDeadlineNudges } from "@/lib/submissions/notify";
+import { watchSubmissionAmendments } from "@/lib/submissions/amendment-watcher";
 import type { BotChannel, ChannelAdapter } from "@/lib/bot/types";
 
 export const maxDuration = 60;
@@ -113,5 +115,23 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   console.log("[bot:nudges:summary]", JSON.stringify({ candidates: identities.length, sent, skipped, failed, dryRun }));
-  return NextResponse.json({ ok: true, candidates: identities.length, sent, skipped, failed, dryRun });
+
+  // Submissions passes ride the same daily tick (08:30 UTC — after the 06:00
+  // crawl, so the watcher always sees fresh source deadlines). Order matters:
+  // amendments first (a moved deadline changes which nudge bucket an order is
+  // in), then deadline nudges. Failures never block the bot pass.
+  let amendments: Awaited<ReturnType<typeof watchSubmissionAmendments>> | null = null;
+  try {
+    amendments = await watchSubmissionAmendments({ dryRun });
+  } catch (err) {
+    console.error("[tp:submissions:amendment_pass_failed]", err);
+  }
+  let submissions: Awaited<ReturnType<typeof sendSubmissionDeadlineNudges>> | null = null;
+  try {
+    submissions = await sendSubmissionDeadlineNudges({ dryRun });
+  } catch (err) {
+    console.error("[tp:submissions:nudge_pass_failed]", err);
+  }
+
+  return NextResponse.json({ ok: true, candidates: identities.length, sent, skipped, failed, dryRun, amendments, submissions });
 }
