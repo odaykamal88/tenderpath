@@ -19,7 +19,7 @@ import type {
 } from "@/lib/submissions/types";
 import { ENVELOPE_LABELS, flowFor } from "@/lib/submissions/flows";
 import { STAGE_META, TIMELINE_ORDER } from "@/lib/submissions/stages";
-import { agoLabel, authHeaders, clientAct, getOrder } from "./api";
+import { agoLabel, clientAct, getOrder } from "./api";
 
 const eyebrow: React.CSSProperties = {
   fontFamily: F.mono,

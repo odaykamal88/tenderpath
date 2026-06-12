@@ -36,7 +36,6 @@ import {
   FieldsBlock,
   LinesBlock,
   PickrefsBlock,
-  seedConformityRows,
 } from "./wizardBlocks";
 
 const RAIL_BREAK = "(max-width: 1279px)";
@@ -368,19 +367,6 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
     }
     return map;
   }, [flow, prefill]);
-
-  // Seed conformity rows from the matched tender's structured requirements the
-  // first time the user lands on a conformity step with an empty matrix.
-  const hasConformityStep = flow.steps[step]?.blocks.some((b) => b.kind === "conformity") ?? false;
-  useEffect(() => {
-    if (!hydrated || !hasConformityStep) return;
-    setDraft((d) => {
-      if (d.conformity.length > 0) return d;
-      const reqs = (seedMatch as (WbMatch & { requirements?: string[] }) | null | undefined)?.requirements;
-      if (!Array.isArray(reqs) || reqs.length === 0) return d;
-      return { ...d, conformity: seedConformityRows(reqs) };
-    });
-  }, [hydrated, hasConformityStep, seedMatch]);
 
   const goto = useCallback((i: number) => {
     setStep(Math.max(0, Math.min(flow.steps.length - 1, i)));
