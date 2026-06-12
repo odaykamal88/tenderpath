@@ -43,15 +43,15 @@ export function buildNudges(orders: SubmissionOrder[]): SubmissionNudge[] {
         kind: "review",
         urgent,
         label: `${o.type} ${o.ref} — draft waiting for your review · ${dueLabel(o.due)}`,
-        cta: "Review draft",
+        cta: "Open",
       });
     } else if (o.stage === "final") {
       out.push({
         orderId: o.id,
         kind: "final",
         urgent,
-        label: `${o.type} ${o.ref} — final pack ready, not yet submitted · ${dueLabel(o.due)}`,
-        cta: "Open checklist",
+        label: `${o.type} ${o.ref} — final pack ready; submit 24h early · ${dueLabel(o.due)}`,
+        cta: "Open",
       });
     } else if (
       o.stage === "submitted" &&

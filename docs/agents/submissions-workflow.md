@@ -2,9 +2,10 @@
 
 The paid per-submission product: vendor intake → ops drafting → QA → client
 review → final-mile submission → outcome + debrief. Ported June 2026 from the
-`~/Downloads/handoff-submissions` design handoff (README.md + SPEC.md + 12
-screenshots; the interactive prototype itself was not shipped — the screenshots
-are its visual record). **Read this before touching anything under
+design handoff and then aligned file-by-file to the runnable prototype
+(`~/Downloads/handoff-submissions 2/prototype/sub-*.jsx` — the prototype is the
+spec; a fidelity pass on 2026-06-12 matched schemas, audit math, copy and UI
+mechanics to it). **Read this before touching anything under
 `src/lib/submissions/` or the two Submissions surfaces.**
 
 ## The two surfaces, one order object
@@ -25,8 +26,8 @@ sees ops events labeled "TenderPath".
 |---|---|
 | `types.ts` | The SPEC §1 order object, action contracts, wizard draft shape |
 | `flows.ts` | **The four format schemas** — steps, blocks, deliverables (+ envelope), declarations, eliminators, QA checklist, shepherd checklist, pay copy. Adding a 5th format = adding a schema here; no new UI code |
-| `docs-catalog.ts` | Required documents + the three resolution paths: `draft` (we author, flagged for signature) / `request` (third-party paper — never fabricated) / `guided` (registrations, e.g. UNGM). Plus universal Upload / Acknowledge |
-| `audit.ts` | Pure completeness math shared by wizard (advisory) and commission endpoint (authoritative). Gate: tender ∧ no `open` blockers ∧ ≥80% |
+| `docs-catalog.ts` | Required documents (prototype ids: inc/reg/tax/bank/cap/coc/hs/dp/ungm/fin/manu/cat/warr/cv3) + the three resolution paths: `draft` (we author, flagged for signature) / `request` (third-party paper — never fabricated) / `guided` (registrations, e.g. UNGM). Each gen carries cta/blurb/ask/result copy; the gen-panel ask input travels to ops on the order. Plus universal Upload / Acknowledge |
+| `audit.ts` | Pure completeness math shared by wizard (advisory) and commission endpoint (authoritative). Prototype semantics: every visible field counts (static pre-fills satisfy until edited; showIf-hidden don't count); only a docs-block's `required` subset counts; **elimination risks = the curated block-level blockers only** (ungm/fin/cv3 …) — a regular missing doc reduces % but never hard-blocks. Gate: tender ∧ no `open` blockers ∧ ≥80% |
 | `stages.ts` | Stage machine + per-actor transition guards (`canTransition`) |
 | `store.ts` | `ensureSubmissionsSchema()` (mirrors `scripts/migrate.mjs`), guarded last-write-wins transitions (0-row update ⇒ `ORDER_CHANGED` 409, never silent clobber), client/admin action appliers, server-side wizard drafts |
 | `doc-content.ts` | `docContent(order)` — reader block model built ONLY from the order's own intake; the PDF export renders the same blocks |
@@ -73,7 +74,7 @@ prototype's inline card, to keep all payment paths on the proven surface.
 | Contract | Status |
 |---|---|
 | 1 · Payment | **Live** (through the existing checkout seam; per-type prices dormant until the 6 Stripe envs exist) |
-| 2 · Doc pipeline | **Reader + PDF/ZIP exports live** (`renderSubmissionDeliverablePdf` in `pdfDocs.tsx`); content = structured intake. DOCX/XLSX variants + ops-authored prose enrichment are future work |
+| 2 · Doc pipeline | **Reader + PDF/ZIP exports live** (`renderSubmissionDeliverablePdf` in `pdfDocs.tsx`); content = the prototype's prose templates parameterized by real intake. Priced-lines deliverables ("XLSX + PDF") ship a REAL workbook (exceljs). Export gating per the prototype: per-deliverable PDF from review on; envelope ZIPs final/submitted only. DOCX variants + ops prose enrichment are future work |
 | 3 · Third-party request engine | **Manual-ops**: the `requested` blocker state + admin "arrived → resolve" exist; templated letters + auto-chase + arrival webhook not built |
 | 4 · Inbound agency mail | **Paste-forward only** (drawer textarea → `qna[]`; ops answers with a draft-impact verdict). The `{ref}@in.tenderpath.me` address is NOT provisioned — deliberately not shown in the UI (never show a dead address) |
 | 5 · Amendment watcher | **Manual-ops**: admin records amendments (+ deadline move). No source polling |

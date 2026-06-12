@@ -9,8 +9,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import styles from "../admin.module.css";
 import type { SubmissionOrder, SubmissionStage } from "@/lib/submissions/types";
-import { flowFor } from "@/lib/submissions/flows";
-import { OPS_ADVANCE_LABEL, opsNextStage, STAGE_META } from "@/lib/submissions/stages";
+import { ADMIN_QA_CHECKLIST } from "@/lib/submissions/flows";
+import { OPS_ACTIONS, OPS_WAITING, STAGE_META } from "@/lib/submissions/stages";
 
 interface AdminOrder extends SubmissionOrder {
   userEmail: string | null;
@@ -31,13 +31,9 @@ function authHeaders(): HeadersInit {
 
 const TABS: { key: string; label: string; stages: SubmissionStage[] | null }[] = [
   { key: "all", label: "All", stages: null },
-  { key: "intake", label: "New intake", stages: ["intake"] },
-  { key: "drafting", label: "Drafting", stages: ["drafting"] },
-  { key: "qa", label: "QA gate", stages: ["qa"] },
-  { key: "revisions", label: "Revisions", stages: ["revisions"] },
-  { key: "review", label: "Client review", stages: ["review"] },
-  { key: "final", label: "Final pack", stages: ["final"] },
-  { key: "submitted", label: "Submitted", stages: ["submitted"] },
+  ...(["intake", "drafting", "qa", "revisions", "review", "final", "submitted"] as SubmissionStage[]).map(
+    (s) => ({ key: s, label: STAGE_META[s].admin, stages: [s] as SubmissionStage[] }),
+  ),
 ];
 
 function money(cents: number): string {
@@ -61,15 +57,24 @@ function shortDate(d: string | null): string {
 }
 
 /** SLA chip for paid orders still in production-entry stages. `now` comes from
- *  the page's ticking clock so the countdown stays live and render stays pure. */
+ *  the page's ticking clock so the countdown stays live and render stays pure.
+ *  An SLA more than 3× overdue is an ancient timestamp — the chip is hidden
+ *  rather than shouting about a long-settled order (prototype sqMinsLeft). */
+function slaMinsLeft(order: AdminOrder, now: number): number | null {
+  if (!now || !order.paidAt || !order.slaMins) return null;
+  const left = Math.round(order.slaMins - (now - new Date(order.paidAt).getTime()) / 60_000);
+  if (left < -(order.slaMins * 3)) return null;
+  return left;
+}
+
 function SlaChip({ order, now }: { order: AdminOrder; now: number }) {
-  if (!now || !order.paidAt || !["intake", "drafting"].includes(order.stage)) return null;
-  const elapsed = Math.round((now - new Date(order.paidAt).getTime()) / 60_000);
-  const left = order.slaMins - elapsed;
-  const cls = left <= 0 ? styles.tagNeg : left <= order.slaMins * 0.25 ? styles.tagWarn : styles.tagPos;
+  if (!["intake", "drafting"].includes(order.stage)) return null;
+  const left = slaMinsLeft(order, now);
+  if (left == null) return null;
+  const cls = left <= 0 ? styles.tagNeg : left < 15 ? styles.tagWarn : styles.tagPos;
   return (
     <span className={`${styles.tag} ${cls}`}>
-      {left > 0 ? `SLA ${left} min left` : `SLA breached +${-left} min`}
+      {left > 0 ? `SLA ${left}m left` : `SLA over by ${-left}m`}
     </span>
   );
 }
@@ -118,14 +123,12 @@ function StageActions({
   const [outcomeState, setOutcomeState] = useState<"won" | "lost" | "shortlisted" | null>(null);
   const [scoresText, setScoresText] = useState("");
   const [lessonsText, setLessonsText] = useState("");
-  const next = opsNextStage(order.stage);
+  const opsAction = OPS_ACTIONS[order.stage];
 
   if (order.stage === "review" || order.stage === "final") {
     return (
       <p className={styles.mute} style={{ fontSize: 13, margin: 0 }}>
-        {order.stage === "review"
-          ? "With the client — they approve or request changes from their dashboard."
-          : "Final-mile — the client signs and submits; the shepherd guides them."}
+        {OPS_WAITING[order.stage]}
       </p>
     );
   }
@@ -135,15 +138,18 @@ function StageActions({
     return (
       <div style={{ display: "grid", gap: 10 }}>
         <p className={styles.mute} style={{ fontSize: 13, margin: 0 }}>
-          Filed with the agency. {oc.state === "pending" ? "Record the outcome when it's known." : (
-            <strong>Outcome: {oc.state}{oc.decidedAt ? ` · ${shortDate(oc.decidedAt)}` : ""}</strong>
+          {OPS_WAITING.submitted} {oc.state !== "pending" && (
+            <strong style={{ color: oc.state === "lost" ? "var(--color-red)" : "var(--color-green)" }}>
+              Outcome: {oc.state === "lost" ? "not selected" : oc.state}
+              {oc.decidedAt ? ` · ${shortDate(oc.decidedAt)}` : ""}
+            </strong>
           )}
         </p>
         {oc.state === "pending" && !outcomeState && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {(["won", "shortlisted", "lost"] as const).map((s) => (
+            {(["shortlisted", "won", "lost"] as const).map((s) => (
               <button key={s} type="button" style={btnGhostStyle} disabled={busy} onClick={() => setOutcomeState(s)}>
-                {s === "won" ? "Won" : s === "shortlisted" ? "Shortlisted" : "Lost"}
+                Record: {s === "lost" ? "not selected" : s}
               </button>
             ))}
           </div>
@@ -245,19 +251,19 @@ function StageActions({
         </div>
       )}
       {order.stage === "qa" && (
-        <div>
-          <div className={styles.eyebrow} style={{ marginBottom: 6 }}>QA gate — display checklist</div>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: "var(--color-ink-2)", lineHeight: 1.7 }}>
-            {flowFor(order.type).qaChecklist.map((q) => (
-              <li key={q}>{q}</li>
-            ))}
-          </ul>
-        </div>
+        <ul style={{ margin: "0 0 4px", padding: 0, listStyle: "none", display: "grid", gap: 4 }}>
+          {ADMIN_QA_CHECKLIST.map((q) => (
+            <li key={q} style={{ fontSize: 11.5, color: "var(--color-ink-2)", display: "flex", gap: 7 }}>
+              <span style={{ color: "var(--color-green)" }}>✓</span>
+              {q}
+            </li>
+          ))}
+        </ul>
       )}
-      {next && (
+      {opsAction && (
         <div>
-          <button type="button" style={btnStyle} disabled={busy} onClick={() => act({ action: "advance", to: next })}>
-            {OPS_ADVANCE_LABEL[order.stage] ?? `Advance → ${next}`}
+          <button type="button" style={btnStyle} disabled={busy} onClick={() => act({ action: "advance", to: opsAction.next })}>
+            {opsAction.label}
           </button>
         </div>
       )}
@@ -285,7 +291,13 @@ function OrderCard({
   const meta = STAGE_META[order.stage];
   const openQna = order.qna.map((q, i) => ({ ...q, i })).filter((q) => !q.a);
   const openBlockers = order.blockers.filter((b) => b.state === "requested" || b.state === "open");
-  const dot = order.stage === "review" || order.stage === "final" ? "#2d8a4e" : order.stage === "submitted" ? "#6b6b6b" : "#c8973e";
+  // Prototype stage colors: submitted = pos, with-client = warn, in production = accent.
+  const dot =
+    order.stage === "submitted"
+      ? "var(--color-green)"
+      : order.stage === "review" || order.stage === "final"
+        ? "var(--color-warn)"
+        : "var(--color-accent)";
 
   return (
     <article className={styles.woCard}>
@@ -382,8 +394,7 @@ function OrderCard({
           </div>
 
           <div>
-            <div className={styles.eyebrow} style={{ marginBottom: 6 }}>Stage — {meta.label}</div>
-            <p className={styles.mute} style={{ fontSize: 12.5, margin: "0 0 10px", lineHeight: 1.55 }}>{meta.ops}</p>
+            <div className={styles.eyebrow} style={{ marginBottom: 6 }}>Stage — {meta.admin}</div>
             <StageActions order={order} busy={busy} act={(body) => act(order.id, body)} />
 
             <div style={{ marginTop: 14 }}>
@@ -579,7 +590,8 @@ export default function AdminSubmissionsPage() {
         <div className={styles.woEmpty}>Loading the queue…</div>
       ) : orders.length === 0 ? (
         <div className={styles.woEmpty}>
-          {tab === "all" ? "No paid submission orders yet — they appear here the moment a vendor pays." : "Nothing in this stage."}
+          Nothing in “{TABS.find((t) => t.key === tab)?.label ?? tab}” — orders land here the moment a
+          vendor places one from the dashboard&apos;s Submissions page.
         </div>
       ) : (
         <section className={styles.woList}>

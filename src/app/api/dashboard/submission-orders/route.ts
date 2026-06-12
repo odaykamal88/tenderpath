@@ -78,13 +78,13 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: !audit.tenderChosen
-            ? "Choose the opportunity first."
-            : audit.openBlockers.length > 0
+            ? "Pick a tender first."
+            : audit.open.length > 0
               ? "Resolve or acknowledge each elimination risk before paying — we won't draft a submission we know will be thrown out."
               : `Intake is ${audit.pct}% complete — the drafting gate is ${PAY_GATE_PCT}%.`,
           code: "PAY_GATE",
           pct: audit.pct,
-          open_blockers: audit.openBlockers,
+          open_blockers: audit.open,
         },
         { status: 409 },
       );
@@ -109,7 +109,18 @@ export async function POST(request: Request) {
       value: tender.value ?? null,
       fit: tender.fit ?? null,
       completeness: audit.pct,
-      blockers: audit.blockers.filter((b) => b.state !== "resolved"),
+      // Carried-in flags wear their state note (prototype buildOrder copy).
+      blockers: audit.blockers.map((b) => ({
+        ...b,
+        note:
+          b.state === "acknowledged"
+            ? "Proceeding at risk — will be flagged in the draft."
+            : b.state === "requested"
+              ? "Request letter sent — ops chase and attach on arrival."
+              : b.state === "resolved"
+                ? "Resolved at intake."
+                : b.note,
+      })),
       intake: buildIntakeSummary(flow, draft),
       intakeFields: buildIntakeFields(draft),
       deliverables: buildDeliverables(flow),

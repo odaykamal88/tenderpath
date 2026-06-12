@@ -1,14 +1,10 @@
-/* Stage machine (SPEC §2).
+/* Stage machine (SPEC §2) — single source of truth for both sides, faithful to
+ * the prototype's TPSUBSTORE.STAGES + the admin queue's SQ_ACTIONS/SQ_WAITING.
  *
  *   intake ─ops─▶ drafting ─ops─▶ qa ─ops─▶ review ─client─▶ final ─client─▶ submitted
  *                    ▲                          │ request changes                │
  *                    └───── revisions ◀─────────┘     outcome: pending → shortlisted/won/lost
- *                          (ops: revisions ─▶ qa)                       └─▶ debrief loop
- *
- * Ops advance: intake→drafting (confirm intake) · drafting→qa · qa→review
- * (release to client; pct→100, deliverables→ready) · revisions→qa (re-gated).
- * Client: review→final (approve) · review→revisions (notes required, round++)
- * · final→submitted (shepherd checklist complete). */
+ *                          (ops: revisions ─▶ qa)                       └─▶ debrief loop */
 
 import type { SubmissionStage } from "./types";
 
@@ -22,60 +18,49 @@ export const STAGES: SubmissionStage[] = [
   "submitted",
 ];
 
-/** Timeline display order — Revisions renders between review and final, and
- *  only when the order has consumed a revision round. */
-export const TIMELINE_ORDER: SubmissionStage[] = [
-  "intake",
-  "drafting",
-  "qa",
-  "review",
-  "revisions",
-  "final",
-  "submitted",
-];
-
+/** user = label shown to the vendor · admin = label shown to ops. The
+ *  Revisions row renders only when the order has consumed a round. */
 export const STAGE_META: Record<
   SubmissionStage,
-  { label: string; client: string; ops: string }
+  { user: string; admin: string; desc: string }
 > = {
   intake: {
-    label: "Intake confirmed",
-    client: "Inputs received and checked against the tender requirements.",
-    ops: "Paid — confirm the intake to start drafting.",
+    user: "Intake confirmed",
+    admin: "New intake",
+    desc: "Inputs received and checked against the tender requirements.",
   },
   drafting: {
-    label: "Drafting",
-    client: "Writers assemble the documents from your intake and vault.",
-    ops: "In production — update % and the status line as you go.",
+    user: "Drafting",
+    admin: "Drafting",
+    desc: "Writers assemble the documents from your intake and vault.",
   },
   qa: {
-    label: "Quality check",
-    client: "Compliance pass — format, eligibility, completeness, no elimination errors.",
-    ops: "Run the QA checklist, then release to the client.",
+    user: "Quality check",
+    admin: "QA gate",
+    desc: "Compliance pass — format, eligibility, completeness, no elimination errors.",
   },
   review: {
-    label: "Your review",
-    client: "Draft pack is with you. Approve, or request changes.",
-    ops: "With the client — they approve or request changes from their dashboard.",
+    user: "Your review",
+    admin: "Client review",
+    desc: "Draft pack is with you. Approve, or request changes.",
   },
   revisions: {
-    label: "Revisions",
-    client: "Your change requests are being applied.",
-    ops: "Apply the client's notes, then send back through QA.",
+    user: "Revisions",
+    admin: "Revisions",
+    desc: "Your change requests are being applied.",
   },
   final: {
-    label: "Final pack",
-    client: "Submission-ready files in the agency's required format.",
-    ops: "Final-mile — the client signs and submits; the shepherd guides them.",
+    user: "Final pack",
+    admin: "Final pack",
+    desc: "Submission-ready files in the agency's required format.",
   },
   submitted: {
-    label: "Submitted",
-    client: "Filed with the agency. Awaiting outcome.",
-    ops: "Awaiting outcome — record it when the agency decides.",
+    user: "Submitted",
+    admin: "Submitted",
+    desc: "Filed with the agency before deadline.",
   },
 };
 
-/** Progress strip position (7 segments on the vendor order card). */
 export function stageIndex(stage: SubmissionStage): number {
   return STAGES.indexOf(stage);
 }
@@ -101,26 +86,51 @@ export function canTransition(
   return (table[from] ?? []).includes(to);
 }
 
-/** The single ops "advance" action per stage, for the queue's primary button. */
+/** The single ops advance per stage (prototype SQ_ACTIONS): button label +
+ *  the event/stage note the client sees. */
+export const OPS_ACTIONS: Partial<
+  Record<SubmissionStage, { next: SubmissionStage; label: string; note: string }>
+> = {
+  intake: {
+    next: "drafting",
+    label: "Confirm intake → start drafting",
+    note: "Intake confirmed against the tender notice — drafting started",
+  },
+  drafting: {
+    next: "qa",
+    label: "Draft complete → send to QA",
+    note: "Draft assembled — entering the compliance QA gate",
+  },
+  qa: {
+    next: "review",
+    label: "QA passed → release to client",
+    note: "QA passed — draft pack released for client review",
+  },
+  revisions: {
+    next: "qa",
+    label: "Revisions applied → re-run QA",
+    note: "Client revisions applied — re-entering QA",
+  },
+};
+
 export function opsNextStage(stage: SubmissionStage): SubmissionStage | null {
-  const next = OPS_TRANSITIONS[stage];
-  return next?.[0] ?? null;
+  return OPS_ACTIONS[stage]?.next ?? null;
 }
 
-export const OPS_ADVANCE_LABEL: Partial<Record<SubmissionStage, string>> = {
-  intake: "Confirm intake → start drafting",
-  drafting: "Send to quality check",
-  qa: "Release to client review",
-  revisions: "Revisions applied → back to QA",
+/** Ops-side explainer for stages where the ball is with the client (SQ_WAITING). */
+export const OPS_WAITING: Partial<Record<SubmissionStage, string>> = {
+  review: "With the client — they approve or request changes from their dashboard.",
+  final: "Final pack delivered. The client runs the guided portal submission from their dashboard.",
+  submitted: "Filed with the agency. Awaiting outcome.",
 };
 
 /** Default stage note written when a transition happens without a custom one. */
 export const DEFAULT_STAGE_NOTE: Record<SubmissionStage, string> = {
-  intake: "Order placed — intake under review.",
-  drafting: "Drafting started.",
-  qa: "Draft in quality check.",
-  review: "Draft pack ready for your review.",
-  revisions: "Change requests being applied.",
-  final: "Final pack prepared — sign and submit.",
-  submitted: "Filed with the agency. Awaiting outcome.",
+  intake: "Intake received — confirming against the tender notice",
+  drafting: "Intake confirmed against the tender notice — drafting started",
+  qa: "Draft assembled — entering the compliance QA gate",
+  review: "Draft pack ready for your review",
+  revisions: "Applying your change requests",
+  final: "Approved — final pack being prepared in the portal's required format",
+  submitted: "Submitted · decision pending",
 };

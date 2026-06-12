@@ -129,19 +129,23 @@ export interface ReferenceEntry {
   vaultDocumentId?: number | null;
 }
 
-/** Resolution state of one required-document row in the wizard. */
+/** Resolution state of one required-document row in the wizard (prototype
+ *  states: attached · resolved · drafted · requested · ack · missing). */
 export type DocResolutionState =
   | "missing"
-  | "attached" // from vault or fresh upload
+  | "attached" // auto-attached from the vault
+  | "resolved" // uploaded just now / registration confirmed
   | "drafted" // we author it (flagged for signature)
   | "requested" // third-party paper — request letter drafted + sent
-  | "acknowledged" // proceed at risk, flagged in the draft
-  | "guided"; // registration walkthrough opened (UNGM etc.)
+  | "ack"; // acknowledged — proceed at risk, flagged in the draft
 
 export interface DocResolution {
   docId: string;
   state: DocResolutionState;
   vaultDocumentId?: number | null;
+  /** The gen panel's ask input (send-to contact, signatory, emphasis…) — ops
+   *  reads this when fulfilling the draft/request. */
+  ask?: string | null;
   note?: string | null;
 }
 

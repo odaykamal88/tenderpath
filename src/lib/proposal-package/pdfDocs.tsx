@@ -821,7 +821,9 @@ function SubmissionBlock({ block }: { block: DocBlock }) {
       return (
         <View style={{ marginBottom: 8 }}>
           {block.items.map((item, i) => (
-            <Text key={i} style={[styles.bullet, { color: INK2 }]}>· {item}</Text>
+            <Text key={i} style={[styles.bullet, { color: INK2 }]}>
+              <Text style={{ color: GOLD }}>§  </Text>{item}
+            </Text>
           ))}
         </View>
       );
@@ -854,19 +856,30 @@ function SubmissionBlock({ block }: { block: DocBlock }) {
               ))}
             </View>
           ))}
+          {block.foot && (
+            <View style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 7, borderTopWidth: 1.5, borderTopColor: INK, backgroundColor: "#fbf9f3", paddingHorizontal: 2 }}>
+              <Text style={[styles.label, { color: INK2 }]}>{block.foot[0]}</Text>
+              <Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold", color: INK }}>{block.foot[1]}</Text>
+            </View>
+          )}
         </View>
       );
     case "note":
       return (
-        <View style={{ marginVertical: 8, borderLeftWidth: 2, borderLeftColor: GOLD, paddingLeft: 10 }}>
-          <Text style={{ fontSize: 9.5, color: INK2, lineHeight: 1.5 }}>{block.text}</Text>
+        <View style={{ marginVertical: 8, borderWidth: 1, borderColor: GOLD, backgroundColor: "#fdfaf2", padding: 9, flexDirection: "row", gap: 8 }}>
+          <Text style={[styles.label, { color: GOLD }]}>QA  </Text>
+          <Text style={{ fontSize: 9.5, color: INK2, lineHeight: 1.5, flex: 1 }}>{block.text}</Text>
         </View>
       );
     case "sig":
       return (
         <View style={{ marginTop: 22 }}>
-          <View style={{ width: 220, borderBottomWidth: 1, borderBottomColor: INK, height: 26 }} />
-          <Text style={[styles.label, { marginTop: 4, color: GOLD }]}>{block.label}</Text>
+          <Text style={{ fontSize: 10.5, color: INK2, marginBottom: 16 }}>Yours faithfully,</Text>
+          <View style={{ width: 200, borderBottomWidth: 1, borderBottomColor: INK, height: 22 }}>
+            <Text style={[styles.label, { color: GOLD, marginTop: 10 }]}>sign here</Text>
+          </View>
+          <Text style={{ fontSize: 10.5, fontFamily: "Helvetica-Bold", color: INK, marginTop: 5 }}>{block.name}</Text>
+          <Text style={[styles.mono, { fontSize: 7.5, color: INK3, marginTop: 2 }]}>{block.role}</Text>
         </View>
       );
     default:

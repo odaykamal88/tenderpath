@@ -1,13 +1,18 @@
 /* Intake audit — completeness math, blocker derivation, the payment gate, and
- * the order-building snapshot. Pure functions over (flow, draft) so the wizard
+ * the order-building snapshot. Faithful port of audit() + buildOrder() from
+ * the prototype's sub-wizard.jsx. Pure over (flow, draft) so the wizard
  * (client) and the commission endpoint (server) compute the SAME numbers; the
- * server result is authoritative at pay time. (Prototype: audit() in
- * sub-wizard.jsx + buildOrder().)
+ * server result is authoritative at pay time.
  *
- * Counting rule (SPEC §3): every required field / doc / declaration / priced
- * line / conformity row counts 1; pct = have/need. Payment gate: tender chosen
- * ∧ no `open` blockers ∧ completeness ≥ 80%. `acknowledged` / `requested`
- * blockers pass the gate but carry into order.blockers. */
+ * Prototype semantics held exactly:
+ *   · every visible field counts 1 (showIf-hidden fields don't); a static
+ *     pre-fill satisfies the count until edited;
+ *   · only a docs-block's `required` subset counts; other listed docs are
+ *     good-to-have;
+ *   · elimination risks = the CURATED block-level blockers only (ungm, fin,
+ *     cv3 …) — a regular missing doc reduces completeness but never blocks
+ *     payment on its own;
+ *   · gate: tender chosen ∧ no `open` blockers ∧ completeness ≥ 80%. */
 
 import type {
   IntakeFields,
@@ -16,167 +21,124 @@ import type {
   WizardDraftState,
 } from "./types";
 import type { FlowBlock, SubmissionFlow } from "./flows";
-import { docSpec } from "./docs-catalog";
 
 export const PAY_GATE_PCT = 80;
-
-export interface AuditItem {
-  key: string;
-  label: string;
-  have: boolean;
-  step: number;
-}
 
 export interface AuditResult {
   need: number;
   have: number;
   pct: number;
-  /** Items still missing, in flow order — drives "N inputs remaining". */
-  remaining: AuditItem[];
   blockers: SubmissionBlocker[];
-  openBlockers: SubmissionBlocker[];
+  /** Blockers still `open` — these alone hard-gate the pay button. */
+  open: SubmissionBlocker[];
   tenderChosen: boolean;
-  /** tender ∧ no open blockers ∧ pct ≥ PAY_GATE_PCT */
   canPay: boolean;
 }
 
-function fieldValue(draft: WizardDraftState, k: string): string {
-  return (draft.fields[k] ?? "").trim();
+function fieldValue(draft: WizardDraftState, k: string, pre?: string): string {
+  const stored = draft.fields[k];
+  return (stored != null ? stored : pre ?? "").trim();
+}
+
+function docState(draft: WizardDraftState, docId: string): string {
+  return draft.docs.find((d) => d.docId === docId)?.state ?? "missing";
 }
 
 export function auditDraft(flow: SubmissionFlow, draft: WizardDraftState): AuditResult {
-  const items: AuditItem[] = [];
+  let need = 0;
+  let have = 0;
   const blockers: SubmissionBlocker[] = [];
 
-  const tenderChosen = Boolean(draft.tender?.title?.trim());
-  items.push({ key: "tender", label: "Opportunity selected", have: tenderChosen, step: 0 });
-
-  flow.steps.forEach((step, stepIdx) => {
-    for (const block of step.blocks) {
-      collectBlock(block, stepIdx);
+  for (const step of flow.steps) {
+    for (const b of step.blocks ?? []) {
+      collect(b, step.id);
     }
-  });
+  }
 
-  function collectBlock(block: FlowBlock, stepIdx: number) {
-    switch (block.kind) {
-      case "tender":
-      case "review":
-        return;
+  function collect(b: FlowBlock, stepId: string) {
+    switch (b.kind) {
       case "fields":
       case "envelope": {
-        for (const f of block.fields) {
-          if (!f.required) continue;
-          items.push({
-            key: `field:${f.k}`,
-            label: f.label,
-            have: fieldValue(draft, f.k).length > 0,
-            step: stepIdx,
-          });
+        for (const f of b.fields) {
+          if (f.showIf && fieldValue(draft, f.showIf.k) !== f.showIf.v) continue;
+          need++;
+          if (fieldValue(draft, f.k, f.pre)) have++;
         }
         return;
       }
-      case "lines": {
-        const lines = draft.lines;
-        if (lines.length === 0) {
-          items.push({ key: "lines:any", label: "At least one priced line", have: false, step: stepIdx });
-          return;
-        }
-        lines.forEach((l, i) => {
-          items.push({
-            key: `line:${l.id}`,
-            label: `Unit price — ${l.desc || `line ${i + 1}`}`,
-            have: l.unitPrice != null && l.unitPrice > 0,
-            step: stepIdx,
-          });
-        });
-        return;
-      }
-      case "conformity": {
-        const rows = draft.conformity;
-        const min = block.min ?? 0;
-        if (rows.length < min) {
-          items.push({
-            key: "conformity:min",
-            label: `Conformity matrix — at least ${min} specification${min === 1 ? "" : "s"}`,
-            have: false,
-            step: stepIdx,
-          });
-        }
-        rows.forEach((r, i) => {
-          const answered = r.response === "comply" || (r.response === "deviate" && Boolean(r.deviation?.trim()));
-          items.push({
-            key: `conf:${r.id}`,
-            label: `Response — ${r.requirement || `spec ${i + 1}`}`,
-            have: answered,
-            step: stepIdx,
-          });
-        });
-        return;
-      }
-      case "declarations": {
-        for (const d of block.items) {
-          items.push({
-            key: `decl:${d.id}`,
-            label: d.label,
-            have: draft.declarations.includes(d.id),
-            step: stepIdx,
-          });
-        }
-        return;
-      }
-      case "pickrefs": {
-        const have = Math.min(draft.refs.length, block.min);
-        for (let i = 0; i < block.min; i++) {
-          items.push({
-            key: `ref:${i}`,
-            label: `${block.label} — ${i + 1} of ${block.min}`,
-            have: i < have,
-            step: stepIdx,
-          });
+      case "criteria": {
+        for (const k of b.items) {
+          need++;
+          if (fieldValue(draft, k.id)) have++;
         }
         return;
       }
       case "docs": {
-        for (const docId of block.docs) {
-          const spec = docSpec(docId);
-          if (!spec) continue;
-          const res = draft.docs.find((d) => d.docId === docId);
-          const state = res?.state ?? "missing";
-          const handled = state !== "missing" && state !== "guided";
-          items.push({ key: `doc:${docId}`, label: spec.label, have: handled, step: stepIdx });
-          if (state === "missing" || state === "guided") {
-            blockers.push({ id: docId, label: spec.label, sev: spec.sev, state: "open", note: spec.why });
-          } else if (state === "requested") {
-            blockers.push({ id: docId, label: spec.label, sev: spec.sev, state: "requested", note: res?.note ?? null });
-          } else if (state === "acknowledged") {
-            blockers.push({
-              id: docId,
-              label: spec.label,
-              sev: spec.sev,
-              state: "acknowledged",
-              note: res?.note ?? "Proceeding at risk — flagged in the draft.",
-            });
+        for (const key of b.docs) {
+          const required = (b.required ?? []).includes(key);
+          if (!required) continue;
+          need++;
+          const st = docState(draft, key);
+          if (st !== "missing") have++;
+          if (b.blocker) {
+            // Curated elimination risk — state follows the doc row unless the
+            // row is satisfied (attached/resolved/drafted ⇒ resolved risk).
+            const state =
+              st === "missing" ? ("open" as const)
+              : st === "ack" ? ("acknowledged" as const)
+              : st === "requested" ? ("requested" as const)
+              : ("resolved" as const);
+            blockers.push({ id: b.blocker.id, label: b.blocker.label, sev: b.blocker.sev, state, note: b.blocker.fix });
           }
+        }
+        return;
+      }
+      case "declarations": {
+        b.items.forEach((_, i) => {
+          need++;
+          if (draft.declarations.includes(`${stepId}:${i}`)) have++;
+        });
+        return;
+      }
+      case "pickrefs": {
+        need += b.min;
+        have += Math.min(b.min, draft.refs.length);
+        return;
+      }
+      case "lines": {
+        if (draft.lines.length === 0) {
+          need++; // at least one priced line
+          return;
+        }
+        for (const l of draft.lines) {
+          need++;
+          if ((l.unitPrice ?? 0) > 0) have++;
+        }
+        return;
+      }
+      case "conformity": {
+        const min = b.min ?? 0;
+        if (draft.conformity.length < min) need += min - draft.conformity.length;
+        for (const r of draft.conformity) {
+          need++;
+          if (r.response === "comply" || (r.response === "deviate" && (r.deviation ?? "").trim())) have++;
         }
         return;
       }
     }
   }
 
-  const need = items.length;
-  const have = items.filter((i) => i.have).length;
-  const pct = need === 0 ? 0 : Math.round((have / need) * 100);
-  const openBlockers = blockers.filter((b) => b.state === "open");
-
+  const pct = need ? Math.round((have / need) * 100) : 0;
+  const open = blockers.filter((b) => b.state === "open");
+  const tenderChosen = Boolean(draft.tender?.title?.trim());
   return {
     need,
     have,
     pct,
-    remaining: items.filter((i) => !i.have),
     blockers,
-    openBlockers,
+    open,
     tenderChosen,
-    canPay: tenderChosen && openBlockers.length === 0 && pct >= PAY_GATE_PCT,
+    canPay: tenderChosen && open.length === 0 && pct >= PAY_GATE_PCT,
   };
 }
 
@@ -190,69 +152,53 @@ export function linesTotal(draft: WizardDraftState): number {
   return draft.lines.reduce((sum, l) => sum + (l.unitPrice ?? 0) * (l.qty || 0), 0);
 }
 
-/** Human-readable intake summary [[k, v], …] — shown in the drawer, the admin
- *  queue card, and used by the reader's docContent(). Built only from what the
- *  user actually entered — empty inputs are simply omitted. */
+/** Per-format intake summary [[k, v], …] — the prototype's buildOrder() rows,
+ *  shown in the drawer ("What we received at intake") and the ops queue card.
+ *  Built only from what the user actually entered. */
 export function buildIntakeSummary(flow: SubmissionFlow, draft: WizardDraftState): [string, string][] {
   const out: [string, string][] = [];
-  out.push(["Format", `${flow.code} — ${flow.name}`]);
+  const f = (k: string, pre?: string) => fieldValue(draft, k, pre);
 
-  if (draft.lines.length > 0) {
-    const priced = draft.lines.filter((l) => l.unitPrice != null && l.unitPrice > 0).length;
-    out.push([
-      flow.code === "ITB" ? "BoQ total" : "Quotation total",
-      `${draft.currency} ${money(linesTotal(draft))} across ${draft.lines.length} line${draft.lines.length === 1 ? "" : "s"}${priced < draft.lines.length ? ` · ${draft.lines.length - priced} unpriced` : ""}`,
-    ]);
+  if (flow.code === "EOI") {
+    out.push(
+      ["Positioning", f("angle") || "—"],
+      ["Coverage", f("geo") || "—"],
+      ["References", `${draft.refs.length} selected`],
+    );
+    if (f("capacity")) out.push(["Capacity evidence", f("capacity")]);
   }
-
-  if (draft.conformity.length > 0) {
-    const comply = draft.conformity.filter((r) => r.response === "comply").length;
-    const deviations = draft.conformity.filter((r) => r.response === "deviate");
-    const devNames = deviations
-      .map((d) => d.requirement.split(/[,—–]/)[0]?.trim().toLowerCase())
-      .filter(Boolean)
-      .slice(0, 3)
-      .join(", ");
-    out.push([
-      "Conformity",
-      `${comply} of ${draft.conformity.length} specs comply · ${deviations.length} deviation${deviations.length === 1 ? "" : "s"} declared${devNames ? ` (${devNames})` : ""}`,
-    ]);
+  if (flow.code === "RFQ") {
+    const tot = linesTotal(draft);
+    out.push(
+      ["Quote total", tot ? `${draft.currency} ${money(tot)}` : "pending"],
+      ["Validity", f("validity") || "90 days"],
+      ["Delivery", f("delivery") || "—"],
+    );
+    if (f("incoterms")) out.push(["Incoterms", f("incoterms")]);
+    const dev = f("specs") === "Compliant with declared deviations";
+    out.push(["Conformity", dev ? `Declared deviations: ${f("deviations") || "—"}` : "Fully compliant with all specs"]);
   }
-
-  for (const step of flow.steps) {
-    for (const block of step.blocks) {
-      if (block.kind === "fields" || block.kind === "envelope") {
-        for (const f of block.fields) {
-          const v = fieldValue(draft, f.k);
-          if (!v) continue;
-          out.push([f.label, v.length > 140 ? `${v.slice(0, 140)}…` : v]);
-        }
-      }
-    }
+  if (flow.code === "ITB") {
+    const devs = draft.conformity.filter((r) => r.response === "deviate").length;
+    out.push(
+      ["Conformity", `${draft.conformity.length - devs} comply · ${devs} declared deviation(s)`],
+      ["Bid validity", f("validity") || "120 days"],
+      ["Security", f("security") || "Bid-securing declaration"],
+    );
+    const tot = linesTotal(draft);
+    if (tot) out.push(["BoQ total", `${draft.currency} ${money(tot)} across ${draft.lines.length} line items`]);
+    if (f("sitevisit")) out.push(["Site visit", f("sitevisit")]);
   }
-
-  if (draft.refs.length > 0) {
-    out.push(["References", draft.refs.map((r) => r.label).join(" · ")]);
+  if (flow.code === "RFP") {
+    out.push(
+      ["Methodology", f("k1") || "—"],
+      ["Fee ceiling", f("ceiling") ? `USD ${f("ceiling")}` : "—"],
+      ["Team", f("k2") || "—"],
+    );
+    if (f("k3")) out.push(["References to cite", f("k3")]);
+    if (f("days")) out.push(["Person-days basis", f("days")]);
+    if (f("reimb")) out.push(["Reimbursables", f("reimb")]);
   }
-
-  const docStates = draft.docs
-    .map((d) => {
-      const spec = docSpec(d.docId);
-      if (!spec) return null;
-      const verb =
-        d.state === "attached" ? "attached"
-        : d.state === "drafted" ? "we draft (for signature)"
-        : d.state === "requested" ? "requested"
-        : d.state === "acknowledged" ? "proceeding without (at risk)"
-        : "open";
-      return `${spec.label.toLowerCase()} — ${verb}`;
-    })
-    .filter(Boolean);
-  if (docStates.length > 0) out.push(["Documents", docStates.join(" · ")]);
-
-  const declBlocks = flow.steps.flatMap((s) => s.blocks).filter((b) => b.kind === "declarations");
-  const declTotal = declBlocks.reduce((n, b) => n + (b.kind === "declarations" ? b.items.length : 0), 0);
-  if (declTotal > 0) out.push(["Declarations", `${draft.declarations.length} of ${declTotal} affirmed`]);
 
   return out;
 }

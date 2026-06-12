@@ -23,8 +23,8 @@ import type {
   WizardDraftState,
 } from "./types";
 import { EMPTY_DRAFT } from "./types";
-import { canTransition, DEFAULT_STAGE_NOTE } from "./stages";
-import { flowFor } from "./flows";
+import { canTransition, DEFAULT_STAGE_NOTE, OPS_ACTIONS } from "./stages";
+import { shepherdSteps } from "./flows";
 
 let ensurePromise: Promise<void> | null = null;
 
@@ -224,6 +224,10 @@ export async function upsertPendingOrder(input: PendingOrderInput): Promise<Subm
     return rowToOrder(rows[0]);
   }
 
+  const flags = input.blockers.length;
+  const intakeEvent = JSON.stringify([
+    event(`Intake completed — ${input.completeness}% complete, ${flags} flag${flags === 1 ? "" : "s"}`, "client"),
+  ]);
   const rows = await sql`
     INSERT INTO submission_orders (
       user_id, type, price_cents, tender, agency, source, portal,
@@ -234,7 +238,7 @@ export async function upsertPendingOrder(input: PendingOrderInput): Promise<Subm
       ${input.source}, ${input.portal}, ${input.tenderId}, ${input.pipelineItemId},
       ${input.due}, ${input.value}, ${input.fit},
       'intake', ${input.completeness}, ${blockers}::jsonb, ${intake}::jsonb,
-      ${intakeFields}::jsonb, ${deliverables}::jsonb, '[]'::jsonb
+      ${intakeFields}::jsonb, ${deliverables}::jsonb, ${intakeEvent}::jsonb
     )
     RETURNING *
   `;
@@ -265,6 +269,7 @@ export async function markSubmissionOrderPaidByWorkOrder(
     SET paid_at = NOW(),
         price_cents = COALESCE(${amountCents}, price_cents),
         currency = COALESCE(${currency}, currency),
+        pct = 8,
         stage_note = ${DEFAULT_STAGE_NOTE.intake},
         updated_at = NOW()
     WHERE work_order_id = ${workOrderId} AND paid_at IS NULL
@@ -272,9 +277,8 @@ export async function markSubmissionOrderPaidByWorkOrder(
   `;
   if (rows.length === 0) return null;
   const order = rowToOrder(rows[0]);
-  await appendEvents(order.id, [
-    event(`Order placed — ${order.type} · ${order.ref}. Drafting starts now (SLA ${order.slaMins} min).`, "client"),
-  ]);
+  const paid = amountCents === 0 ? "first-submission credit applied" : `$${Math.round(order.priceCents / 100)} paid`;
+  await appendEvents(order.id, [event(`Order placed · ${paid}`, "client")]);
   await clearDraft(order.userId, order.type).catch(() => {});
   return order;
 }
@@ -400,20 +404,22 @@ export async function applyClientAction(
     case "approve": {
       return transition(orderId, "client", "review", "final", {
         pct: 100,
-      }, "Draft pack approved — final submission copy prepared.");
+        deliverables: order.deliverables.map((d) => ({ ...d, status: "ready" as const })),
+      }, "Draft approved — preparing final submission pack");
     }
     case "request_changes": {
       const notes = action.notes?.trim();
       if (!notes) throw new OrderStateError("INVALID_ACTION", "Describe the changes you need.");
+      const round = order.round + 1;
       return transition(orderId, "client", "review", "revisions", {
-        round: order.round + 1,
+        round,
         revisionNotes: notes,
-        pct: 85,
-      }, `Change requests sent (round ${order.round + 1}): ${notes.slice(0, 160)}`);
+        pct: 80,
+        stageNote: `Revision round ${round} — applying your notes`,
+      }, `Changes requested (round ${round}): “${notes.length > 80 ? `${notes.slice(0, 80)}…` : notes}”`);
     }
     case "submit_final": {
-      const flow = flowFor(order.type);
-      const required = flow.shepherd.map((s) => s.id);
+      const required = shepherdSteps(order.type, order.portal, order.due).map((s) => s.id);
       const missing = required.filter((id) => !order.shepherd.checked.includes(id));
       if (missing.length > 0) {
         throw new OrderStateError("INVALID_ACTION", "Complete every step of the submission checklist first.");
@@ -424,9 +430,8 @@ export async function applyClientAction(
         deliverables,
         shepherd: { ...order.shepherd, receipt },
         outcome: { state: "pending" },
-      }, receipt
-        ? `Marked as submitted to the agency — receipt ${receipt}.`
-        : "Marked as submitted to the agency.");
+        stageNote: `Submitted · receipt ${receipt || "on file"} · decision pending`,
+      }, `Submitted via ${order.portal || "the agency's channel"}${receipt ? ` · receipt ${receipt}` : ""}`);
     }
     case "shepherd_toggle": {
       const checked = new Set(order.shepherd.checked);
@@ -526,20 +531,25 @@ export async function applyAdminAction(
 
   switch (action.action) {
     case "advance": {
+      const opsAction = OPS_ACTIONS[order.stage];
+      if (!opsAction || opsAction.next !== action.to) {
+        throw new OrderStateError("INVALID_ACTION", `Cannot move ${order.stage} → ${action.to} as ops.`);
+      }
       const status = deliverableStatusFor(action.to);
       const deliverables = status
         ? order.deliverables.map((d) => ({ ...d, status }))
         : null;
-      const pct = action.to === "review" ? 100 : action.to === "drafting" ? Math.max(order.pct, 5) : undefined;
-      const labels: Partial<Record<SubmissionStage, string>> = {
-        drafting: "Intake confirmed — drafting started.",
-        qa: "Draft complete — in quality check.",
-        review: "Draft pack released for your review.",
-      };
-      const label = order.stage === "revisions" && action.to === "qa"
-        ? `Revisions applied (round ${order.round}) — re-running quality check.`
-        : labels[action.to] ?? `Moved to ${action.to}.`;
-      return transition(orderId, "ops", order.stage, action.to, { pct, deliverables }, label);
+      const pct = action.to === "review" || action.to === "qa" ? 100 : action.to === "drafting" ? Math.max(order.pct, 8) : undefined;
+      const isQARelease = order.stage === "qa";
+      const stageNote = action.to === "review" ? "Draft pack ready for your review" : opsAction.note;
+      return transition(
+        orderId,
+        "ops",
+        order.stage,
+        action.to,
+        { pct, deliverables, stageNote },
+        `${opsAction.note}${isQARelease ? " (34-point checklist)" : ""}`,
+      );
     }
     case "set_progress": {
       if (order.stage !== "drafting" && order.stage !== "revisions") {
@@ -572,13 +582,21 @@ export async function applyAdminAction(
         decidedAt: action.decidedAt ?? new Date().toISOString(),
         scores: action.scores ?? order.outcome.scores ?? [],
       };
+      const stageNote =
+        action.state === "lost"
+          ? "Not selected — debrief available on request"
+          : action.state === "won"
+            ? "Awarded — contracting next"
+            : "Shortlisted — next stage to follow";
       const updated = await sql`
         UPDATE submission_orders
-        SET outcome = ${JSON.stringify(outcome)}::jsonb, updated_at = NOW()
+        SET outcome = ${JSON.stringify(outcome)}::jsonb, stage_note = ${stageNote}, updated_at = NOW()
         WHERE id = ${orderId}
         RETURNING *
       `;
-      await appendEvents(orderId, [event(`Outcome recorded — ${action.state}.`, "ops")]);
+      await appendEvents(orderId, [
+        event(`Outcome recorded: ${action.state === "lost" ? "not selected" : action.state}`, "ops"),
+      ]);
       return rowToOrder(updated[0]);
     }
     case "record_debrief": {
