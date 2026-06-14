@@ -8,9 +8,6 @@
  *     demo-tender data — lines and conformity are user-built here, and `bench`
  *     stays null until real awarded-contract bands exist (never invent one);
  *   · per-tender helps ("FAO requires…", "DAP Mogadishu") are genericized.
- *   · per-tender helps ("FAO requires…", "DAP Mogadishu") are genericized;
- *   · "DOCX + PDF" deliverables ship as "PDF" until a DOCX pipeline exists —
- *     never label an artifact we can't produce.
  *
  * Copy rules held (SPEC §3/§7, load-bearing): "start" / "pay & start drafting"
  * — never "commission"; the guarantee line at the pay button; VAT, time-zone
@@ -136,7 +133,6 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
       "A capability-led response that positions you for the shortlist. No pricing — this is about credibility and eligibility.",
     deliverables: [
       { name: "EOI cover letter", fmt: "DOCX + PDF", envelope: "forms" },
-      { name: "EOI cover letter", fmt: "PDF", envelope: "forms" },
       { name: "Capability statement (tailored)", fmt: "PDF", envelope: "technical" },
       { name: "Eligibility annex & declarations", fmt: "PDF", envelope: "forms" },
     ],
@@ -484,7 +480,6 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
       "Two-envelope, best-value selection — typically 70% technical, 30% financial. We build the methodology against the scoring matrix, point by point.",
     deliverables: [
       { name: "Technical proposal (methodology, workplan, team)", fmt: "DOCX + PDF", envelope: "technical" },
-      { name: "Technical proposal (methodology, workplan, team)", fmt: "PDF", envelope: "technical" },
       { name: "Financial proposal — sealed separately", fmt: "PDF", envelope: "financial" },
       { name: "Forms, CVs & declarations pack", fmt: "PDF", envelope: "forms" },
     ],

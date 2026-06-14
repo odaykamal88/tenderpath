@@ -8,7 +8,6 @@
  * workbook alongside the PDF, built from the same intake lines; fmt DOCX
  * deliverables (EOI cover letter, RFP technical) get a real .docx from the
  * same block model. */
- * workbook alongside the PDF, built from the same intake lines. */
 
 import { NextResponse } from "next/server";
 import JSZip from "jszip";
@@ -143,12 +142,6 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
           },
         });
       }
-      const pdf = await renderSubmissionDeliverablePdf(doc, {
-        companyName: company.name,
-        ref: order.ref,
-        stamp: stampFor(order),
-        generatedAt: new Date().toISOString().slice(0, 10),
-      });
       return new NextResponse(new Uint8Array(pdf), {
         headers: {
           "content-type": "application/pdf",
