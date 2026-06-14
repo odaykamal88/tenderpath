@@ -115,22 +115,25 @@ export async function POST(request: Request) {
   }
 
   let priceId = process.env[priceEnvKey];
+
+  // Per-type submission pricing: a proposal-draft is billed at the EOI/RFQ/ITB/
+  // RFP rate when the request carries a submission_type AND that type's Stripe
+  // price is configured. Runs BEFORE the "not configured" guard so the per-type
+  // prices stand alone — the legacy single STRIPE_PRICE_SUBMISSION_PACKAGE need
+  // not be set. An unconfigured type leaves priceId at the package price (if
+  // any), so the charge can never mismatch what's displayed. Fulfilment stays
+  // plan=proposal-draft regardless.
+  const submissionTypeRaw = metadataValue(body.submission_type);
+  if (plan === "proposal-draft" && submissionTypeRaw) {
+    const perTypePrice = configuredSubmissionPriceId(submissionTypeRaw);
+    if (perTypePrice) priceId = perTypePrice;
+  }
+
   if (!priceId) {
     return NextResponse.json(
       { error: "Card payments for this plan are not yet configured. Please use USDT or wire transfer." },
       { status: 503 }
     );
-  }
-
-  // Per-type submission pricing: a proposal-draft is billed at the EOI/RFQ/ITB/
-  // RFP rate when the request carries a submission_type AND that type's Stripe
-  // price is configured. DORMANT until those prices exist — an unconfigured type
-  // leaves priceId at the single proposal-package price, so the charge can never
-  // mismatch what's displayed. Fulfilment stays plan=proposal-draft regardless.
-  const submissionTypeRaw = metadataValue(body.submission_type);
-  if (plan === "proposal-draft" && submissionTypeRaw) {
-    const perTypePrice = configuredSubmissionPriceId(submissionTypeRaw);
-    if (perTypePrice) priceId = perTypePrice;
   }
 
   if (!process.env.STRIPE_SECRET_KEY) {
