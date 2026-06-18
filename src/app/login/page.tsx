@@ -7,7 +7,7 @@
  * /api/auth/verify, the tp_bridge email prefill, devToken, and the `next`
  * redirect. Only the presentation changed. */
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { C, F } from "@/components/workbench/tokens";
@@ -47,9 +47,24 @@ function LoginForm() {
     }
   }, []);
 
+  const verifyFired = useRef(false);
   useEffect(() => {
     const urlToken = search.get("token");
     if (!urlToken) return;
+    // One-shot guard. The magic token is single-use (cleared server-side on the
+    // first verify), so this effect must POST exactly once. Without the latch a
+    // double-invoke — React Strict Mode in dev, or any remount — fires a second
+    // verify whose token is already spent, painting a false "Invalid or expired
+    // token" on a legitimate first click.
+    if (verifyFired.current) return;
+    verifyFired.current = true;
+    // Strip the token from the visible URL so a refresh or back-nav can't replay
+    // an already-consumed link and resurface the same false error.
+    if (typeof window !== "undefined") {
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete("token");
+      window.history.replaceState(null, "", clean.pathname + clean.search);
+    }
     setBusy(true);
     fetch("/api/auth/verify", {
       method: "POST",
