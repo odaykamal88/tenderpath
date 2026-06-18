@@ -33,8 +33,34 @@ export async function POST(request: Request) {
   `;
 
   if (users.length === 0) {
+    // Diagnose *why* the match failed so the cause is visible in prod logs
+    // instead of a silent 401 (launch-discipline rule 4). Re-look the token up
+    // ignoring expiry: a hit means the link aged out; a miss means it was
+    // already consumed (the token is cleared on first use), rotated by a newer
+    // request, or never existed. This second query only runs on the failure
+    // path, so the happy path stays a single query.
+    const stale = await sql`
+      SELECT magic_token_expires_at FROM users WHERE magic_token = ${token}
+    `;
+    if (stale.length > 0) {
+      console.warn("[auth:verify:expired]", {
+        expiredAt: stale[0].magic_token_expires_at,
+      });
+      return NextResponse.json(
+        {
+          error: "This sign-in link has expired. Please request a new one.",
+          code: "expired",
+        },
+        { status: 401 }
+      );
+    }
+    console.warn("[auth:verify:consumed_or_unknown]");
     return NextResponse.json(
-      { error: "Invalid or expired token" },
+      {
+        error:
+          "This sign-in link is no longer valid — it may have already been used or replaced by a newer link. Please request a new one.",
+        code: "consumed_or_unknown",
+      },
       { status: 401 }
     );
   }
