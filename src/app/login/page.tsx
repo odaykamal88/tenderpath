@@ -47,59 +47,50 @@ function LoginForm() {
     }
   }, []);
 
-  // Magic-link landing. We deliberately do NOT verify on page load: email
-  // security scanners (SafeLinks / Mimecast / Proofpoint) and link-preview bots
-  // render the link the instant it's delivered, and an auto-fired verify lets
-  // them consume the single-use token before the human ever clicks — confirmed
-  // in prod logs (verify 401 [consumed_or_unknown] ~5s after send, alongside a
-  // bot crawling /terms + /privacy). Instead we capture the token, strip it from
-  // the URL, and require an explicit "Confirm sign-in" click — a gesture bots
-  // don't perform. Keeps the token single-use AND scanner-proof.
-  const [pendingToken, setPendingToken] = useState<string | null>(() => search.get("token"));
+  // Magic-link landing: verify the token on load and sign the user in. The
+  // session must land in BOTH places the app reads it:
+  //   • the httpOnly `tp_session` cookie (set by the verify route) — used by the
+  //     edge proxy to gate /dashboard *page* routes;
+  //   • `localStorage.tp_token` — the Bearer the dashboard's *data* fetches send
+  //     (WorkbenchProvider → /api/dashboard/workbench, + ~15 dashboard pages).
+  // Storing the token is load-bearing: commit 32a4400 changed this to
+  // removeItem() for cookie-only auth but never migrated the dashboard/proxy off
+  // Bearer, so every magic-link (and password) login 401'd on its first API call
+  // and bounced straight back here. Keep setItem until that migration is real.
+  const verifyFired = useRef(false);
   useEffect(() => {
-    if (!pendingToken || typeof window === "undefined") return;
-    // Strip the token from the visible URL so it isn't replayed on refresh/back
-    // and doesn't leak via history or the Referer header. No verify here.
-    const clean = new URL(window.location.href);
-    if (clean.searchParams.has("token")) {
+    const urlToken = search.get("token");
+    if (!urlToken || verifyFired.current) return;
+    verifyFired.current = true; // single-use token: POST exactly once per mount
+    // Strip the token from the URL so a refresh/back-nav can't replay a spent
+    // link and it doesn't leak via history or the Referer header.
+    if (typeof window !== "undefined") {
+      const clean = new URL(window.location.href);
       clean.searchParams.delete("token");
       window.history.replaceState(null, "", clean.pathname + clean.search);
     }
+    setBusy(true);
+    fetch("/api/auth/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: urlToken }),
+    })
+      .then((r) => r.json())
+      .then((body) => {
+        if (body.token) {
+          localStorage.setItem("tp_token", body.token);
+          router.replace(next);
+        } else {
+          setError(body.error || "This link is no longer valid. Please request a new one.");
+          setBusy(false);
+        }
+      })
+      .catch(() => {
+        setError("Something went wrong. Please request a new magic link.");
+        setBusy(false);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const confirming = useRef(false);
-  async function confirmSignIn() {
-    if (!pendingToken || confirming.current) return; // single-use: guard double-clicks
-    confirming.current = true;
-    setBusy(true);
-    setError(null);
-    let res: Response;
-    try {
-      res = await fetch("/api/auth/verify", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token: pendingToken }),
-      });
-    } catch {
-      confirming.current = false;
-      setBusy(false);
-      setError("Couldn't reach the server. Check your connection and try again.");
-      return;
-    }
-    const body = await res.json().catch(() => ({}));
-    if (body.token) {
-      localStorage.removeItem("tp_token");
-      router.replace(next);
-      return;
-    }
-    // Spent or unknown token (an older link, or a newer one was requested). Fall
-    // back to the request form with the reason so the user can get a fresh link.
-    confirming.current = false;
-    setBusy(false);
-    setPendingToken(null);
-    setError(body.error || "This link is no longer valid. Please request a new one.");
-  }
 
   async function sendMagicLink(emailValue: string) {
     setBusy(true);
@@ -162,35 +153,18 @@ function LoginForm() {
       }
       return;
     }
-    localStorage.removeItem("tp_token");
+    localStorage.setItem("tp_token", body.token);
     router.replace(next);
   }
 
-  // ── magic-link confirm step ──────────────────────────────────
-  // Gated on a captured token. Verification happens only when the user clicks
-  // Confirm, so automated scanners that merely render this page can't burn the
-  // one-time token. On a spent/invalid token confirmSignIn clears pendingToken
-  // and falls through to the request form below with the reason shown.
-  if (pendingToken) {
+  // ── auto-verify spinner ──────────────────────────────────────
+  // Shown while the magic-link token is being verified on load.
+  if (busy && !email && search.get("token")) {
     return (
-      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24, background: C.paper }}>
-        <div style={{ width: "100%", maxWidth: 380, border: `1px solid ${C.rule}`, background: C.white, padding: "32px 26px", textAlign: "center" }}>
-          <div style={{ width: 48, height: 48, margin: "0 auto 16px", borderRadius: 999, background: C.ink, color: C.paper, display: "grid", placeItems: "center" }}>
-            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 00-9 0v3.75m-1.5 0h12a1.5 1.5 0 011.5 1.5v6a1.5 1.5 0 01-1.5 1.5h-12a1.5 1.5 0 01-1.5-1.5v-6a1.5 1.5 0 011.5-1.5z" />
-            </svg>
-          </div>
-          <div style={{ fontFamily: F.mono, fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: C.accent }}>Secure sign-in</div>
-          <h1 style={{ fontFamily: F.display, fontSize: 27, fontWeight: 400, letterSpacing: "-0.02em", color: C.ink, lineHeight: 1.12, margin: "8px 0 0" }}>Confirm sign-in</h1>
-          <p style={{ fontFamily: F.sans, fontSize: 13, lineHeight: 1.55, color: C.ink2, margin: "10px 0 20px" }}>
-            One quick step to finish signing in — this keeps your one-time link secure from automated email scanners.
-          </p>
-          <button type="button" disabled={busy} onClick={confirmSignIn} style={{ width: "100%", background: C.accent, color: C.white, border: 0, padding: "13px 0", fontFamily: F.mono, fontSize: 11.5, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", cursor: busy ? "default" : "pointer", opacity: busy ? 0.65 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-            {busy && <span style={{ width: 14, height: 14, borderRadius: 999, border: "2px solid rgba(255,255,255,0.45)", borderTopColor: "#fff", animation: "tpSpin .8s linear infinite" }} />}
-            {busy ? "Signing you in…" : "Confirm sign-in →"}
-          </button>
-          {error && <p style={{ marginTop: 14, borderLeft: `2px solid ${C.neg}`, background: "#fbeceb", padding: "9px 12px", textAlign: "left", fontFamily: F.sans, fontSize: 12, color: C.neg }}>{error}</p>}
-        </div>
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, background: C.paper }}>
+        <div style={{ width: 30, height: 30, borderRadius: 999, border: `2px solid ${C.paper2}`, borderTopColor: C.accent, animation: "tpSpin .8s linear infinite" }} />
+        <p style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: C.ink2 }}>Signing you in</p>
+        {error && <p style={{ maxWidth: 360, borderLeft: `2px solid ${C.neg}`, background: "#fbeceb", padding: "8px 12px", fontFamily: F.sans, fontSize: 12, color: C.neg }}>{error}</p>}
       </div>
     );
   }
