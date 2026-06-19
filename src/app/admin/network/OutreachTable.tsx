@@ -7,7 +7,6 @@ import {
   type OutreachMatch,
   buildBundleEmail,
   buildLinkedInDraft,
-  businessDaysUntil,
   groupByCompany,
   hasLinkedIn,
   isConsultancyTender,
@@ -18,20 +17,21 @@ import {
 } from "@/lib/network/outreach";
 
 const SIGNOFF_KEY = "tp_outreach_signoff";
-// v2: resets a stale persisted minBusinessDays=10 that (combined with the new
-// server-side "Min lead time" floor) silently emptied the outreach worklist.
-const FILTERS_KEY = "tp_outreach_filters_v2";
+// v3: dropped the client-side "min business days" lead-time floor entirely. Lead
+// time is now governed by the single server-side "Min lead time" control on the
+// page (?min_days, applied before the row cap). Two floors in mismatched units
+// (calendar vs business) confused operators and silently emptied the worklist.
+// Bumping the key clears any stale persisted minBusinessDays value.
+const FILTERS_KEY = "tp_outreach_filters_v3";
 const DEFAULT_SIGNOFF = "[Your name]\nTenderPath";
 
 interface Filters {
-  minBusinessDays: number;
   minScore: number;
   excludeConsultancies: boolean;
   sendReadyOnly: boolean;
 }
 
 const DEFAULT_FILTERS: Filters = {
-  minBusinessDays: OUTREACH_DEFAULTS.minBusinessDays,
   minScore: OUTREACH_DEFAULTS.minScore,
   excludeConsultancies: OUTREACH_DEFAULTS.excludeConsultancies,
   sendReadyOnly: false,
@@ -44,7 +44,6 @@ function loadFilters(): Filters {
     if (!raw) return DEFAULT_FILTERS;
     const p = JSON.parse(raw) as Partial<Filters>;
     return {
-      minBusinessDays: Number.isFinite(p.minBusinessDays) ? Number(p.minBusinessDays) : DEFAULT_FILTERS.minBusinessDays,
       minScore: Number.isFinite(p.minScore) ? Number(p.minScore) : DEFAULT_FILTERS.minScore,
       excludeConsultancies: typeof p.excludeConsultancies === "boolean" ? p.excludeConsultancies : DEFAULT_FILTERS.excludeConsultancies,
       sendReadyOnly: typeof p.sendReadyOnly === "boolean" ? p.sendReadyOnly : DEFAULT_FILTERS.sendReadyOnly,
@@ -109,11 +108,8 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
   // Transparency on what the filters removed — never silently drop tenders.
   const hidden = useMemo(() => {
     const consultancy = filters.excludeConsultancies ? matches.filter(isConsultancyTender).length : 0;
-    const tooSoon = filters.minBusinessDays > 0
-      ? matches.filter((m) => { const b = businessDaysUntil(m.tender_deadline); return b !== null && b < filters.minBusinessDays; }).length
-      : 0;
     const lowFit = filters.minScore > 0 ? matches.filter((m) => m.score < filters.minScore).length : 0;
-    return { consultancy, tooSoon, lowFit };
+    return { consultancy, lowFit };
   }, [matches, filters]);
 
   function isIn(matchId: number): boolean { return !excluded.has(matchId); }
@@ -174,7 +170,6 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
 
   const hiddenParts = [
     hidden.consultancy > 0 ? `${hidden.consultancy} consultancy` : null,
-    hidden.tooSoon > 0 ? `${hidden.tooSoon} closing too soon` : null,
     hidden.lowFit > 0 ? `${hidden.lowFit} below fit` : null,
   ].filter(Boolean);
 
@@ -193,16 +188,6 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
 
       {/* Adjustable filters — these are the launch rules, tunable per the operator. */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "center", padding: "10px 22px" }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-          Min business days
-          <input
-            type="number" min={0} value={filters.minBusinessDays}
-            onChange={(e) => patchFilters({ minBusinessDays: clampInt(e.target.value, DEFAULT_FILTERS.minBusinessDays) })}
-            className={styles.adminSearchInput}
-            suppressHydrationWarning
-            style={{ width: 64, padding: "4px 6px", fontSize: 12 }}
-          />
-        </label>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
           Min fit
           <input
@@ -255,7 +240,7 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
         <div className={styles.woEmpty}>
           {matches.length === 0
             ? "No fresh matches. Add or import companies, or wait for the next match run."
-            : "Nothing meets these filters — loosen min business days, min fit, or the consultancy toggle above."}
+            : "Nothing meets these filters — lower Min fit, turn off the consultancy toggle, or widen Min lead time above."}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "4px 22px 20px" }}>

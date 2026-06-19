@@ -340,6 +340,23 @@ export default function AdminNetworkPage() {
         />
       )}
 
+      {!loading && minDays !== "0" && fresh.length === 0 && (
+        <section className={styles.panel} style={{ padding: "14px 22px" }}>
+          <p className={styles.panelSub} style={{ margin: 0 }}>
+            No fresh matches with <strong>{minDays}+ days</strong> of runway. Any tenders closing sooner
+            are hidden by the <em>Min lead time</em> filter above.{" "}
+            <button
+              type="button"
+              className={styles.btnGhost}
+              onClick={() => setMinDays("0")}
+              style={{ padding: "4px 10px", fontSize: 12, marginLeft: 4 }}
+            >
+              Show all (incl. closing soon)
+            </button>
+          </p>
+        </section>
+      )}
+
       <OutreachTable
         matches={fresh}
         loading={loading}

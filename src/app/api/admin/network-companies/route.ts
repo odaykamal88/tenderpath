@@ -66,6 +66,11 @@ export async function GET(request: Request) {
       ) mc ON mc.network_company_id = c.id
       ORDER BY c.is_active DESC, COALESCE(mc.fresh, 0) DESC, c.created_at DESC
     `,
+    // Outreach worklist. LIMIT raised 100→1000 (2026-06-19): with a busy radar
+    // (700+ fresh matches) the soonest-deadline-first cap truncated the furthest-out
+    // tenders, so far-out opportunities never surfaced. 1000 covers the current peak
+    // with headroom; the per-company Fresh count (the `rows` query above) is
+    // unbounded, so badge and list now agree. Revisit with pagination only if exceeded.
     sql`
       SELECT
         m.id, m.score, m.match_reasons, m.status, m.first_seen_at,
@@ -85,7 +90,7 @@ export async function GET(request: Request) {
           OR (t.deadline IS NOT NULL AND t.deadline >= CURRENT_DATE + (${minDays})::int)
         )
       ORDER BY t.deadline ASC NULLS LAST, m.score DESC
-      LIMIT 100
+      LIMIT 1000
     `,
   ]);
 
