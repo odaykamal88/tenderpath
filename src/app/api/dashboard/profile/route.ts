@@ -39,6 +39,46 @@ interface AssessmentRow {
   } | null;
 }
 
+interface DerivedProfile {
+  business_name: string | null;
+  website: string | null;
+  sector: string | null;
+  country_focus: string[];
+  org_type: string | null;
+  profile_description: string | null;
+}
+
+/** The canonical company identity a completed assessment resolves to — the same
+ *  mapping the original auto-populate used, factored out so GET (re-sync) and
+ *  POST (force-sync) stay identical. */
+function deriveFromAssessment(a: AssessmentRow): DerivedProfile {
+  const ai = a.ai_analysis;
+  return {
+    business_name: a.company_name,
+    website: a.website ?? null,
+    sector: a.sector ?? ai?.detected_industry ?? ai?.sectors?.[0] ?? null,
+    country_focus: Array.isArray(a.countries) ? a.countries : [],
+    org_type: a.org_type ?? null,
+    profile_description: ai?.summary ?? a.description ?? null,
+  };
+}
+
+/** True when the cached users-row profile no longer matches the assessment it
+ *  claims to mirror — i.e. a newer assessment has resolved a different company.
+ *  Drives both the GET re-sync write-skip and the manual-profile "update?" hint. */
+function profilesDiffer(profile: ProfileRow | undefined, d: DerivedProfile): boolean {
+  if (!profile) return true;
+  const norm = (s: string | null | undefined) => (s ?? "").trim();
+  return (
+    norm(profile.business_name) !== norm(d.business_name) ||
+    norm(profile.website) !== norm(d.website) ||
+    norm(profile.sector) !== norm(d.sector) ||
+    norm(profile.org_type) !== norm(d.org_type) ||
+    norm(profile.profile_description) !== norm(d.profile_description) ||
+    JSON.stringify((profile.country_focus as string[] | null) ?? []) !== JSON.stringify(d.country_focus)
+  );
+}
+
 export async function GET(request: Request) {
   const guard = await requireAuth(request);
   if (!guard.authorized) return guard.response!;
@@ -63,7 +103,6 @@ export async function GET(request: Request) {
   const profile = rows[0] as ProfileRow | undefined;
 
   const source = profile?.profile_source ?? "unset";
-  const hasProfile = source !== "unset" && profile?.business_name;
   // Sprint 13. Pre-Sprint-8e accounts have NULL here; empty-object JSONB
   // ({}) collapses to null for the UI so the Vault badge doesn't render
   // an empty card.
@@ -71,23 +110,13 @@ export async function GET(request: Request) {
     profile?.mined_profile_facts && Object.keys(profile.mined_profile_facts).length > 0
       ? profile.mined_profile_facts
       : null;
+  const base = {
+    email: user.email ?? null,
+    contact_phone: profile?.contact_phone ?? null,
+    mined_profile_facts: minedFacts,
+  };
 
-  if (hasProfile) {
-    return NextResponse.json({
-      email: user.email ?? null,
-      contact_phone: profile!.contact_phone ?? null,
-      business_name: profile!.business_name,
-      website: profile!.website,
-      sector: profile!.sector,
-      country_focus: (profile!.country_focus as string[] | null) ?? [],
-      org_type: profile!.org_type,
-      profile_description: profile!.profile_description,
-      profile_source: source,
-      mined_profile_facts: minedFacts,
-    });
-  }
-
-  // Auto-populate from latest assessment
+  // Latest assessment for this user — the source of truth for company identity.
   const aRows = await sql`
     SELECT company_name, website, sector, countries, org_type,
            description, ai_analysis
@@ -96,51 +125,76 @@ export async function GET(request: Request) {
     ORDER BY created_at DESC
     LIMIT 1
   `;
+  const derived = aRows.length ? deriveFromAssessment(aRows[0] as AssessmentRow) : null;
 
-  if (!aRows.length) {
+  // Manual edits win — never auto-overwrite them. But if a newer assessment now
+  // describes a different company, hand the UI a non-destructive "update?" hint
+  // (audit 2026-06-19 blocker #3: an earlier/manual profile diverging from the
+  // latest assessment, which also leaked into the submission-wizard prefill).
+  if (source === "manual" && profile?.business_name) {
+    const differs = derived ? profilesDiffer(profile, derived) : false;
     return NextResponse.json({
-      email: user.email ?? null,
-      contact_phone: profile?.contact_phone ?? null,
-      business_name: null,
-      website: null,
-      sector: null,
-      country_focus: [],
-      org_type: null,
-      profile_description: null,
-      profile_source: "unset",
-      mined_profile_facts: minedFacts,
+      ...base,
+      business_name: profile.business_name,
+      website: profile.website,
+      sector: profile.sector,
+      country_focus: (profile.country_focus as string[] | null) ?? [],
+      org_type: profile.org_type,
+      profile_description: profile.profile_description,
+      profile_source: "manual",
+      assessment_differs: differs,
+      latest_assessment: differs ? derived : null,
     });
   }
 
-  const a = aRows[0] as AssessmentRow;
-  const ai = a.ai_analysis;
-  const inferredSector = a.sector ?? ai?.detected_industry ?? (ai?.sectors?.[0] ?? null);
-  const inferredDescription = ai?.summary ?? a.description ?? null;
+  // No assessment yet → nothing to mirror.
+  if (!derived) {
+    // Keep an existing assessment-derived profile if its assessment row was
+    // since deleted; otherwise report unset.
+    const keep = source === "assessment" && profile?.business_name ? profile : null;
+    return NextResponse.json({
+      ...base,
+      business_name: keep?.business_name ?? null,
+      website: keep?.website ?? null,
+      sector: keep?.sector ?? null,
+      country_focus: (keep?.country_focus as string[] | null) ?? [],
+      org_type: keep?.org_type ?? null,
+      profile_description: keep?.profile_description ?? null,
+      profile_source: keep ? "assessment" : "unset",
+      assessment_differs: false,
+      latest_assessment: null,
+    });
+  }
 
-  // Write assessment-sourced profile back to users row
-  await sql`
-    UPDATE users SET
-      business_name = ${a.company_name},
-      website       = ${a.website ?? null},
-      sector        = ${inferredSector ?? null},
-      country_focus = ${JSON.stringify(a.countries ?? [])}::jsonb,
-      org_type      = ${a.org_type ?? null},
-      profile_description = ${inferredDescription ?? null},
-      profile_source = 'assessment'
-    WHERE id = ${user.id}
-  `;
+  // 'unset' or 'assessment' → mirror the latest assessment. Re-sync the users
+  // row only when something actually changed, so an assessment-derived profile
+  // tracks the newest assessment instead of freezing on the first one (the
+  // original bug: the populate fired once, then never refreshed).
+  if (source === "unset" || profilesDiffer(profile, derived)) {
+    await sql`
+      UPDATE users SET
+        business_name = ${derived.business_name},
+        website       = ${derived.website},
+        sector        = ${derived.sector},
+        country_focus = ${JSON.stringify(derived.country_focus)}::jsonb,
+        org_type      = ${derived.org_type},
+        profile_description = ${derived.profile_description},
+        profile_source = 'assessment'
+      WHERE id = ${user.id}
+    `;
+  }
 
   return NextResponse.json({
-    email: user.email ?? null,
-    contact_phone: profile?.contact_phone ?? null,
-    business_name: a.company_name,
-    website: a.website ?? null,
-    sector: inferredSector ?? null,
-    country_focus: a.countries ?? [],
-    org_type: a.org_type ?? null,
-    profile_description: inferredDescription ?? null,
+    ...base,
+    business_name: derived.business_name,
+    website: derived.website,
+    sector: derived.sector,
+    country_focus: derived.country_focus,
+    org_type: derived.org_type,
+    profile_description: derived.profile_description,
     profile_source: "assessment",
-    mined_profile_facts: minedFacts,
+    assessment_differs: false,
+    latest_assessment: null,
   });
 }
 
@@ -174,4 +228,53 @@ export async function PATCH(request: Request) {
   `;
 
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * POST /api/dashboard/profile — force-refresh the profile from the user's
+ * latest assessment and re-mark it assessment-derived. Backs the "Update from
+ * latest assessment" affordance the GET surfaces when a manual profile has
+ * diverged from a newer assessment, so the user can opt in without re-typing.
+ */
+export async function POST(request: Request) {
+  const guard = await requireAuth(request);
+  if (!guard.authorized) return guard.response!;
+  const user = guard.user!;
+
+  const aRows = await sql`
+    SELECT company_name, website, sector, countries, org_type,
+           description, ai_analysis
+    FROM assessments
+    WHERE email = ${user.email}
+    ORDER BY created_at DESC
+    LIMIT 1
+  `;
+  if (!aRows.length) {
+    return NextResponse.json({ error: "No assessment found to sync from." }, { status: 404 });
+  }
+
+  const d = deriveFromAssessment(aRows[0] as AssessmentRow);
+  await sql`
+    UPDATE users SET
+      business_name       = ${d.business_name},
+      website             = ${d.website},
+      sector              = ${d.sector},
+      country_focus       = ${JSON.stringify(d.country_focus)}::jsonb,
+      org_type            = ${d.org_type},
+      profile_description  = ${d.profile_description},
+      profile_source      = 'assessment',
+      updated_at          = NOW()
+    WHERE id = ${user.id}
+  `;
+
+  return NextResponse.json({
+    ok: true,
+    business_name: d.business_name,
+    website: d.website,
+    sector: d.sector,
+    country_focus: d.country_focus,
+    org_type: d.org_type,
+    profile_description: d.profile_description,
+    profile_source: "assessment",
+  });
 }

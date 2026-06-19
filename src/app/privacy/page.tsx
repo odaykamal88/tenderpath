@@ -35,7 +35,7 @@ export default function PrivacyPage() {
           <li><strong>Assessment results:</strong> AI-generated company profile, readiness scores, matched tenders, and capability extractions — stored against your account.</li>
           <li><strong>Tender feedback:</strong> your saved, not-relevant, in-progress, or applied status on individual tenders.</li>
           <li><strong>Vault documents:</strong> files you upload to the document vault (PDFs, Word documents, spreadsheets, images — up to 10 MB per file).</li>
-          <li><strong>Billing data:</strong> subscription and payment records. Card details are handled entirely by Stripe and are never stored on TenderPath servers. For manual payment methods (USDT, Whish, OMT, bank wire), transaction references and confirmation details may be stored by TenderPath staff.</li>
+          <li><strong>Billing data:</strong> subscription and payment records. Card details are handled entirely by Stripe and are never stored on TenderPath servers. For manual payment methods (USDT and bank wire), transaction references and confirmation details may be stored by TenderPath staff.</li>
           <li><strong>Authentication tokens:</strong> short-lived magic-link tokens (expire after 30 minutes) and a session token stored in an httpOnly cookie (<code>tp_session</code>).</li>
           <li><strong>Server logs:</strong> standard web server logs including IP addresses and request metadata, retained for operational and security purposes.</li>
         </ul>
@@ -87,7 +87,7 @@ export default function PrivacyPage() {
           </tbody>
         </table>
         <p className="text-sm text-gray-500 mt-2">
-          Manual payment methods (USDT, Whish Money, OMT, bank wire transfer) are coordinated
+          Manual payment methods (USDT and bank wire transfer) are coordinated
           directly by TenderPath staff; transaction references are stored within our primary database.
         </p>
       </Section>

@@ -137,7 +137,7 @@ export function MatchesPage() {
 
       {/* intro strip */}
       <div style={{ display: "flex", gap: 1, background: C.rule, border: `1px solid ${C.rule}`, marginBottom: 24, flexWrap: mobile ? "wrap" : "nowrap" }}>
-        {([["Total matches", String(data.pipeline.matched)], ["Strong fit ≥70%", String(data.pipeline.strong)], ["Closing this week", String(data.pipeline.dueSoon)], ["Avg fit", `${avgFit}%`]] as [string, string][]).map(([l, v]) => (
+        {([["Total matches", String(data.pipeline.matched)], ["High fit ≥70%", String(data.pipeline.strong)], ["Closing this week", String(data.pipeline.dueSoon)], ["Avg fit", `${avgFit}%`]] as [string, string][]).map(([l, v]) => (
           <div key={l} style={{ flex: mobile ? "1 1 45%" : 1, background: C.white, padding: "14px 18px" }}>
             <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: C.faint }}>{l}</div>
             <div style={{ fontFamily: F.display, fontSize: 28, color: C.ink, marginTop: 4, lineHeight: 1 }}>{v}</div>

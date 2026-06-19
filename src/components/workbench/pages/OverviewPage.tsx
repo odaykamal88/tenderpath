@@ -117,7 +117,7 @@ export function OverviewPage() {
       <div style={{ marginBottom: 40 }}>
         <SectionHeadLite n="00" title="State of the pipeline" hint={`${pipeline.total} tracked · ${pipeline.dueSoon} closing this week`} />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", border: `1px solid ${C.rule}`, background: C.white }}>
-          {([["Matched", pipeline.matched, "shortlist"], ["Strong fit", pipeline.strong, "≥70%"], ["Active", pipeline.active, "evaluating"], ["Submitted", pipeline.submitted, "awaiting"]] as [string, number, string][]).map(([l, v, sub], i) => {
+          {([["Matched", pipeline.matched, "shortlist"], ["High fit", pipeline.strong, "≥70%"], ["Active", pipeline.active, "evaluating"], ["Submitted", pipeline.submitted, "awaiting"]] as [string, number, string][]).map(([l, v, sub], i) => {
             const max = Math.max(pipeline.matched, pipeline.strong, pipeline.active, pipeline.submitted, 1);
             return (
               <div key={l} style={{ padding: "16px 18px", borderRight: i < 3 ? `1px solid ${C.ruleSoft}` : "none" }}>

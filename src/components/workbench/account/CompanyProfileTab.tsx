@@ -10,6 +10,15 @@ import { useWorkbench } from "../WorkbenchProvider";
 import { Block, Field, ChipEditor } from "./atoms";
 import { SECTOR_TAXONOMY, splitSectors, joinSectors } from "@/lib/workbench/sectors";
 
+interface AssessmentSummary {
+  business_name: string | null;
+  website: string | null;
+  sector: string | null;
+  country_focus: string[];
+  org_type: string | null;
+  profile_description: string | null;
+}
+
 interface Profile {
   email: string | null;
   contact_phone: string | null;
@@ -20,6 +29,10 @@ interface Profile {
   org_type: string | null;
   profile_description: string | null;
   profile_source: string | null;
+  // Set when a manual profile has diverged from a newer assessment — drives a
+  // non-destructive "update from latest assessment" prompt (audit blocker #3).
+  assessment_differs?: boolean;
+  latest_assessment?: AssessmentSummary | null;
 }
 
 export function CompanyProfileTab() {
@@ -27,6 +40,7 @@ export function CompanyProfileTab() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // draft fields
@@ -91,16 +105,68 @@ export function CompanyProfileTab() {
     setEditing(false);
   };
 
+  // Opt-in refresh when a manual profile has gone stale against a newer
+  // assessment. Non-destructive: only runs when the user clicks.
+  const syncFromAssessment = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/dashboard/profile", {
+        method: "POST",
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) { setError("Couldn't update from your latest assessment."); setSyncing(false); return; }
+      const p = (await res.json()) as Profile;
+      const next: Profile = { ...(profile as Profile), ...p, assessment_differs: false, latest_assessment: null };
+      setProfile(next);
+      hydrate(next);
+      setEditing(false);
+      setError(null);
+    } catch {
+      setError("Couldn't update from your latest assessment.");
+    }
+    setSyncing(false);
+  };
+
   if (error && !profile) return <div style={{ fontFamily: F.sans, fontSize: 13.5, color: C.neg }}>{error}</div>;
   if (!profile) return <div style={{ fontFamily: F.mono, fontSize: 11, color: C.mute, textTransform: "uppercase", letterSpacing: "0.08em" }}>Loading…</div>;
 
   const provenance =
     profile.profile_source === "manual"
-      ? "Your edits override the imported values and are kept even if the assessment re-runs."
-      : "Auto-filled from your assessment and Document Vault. Edit any field to correct or add detail.";
+      ? "Your edits override the imported values and are kept even when you re-run an assessment."
+      : "Auto-filled from your latest assessment and Document Vault, and kept in sync as new assessments run. Edit any field to correct or add detail.";
+
+  const stale = profile.profile_source === "manual" && profile.assessment_differs && profile.latest_assessment;
 
   return (
     <div>
+      {stale && profile.latest_assessment && (
+        <div style={{ border: `1px solid ${C.accent}`, borderLeft: `3px solid ${C.accent}`, background: C.white, padding: "14px 16px", marginBottom: 18 }}>
+          <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: C.accent, marginBottom: 6 }}>
+            Newer assessment available
+          </div>
+          <p style={{ fontFamily: F.sans, fontSize: 13, color: C.ink2, lineHeight: 1.5, margin: 0 }}>
+            Your latest assessment describes <b style={{ color: C.ink }}>{profile.latest_assessment.business_name}</b>, but your saved profile still says <b style={{ color: C.ink }}>{profile.business_name}</b>. Your manual edits are kept until you choose to update.
+          </p>
+          <button
+            onClick={syncFromAssessment}
+            disabled={syncing}
+            style={{
+              marginTop: 11,
+              fontFamily: F.mono,
+              fontSize: 11,
+              letterSpacing: "0.04em",
+              padding: "8px 14px",
+              background: C.ink,
+              color: C.paper,
+              border: 0,
+              cursor: syncing ? "default" : "pointer",
+              opacity: syncing ? 0.6 : 1,
+            }}
+          >
+            {syncing ? "Updating…" : "Update from latest assessment →"}
+          </button>
+        </div>
+      )}
       <Block
         title="Company background"
         editing={editing}
