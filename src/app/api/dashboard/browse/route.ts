@@ -10,17 +10,44 @@ import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/auth";
 import { decodeHtmlEntities } from "@/lib/text/entities";
-import type { User } from "@/lib/types";
+import { rawSectorToSlug, sectorDisplayLabel, userSectorSlugs, type SectorSlug } from "@/lib/crawlers/sector-map";
+import { expandCountrySet } from "@/lib/assessment/match";
+import type { AIAnalysis, User } from "@/lib/types";
 import type { WbBrowseRow, WbFacet, WbBrowseResult } from "@/lib/workbench/types";
 
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 40;
+// Tenders tagged "global" never get geo-filtered out of a "relevant to me" view.
+const GLOBAL_COUNTRY_TOKENS = ["global", "worldwide", "multiple", "various"];
 
 function parseList(v: string | null): string[] {
   return v
     ? v.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 40)
     : [];
+}
+
+// The viewer's profile (sector slugs + countries) from their latest completed
+// assessment — used only for the off-by-default "Relevant to me" scope. Best-
+// effort: a miss just means that filter degrades to no-op.
+async function loadViewerProfile(email: string): Promise<{ slugs: Set<SectorSlug>; countries: string[] }> {
+  try {
+    const rows = await sql`
+      SELECT ai_analysis, countries FROM assessments
+      WHERE email = ${email} AND assessment_status = 'completed'
+      ORDER BY created_at DESC LIMIT 1
+    `;
+    const row = rows[0];
+    if (!row) return { slugs: new Set(), countries: [] };
+    const analysis = row.ai_analysis as AIAnalysis | null;
+    const slugs = userSectorSlugs(analysis?.detected_industry ?? null, analysis?.sectors ?? null);
+    const countries = Array.isArray(row.countries)
+      ? row.countries.filter((c): c is string => typeof c === "string")
+      : [];
+    return { slugs, countries };
+  } catch {
+    return { slugs: new Set(), countries: [] };
+  }
 }
 
 function inferType(title: string, opportunityType: string | null): string {
@@ -46,7 +73,10 @@ export async function GET(request: Request) {
   const types = parseList(searchParams.get("type"));
   const sources = parseList(searchParams.get("source"));
   const matchedOnly = searchParams.get("matched") === "1";
-  const sort = searchParams.get("sort") === "fit" ? "fit" : "deadline";
+  const relevant = searchParams.get("relevant") === "1";
+  // Default to best-fit so a viewer's matched tenders surface first; "deadline"
+  // is the explicit "closing soon" choice.
+  const sort = searchParams.get("sort") === "deadline" ? "deadline" : "fit";
   const page = Math.max(1, Number.parseInt(searchParams.get("page") ?? "1", 10) || 1);
   const offset = (page - 1) * PAGE_SIZE;
   const like = q ? `%${q}%` : null;
@@ -67,18 +97,10 @@ export async function GET(request: Request) {
     : sql``;
   const matchedClause = matchedOnly ? sql`AND pf.fit IS NOT NULL` : sql``;
 
-  // Full WHERE (search + matched + selected facets) for results + count.
-  const where = sql`
-    WHERE t.status = 'open'
-      AND (t.deadline IS NULL OR t.deadline >= CURRENT_DATE)
-      ${searchClause}
-      ${matchedClause}
-      ${sectors.length ? sql`AND t.sector = ANY(${sectors})` : sql``}
-      ${types.length ? sql`AND t.opportunity_type = ANY(${types})` : sql``}
-      ${sources.length ? sql`AND t.source_name = ANY(${sources})` : sql``}
-  `;
   // Facet WHERE (search + matched only) so counts reflect availability rather
-  // than collapsing as the user narrows within a group.
+  // than collapsing as the user narrows within a group. The full results WHERE
+  // (adds sector / type / source / relevance) is assembled in the try block once
+  // the raw→canonical sector map is built.
   const facetWhere = sql`
     WHERE t.status = 'open'
       AND (t.deadline IS NULL OR t.deadline >= CURRENT_DATE)
@@ -87,7 +109,76 @@ export async function GET(request: Request) {
   `;
 
   try {
-    const [countRows, rows, sectorFacet, typeFacet, sourceFacet] = await Promise.all([
+    // 1) Harmonize the sector universe. Pull the full raw grouping (no LIMIT,
+    //    excluding leaked JSON blobs) under the facet scope, then collapse every
+    //    variant that maps to the same canonical slug ("it" / "Information
+    //    Technology" / a NAICS code → one label) and remember which raw values
+    //    back each label and slug so a selection — or the relevance filter — can
+    //    translate back to a real `t.sector` predicate.
+    const sectorRaw = (await sql`
+      SELECT t.sector AS value, COUNT(*)::int AS count
+      FROM tenders t ${join} ${facetWhere}
+        AND t.sector IS NOT NULL AND t.sector <> '' AND t.sector NOT LIKE '{%' AND length(t.sector) <= 60
+      GROUP BY t.sector
+    `) as { value: string; count: number }[];
+
+    const labelCounts = new Map<string, number>();
+    const labelToRaws = new Map<string, string[]>();
+    const slugToRaws = new Map<SectorSlug, string[]>();
+    for (const r of sectorRaw) {
+      const rawVal = String(r.value);
+      const label = sectorDisplayLabel(rawVal);
+      if (!label) continue;
+      labelCounts.set(label, (labelCounts.get(label) ?? 0) + Number(r.count));
+      const raws = labelToRaws.get(label) ?? [];
+      raws.push(rawVal);
+      labelToRaws.set(label, raws);
+      const slug = rawSectorToSlug(rawVal);
+      if (slug) {
+        const sr = slugToRaws.get(slug) ?? [];
+        sr.push(rawVal);
+        slugToRaws.set(slug, sr);
+      }
+    }
+    const sectorFacets: WbFacet[] = [...labelCounts.entries()]
+      .map(([value, count]) => ({ value, count }))
+      .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value))
+      .slice(0, 24);
+
+    // 2) Selected canonical sector labels → the raw values that back them.
+    const selectedRaws = sectors.flatMap((label) => labelToRaws.get(label) ?? []);
+    const sectorClause = sectors.length
+      ? sql`AND t.sector = ANY(${selectedRaws.length ? selectedRaws : sectors})`
+      : sql``;
+
+    // 3) "Relevant to me" (off by default): the viewer's own sectors AND a
+    //    lenient geography (their countries + alias expansion + global/unscoped).
+    let relevantClause = sql``;
+    if (relevant) {
+      const profile = await loadViewerProfile(user.email);
+      const relevantRaws = [...profile.slugs].flatMap((s) => slugToRaws.get(s) ?? []);
+      const sectorRel = relevantRaws.length ? sql`AND t.sector = ANY(${relevantRaws})` : sql`AND FALSE`;
+      const expanded = [...expandCountrySet(profile.countries)].map((c) => c.toLowerCase());
+      const countryRel = expanded.length
+        ? sql`AND (t.country IS NULL OR LOWER(t.country) = ANY(${expanded}) OR LOWER(t.country) = ANY(${GLOBAL_COUNTRY_TOKENS}))`
+        : sql``;
+      relevantClause = sql`${sectorRel} ${countryRel}`;
+    }
+
+    // Full results/count WHERE: facet scope + sector selection + relevance + the
+    // exact-match type/source facets.
+    const where = sql`
+      WHERE t.status = 'open'
+        AND (t.deadline IS NULL OR t.deadline >= CURRENT_DATE)
+        ${searchClause}
+        ${matchedClause}
+        ${sectorClause}
+        ${relevantClause}
+        ${types.length ? sql`AND t.opportunity_type = ANY(${types})` : sql``}
+        ${sources.length ? sql`AND t.source_name = ANY(${sources})` : sql``}
+    `;
+
+    const [countRows, rows, typeFacet, sourceFacet] = await Promise.all([
       sql`SELECT COUNT(*)::int AS n FROM tenders t ${join} ${where}`,
       sql`
         SELECT t.id, t.reference_id, t.title, t.agency, t.deadline, t.sector, t.country,
@@ -96,10 +187,6 @@ export async function GET(request: Request) {
         ORDER BY ${sort === "fit" ? sql`pf.fit DESC NULLS LAST, t.deadline ASC NULLS LAST` : sql`t.deadline ASC NULLS LAST`}, t.id DESC
         LIMIT ${PAGE_SIZE} OFFSET ${offset}
       `,
-      // Exclude malformed sector values that leaked from source data (e.g. a
-      // JSON blob {"sector_code":"SG",…} in tenders.sector) so the facet list
-      // stays clean.
-      sql`SELECT t.sector AS value, COUNT(*)::int AS count FROM tenders t ${join} ${facetWhere} AND t.sector IS NOT NULL AND t.sector <> '' AND t.sector NOT LIKE '{%' AND length(t.sector) <= 60 GROUP BY t.sector ORDER BY count DESC, value LIMIT 30`,
       sql`SELECT t.opportunity_type AS value, COUNT(*)::int AS count FROM tenders t ${join} ${facetWhere} AND t.opportunity_type IS NOT NULL AND t.opportunity_type <> '' GROUP BY t.opportunity_type ORDER BY count DESC, value LIMIT 30`,
       sql`SELECT t.source_name AS value, COUNT(*)::int AS count FROM tenders t ${join} ${facetWhere} AND t.source_name IS NOT NULL AND t.source_name <> '' GROUP BY t.source_name ORDER BY count DESC, value LIMIT 30`,
     ]);
@@ -117,7 +204,8 @@ export async function GET(request: Request) {
         source: (r.source_name as string | null) ?? "—",
         deadline: (r.deadline as string | null) ?? null,
         value: (r.estimated_value as string | null) ?? "—",
-        sector: (r.sector as string | null) ?? null,
+        // Show the harmonized sector label so the row matches its facet.
+        sector: sectorDisplayLabel(r.sector as string | null) ?? (r.sector as string | null) ?? null,
         country: (r.country as string | null) ?? null,
         fit,
         matched: fit != null,
@@ -131,7 +219,7 @@ export async function GET(request: Request) {
     const result: WbBrowseResult = {
       tenders,
       facets: {
-        sector: toFacets(sectorFacet as Record<string, unknown>[]),
+        sector: sectorFacets,
         type: toFacets(typeFacet as Record<string, unknown>[]),
         source: toFacets(sourceFacet as Record<string, unknown>[]),
       },

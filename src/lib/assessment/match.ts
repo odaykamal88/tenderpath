@@ -1,6 +1,6 @@
 import { sql } from "@/lib/db";
 import type { MatchedTender, MatchedGrant, AIAnalysis, MatchReason, GeographyMode, OpportunityBucket } from "@/lib/types";
-import { SECTOR_SLUGS, normalizeSector, userSectorSlugs, type SectorSlug } from "@/lib/crawlers/sector-map";
+import { SECTOR_SLUGS, SECTOR_LABELS, normalizeSector, userSectorSlugs, type SectorSlug } from "@/lib/crawlers/sector-map";
 import { ALL_COUNTRIES } from "@/lib/countries";
 import { computeAdjacentSlugs } from "./sector-adjacency";
 import { shouldSuppressSource } from "./source-rules";
@@ -292,7 +292,7 @@ function expandRegionalSet(countries: string[]): Set<string> {
   return out;
 }
 
-function expandCountrySet(countries: string[]): Set<string> {
+export function expandCountrySet(countries: string[]): Set<string> {
   const out = new Set<string>();
   for (const raw of countries) {
     const key = raw.trim().toLowerCase();
@@ -626,24 +626,6 @@ type FeedbackProfile = {
 };
 
 type SourceProvenance = "primary" | "aggregator" | "unknown";
-
-const SECTOR_LABELS: Record<SectorSlug, string> = {
-  it: "Information Technology",
-  education: "Education & Training",
-  healthcare: "Healthcare",
-  logistics: "Logistics & Supply Chain",
-  construction: "Construction & Infrastructure",
-  consulting: "Consulting Services",
-  monitoring_evaluation: "Monitoring & Evaluation",
-  food: "Food & Nutrition",
-  security: "Security & Safety",
-  language_services: "Language Services",
-  engineering: "Engineering",
-  environment: "Environment & Climate",
-  agriculture: "Agriculture",
-  water_sanitation: "Water & Sanitation",
-  energy: "Energy",
-};
 
 function sourceProvenance(sourceName: string | null | undefined, sourceUrl: string | null | undefined): SourceProvenance {
   const source = (sourceName ?? "").toLowerCase();

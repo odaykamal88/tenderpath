@@ -30,6 +30,26 @@ export const SECTOR_SLUGS: SectorSlug[] = [
   "agriculture", "water_sanitation", "energy",
 ];
 
+/** Canonical human label per slug — the single display name a slug resolves to
+ *  wherever the UI shows a sector (matches, browse facets, reasons). */
+export const SECTOR_LABELS: Record<SectorSlug, string> = {
+  it: "Information Technology",
+  education: "Education & Training",
+  healthcare: "Healthcare",
+  logistics: "Logistics & Supply Chain",
+  construction: "Construction & Infrastructure",
+  consulting: "Consulting Services",
+  monitoring_evaluation: "Monitoring & Evaluation",
+  food: "Food & Nutrition",
+  security: "Security & Safety",
+  language_services: "Language Services",
+  engineering: "Engineering",
+  environment: "Environment & Climate",
+  agriculture: "Agriculture",
+  water_sanitation: "Water & Sanitation",
+  energy: "Energy",
+};
+
 // Keyword → slug map. Checked against lowercased raw sector + title + description.
 // Ordered roughly by specificity — first hit wins per slug, but every slug
 // that matches is returned so a "construction consultancy" hits both.
@@ -520,4 +540,32 @@ export function userSectorSlugs(
     for (const s of fromKeywords) slugs.add(s);
   }
   return slugs;
+}
+
+/**
+ * Best-effort single slug for a stored `tenders.sector` value. Across crawlers
+ * that column may hold a bare slug ("it"), a canonical/variant label
+ * ("Information Technology", "Health"), or a coded string — this collapses all
+ * three to one slug so the Browse facet can harmonize duplicates.
+ */
+export function rawSectorToSlug(raw: string | null | undefined): SectorSlug | null {
+  if (!raw) return null;
+  const key = raw.trim().toLowerCase();
+  if (!key) return null;
+  if ((SECTOR_SLUGS as string[]).includes(key)) return key as SectorSlug;
+  const direct = slugFromLabel(raw);
+  if (direct) return direct;
+  return normalizeSector(raw, null)[0] ?? null;
+}
+
+/**
+ * Canonical display label for a stored sector value: the harmonized label when
+ * it maps to the shared vocabulary, else the cleaned raw string so genuine
+ * long-tail sectors aren't lost (just de-duplicated by whitespace/case upstream).
+ */
+export function sectorDisplayLabel(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  const slug = rawSectorToSlug(raw);
+  if (slug) return SECTOR_LABELS[slug];
+  return raw.trim().replace(/\s+/g, " ");
 }
