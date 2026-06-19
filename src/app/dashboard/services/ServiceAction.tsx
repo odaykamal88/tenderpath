@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { CheckoutCard, type CheckoutContext } from "@/components/checkout/CheckoutCard";
 
 type ServiceSlug = "bid-no-bid" | "digest" | "proposal" | "lta-roster";
 
@@ -33,6 +34,9 @@ export default function ServiceAction({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Once the "already analyzed?" check clears, reveal the shared embedded
+  // checkout inline (no hop to a separate hosted Stripe page).
+  const [embed, setEmbed] = useState<CheckoutContext | null>(null);
 
   if (service !== "bid-no-bid") {
     return (
@@ -67,6 +71,7 @@ export default function ServiceAction({
     setError(null);
 
     try {
+      // If the analysis already exists, skip payment and open it directly.
       const checkRes = await fetch(
         `/api/analysis/bid-no-bid?pipeline_item_id=${encodeURIComponent(pipelineItemId)}`,
         { headers: authHeaders() },
@@ -76,25 +81,37 @@ export default function ServiceAction({
         return;
       }
 
-      const checkoutRes = await fetch("/api/analysis/bid-no-bid/checkout", {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({
-          pipeline_item_id: Number(pipelineItemId),
-          tender_title: tenderTitle ?? undefined,
-        }),
+      // Otherwise mount the shared embedded checkout inline. It posts to the
+      // unified /api/pay/checkout (plan=bid-no-bid, pipeline-item anchored, no
+      // work order) and, on payment, returns to /dashboard/analysis/{id} where
+      // the analysis is generated — replacing the old hosted-redirect route.
+      setEmbed({
+        tender: tenderTitle ?? null,
+        agency: null,
+        pipelineItemId,
+        workOrderId: null,
+        submissionType: null,
+        submissionOrderId: null,
       });
-      const data = (await checkoutRes.json().catch(() => ({}))) as { url?: string; error?: string };
-      if (!checkoutRes.ok || !data.url) {
-        setError(data.error ?? "Could not start bid/no-bid checkout.");
-        return;
-      }
-      window.location.href = data.url;
     } catch {
       setError("Could not start bid/no-bid checkout. Please try again.");
     } finally {
       setLoading(false);
     }
+  }
+
+  if (embed) {
+    return (
+      <div>
+        <div
+          className="mb-3 text-[10.5px] font-semibold uppercase tracking-[0.15em] text-ink-3"
+          style={{ fontFamily: MONO }}
+        >
+          Secure payment
+        </div>
+        <CheckoutCard autoStart plan="bid-no-bid" context={embed} />
+      </div>
+    );
   }
 
   return (
