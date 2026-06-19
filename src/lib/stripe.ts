@@ -45,6 +45,11 @@ export const PRICE_MAP: Record<string, { tier: string; name: string }> = {
 export function tierFromPriceId(priceId: string): string | null {
   return PRICE_MAP[priceId]?.tier ?? null;
 }
+// NOTE: the legacy hosted-redirect checkout helpers (createCheckoutUrl →
+// /api/subscriptions, and /api/proposals/checkout) were removed in the
+// 2026-06-19 checkout consolidation. All card payments now flow through the
+// single embedded path: /api/pay/checkout, mounted by the shared CheckoutCard
+// (src/components/checkout/CheckoutCard.tsx).
 
 /**
  * Stripe marks a $0 checkout — a 100%-off promotion code (e.g. FREETEST) or a
@@ -56,21 +61,4 @@ export function tierFromPriceId(priceId: string): string | null {
  */
 export function isSettledPayment(status: string | null | undefined): boolean {
   return status === "paid" || status === "no_payment_required";
-}
-
-export function createCheckoutUrl(tier: string, userEmail: string): string {
-  const priceEnvMap: Record<string, string> = {
-    "tender-intelligence": "STRIPE_PRICE_TENDER_INTELLIGENCE",
-    "submission-package": "STRIPE_PRICE_SUBMISSION_PACKAGE",
-    "strategic-partnership": "STRIPE_PRICE_STRATEGIC_PARTNERSHIP",
-    "annual-access": "STRIPE_PRICE_ANNUAL_ACCESS_99",
-  };
-
-  const envKey = priceEnvMap[tier];
-  if (!envKey) throw new Error(`Unknown tier: ${tier}`);
-
-  const priceId = process.env[envKey];
-  if (!priceId) throw new Error(`${envKey} is not set`);
-
-  return `/api/subscriptions/checkout?price=${priceId}&email=${encodeURIComponent(userEmail)}`;
 }

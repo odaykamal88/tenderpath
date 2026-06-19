@@ -164,7 +164,9 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
     // are configured; until then fall back to the existing annual-access flow so
     // the CTA never dead-ends. The pay page handles plan selection + checkout.
     const plan = data?.access.newSubscriptionLive ? "sub-annual" : "annual-access";
-    window.open(`/pay?plan=${plan}`, "_blank", "noopener,noreferrer");
+    // Navigate in place (was a new tab) so checkout feels like one continuous
+    // flow rather than a detached pop-up — part of the 2026-06-19 consolidation.
+    window.location.href = `/pay?plan=${plan}`;
   }, [data]);
 
   const isClosed = useCallback(

@@ -19,6 +19,7 @@ import { C, F } from "../tokens";
 import { Bar, Btn, deadlineLabel, FitBadge, SevDot, shortDate } from "../ui";
 import { useMedia } from "../useMedia";
 import { useWorkbench } from "../WorkbenchProvider";
+import { CheckoutCard, type CheckoutContext } from "@/components/checkout/CheckoutCard";
 import type { WbMatch } from "@/lib/workbench/types";
 import type { DocResolution, SubmissionCode, WizardDraftState } from "@/lib/submissions/types";
 import { EMPTY_DRAFT } from "@/lib/submissions/types";
@@ -225,6 +226,7 @@ function ReviewStep({
   payError,
   onPay,
   freeEligible,
+  committed,
 }: {
   flow: SubmissionFlow;
   draft: WizardDraftState;
@@ -233,6 +235,9 @@ function ReviewStep({
   payError: string | null;
   onPay: () => void;
   freeEligible: boolean;
+  /** Non-null once the order is commissioned — switches the CTA to the inline
+   *  embedded checkout. */
+  committed: CheckoutContext | null;
 }) {
   const tender = draft.tender;
   const canGo = a.canPay;
@@ -305,21 +310,43 @@ function ReviewStep({
             {payError && <div style={{ fontFamily: F.sans, fontSize: 12.5, color: "#e8b9b9", marginTop: 10 }}>{payError}</div>}
           </div>
           <div style={{ textAlign: "right", flexShrink: 0 }}>
-            <Btn kind="gold" onClick={onPay} style={{ opacity: canGo && !paying ? 1 : 0.45, pointerEvents: canGo && !paying ? "auto" : "none" }}>
-              {paying ? "Processing…" : `Pay $${flow.price} & start drafting →`}
-            </Btn>
-            {!canGo && (
-              <div style={{ fontFamily: F.mono, fontSize: 9, color: "#7d8794", marginTop: 8, maxWidth: 220, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                {!a.tenderChosen
-                  ? "Pick a tender first"
-                  : a.open.length
-                    ? "Resolve or acknowledge risks above"
-                    : "Complete at least 80% of the intake"}
+            {committed ? (
+              <div style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase", color: C.accent2, maxWidth: 220 }}>
+                Enter payment below ↓
               </div>
+            ) : (
+              <>
+                <Btn kind="gold" onClick={onPay} style={{ opacity: canGo && !paying ? 1 : 0.45, pointerEvents: canGo && !paying ? "auto" : "none" }}>
+                  {paying ? "Processing…" : `Pay $${flow.price} & start drafting →`}
+                </Btn>
+                {!canGo && (
+                  <div style={{ fontFamily: F.mono, fontSize: 9, color: "#7d8794", marginTop: 8, maxWidth: 220, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                    {!a.tenderChosen
+                      ? "Pick a tender first"
+                      : a.open.length
+                        ? "Resolve or acknowledge risks above"
+                        : "Complete at least 80% of the intake"}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
       </div>
+      {committed && (
+        <div style={{ border: `1px solid ${C.rule}`, background: C.white, padding: "18px 20px" }}>
+          <div style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.12em", textTransform: "uppercase", color: C.faint, marginBottom: 12 }}>
+            Secure payment{freeEligible ? " · first submission free" : ""}
+          </div>
+          <CheckoutCard autoStart plan="proposal-draft" context={committed} freeEligible={freeEligible} />
+          <div style={{ fontFamily: F.sans, fontSize: 11, color: C.mute, lineHeight: 1.5, marginTop: 10 }}>
+            Prefer USDT or bank transfer?{" "}
+            <a href={`/pay?plan=proposal-draft&submission_type=${committed.submissionType ?? ""}&work_order_id=${committed.workOrderId ?? ""}&submission_order_id=${committed.submissionOrderId ?? ""}`} style={{ color: C.ink, borderBottom: `1px solid ${C.ink}`, textDecoration: "none" }}>
+              Open the full checkout →
+            </a>
+          </div>
+        </div>
+      )}
       {a.pct < 100 && a.open.length === 0 && a.pct >= PAY_GATE_PCT && (
         <div style={{ fontFamily: F.sans, fontSize: 11.5, color: C.mute, lineHeight: 1.5 }}>
           You can pay at {a.pct}% — we&apos;ll prompt you for the remaining {a.need - a.have} item(s) during
@@ -346,6 +373,9 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
   const [prefills, setPrefills] = useState<Record<string, string>>({});
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
+  // Once commissioned, the order + billing work order exist; we mount the
+  // shared embedded checkout inline (no hop to /pay).
+  const [committed, setCommitted] = useState<CheckoutContext | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -438,7 +468,18 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
     try {
       await saveDraft(type, { ...draft, step }).catch(() => {});
       const res = await commission(type, draft);
-      window.location.href = res.pay_url;
+      // Mount the shared embedded checkout inline rather than redirecting to
+      // /pay — the order + billing work order now exist, so checkout has
+      // everything it needs (the wizard's ≥80% gate is authoritative, so
+      // readiness self-serves for submission orders).
+      setCommitted({
+        tender: draft.tender?.title ?? null,
+        agency: draft.tender?.agency ?? null,
+        pipelineItemId: draft.tender?.pipelineItemId != null ? String(draft.tender.pipelineItemId) : null,
+        workOrderId: String(res.work_order_id),
+        submissionType: type,
+        submissionOrderId: String(res.order.id),
+      });
     } catch (err) {
       setPayError(err instanceof Error ? err.message : "Could not start checkout — try again.");
       setPaying(false);
@@ -566,6 +607,7 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
                       payError={payError}
                       onPay={startPay}
                       freeEligible={Boolean(data?.access.freeSubmissionEligible)}
+                      committed={committed}
                     />
                   ) : (
                     (current.blocks ?? []).map((b, i) => renderBlock(b, current.id, i))
