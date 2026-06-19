@@ -25,7 +25,12 @@ export function shortDate(d: string | null | undefined): string {
   if (!d) return "—";
   const x = new Date(d);
   if (Number.isNaN(x.getTime())) return "—";
-  return x.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
+  // Show the year when it isn't the current one so a stale/wrong-year deadline
+  // can't masquerade as the current year — e.g. a "30 Jun" that deadlineLabel()
+  // correctly calls "Closed" because it's actually 2025, not this year's 30 Jun.
+  if (x.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
+  return x.toLocaleDateString("en-GB", opts);
 }
 export function isSoon(d: string | null | undefined): boolean {
   const x = daysUntil(d);

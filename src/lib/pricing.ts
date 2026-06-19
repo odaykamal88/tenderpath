@@ -129,8 +129,8 @@ export const TIERS: Tier[] = [
   // a flat yearly rate. Two slugs map to the same Stripe product:
   //   annual-access            → $99/year  (regular)
   //   annual-access-founding   → $49/year  (founding-100 lock-in)
-  // Both trigger the same webhook tier ("annual-access"). The 14-day
-  // Stripe trial is configured in /api/pay/checkout for these slugs.
+  // Both trigger the same webhook tier ("annual-access"). The 30-day
+  // Stripe trial (TRIAL_DAYS) is configured in /api/pay/checkout for these slugs.
   // We intentionally do NOT surface these in the landing rate sheet —
   // they're a dashboard-overview promo only. The Services component
   // filters them out by checking slug.
@@ -140,18 +140,18 @@ export const TIERS: Tier[] = [
     label: "Yearly subscription",
     price: "$99",
     billingPeriod: "/year",
-    billingNote: "14-day free trial · cancel anytime",
+    billingNote: "30-day free trial · cancel anytime",
     tagline: "Every feature on the dashboard — bid/no-bid analyst, proposal drafts, roster fast-track, vault, weekly matched tenders + grants.",
-    description: "One annual subscription unlocks the full TenderPath dashboard. 14-day free trial; cancel any time before day 14 and you won't be charged. After that, $99/year with no per-tender add-ons.",
+    description: "One annual subscription unlocks the full TenderPath dashboard. 30-day free trial; cancel any time before day 30 and you won't be charged. After that, $99/year with no per-tender add-ons.",
     features: [
       "Bid/no-bid analyst",
       "Proposal draft generation",
       "Roster fast-track",
       "Document vault",
       "Weekly matched tenders + grants",
-      "14-day free trial · cancel anytime",
+      "30-day free trial · cancel anytime",
     ],
-    cta: "Start 14-day trial",
+    cta: "Start 30-day trial",
     ctaHref: "/pay?plan=annual-access",
     featured: false,
   },
@@ -161,14 +161,14 @@ export const TIERS: Tier[] = [
     label: "Yearly subscription · founding",
     price: "$49",
     billingPeriod: "/year",
-    billingNote: "Founding-100 lock-in · 14-day free trial",
+    billingNote: "Founding-100 lock-in · 30-day free trial",
     tagline: "Same full-feature dashboard, locked at $49/year for life — limited to the first 100 subscribers.",
-    description: "Founding-100 lock-in: $49/year forever as long as you stay subscribed. 14-day free trial; cancel any time before day 14 and you won't be charged. Limited to the first 100 subscribers.",
+    description: "Founding-100 lock-in: $49/year forever as long as you stay subscribed. 30-day free trial; cancel any time before day 30 and you won't be charged. Limited to the first 100 subscribers.",
     features: [
       "Everything in Annual Dashboard Access",
       "Locked at $49/year for life",
       "Limited to first 100 subscribers",
-      "14-day free trial · cancel anytime",
+      "30-day free trial · cancel anytime",
     ],
     cta: "Lock in $49/year",
     ctaHref: "/pay?plan=annual-access-founding",

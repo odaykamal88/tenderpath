@@ -9,6 +9,7 @@ const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
   : null;
 import { TIERS, isComingSoonTier } from "@/lib/pricing";
+import { isSubmissionCode, submissionType, type SubmissionCode } from "@/lib/workbench/pricing";
 
 const MONO = "var(--font-jetbrains), ui-monospace, Menlo, monospace";
 const SERIF = "var(--font-fraunces), Georgia, serif";
@@ -54,6 +55,17 @@ interface FulfillmentReadiness {
   warnings: string[];
   code: string | null;
   message: string;
+}
+
+/** Server-resolved price for a submission checkout (EOI/RFQ/ITB/RFP). Mirrors
+ *  exactly what /api/pay/checkout charges, so the summary never disagrees with
+ *  the card total. */
+interface SubmissionPricing {
+  code: string;
+  name: string;
+  price: number;
+  period: string;
+  perType: boolean;
 }
 
 function authHeaders(extra: HeadersInit = {}): HeadersInit {
@@ -593,6 +605,7 @@ function PayPage() {
   const [readiness, setReadiness] = useState<FulfillmentReadiness | null>(null);
   const [readinessError, setReadinessError] = useState<string | null>(null);
   const [freeEligible, setFreeEligible] = useState(false);
+  const [submissionPricing, setSubmissionPricing] = useState<SubmissionPricing | null>(null);
 
   // PR-I (2026-05-23): when a user arrives from a service intake (e.g.
   // /dashboard/services/bid-no-bid) they've ALREADY chosen the service —
@@ -611,22 +624,55 @@ function PayPage() {
     ? (TIERS.find((t) => t.slug === planSlug) ?? EXTRA_PLAN_DISPLAY[planSlug] ?? null)
     : null;
 
+  // Submission checkouts arrive as ?plan=proposal-draft&submission_type=RFP — so
+  // the raw plan would show the generic "Proposal Draft · $299". When a valid
+  // submission type is present, show the actual product (e.g. "Request for
+  // Proposal · $349") to match the wizard. The price shown is the catalog rate
+  // until the readiness endpoint confirms the authoritative figure (per-type
+  // when its Stripe price is configured, package price otherwise) so the summary
+  // can never disagree with the card total.
+  const submissionCode: SubmissionCode | null = isSubmissionCode(context.submissionType)
+    ? (context.submissionType.toUpperCase() as SubmissionCode)
+    : null;
+  const summary = submissionCode
+    ? {
+        name: submissionType(submissionCode).name,
+        price: `$${submissionPricing?.price ?? submissionType(submissionCode).price}`,
+        billingPeriod: submissionPricing?.period ?? "/submission",
+        featured: false,
+      }
+    : preselectedTier
+      ? {
+          name: preselectedTier.name,
+          price: preselectedTier.price,
+          billingPeriod: preselectedTier.billingPeriod,
+          featured: preselectedTier.featured,
+        }
+      : null;
+
   useEffect(() => {
     if (!selectedSlug) return;
     let cancelled = false;
     const params = new URLSearchParams({ plan: selectedSlug });
     if (context.workOrderId) params.set("work_order_id", context.workOrderId);
+    // Pass the submission-workflow context so the readiness endpoint can skip
+    // the proposal-draft gate (the wizard already gated intake) and return the
+    // authoritative per-type price — keeping the pay UI and checkout in agreement.
+    if (context.submissionOrderId) params.set("submission_order_id", context.submissionOrderId);
+    if (context.submissionType) params.set("submission_type", context.submissionType);
     fetch(`/api/pay/readiness?${params.toString()}`, { headers: authHeaders() })
       .then(async (res) => {
         const data = (await res.json().catch(() => ({}))) as {
           readiness?: FulfillmentReadiness;
           free_submission_eligible?: boolean;
+          pricing?: SubmissionPricing | null;
           error?: string;
         };
         if (!res.ok || !data.readiness) throw new Error(data.error ?? "Could not check fulfillment readiness.");
         if (!cancelled) {
           setReadiness(data.readiness);
           setFreeEligible(Boolean(data.free_submission_eligible));
+          setSubmissionPricing(data.pricing ?? null);
           setReadinessError(null);
         }
       })
@@ -634,13 +680,14 @@ function PayPage() {
         if (!cancelled) {
           setReadiness(null);
           setFreeEligible(false);
+          setSubmissionPricing(null);
           setReadinessError(err instanceof Error ? err.message : "Could not check fulfillment readiness.");
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [context.workOrderId, selectedSlug]);
+  }, [context.workOrderId, context.submissionOrderId, context.submissionType, selectedSlug]);
 
   // Wire payments cannot be auto-fulfilled today (manual proof review), so they
   // are hidden on one-time service plans where the user expects an immediate
@@ -755,7 +802,7 @@ function PayPage() {
             ?plan=… already locked in (PR-I 2026-05-23). In that case we
             render a compact summary card so the user knows what they're
             paying for without having to re-pick from a grid. */}
-        {planPrelocked && preselectedTier ? (
+        {planPrelocked && summary ? (
           <div className="rounded-none border border-[#d8d1bf]/70 bg-white p-4 sm:p-5">
             <div className="flex items-baseline gap-2.5 mb-3">
               <span
@@ -777,9 +824,9 @@ function PayPage() {
                   className="text-[14px] font-medium text-[#0f1620] leading-snug truncate"
                   style={{ fontFamily: SERIF }}
                 >
-                  {preselectedTier.name}
+                  {summary.name}
                 </p>
-                {preselectedTier.featured && (
+                {summary.featured && (
                   <span
                     className="inline-block mt-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-[#9c6b1f]"
                     style={{ fontFamily: MONO }}
@@ -792,12 +839,12 @@ function PayPage() {
                 className="text-[22px] font-medium text-[#0f1620] tabular-nums tracking-tight shrink-0"
                 style={{ fontFamily: SERIF }}
               >
-                {preselectedTier.price}
+                {summary.price}
                 <span
                   className="text-[10px] font-medium text-[#6b6557] ml-1"
                   style={{ fontFamily: MONO }}
                 >
-                  {preselectedTier.billingPeriod}
+                  {summary.billingPeriod}
                 </span>
               </p>
             </div>
