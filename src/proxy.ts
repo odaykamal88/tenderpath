@@ -22,6 +22,7 @@ const PUBLIC_PATHS = new Set([
   // as the crons above. Both are registered in vercel.json.
   "/api/cron/trial-reminders",
   "/api/cron/network-match",
+  "/api/cron/refresh-matches",
   "/api/assessment/public",
   "/api/assessment/preview",
   // Live "opportunity signal" counts shown in the public assessment wizard

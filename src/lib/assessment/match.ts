@@ -2265,3 +2265,155 @@ export async function matchGrants(
   }
   return assignGrantOpportunityBuckets(out);
 }
+
+/* Re-run the live matcher for one assessment and persist the fresh snapshot.
+ *
+ * A user's `assessments.matched_tenders` is a JSONB snapshot written when their
+ * assessment last ran; it is never recomputed on its own. Because matchTenders /
+ * matchGrants only ever return *open, non-expired* opportunities
+ * (`WHERE status='open' AND deadline >= CURRENT_DATE`), re-running them and
+ * persisting the result is what keeps a dashboard from drifting into an all-
+ * "Closed" list as the snapshot ages.
+ *
+ * Shared by the manual refresh endpoint (POST /api/assessment/latest-matches)
+ * and the Workbench self-heal, so the two paths can't diverge. Returns null when
+ * the assessment lacks the analysis needed to re-match — the caller should keep
+ * the existing snapshot in that case. */
+let matchRefreshSchemaEnsured = false;
+/** Idempotent self-heal for the columns the match-refresh layer owns. Mirrors
+ *  network/schema.ts — one ALTER per cold start, then a no-op. `matches_refreshed_at`
+ *  is the staleness cursor the daily bulk refresh orders by. */
+async function ensureAssessmentMatchColumns(): Promise<void> {
+  if (matchRefreshSchemaEnsured) return;
+  await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS matches_refreshed_at TIMESTAMPTZ`;
+  await sql`CREATE INDEX IF NOT EXISTS assessments_matches_refreshed_idx ON assessments (matches_refreshed_at ASC NULLS FIRST)`;
+  matchRefreshSchemaEnsured = true;
+}
+
+export async function refreshAssessmentMatches(
+  assessmentId: number,
+  opts: { skipEnrichment?: boolean } = {},
+): Promise<{ tenders: MatchedTender[]; grants: MatchedGrant[] } | null> {
+  await ensureAssessmentMatchColumns();
+  const rows = await sql`
+    SELECT email, ai_analysis, countries, dev_themes, org_type, include_consultancies
+    FROM assessments
+    WHERE id = ${assessmentId}
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row) return null;
+
+  const analysis = row.ai_analysis as AIAnalysis | null;
+  // Mirror the latest-matches guard: with no detected industry the matcher has
+  // nothing to score against, so we must not blow away the existing snapshot.
+  if (!analysis?.detected_industry) return null;
+
+  const countries = Array.isArray(row.countries)
+    ? row.countries.filter((c): c is string => typeof c === "string")
+    : [];
+  const devThemes = Array.isArray(row.dev_themes)
+    ? row.dev_themes.filter((t): t is string => typeof t === "string")
+    : [];
+  const orgType = typeof row.org_type === "string" ? row.org_type : null;
+  const email = typeof row.email === "string" ? row.email : undefined;
+
+  const [tendersRaw, grants] = await Promise.all([
+    matchTenders(analysis, countries, {
+      includeConsultancies: row.include_consultancies === true,
+      userEmail: email,
+      orgType,
+      skipEnrichment: opts.skipEnrichment,
+    }),
+    matchGrants(analysis.sectors ?? [], orgType, devThemes, countries),
+  ]);
+  const tenders = tendersRaw.map((t) => ({
+    ...t,
+    fit_score: (t as MatchedTender & { fit_score?: number }).fit_score ?? t.score,
+  }));
+
+  await sql`
+    UPDATE assessments
+    SET matched_tenders = ${JSON.stringify(tenders)}::jsonb,
+        matched_grants = ${JSON.stringify(grants)}::jsonb,
+        matches_refreshed_at = NOW()
+    WHERE id = ${assessmentId}
+  `;
+
+  return { tenders, grants };
+}
+
+/* Daily bulk refresh (cron) — re-match the latest assessment of every active
+ * user so the matched-tender dashboards stay current instead of drifting into a
+ * stale, all-"Closed" snapshot. Processes the *stalest* eligible assessments
+ * first (matches_refreshed_at NULLS FIRST), so a base too large for one 300s
+ * invocation still gets fully cycled across a few days. Enrichment (live
+ * per-tender source fetches) is skipped here — it's expensive and flaky at
+ * fan-out, and the on-demand refresh paths keep full evidence. One row per user
+ * (the latest 'completed' assessment that has analysis to score against, which
+ * is exactly what the dashboard reads back). Returns a summary for the cron's
+ * health response. */
+export async function refreshStaleAssessmentMatches(
+  opts: { budgetMs?: number; maxCount?: number } = {},
+): Promise<{
+  eligible: number;
+  processed: number;
+  refreshed: number;
+  skipped: number;
+  errors: number;
+  budgetHit: boolean;
+  durationMs: number;
+}> {
+  await ensureAssessmentMatchColumns();
+  const budgetMs = opts.budgetMs ?? 240_000; // headroom under the route's maxDuration=300
+  const maxCount = opts.maxCount ?? 1000;
+  const startedAt = Date.now();
+
+  const rows = await sql`
+    SELECT id FROM (
+      SELECT DISTINCT ON (email) id, matches_refreshed_at, created_at
+      FROM assessments
+      WHERE assessment_status = 'completed'
+        AND email IS NOT NULL
+        AND ai_analysis IS NOT NULL
+        AND ai_analysis->>'detected_industry' IS NOT NULL
+      ORDER BY email, created_at DESC
+    ) latest
+    ORDER BY matches_refreshed_at ASC NULLS FIRST, created_at ASC
+    LIMIT ${maxCount}
+  `;
+
+  let processed = 0;
+  let refreshed = 0;
+  let skipped = 0;
+  let errors = 0;
+  let budgetHit = false;
+
+  for (const row of rows) {
+    if (Date.now() - startedAt > budgetMs) {
+      budgetHit = true;
+      break;
+    }
+    const id = Number(row.id);
+    try {
+      const res = await refreshAssessmentMatches(id, { skipEnrichment: true });
+      if (res) {
+        refreshed += 1;
+      } else {
+        // No analysis to match against (shouldn't happen given the filter) —
+        // stamp it so it doesn't stay pinned to the head of the stale queue.
+        skipped += 1;
+        await sql`UPDATE assessments SET matches_refreshed_at = NOW() WHERE id = ${id}`;
+      }
+    } catch (err) {
+      errors += 1;
+      console.error("[tp:cron:refresh-matches:assessment_failed]", {
+        assessmentId: id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    processed += 1;
+  }
+
+  return { eligible: rows.length, processed, refreshed, skipped, errors, budgetHit, durationMs: Date.now() - startedAt };
+}

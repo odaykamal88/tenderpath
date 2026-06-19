@@ -17,7 +17,8 @@ import { evaluateAccess } from "@/lib/access";
 import { getFreeSubmissionStatus } from "@/lib/free-submission";
 import { newSubscriptionConfigured } from "@/lib/workbench/pricing";
 import { loadWorkbenchSource, getViewerActivityForUser } from "@/lib/assessment/data";
-import { buildWorkbenchData, emptyWorkbenchData } from "@/lib/workbench/build";
+import { refreshAssessmentMatches } from "@/lib/assessment/match";
+import { buildWorkbenchData, emptyWorkbenchData, isExpiredDeadline } from "@/lib/workbench/build";
 import type { NavigatorCompany } from "@/lib/workbench/navigator";
 import type { WbAccess, WbSubmission, WbVaultSummary } from "@/lib/workbench/types";
 import type { Gap, MatchedTender, User } from "@/lib/types";
@@ -159,7 +160,42 @@ export async function GET(request: Request) {
     return NextResponse.json(emptyWorkbenchData({ email: user.email, trialDays, access }));
   }
 
-  const { report, row } = source;
+  let { report, row } = source;
+
+  // Self-heal a stale matches snapshot. `matched_tenders` is persisted at
+  // assessment time and never recomputed on its own; matchTenders only returns
+  // open, non-expired tenders, so once every tender in the snapshot has passed
+  // its deadline the dashboard would show an all-"Closed" list. When the
+  // snapshot is non-empty but fully expired, re-match once and reload — the
+  // result is either fresh open tenders or an honest empty set (which won't
+  // re-trigger this branch, so it can't loop). Best-effort: any failure falls
+  // through to the read-time expired filter in buildWorkbenchData. A daily
+  // refresh for *every* user (not just depleted ones) is a separate cron.
+  if (report.status === "ready") {
+    const snapshot = (row.matched_tenders ?? []) as MatchedTender[];
+    const liveCount = snapshot.filter((t) => !isExpiredDeadline(t.deadline ?? null)).length;
+    if (snapshot.length > 0 && liveCount === 0) {
+      try {
+        const refreshed = await refreshAssessmentMatches(row.id as number);
+        if (refreshed) {
+          console.log("[tp:workbench:matches_self_healed]", {
+            userId: user.id,
+            assessmentId: row.id,
+            before: snapshot.length,
+            after: refreshed.tenders.length,
+          });
+          const fresh = await loadWorkbenchSource(user.email);
+          if (fresh) ({ report, row } = fresh);
+        }
+      } catch (err) {
+        console.warn("[tp:workbench:matches_self_heal_failed]", {
+          userId: user.id,
+          assessmentId: row.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
 
   // Computing / failed assessments don't have a renderable Workbench yet —
   // signal the client to route to the standalone assessment status view.

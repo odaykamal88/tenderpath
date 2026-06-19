@@ -56,7 +56,7 @@ function Row({ m, open, onToggle }: { m: WbMatch; open: boolean; onToggle: () =>
         style={{ display: "grid", gridTemplateColumns: mobile ? "8px 1fr auto" : "8px 70px 1fr 120px 48px 76px 16px", gap: mobile ? 12 : 14, alignItems: "center", width: "100%", textAlign: "left", padding: mobile ? "14px 16px" : "15px 20px", background: open ? C.paper : "transparent", border: 0, cursor: "pointer" }}
       >
         <span style={{ width: 7, height: 7, borderRadius: 999, background: color }} />
-        {!mobile && <span style={{ fontFamily: F.mono, fontSize: 10.5, color: C.faint }}>{m.code}</span>}
+        {!mobile && <span title={m.code} style={{ fontFamily: F.mono, fontSize: 10.5, color: C.faint, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{m.code}</span>}
         <span style={{ minWidth: 0 }}>
           <span style={{ display: "block", fontFamily: F.sans, fontSize: 14.5, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.title}</span>
           <span style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 3 }}>
