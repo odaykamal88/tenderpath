@@ -81,7 +81,8 @@ export function BrowsePage() {
   const [types, setTypes] = useState<string[]>([]);
   const [sources, setSources] = useState<string[]>([]);
   const [matchedOnly, setMatchedOnly] = useState(false);
-  const [sort, setSort] = useState<"deadline" | "fit">("deadline");
+  const [relevant, setRelevant] = useState(false);
+  const [sort, setSort] = useState<"deadline" | "fit">("fit");
   const [showFilters, setShowFilters] = useState(false);
 
   const [rows, setRows] = useState<WbBrowseRow[]>([]);
@@ -106,11 +107,12 @@ export function BrowsePage() {
       if (types.length) p.set("type", types.join(","));
       if (sources.length) p.set("source", sources.join(","));
       if (matchedOnly) p.set("matched", "1");
+      if (relevant) p.set("relevant", "1");
       p.set("sort", sort);
       p.set("page", String(pageNum));
       return `/api/dashboard/browse?${p.toString()}`;
     },
-    [debouncedQ, sectors, types, sources, matchedOnly, sort],
+    [debouncedQ, sectors, types, sources, matchedOnly, relevant, sort],
   );
 
   const fetchPage = useCallback(
@@ -159,18 +161,24 @@ export function BrowsePage() {
     setLoadingMore(false);
   };
 
-  const activeCount = sectors.length + types.length + sources.length + (matchedOnly ? 1 : 0) + (q ? 1 : 0);
+  const activeCount = sectors.length + types.length + sources.length + (matchedOnly ? 1 : 0) + (relevant ? 1 : 0) + (q ? 1 : 0);
   const clearAll = () => {
     setQ("");
     setSectors([]);
     setTypes([]);
     setSources([]);
     setMatchedOnly(false);
+    setRelevant(false);
   };
   const hasMore = rows.length < total;
 
   const rail = (
     <div style={{ position: mobile ? "static" : "sticky", top: 84 }}>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 2px", cursor: "pointer", marginBottom: 10 }}>
+        <span style={{ width: 13, height: 13, border: `1px solid ${relevant ? C.ink : C.rule}`, background: relevant ? C.ink : C.white, color: C.white, display: "grid", placeItems: "center", flexShrink: 0, fontSize: 9 }}>{relevant ? "✓" : ""}</span>
+        <input type="checkbox" checked={relevant} onChange={(e) => setRelevant(e.target.checked)} style={{ display: "none" }} />
+        <span style={{ fontFamily: F.sans, fontSize: 12.5, color: C.ink }}>Relevant to me <span style={{ color: C.faint, fontSize: 11 }}>· sectors + country</span></span>
+      </label>
       <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 2px", cursor: "pointer", marginBottom: 16 }}>
         <span style={{ width: 13, height: 13, border: `1px solid ${matchedOnly ? C.ink : C.rule}`, background: matchedOnly ? C.ink : C.white, color: C.white, display: "grid", placeItems: "center", flexShrink: 0, fontSize: 9 }}>{matchedOnly ? "✓" : ""}</span>
         <input type="checkbox" checked={matchedOnly} onChange={(e) => setMatchedOnly(e.target.checked)} style={{ display: "none" }} />

@@ -28,6 +28,10 @@
     {
       "path": "/api/cron/bot-nudges",
       "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-matches",
+      "schedule": "0 9 * * *"
     }
   ]
 }

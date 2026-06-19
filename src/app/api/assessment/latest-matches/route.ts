@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
-import { matchGrants, matchTenders } from "@/lib/assessment/match";
-import type { AIAnalysis, MatchedTender } from "@/lib/types";
+import { refreshAssessmentMatches } from "@/lib/assessment/match";
 import { normalizeAssessmentTenders, seedPipelineItems } from "@/lib/pipeline/seed";
 
 export async function GET(request: Request) {
@@ -79,34 +78,12 @@ export async function POST(request: Request) {
     });
   }
 
-  const analysis = row.ai_analysis as AIAnalysis | null;
-  if (!analysis?.detected_industry) {
+  const refreshed = await refreshAssessmentMatches(row.id as number);
+  if (!refreshed) {
     return NextResponse.json({ error: "Latest assessment is missing analysis data and cannot be refreshed." }, { status: 422 });
   }
-
-  const countries = Array.isArray(row.countries) ? row.countries.filter((c): c is string => typeof c === "string") : [];
-  const devThemes = Array.isArray(row.dev_themes) ? row.dev_themes.filter((t): t is string => typeof t === "string") : [];
-  const orgType = typeof row.org_type === "string" ? row.org_type : null;
-
-  const [matchedTendersRaw, matchedGrants] = await Promise.all([
-    matchTenders(analysis, countries, {
-      includeConsultancies: row.include_consultancies === true,
-      userEmail: user.email,
-      orgType,
-    }),
-    matchGrants(analysis.sectors ?? [], orgType, devThemes, countries),
-  ]);
-  const matchedTenders = matchedTendersRaw.map((t) => ({
-    ...t,
-    fit_score: (t as MatchedTender & { fit_score?: number }).fit_score ?? t.score,
-  }));
-
-  await sql`
-    UPDATE assessments
-    SET matched_tenders = ${JSON.stringify(matchedTenders)}::jsonb,
-        matched_grants = ${JSON.stringify(matchedGrants)}::jsonb
-    WHERE id = ${row.id as number}
-  `;
+  const matchedTenders = refreshed.tenders;
+  const matchedGrants = refreshed.grants;
 
   const seed = body.seed_pipeline
     ? await seedPipelineItems(user.id, row.id as number, matchedTenders)

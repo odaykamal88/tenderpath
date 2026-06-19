@@ -32,6 +32,14 @@ function isSoon(d: string | null): boolean {
   const x = daysUntil(d);
   return x != null && x >= 0 && x <= 7;
 }
+/** A tender whose deadline day has fully passed. Mirrors the matcher's
+ *  `deadline >= CURRENT_DATE` rule (a deadline of *today* is still live), so the
+ *  dashboard never renders a "Closed" tender out of a stale snapshot. A null
+ *  deadline is unknown, not expired — keep it. */
+export function isExpiredDeadline(d: string | null): boolean {
+  const x = daysUntil(d);
+  return x !== null && x < 0;
+}
 
 function deriveBucket(fit: number, soon: boolean, roster: boolean): BucketKey {
   if (soon && fit >= 45) return "act_now";
@@ -53,7 +61,7 @@ function inferType(title: string): string {
 }
 
 function mapMatches(report: AssessmentReport, raw: MatchedTender[]): WbMatch[] {
-  return report.tenders.map((t, i) => {
+  const all = report.tenders.map((t, i) => {
     const r = raw[i] ?? ({} as MatchedTender);
     const proc = r.structured_reasons?.procurement;
     const type = r.opportunity_type ?? proc?.opportunityType ?? inferType(t.title);
@@ -90,6 +98,12 @@ function mapMatches(report: AssessmentReport, raw: MatchedTender[]): WbMatch[] {
       sourceUrl: t.sourceUrl,
     };
   });
+  // Read-time guard: a persisted snapshot ages, so drop any tender whose
+  // deadline has already passed. The Workbench self-heal re-matches a fully
+  // expired snapshot, but until that runs (and for partially-expired ones) this
+  // keeps "Closed" rows off the dashboard. The index-aligned zip with `raw`
+  // happened above, so filtering here is safe.
+  return all.filter((m) => !isExpiredDeadline(m.deadline));
 }
 
 function mapGaps(report: AssessmentReport, raw: Gap[], navCompany: NavigatorCompany): WbGap[] {
@@ -118,10 +132,13 @@ function mapGaps(report: AssessmentReport, raw: Gap[], navCompany: NavigatorComp
   });
 }
 
-function buildPipeline(report: AssessmentReport, activity: ViewerActivity | null): WbPipeline {
-  const matched = report.tenders.length;
-  const strong = report.tenders.filter((t) => t.fit >= 70).length;
-  const dueSoon = report.tenders.filter((t) => isSoon(t.deadline)).length;
+// Counts derive from the already-filtered live matches (not the raw snapshot) so
+// the chips, SectionHead count, and "closing this week" never overstate by
+// including expired tenders.
+function buildPipeline(matches: WbMatch[], activity: ViewerActivity | null): WbPipeline {
+  const matched = matches.length;
+  const strong = matches.filter((m) => m.fit >= 70).length;
+  const dueSoon = matches.filter((m) => isSoon(m.deadline)).length;
   const active = activity?.pipeline.inProgress ?? 0;
   const submitted = activity?.pipeline.applied ?? 0;
   const total = Math.max(activity?.pipeline.total ?? 0, matched);
@@ -225,7 +242,7 @@ export function buildWorkbenchData(input: {
   const acknowledgedGapIds = [...(input.acknowledgedIdx ?? [])]
     .map((i) => gaps[i]?.id)
     .filter((x): x is string => !!x);
-  const pipeline = buildPipeline(report, activity);
+  const pipeline = buildPipeline(matches, activity);
   const nextMove = deriveNextMove(report, gaps, matches, submissions);
 
   return {
