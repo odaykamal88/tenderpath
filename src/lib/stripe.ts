@@ -46,6 +46,18 @@ export function tierFromPriceId(priceId: string): string | null {
   return PRICE_MAP[priceId]?.tier ?? null;
 }
 
+/**
+ * Stripe marks a $0 checkout — a 100%-off promotion code (e.g. FREETEST) or a
+ * fully-covered trial — as `"no_payment_required"`, not `"paid"`. Both mean
+ * "nothing left to collect", so fulfillment/gating must treat them identically;
+ * otherwise a fully-discounted order completes but never fulfills and shows as
+ * unpaid. (The first-proposal-free credit sidesteps this by synthesizing a
+ * `"paid"` session — see src/lib/free-submission.ts.)
+ */
+export function isSettledPayment(status: string | null | undefined): boolean {
+  return status === "paid" || status === "no_payment_required";
+}
+
 export function createCheckoutUrl(tier: string, userEmail: string): string {
   const priceEnvMap: Record<string, string> = {
     "tender-intelligence": "STRIPE_PRICE_TENDER_INTELLIGENCE",
