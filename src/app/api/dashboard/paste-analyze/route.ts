@@ -59,34 +59,65 @@ export async function POST(req: NextRequest) {
   // 1. Resolve the tender text (from a URL we can fetch, or the pasted notice).
   let tenderText = (body.text ?? "").trim();
   const url = (body.url ?? "").trim();
+  // Track WHY a URL resolve failed so the 422 can guide instead of stonewalling,
+  // and so prod logs distinguish a fetch block from an empty/scanned PDF.
+  let failReason: "fetch" | "http" | "pdf_empty" | "pdf_failed" | null = null;
   if (!tenderText && url) {
     try {
       const u = new URL(url);
       if (!["http:", "https:"].includes(u.protocol)) throw new Error("bad protocol");
       const r = await fetch(u.toString(), {
-        headers: { "user-agent": "TenderPathBot/1.0 (+https://www.tenderpath.me)" },
-        signal: AbortSignal.timeout(15_000),
+        headers: {
+          // Some portals/CDNs 403 a bare bot UA; present as a normal client.
+          "user-agent": "Mozilla/5.0 (compatible; TenderPathBot/1.0; +https://www.tenderpath.me)",
+          accept: "application/pdf,text/html,application/xhtml+xml,*/*",
+        },
+        signal: AbortSignal.timeout(20_000),
         redirect: "follow",
       });
-      if (r.ok) {
+      if (!r.ok) {
+        failReason = "http";
+        console.warn("[paste-analyze:fetch_http_error]", { status: r.status, url: u.toString() });
+      } else {
         const ct = (r.headers.get("content-type") || "").toLowerCase();
         if (ct.includes("application/pdf") || u.pathname.toLowerCase().endsWith(".pdf")) {
           const buf = Buffer.from(await r.arrayBuffer());
-          tenderText = (await extractDocumentText({ buffer: buf, mimeType: "application/pdf", fileName: u.pathname.split("/").pop() || "tender.pdf" })).text;
+          const extracted = await extractDocumentText({
+            buffer: buf,
+            mimeType: "application/pdf",
+            fileName: u.pathname.split("/").pop() || "tender.pdf",
+          });
+          tenderText = extracted.text;
+          if (extracted.status !== "extracted") {
+            failReason = extracted.status === "empty" ? "pdf_empty" : "pdf_failed";
+            console.warn("[paste-analyze:pdf_extract_failed]", {
+              status: extracted.status,
+              error: extracted.error,
+              chars: extracted.charCount,
+              url: u.toString(),
+            });
+          }
         } else {
           tenderText = stripHtml(await r.text());
         }
       }
     } catch (err) {
+      failReason = "fetch";
       console.warn("[paste-analyze:fetch_failed]", { err: err instanceof Error ? err.message : String(err) });
     }
   }
   tenderText = tenderText.slice(0, 16_000);
   if (tenderText.trim().length < 40) {
-    return NextResponse.json(
-      { error: "We couldn't read that. Paste the notice text, or a link to the tender page." },
-      { status: 422 },
-    );
+    const error =
+      failReason === "pdf_empty"
+        ? "That looks like a scanned PDF with no selectable text. Paste the notice text instead."
+        : failReason === "pdf_failed"
+          ? "We couldn't read that PDF. Try the tender's web page, or paste the notice text."
+          : failReason === "http"
+            ? "That link wouldn't open — it may need a login or block automated access. Paste the notice text instead."
+            : "We couldn't read that. Paste the notice text, or a link to the tender page.";
+    console.warn("[paste-analyze:unreadable]", { failReason, hadUrl: !!url, chars: tenderText.trim().length });
+    return NextResponse.json({ error }, { status: 422 });
   }
 
   // 2. Ground in the applicant's profile + known open gaps (best-effort).

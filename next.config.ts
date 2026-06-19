@@ -69,7 +69,12 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: turboRoot,
   },
-  serverExternalPackages: ["@anthropic-ai/sdk", "@sparticuz/chromium", "puppeteer-core"],
+  // pdfjs-dist MUST stay external. Bundling its legacy build breaks the worker
+  // `.mjs` resolution in the Vercel serverless runtime, so PDF text extraction
+  // (paste-a-tender URL, vault upload, proposal ingest) silently returns empty
+  // in production while working locally. Externalizing makes it resolve from
+  // node_modules at runtime, exactly as it does in dev.
+  serverExternalPackages: ["@anthropic-ai/sdk", "@sparticuz/chromium", "puppeteer-core", "pdfjs-dist"],
 };
 
 export default nextConfig;
