@@ -183,7 +183,13 @@ export interface WbFacet {
 export interface WbBrowseResult {
   tenders: WbBrowseRow[];
   facets: { sector: WbFacet[]; type: WbFacet[]; source: WbFacet[] };
+  /** Harmonized type-ahead suggestion lists for the country / agency filters. */
+  countries: string[];
+  agencies: string[];
   total: number;
+  /** Counts over the full filtered set (accurate regardless of pagination). */
+  matchedTotal: number;
+  soonTotal: number;
   page: number;
   pageSize: number;
 }

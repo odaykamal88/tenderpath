@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
+import {
+  buildAgencyHarmonization,
+  canonicalAgency,
+  harmonizeFacetValues,
+  resolveAgencyRaws,
+} from "@/lib/crawlers/agency-map";
 
 type TenderRow = {
   id: number;
@@ -23,27 +29,8 @@ function toInt(v: number | string | null | undefined): number {
   return Number(v ?? 0);
 }
 
-// Harmonize a raw DISTINCT column into a clean datalist-suggestion set:
-// trim, de-duplicate case-insensitively (keeping the first-seen casing), and
-// sort. For `sector`, dropCoded removes JSON-blob / numeric-code values that
-// are unreadable as type-in suggestions — those rows are still reachable via
-// the partial ILIKE filter (e.g. typing "education" hits a coded blob that
-// contains the word). The filter VALUE stays the raw text so ILIKE matches.
-function harmonizeFilterValues(
-  values: Array<string | null>,
-  opts: { dropCoded?: boolean } = {},
-): string[] {
-  const seen = new Map<string, string>();
-  for (const raw of values) {
-    const v = (raw ?? "").trim();
-    if (!v) continue;
-    if (opts.dropCoded && (/^[[{]/.test(v) || /sector_(code|description)/i.test(v) || /^[\d\s,.\-]+$/.test(v))) {
-      continue;
-    }
-    const key = v.toLowerCase();
-    if (!seen.has(key)) seen.set(key, v);
-  }
-  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+function parseList(v: string | null | undefined): string[] {
+  return (v ?? "").split(",").map((s) => s.trim()).filter(Boolean).slice(0, 40);
 }
 
 export async function GET(request: Request) {
@@ -52,15 +39,54 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const q = url.searchParams.get("q")?.trim() ?? "";
-  const country = url.searchParams.get("country")?.trim() ?? "";
+  // Country is now multi-select: a comma list of exact (case-insensitive)
+  // country names picked from the harmonized suggestions.
+  const countries = parseList(url.searchParams.get("country"));
   const agency = url.searchParams.get("agency")?.trim() ?? "";
   const sector = url.searchParams.get("sector")?.trim() ?? "";
-  const deadlineBefore = url.searchParams.get("deadline_before")?.trim() ?? "";
   // Minimum lead time: only surface tenders whose deadline is at least N days
   // out, so there's still time to actually apply. 0 (or absent) = no floor,
   // which also lets through past-deadline and no-deadline rows (legacy view).
+  // This replaces the old absolute `deadline_before` date field in the UI.
   const minDays = Math.max(0, Math.floor(Number(url.searchParams.get("min_days") ?? 0)) || 0);
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 200), 1), 500);
+
+  // Resolve the harmonized filter universe first so the agency predicate can map
+  // a canonical label ("UN Development Programme (UNDP)") back to every raw
+  // variant in the DB, and the suggestion lists come back deduplicated.
+  const [countriesRows, agenciesRows, sectorsRows] = await Promise.all([
+    sql`
+      SELECT DISTINCT country FROM tenders
+      WHERE status = 'open' AND COALESCE(has_broken_link, false) = false
+        AND country IS NOT NULL AND country <> ''
+    `,
+    sql`
+      SELECT DISTINCT agency FROM tenders
+      WHERE status = 'open' AND COALESCE(has_broken_link, false) = false
+        AND agency IS NOT NULL AND agency <> ''
+    `,
+    sql`
+      SELECT DISTINCT sector FROM tenders
+      WHERE status = 'open' AND COALESCE(has_broken_link, false) = false
+        AND sector IS NOT NULL AND sector <> ''
+    `,
+  ]);
+
+  const { labels: agencyLabels, canonicalToRaws } = buildAgencyHarmonization(
+    agenciesRows.map((r) => r.agency as string | null),
+  );
+
+  const countriesLc = countries.map((c) => c.toLowerCase());
+  const countryClause = countriesLc.length ? sql`AND LOWER(t.country) = ANY(${countriesLc})` : sql``;
+
+  // A canonical-label pick resolves to its raw variants (exact match); free-typed
+  // text falls back to a partial ILIKE.
+  const agencyRaws = agency ? resolveAgencyRaws(agency, canonicalToRaws) : null;
+  const agencyClause = agencyRaws
+    ? sql`AND t.agency = ANY(${agencyRaws})`
+    : agency
+      ? sql`AND t.agency ILIKE ${`%${agency}%`}`
+      : sql``;
 
   const rows = (await sql`
     SELECT
@@ -79,13 +105,9 @@ export async function GET(request: Request) {
         OR t.agency ILIKE ${`%${q}%`}
         OR t.reference_id ILIKE ${`%${q}%`}
       )
-      AND (${country} = '' OR t.country ILIKE ${`%${country}%`})
-      AND (${agency} = '' OR t.agency ILIKE ${`%${agency}%`})
+      ${countryClause}
+      ${agencyClause}
       AND (${sector} = '' OR t.sector ILIKE ${`%${sector}%`})
-      AND (
-        NULLIF(${deadlineBefore}, '') IS NULL
-        OR (t.deadline IS NOT NULL AND t.deadline <= NULLIF(${deadlineBefore}, '')::date)
-      )
       AND (
         ${minDays} <= 0
         OR (t.deadline IS NOT NULL AND t.deadline >= CURRENT_DATE + (${minDays})::int)
@@ -94,29 +116,12 @@ export async function GET(request: Request) {
     LIMIT ${limit}
   `) as TenderRow[];
 
-  const [countriesRows, agenciesRows, sectorsRows] = await Promise.all([
-    sql`
-      SELECT DISTINCT country FROM tenders
-      WHERE status = 'open' AND country IS NOT NULL AND country <> ''
-      ORDER BY country ASC
-    `,
-    sql`
-      SELECT DISTINCT agency FROM tenders
-      WHERE status = 'open' AND agency IS NOT NULL AND agency <> ''
-      ORDER BY agency ASC
-    `,
-    sql`
-      SELECT DISTINCT sector FROM tenders
-      WHERE status = 'open' AND sector IS NOT NULL AND sector <> ''
-      ORDER BY sector ASC
-    `,
-  ]);
-
   return NextResponse.json({
     tenders: rows.map((r) => ({
       id: r.id,
       title: r.title,
-      agency: r.agency,
+      // Show the harmonized agency so the column matches the filter labels.
+      agency: canonicalAgency(r.agency) ?? r.agency,
       country: r.country,
       sector: r.sector,
       deadline: r.deadline,
@@ -131,10 +136,10 @@ export async function GET(request: Request) {
     })),
     total: rows.length,
     filters: {
-      countries: harmonizeFilterValues(countriesRows.map((r) => r.country as string | null)),
-      agencies: harmonizeFilterValues(agenciesRows.map((r) => r.agency as string | null)),
-      sectors: harmonizeFilterValues(sectorsRows.map((r) => r.sector as string | null), { dropCoded: true }),
+      countries: harmonizeFacetValues(countriesRows.map((r) => r.country as string | null)),
+      agencies: agencyLabels,
+      sectors: harmonizeFacetValues(sectorsRows.map((r) => r.sector as string | null), { dropCoded: true }),
     },
-    applied: { q, country, agency, sector, deadlineBefore, minDays, limit },
+    applied: { q, country: countries.join(","), agency, sector, minDays, limit },
   });
 }

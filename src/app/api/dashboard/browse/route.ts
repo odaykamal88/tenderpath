@@ -11,6 +11,7 @@ import { sql } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/auth";
 import { decodeHtmlEntities } from "@/lib/text/entities";
 import { rawSectorToSlug, sectorDisplayLabel, userSectorSlugs, type SectorSlug } from "@/lib/crawlers/sector-map";
+import { buildAgencyHarmonization, canonicalAgency, harmonizeFacetValues, resolveAgencyRaws } from "@/lib/crawlers/agency-map";
 import { expandCountrySet } from "@/lib/assessment/match";
 import type { AIAnalysis, User } from "@/lib/types";
 import type { WbBrowseRow, WbFacet, WbBrowseResult } from "@/lib/workbench/types";
@@ -72,6 +73,11 @@ export async function GET(request: Request) {
   const sectors = parseList(searchParams.get("sector"));
   const types = parseList(searchParams.get("type"));
   const sources = parseList(searchParams.get("source"));
+  // Admin-matching-style filters: multi-country (exact, case-insensitive), a
+  // canonical-aware agency, and a minimum lead-time floor.
+  const countries = parseList(searchParams.get("country"));
+  const agencyParam = (searchParams.get("agency") ?? "").trim().slice(0, 120);
+  const minDays = Math.max(0, Math.floor(Number(searchParams.get("min_days") ?? 0)) || 0);
   const matchedOnly = searchParams.get("matched") === "1";
   const relevant = searchParams.get("relevant") === "1";
   // Default to best-fit so a viewer's matched tenders surface first; "deadline"
@@ -146,10 +152,19 @@ export async function GET(request: Request) {
       .slice(0, 24);
 
     // 2) Selected canonical sector labels → the raw values that back them.
-    const selectedRaws = sectors.flatMap((label) => labelToRaws.get(label) ?? []);
-    const sectorClause = sectors.length
-      ? sql`AND t.sector = ANY(${selectedRaws.length ? selectedRaws : sectors})`
-      : sql``;
+    // A picked canonical label resolves to its raw variants (exact ANY). A single
+    // free-typed value the type-ahead didn't recognise gets a forgiving partial
+    // match, mirroring the admin matching page. Multi-select keeps exact ANY.
+    const knownSectorRaws = sectors.flatMap((label) => labelToRaws.get(label) ?? []);
+    const unknownSectors = sectors.filter((label) => !labelToRaws.has(label));
+    let sectorClause = sql``;
+    if (sectors.length) {
+      if (knownSectorRaws.length === 0 && unknownSectors.length === 1) {
+        sectorClause = sql`AND t.sector ILIKE ${`%${unknownSectors[0]}%`}`;
+      } else {
+        sectorClause = sql`AND t.sector = ANY(${knownSectorRaws.length ? knownSectorRaws : sectors})`;
+      }
+    }
 
     // 3) "Relevant to me" (off by default): the viewer's own sectors AND a
     //    lenient geography (their countries + alias expansion + global/unscoped).
@@ -165,8 +180,30 @@ export async function GET(request: Request) {
       relevantClause = sql`${sectorRel} ${countryRel}`;
     }
 
-    // Full results/count WHERE: facet scope + sector selection + relevance + the
-    // exact-match type/source facets.
+    // 4) Country + agency: harmonized suggestion lists (under the facet scope) +
+    //    predicates. Country is exact multi-select; agency maps a canonical label
+    //    back to its raw variants, falling back to ILIKE for free-typed text.
+    const [countryDistinct, agencyDistinct] = await Promise.all([
+      sql`SELECT DISTINCT t.country AS value FROM tenders t ${join} ${facetWhere} AND t.country IS NOT NULL AND t.country <> ''`,
+      sql`SELECT DISTINCT t.agency AS value FROM tenders t ${join} ${facetWhere} AND t.agency IS NOT NULL AND t.agency <> ''`,
+    ]);
+    const countryLabels = harmonizeFacetValues((countryDistinct as { value: string }[]).map((r) => r.value));
+    const { labels: agencyLabels, canonicalToRaws } = buildAgencyHarmonization(
+      (agencyDistinct as { value: string }[]).map((r) => r.value),
+    );
+
+    const countriesLc = countries.map((c) => c.toLowerCase());
+    const countryClause = countriesLc.length ? sql`AND LOWER(t.country) = ANY(${countriesLc})` : sql``;
+    const agencyRaws = agencyParam ? resolveAgencyRaws(agencyParam, canonicalToRaws) : null;
+    const agencyClause = agencyRaws
+      ? sql`AND t.agency = ANY(${agencyRaws})`
+      : agencyParam
+        ? sql`AND t.agency ILIKE ${`%${agencyParam}%`}`
+        : sql``;
+    const minDaysClause = minDays > 0 ? sql`AND t.deadline IS NOT NULL AND t.deadline >= CURRENT_DATE + (${minDays})::int` : sql``;
+
+    // Full results/count WHERE: facet scope + sector selection + relevance +
+    // country / agency / min-days + the exact-match type/source facets.
     const where = sql`
       WHERE t.status = 'open'
         AND (t.deadline IS NULL OR t.deadline >= CURRENT_DATE)
@@ -174,11 +211,14 @@ export async function GET(request: Request) {
         ${matchedClause}
         ${sectorClause}
         ${relevantClause}
+        ${countryClause}
+        ${agencyClause}
+        ${minDaysClause}
         ${types.length ? sql`AND t.opportunity_type = ANY(${types})` : sql``}
         ${sources.length ? sql`AND t.source_name = ANY(${sources})` : sql``}
     `;
 
-    const [countRows, rows, typeFacet, sourceFacet] = await Promise.all([
+    const [countRows, rows, typeFacet, sourceFacet, matchedRows, soonRows] = await Promise.all([
       sql`SELECT COUNT(*)::int AS n FROM tenders t ${join} ${where}`,
       sql`
         SELECT t.id, t.reference_id, t.title, t.agency, t.deadline, t.sector, t.country,
@@ -189,6 +229,9 @@ export async function GET(request: Request) {
       `,
       sql`SELECT t.opportunity_type AS value, COUNT(*)::int AS count FROM tenders t ${join} ${facetWhere} AND t.opportunity_type IS NOT NULL AND t.opportunity_type <> '' GROUP BY t.opportunity_type ORDER BY count DESC, value LIMIT 30`,
       sql`SELECT t.source_name AS value, COUNT(*)::int AS count FROM tenders t ${join} ${facetWhere} AND t.source_name IS NOT NULL AND t.source_name <> '' GROUP BY t.source_name ORDER BY count DESC, value LIMIT 30`,
+      // Stat-strip counts over the full filtered set (accurate across pagination).
+      sql`SELECT COUNT(*)::int AS n FROM tenders t ${join} ${where} AND pf.fit IS NOT NULL`,
+      sql`SELECT COUNT(*)::int AS n FROM tenders t ${join} ${where} AND t.deadline IS NOT NULL AND t.deadline <= CURRENT_DATE + 7`,
     ]);
 
     const tenders: WbBrowseRow[] = rows.map((r) => {
@@ -199,7 +242,8 @@ export async function GET(request: Request) {
         tenderId: r.id as number,
         code: (r.reference_id as string | null) ?? `T-${r.id}`,
         title,
-        agency: decodeHtmlEntities(String(r.agency ?? "")),
+        // Harmonized agency so the column matches the agency filter labels.
+        agency: canonicalAgency(r.agency as string | null) ?? "",
         type: inferType(title, (r.opportunity_type as string | null) ?? null),
         source: (r.source_name as string | null) ?? "—",
         deadline: (r.deadline as string | null) ?? null,
@@ -223,7 +267,11 @@ export async function GET(request: Request) {
         type: toFacets(typeFacet as Record<string, unknown>[]),
         source: toFacets(sourceFacet as Record<string, unknown>[]),
       },
+      countries: countryLabels,
+      agencies: agencyLabels,
       total: (countRows[0]?.n as number) ?? tenders.length,
+      matchedTotal: (matchedRows[0]?.n as number) ?? 0,
+      soonTotal: (soonRows[0]?.n as number) ?? 0,
       page,
       pageSize: PAGE_SIZE,
     };
