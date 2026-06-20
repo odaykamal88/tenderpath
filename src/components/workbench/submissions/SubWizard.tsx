@@ -339,12 +339,6 @@ function ReviewStep({
             Secure payment{freeEligible ? " · first submission free" : ""}
           </div>
           <CheckoutCard autoStart plan="proposal-draft" context={committed} freeEligible={freeEligible} />
-          <div style={{ fontFamily: F.sans, fontSize: 11, color: C.mute, lineHeight: 1.5, marginTop: 10 }}>
-            Prefer USDT or bank transfer?{" "}
-            <a href={`/pay?plan=proposal-draft&submission_type=${committed.submissionType ?? ""}&work_order_id=${committed.workOrderId ?? ""}&submission_order_id=${committed.submissionOrderId ?? ""}`} style={{ color: C.ink, borderBottom: `1px solid ${C.ink}`, textDecoration: "none" }}>
-              Open the full checkout →
-            </a>
-          </div>
         </div>
       )}
       {a.pct < 100 && a.open.length === 0 && a.pct >= PAY_GATE_PCT && (

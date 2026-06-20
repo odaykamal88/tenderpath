@@ -95,16 +95,12 @@ export default function TermsPage() {
           RFQ, ITB, and RFP packages) is billed separately, per submission. Prices are displayed at
           the point of purchase.
         </p>
-        <p className="text-sm font-medium text-gray-800 mb-1">Payment methods accepted:</p>
-        <ul className="list-disc pl-5 space-y-1 text-sm">
-          <li><strong>Card</strong> — Visa, Mastercard, and other major cards via Stripe. By paying by card, you agree to <a href="https://stripe.com/legal" target="_blank" rel="noreferrer" className="underline">Stripe&apos;s terms of service</a>.</li>
-          <li><strong>USDT</strong> — TRC20 network. Wallet address provided at checkout.</li>
-          <li><strong>Bank wire transfer</strong> — Account details provided at checkout. Use your email address as payment reference.</li>
-        </ul>
-        <p className="text-sm text-gray-500">
-          For manual payment methods (USDT and bank wire), email{" "}
-          <a href="mailto:info@tenderpath.me" className="underline">info@tenderpath.me</a>{" "}
-          with your transaction confirmation to activate your account.
+        <p className="text-sm font-medium text-gray-800 mb-1">Payment:</p>
+        <p className="text-sm">
+          Payments are processed by <strong>card</strong> (Visa, Mastercard, and other major cards)
+          through <a href="https://stripe.com/legal" target="_blank" rel="noreferrer" className="underline">Stripe</a>.
+          Card details are handled entirely by Stripe and are never stored on TenderPath servers. By
+          paying, you agree to Stripe&apos;s terms of service.
         </p>
         <p className="text-sm font-medium text-gray-800 mt-2 mb-1">Subscriptions:</p>
         <ul className="list-disc pl-5 space-y-1 text-sm">

@@ -125,13 +125,6 @@ export function SubscriptionTab() {
 
           {/* key=planSlug so switching cycle tears down any half-mounted checkout */}
           <CheckoutCard key={planSlug} plan={planSlug} context={SUB_CONTEXT} />
-
-          <p style={{ fontFamily: F.sans, fontSize: 11, color: C.mute, lineHeight: 1.5, marginTop: 12 }}>
-            Prefer another method?{" "}
-            <a href={`/pay?plan=${planSlug}`} style={{ color: C.ink, borderBottom: `1px solid ${C.ink}`, textDecoration: "none" }}>
-              Open the full checkout →
-            </a>
-          </p>
         </div>
       )}
 
