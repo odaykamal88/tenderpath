@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
-import { getStripe } from "@/lib/stripe";
+import { getStripe, isSettledPayment } from "@/lib/stripe";
 import { ensurePaymentIntegritySchema } from "@/lib/payment-integrity";
 import Anthropic from "@anthropic-ai/sdk";
 import type Stripe from "stripe";
@@ -51,7 +51,7 @@ async function verifyBidNoBidPayment(
     return { session: null, response: NextResponse.json({ error: "Invalid Stripe session" }, { status: 400 }) };
   }
 
-  if (stripeSession.mode !== "payment" || stripeSession.payment_status !== "paid") {
+  if (stripeSession.mode !== "payment" || !isSettledPayment(stripeSession.payment_status)) {
     return { session: null, response: NextResponse.json({ error: "Payment not completed" }, { status: 402 }) };
   }
 

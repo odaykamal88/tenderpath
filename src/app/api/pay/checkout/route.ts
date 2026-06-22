@@ -235,7 +235,19 @@ export async function POST(request: Request) {
       }
     }
 
-    const gate = submissionWorkflow
+    // Dashboard Bid/No-Bid is pipeline-item-anchored with NO work order — it is
+    // fulfilled by the analysis page (POST /api/analysis/bid-no-bid), not the
+    // work-order generator, so the work-order fulfillment gate does not apply.
+    // The deadline guard above still runs, and the analysis route does its own
+    // payment + source verification. (Consolidation 2026-06-19: this lets the
+    // dashboard Bid/No-Bid flow drop its separate hosted checkout route and use
+    // the one embedded /api/pay/checkout path.)
+    const isPipelineBidNoBid =
+      plan === "bid-no-bid"
+      && /^\d+$/.test(pipelineItemId)
+      && !parsedWorkOrderId
+      && !parsedSubmissionOrderId;
+    const gate = submissionWorkflow || isPipelineBidNoBid
       ? null
       : await evaluateServiceFulfillmentGate({
           plan,
@@ -296,9 +308,13 @@ export async function POST(request: Request) {
     // "Order placed" confirmation + live order drawer take over.
     const returnUrl = submissionWorkflow
       ? `${origin}/dashboard/proposals?placed=${parsedSubmissionOrderId}`
-      : parsedWorkOrderId && !SUBSCRIPTION_PLANS.has(plan)
-        ? `${origin}/dashboard/work-orders/${parsedWorkOrderId}?paid=1`
-        : `${origin}/pay/success?${returnParams.toString()}`;
+      : isPipelineBidNoBid
+        // {CHECKOUT_SESSION_ID} is a Stripe template token (no JS interpolation):
+        // the analysis page reads it to verify payment and run the analysis.
+        ? `${origin}/dashboard/analysis/${pipelineItemId}?session_id={CHECKOUT_SESSION_ID}`
+        : parsedWorkOrderId && !SUBSCRIPTION_PLANS.has(plan)
+          ? `${origin}/dashboard/work-orders/${parsedWorkOrderId}?paid=1`
+          : `${origin}/pay/success?${returnParams.toString()}`;
 
     const isSubscription = SUBSCRIPTION_PLANS.has(plan);
     const wantsTrial = TRIAL_PLANS.has(plan);
@@ -379,7 +395,7 @@ export async function POST(request: Request) {
         pipeline_item_id: pipelineItemId || null,
         submission_order_id: submissionOrderIdRaw || null,
         stripe_session_id: session.id,
-        fulfillment_mode: gate?.mode ?? "submission_workflow",
+        fulfillment_mode: gate?.mode ?? (isPipelineBidNoBid ? "analysis_direct" : "submission_workflow"),
         readiness_code: gate?.code ?? null,
         readiness_score: gate?.score_0_10 ?? null,
         trial_days_remaining: trialDaysRemaining,

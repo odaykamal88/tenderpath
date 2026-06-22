@@ -35,8 +35,6 @@ const PUBLIC_PATHS = new Set([
   "/api/report",
   "/api/pay/checkout",
   "/api/pay/readiness",
-  "/api/pay/verify-usdt",
-  "/api/pay/wire-proof",
   "/api/telegram/webhook",
   // WhatsApp Business Cloud API webhook — Meta posts inbound messages here and
   // hits GET for the verification handshake; neither can carry a Bearer header.

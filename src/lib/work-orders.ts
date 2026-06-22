@@ -1,6 +1,7 @@
 import type Stripe from "stripe";
 import { after } from "next/server";
 import { sql } from "@/lib/db";
+import { isSettledPayment } from "@/lib/stripe";
 import { sendWorkOrderPaidNotifications } from "@/lib/email/sendWorkOrderNotifications";
 import { generateBidNoBid, BID_PLAN } from "@/lib/bid-no-bid/generate";
 import { generateProposalPackage } from "@/lib/proposal-package/generate-proposal";
@@ -84,6 +85,16 @@ export async function createWorkOrderFromCheckout(
   const agency = cleanMeta(session.metadata?.agency);
   const serviceSlug = cleanMeta(session.metadata?.service) ?? cleanMeta(session.metadata?.product);
 
+  // A 100%-off promotion code (e.g. FREETEST) or fully-covered trial settles as
+  // "no_payment_required" in Stripe, not "paid". Persist it AS "paid" — with
+  // amount_cents=0 still recording it was free — so every downstream
+  // `payment_status = 'paid'` gate (generation, dashboard display, queries)
+  // treats it like any settled order. Same convention as the first-proposal-free
+  // credit (src/lib/free-submission.ts), which synthesizes a "paid" $0 session.
+  const settledStatus = session.payment_status === "no_payment_required"
+    ? "paid"
+    : (session.payment_status ?? "paid");
+
   const rows = workOrderId
     ? await sql`
         WITH previous AS (
@@ -98,7 +109,7 @@ export async function createWorkOrderFromCheckout(
           user_id = COALESCE(user_id, ${userId}),
           plan = ${plan},
           service_slug = COALESCE(service_slug, ${serviceSlug}),
-          payment_status = ${session.payment_status ?? 'paid'},
+          payment_status = ${settledStatus},
           stripe_session_id = ${session.id},
           stripe_customer_id = ${customerId},
           amount_cents = ${session.amount_total ?? null},
@@ -134,7 +145,7 @@ export async function createWorkOrderFromCheckout(
           amount_cents, currency, email,
           pipeline_item_id, tender_title, agency
         ) VALUES (
-          ${userId}, ${plan}, ${serviceSlug}, 'new', ${session.payment_status ?? 'paid'},
+          ${userId}, ${plan}, ${serviceSlug}, 'new', ${settledStatus},
           ${session.id}, ${customerId},
           ${session.amount_total ?? null}, ${session.currency ?? 'usd'},
           ${email},
@@ -183,7 +194,7 @@ export async function createWorkOrderFromCheckout(
     }
     if (submissionOrder) {
       const previousStatus = order.previous_payment_status as string | null | undefined;
-      if (session.payment_status === "paid" && previousStatus !== "paid") {
+      if (isSettledPayment(session.payment_status) && !isSettledPayment(previousStatus)) {
         const live = await markSubmissionOrderPaidByWorkOrder(
           order.id as number,
           (session.amount_total as number | null) ?? null,
@@ -238,7 +249,7 @@ export async function createWorkOrderFromCheckout(
     }
   }
   const previousPaymentStatus = order?.previous_payment_status as string | null | undefined;
-  if (order && session.payment_status === "paid" && previousPaymentStatus !== "paid") {
+  if (order && isSettledPayment(session.payment_status) && !isSettledPayment(previousPaymentStatus)) {
     const orderPlan = order.plan as string;
     const orderId = order.id as number;
 
