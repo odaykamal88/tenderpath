@@ -5,6 +5,7 @@ import Link from "next/link";
 import styles from "../admin.module.css";
 import {
   type OutreachMatch,
+  type OutreachSort,
   buildBundleEmail,
   buildLinkedInDraft,
   groupByCompany,
@@ -21,20 +22,26 @@ const SIGNOFF_KEY = "tp_outreach_signoff";
 // time is now governed by the single server-side "Min lead time" control on the
 // page (?min_days, applied before the row cap). Two floors in mismatched units
 // (calendar vs business) confused operators and silently emptied the worklist.
-// Bumping the key clears any stale persisted minBusinessDays value.
-const FILTERS_KEY = "tp_outreach_filters_v3";
+// Bumping the key clears stale persisted shapes (v4 adds sort + hideLostAgencies).
+const FILTERS_KEY = "tp_outreach_filters_v4";
 const DEFAULT_SIGNOFF = "[Your name]\nTenderPath";
 
 interface Filters {
   minScore: number;
   excludeConsultancies: boolean;
   sendReadyOnly: boolean;
+  /** Bulk-hide tenders from agencies this company has already lost with (off = flag only). */
+  hideLostAgencies: boolean;
+  /** Lead with soonest deadline or highest fit. */
+  sort: OutreachSort;
 }
 
 const DEFAULT_FILTERS: Filters = {
   minScore: OUTREACH_DEFAULTS.minScore,
   excludeConsultancies: OUTREACH_DEFAULTS.excludeConsultancies,
   sendReadyOnly: false,
+  hideLostAgencies: false,
+  sort: "deadline",
 };
 
 function loadFilters(): Filters {
@@ -47,6 +54,8 @@ function loadFilters(): Filters {
       minScore: Number.isFinite(p.minScore) ? Number(p.minScore) : DEFAULT_FILTERS.minScore,
       excludeConsultancies: typeof p.excludeConsultancies === "boolean" ? p.excludeConsultancies : DEFAULT_FILTERS.excludeConsultancies,
       sendReadyOnly: typeof p.sendReadyOnly === "boolean" ? p.sendReadyOnly : DEFAULT_FILTERS.sendReadyOnly,
+      hideLostAgencies: typeof p.hideLostAgencies === "boolean" ? p.hideLostAgencies : DEFAULT_FILTERS.hideLostAgencies,
+      sort: p.sort === "fit" || p.sort === "deadline" ? p.sort : DEFAULT_FILTERS.sort,
     };
   } catch {
     return DEFAULT_FILTERS;
@@ -103,13 +112,14 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
   function patchFilters(p: Partial<Filters>) { setFilters((f) => ({ ...f, ...p })); }
 
   const shortlist = useMemo(() => rankForOutreach(matches, filters), [matches, filters]);
-  const groups = useMemo(() => groupByCompany(shortlist), [shortlist]);
+  const groups = useMemo(() => groupByCompany(shortlist, filters.sort), [shortlist, filters.sort]);
 
   // Transparency on what the filters removed — never silently drop tenders.
   const hidden = useMemo(() => {
     const consultancy = filters.excludeConsultancies ? matches.filter(isConsultancyTender).length : 0;
     const lowFit = filters.minScore > 0 ? matches.filter((m) => m.score < filters.minScore).length : 0;
-    return { consultancy, lowFit };
+    const lostAgency = filters.hideLostAgencies ? matches.filter((m) => m.lost_agency_before).length : 0;
+    return { consultancy, lowFit, lostAgency };
   }, [matches, filters]);
 
   function isIn(matchId: number): boolean { return !excluded.has(matchId); }
@@ -171,6 +181,7 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
   const hiddenParts = [
     hidden.consultancy > 0 ? `${hidden.consultancy} consultancy` : null,
     hidden.lowFit > 0 ? `${hidden.lowFit} below fit` : null,
+    hidden.lostAgency > 0 ? `${hidden.lostAgency} lost-agency` : null,
   ].filter(Boolean);
 
   return (
@@ -205,6 +216,23 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
           <input type="checkbox" checked={filters.sendReadyOnly} onChange={(e) => patchFilters({ sendReadyOnly: e.target.checked })} suppressHydrationWarning />
           Email-ready only
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }} title="Bulk-hide tenders from agencies this company has already lost with. Off by default — a prior loss is flagged on the row, not hidden.">
+          <input type="checkbox" checked={filters.hideLostAgencies} onChange={(e) => patchFilters({ hideLostAgencies: e.target.checked })} suppressHydrationWarning />
+          Hide lost agencies
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+          Sort
+          <select
+            value={filters.sort}
+            onChange={(e) => patchFilters({ sort: e.target.value as OutreachSort })}
+            className={styles.adminSearchInput}
+            suppressHydrationWarning
+            style={{ width: "auto", padding: "4px 6px", fontSize: 12 }}
+          >
+            <option value="deadline">Soonest deadline</option>
+            <option value="fit">Best fit</option>
+          </select>
         </label>
         <button type="button" className={styles.btnGhost} onClick={() => setFilters(DEFAULT_FILTERS)} style={{ padding: "4px 9px", fontSize: 11 }}>
           Reset
@@ -246,6 +274,13 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
         <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "4px 22px 20px" }}>
           {groups.map((g) => {
             const selected = selectedFor(g);
+            // Per-company engagement context (same on every match of the company).
+            const m0 = g.matches[0];
+            const history = [
+              (m0?.contacted_count ?? 0) > 0 ? `${m0!.contacted_count} contacted` : null,
+              (m0?.won_count ?? 0) > 0 ? `${m0!.won_count} won` : null,
+              (m0?.lost_count ?? 0) > 0 ? `${m0!.lost_count} lost` : null,
+            ].filter(Boolean).join(" · ");
             return (
               <div key={g.company_id} style={{ border: "1px solid var(--admin-border, rgba(127,127,127,0.22))", borderRadius: 10, overflow: "hidden" }}>
                 <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, padding: "10px 14px", background: "var(--admin-panel-alt, rgba(127,127,127,0.06))" }}>
@@ -260,6 +295,11 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
                     <Link href={`/admin/network/${g.company_id}`} className={styles.tableLink}>{g.company_name}</Link>
                     <div className={styles.sessionSubtle}>{g.contact_email ?? g.contact_name ?? "no contact on file"}</div>
                   </div>
+                  {history && (
+                    <span className={`${styles.tag} ${styles.tagMute}`} title="Your prior engagement with this company (all statuses)">
+                      {history}
+                    </span>
+                  )}
                   <span className={styles.panelMeta}>{selected.length}/{g.matches.length} selected</span>
                   <div style={{ flex: 1 }} />
                   <button
@@ -303,6 +343,15 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
                               {[m.tender_agency, m.tender_sector, m.tender_country].filter(Boolean).join(" · ") || "—"}
                               {Array.isArray(m.match_reasons) && m.match_reasons.length > 0 && ` · ${m.match_reasons.slice(0, 2).join("; ")}`}
                             </div>
+                            {m.lost_agency_before && (
+                              <span
+                                className={`${styles.tag} ${styles.tagWarn}`}
+                                style={{ marginTop: 4 }}
+                                title="This company has lost a bid with this agency before — pitch with care."
+                              >
+                                ⚠ lost with this agency before
+                              </span>
+                            )}
                           </td>
                           <td>
                             <div className={styles.mono}>{fmtDate(m.tender_deadline)}</div>
@@ -331,6 +380,8 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
                                   <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => openLinkedIn(m)} style={{ padding: "4px 8px", fontSize: 11 }}>LinkedIn</button>
                                 )}
                                 <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => onSetStatus(m.id, "contacted")} style={{ padding: "4px 8px", fontSize: 11 }}>Contacted</button>
+                                <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => onSetStatus(m.id, "won")} style={{ padding: "4px 8px", fontSize: 11 }} title="Mark this tender won — records the outcome and drops it from the worklist">Won</button>
+                                <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => onSetStatus(m.id, "lost")} style={{ padding: "4px 8px", fontSize: 11 }} title="Mark this tender lost — records the outcome and flags this agency on future matches">Lost</button>
                                 <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => { setDismissingId(m.id); setDismissReason(""); }} style={{ padding: "4px 8px", fontSize: 11 }}>Dismiss</button>
                               </div>
                             )}
