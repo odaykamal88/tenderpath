@@ -62,6 +62,7 @@ async function runCrawl(): Promise<CrawlOutcome> {
       total_updated: totalUpdated,
       total_expired: totalExpired,
       total_deduped: tenderSummary.totalDeduped,
+      total_collapsed: tenderSummary.totalCollapsed,
       total_broken_links: tenderSummary.totalBrokenLinks,
       tenders: {
         sources: tenderSummary.results.map((r) => ({
