@@ -194,6 +194,11 @@
   margin-bottom: 24px;
   overflow: hidden;
 }
+/* Opt a panel out of clipping so absolutely-positioned children can escape its
+   rounded box. The filter panel uses this: the facet combobox menu would
+   otherwise be clipped by overflow:hidden and never appear below the input
+   (it just needs to overlay the table panel beneath it). */
+.panelOverflowVisible { overflow: visible; }
 .panelHead {
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px 22px;

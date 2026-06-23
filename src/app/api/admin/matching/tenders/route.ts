@@ -104,31 +104,54 @@ export async function GET(request: Request) {
   const sectorIlike = sectors.map((s) => `%${s}%`);
   const sectorClause = sectorIlike.length ? sql`AND t.sector ILIKE ANY(${sectorIlike})` : sql``;
 
+  // Collapse cross-posted duplicates before the row cap. Overlapping sources
+  // publish the same opportunity under different reference_ids, and upsertTenders
+  // keys ON CONFLICT (reference_id) — so each copy persists as its own row. Group
+  // on the crawler's OWN canonical identity (the exact key dedupeTenders() uses:
+  // normalized title + agency + deadline) and keep one row per opportunity — the
+  // one carrying the most vendor matches, then most recently updated. This is a
+  // read-side display fix only; upsert/dedupe/link-verify contracts are untouched.
   const rows = (await sql`
-    SELECT
-      t.id, t.title, t.agency, t.country, t.sector, t.deadline,
-      t.estimated_value, t.source_url, t.source_name, t.opportunity_type,
-      t.reference_id, t.created_at, t.updated_at,
-      COALESCE((
-        SELECT COUNT(*)::int FROM tender_vendor_matches m WHERE m.tender_id = t.id
-      ), 0) AS match_count
-    FROM tenders t
-    WHERE t.status = 'open'
-      AND COALESCE(t.has_broken_link, false) = false
-      AND (
-        ${q} = ''
-        OR t.title ILIKE ${`%${q}%`}
-        OR t.agency ILIKE ${`%${q}%`}
-        OR t.reference_id ILIKE ${`%${q}%`}
-      )
-      ${countryClause}
-      ${agencyClause}
-      ${sectorClause}
-      AND (
-        ${minDays} <= 0
-        OR (t.deadline IS NOT NULL AND t.deadline >= CURRENT_DATE + (${minDays})::int)
-      )
-    ORDER BY t.deadline ASC NULLS LAST, t.created_at DESC
+    WITH filtered AS (
+      SELECT
+        t.id, t.title, t.agency, t.country, t.sector, t.deadline,
+        t.estimated_value, t.source_url, t.source_name, t.opportunity_type,
+        t.reference_id, t.created_at, t.updated_at,
+        COALESCE((
+          SELECT COUNT(*)::int FROM tender_vendor_matches m WHERE m.tender_id = t.id
+        ), 0) AS match_count
+      FROM tenders t
+      WHERE t.status = 'open'
+        AND COALESCE(t.has_broken_link, false) = false
+        AND (
+          ${q} = ''
+          OR t.title ILIKE ${`%${q}%`}
+          OR t.agency ILIKE ${`%${q}%`}
+          OR t.reference_id ILIKE ${`%${q}%`}
+        )
+        ${countryClause}
+        ${agencyClause}
+        ${sectorClause}
+        AND (
+          ${minDays} <= 0
+          OR (t.deadline IS NOT NULL AND t.deadline >= CURRENT_DATE + (${minDays})::int)
+        )
+    ),
+    deduped AS (
+      SELECT DISTINCT ON (
+        LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(title, '')),  '[^a-z0-9]+', ' ', 'g')), 120),
+        LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(agency, '')), '[^a-z0-9]+', ' ', 'g')), 120),
+        deadline::date
+      ) *
+      FROM filtered
+      ORDER BY
+        LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(title, '')),  '[^a-z0-9]+', ' ', 'g')), 120),
+        LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(agency, '')), '[^a-z0-9]+', ' ', 'g')), 120),
+        deadline::date,
+        match_count DESC, updated_at DESC NULLS LAST, id DESC
+    )
+    SELECT * FROM deduped
+    ORDER BY deadline ASC NULLS LAST, created_at DESC
     LIMIT ${limit}
   `) as TenderRow[];
 

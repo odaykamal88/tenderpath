@@ -115,6 +115,25 @@ export async function GET(request: Request) {
   `;
 
   try {
+    // Canonical "same opportunity" key — the read-side twin of dedupKey() in
+    // crawlers/types.ts (normalized title + agency + deadline). Overlapping
+    // sources cross-post the same tender under different reference_ids and
+    // upsertTenders dedups ON CONFLICT (reference_id) only, so each copy persists
+    // as its own row. We collapse them at read time; the upsert / dedupe /
+    // link-verify contracts upstream are untouched. Two shapes of the one key:
+    //   dupKeyT    — concatenated text over the `t` alias, for COUNT(DISTINCT …)
+    //   dupKeyCols — the three key columns (unprefixed) for DISTINCT ON in the CTE
+    const dupKeyT = sql`(
+      LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.title, '')),  '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
+      LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.agency, '')), '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
+      COALESCE(t.deadline::date::text, '')
+    )`;
+    const dupKeyCols = sql`
+      LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(title, '')),  '[^a-z0-9]+', ' ', 'g')), 120),
+      LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(agency, '')), '[^a-z0-9]+', ' ', 'g')), 120),
+      deadline::date
+    `;
+
     // 1) Harmonize the sector universe. Pull the full raw grouping (no LIMIT,
     //    excluding leaked JSON blobs) under the facet scope, then collapse every
     //    variant that maps to the same canonical slug ("it" / "Information
@@ -122,7 +141,7 @@ export async function GET(request: Request) {
     //    back each label and slug so a selection — or the relevance filter — can
     //    translate back to a real `t.sector` predicate.
     const sectorRaw = (await sql`
-      SELECT t.sector AS value, COUNT(*)::int AS count
+      SELECT t.sector AS value, COUNT(DISTINCT ${dupKeyT})::int AS count
       FROM tenders t ${join} ${facetWhere}
         AND t.sector IS NOT NULL AND t.sector <> '' AND t.sector NOT LIKE '{%' AND length(t.sector) <= 60
       GROUP BY t.sector
@@ -218,20 +237,45 @@ export async function GET(request: Request) {
         ${sources.length ? sql`AND t.source_name = ANY(${sources})` : sql``}
     `;
 
+    // Page ordering is applied AFTER the dedup CTE, so it references the deduped
+    // columns (unprefixed) rather than the t. / pf. aliases.
+    const orderByOuter = sort === "fit"
+      ? sql`fit DESC NULLS LAST, deadline ASC NULLS LAST`
+      : sql`deadline ASC NULLS LAST`;
+
     const [countRows, rows, typeFacet, sourceFacet, matchedRows, soonRows] = await Promise.all([
-      sql`SELECT COUNT(*)::int AS n FROM tenders t ${join} ${where}`,
+      // Distinct opportunities, not raw rows, so the total agrees with the
+      // deduped page below and the pagination math stays correct.
+      sql`SELECT COUNT(DISTINCT ${dupKeyT})::int AS n FROM tenders t ${join} ${where}`,
+      // Collapse cross-posted duplicates before LIMIT/OFFSET: keep one row per
+      // opportunity, preferring the viewer's matched copy (fit set) so the
+      // "Matched" badge + score survive the collapse, then their newest id.
       sql`
-        SELECT t.id, t.reference_id, t.title, t.agency, t.deadline, t.sector, t.country,
-               t.opportunity_type, t.source_name, t.estimated_value, t.source_url, pf.fit
-        FROM tenders t ${join} ${where}
-        ORDER BY ${sort === "fit" ? sql`pf.fit DESC NULLS LAST, t.deadline ASC NULLS LAST` : sql`t.deadline ASC NULLS LAST`}, t.id DESC
+        WITH base AS (
+          SELECT t.id, t.reference_id, t.title, t.agency, t.deadline, t.sector, t.country,
+                 t.opportunity_type, t.source_name, t.estimated_value, t.source_url, pf.fit
+          FROM tenders t ${join} ${where}
+        ),
+        deduped AS (
+          SELECT DISTINCT ON (${dupKeyCols}) *
+          FROM base
+          ORDER BY ${dupKeyCols}, fit DESC NULLS LAST, id DESC
+        )
+        SELECT * FROM deduped
+        ORDER BY ${orderByOuter}, id DESC
         LIMIT ${PAGE_SIZE} OFFSET ${offset}
       `,
-      sql`SELECT t.opportunity_type AS value, COUNT(*)::int AS count FROM tenders t ${join} ${facetWhere} AND t.opportunity_type IS NOT NULL AND t.opportunity_type <> '' GROUP BY t.opportunity_type ORDER BY count DESC, value LIMIT 30`,
-      sql`SELECT t.source_name AS value, COUNT(*)::int AS count FROM tenders t ${join} ${facetWhere} AND t.source_name IS NOT NULL AND t.source_name <> '' GROUP BY t.source_name ORDER BY count DESC, value LIMIT 30`,
-      // Stat-strip counts over the full filtered set (accurate across pagination).
-      sql`SELECT COUNT(*)::int AS n FROM tenders t ${join} ${where} AND pf.fit IS NOT NULL`,
-      sql`SELECT COUNT(*)::int AS n FROM tenders t ${join} ${where} AND t.deadline IS NOT NULL AND t.deadline <= CURRENT_DATE + 7`,
+      // Facet counts are distinct opportunities too, so a facet's number matches
+      // what its selection yields in the deduped list. Intentional divergence: an
+      // opportunity cross-posted on two sources counts under BOTH source rows —
+      // facets measure availability, not a partition, so their sum can exceed the
+      // total (the same was already true of raw counts; this just de-inflates them).
+      sql`SELECT t.opportunity_type AS value, COUNT(DISTINCT ${dupKeyT})::int AS count FROM tenders t ${join} ${facetWhere} AND t.opportunity_type IS NOT NULL AND t.opportunity_type <> '' GROUP BY t.opportunity_type ORDER BY count DESC, value LIMIT 30`,
+      sql`SELECT t.source_name AS value, COUNT(DISTINCT ${dupKeyT})::int AS count FROM tenders t ${join} ${facetWhere} AND t.source_name IS NOT NULL AND t.source_name <> '' GROUP BY t.source_name ORDER BY count DESC, value LIMIT 30`,
+      // Stat-strip counts over the full filtered set — distinct opportunities so
+      // they agree with the deduped list and stay accurate across pagination.
+      sql`SELECT COUNT(DISTINCT ${dupKeyT})::int AS n FROM tenders t ${join} ${where} AND pf.fit IS NOT NULL`,
+      sql`SELECT COUNT(DISTINCT ${dupKeyT})::int AS n FROM tenders t ${join} ${where} AND t.deadline IS NOT NULL AND t.deadline <= CURRENT_DATE + 7`,
     ]);
 
     const tenders: WbBrowseRow[] = rows.map((r) => {
