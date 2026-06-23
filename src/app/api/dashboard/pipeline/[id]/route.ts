@@ -1,6 +1,6 @@
 import { NextResponse, after } from "next/server";
 import { sql } from "@/lib/db";
-import { requireDashboardAccess } from "@/lib/access";
+import { requireAuth, evaluateAccess } from "@/lib/access";
 import {
   promoteWonPipelineItem,
   type WonPipelineRow,
@@ -22,7 +22,7 @@ export async function GET(
   request: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireDashboardAccess(request);
+  const guard = await requireAuth(request);
   if (!guard.authorized) return guard.response!;
 
   await ensurePipelineColumns();
@@ -52,14 +52,14 @@ export async function GET(
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ item: rows[0], access: guard.access });
+  return NextResponse.json({ item: rows[0], access: evaluateAccess(guard.user!) });
 }
 
 export async function PATCH(
   request: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireDashboardAccess(request);
+  const guard = await requireAuth(request);
   if (!guard.authorized) return guard.response!;
 
   const { id } = await ctx.params;
@@ -110,7 +110,7 @@ export async function DELETE(
   request: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireDashboardAccess(request);
+  const guard = await requireAuth(request);
   if (!guard.authorized) return guard.response!;
 
   const { id } = await ctx.params;

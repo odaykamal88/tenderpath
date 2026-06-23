@@ -31,11 +31,15 @@ const faqs = [
     a: "Most UN agencies require: UNGM registration, audited financial statements (last 2–3 years), company registration certificate, tax compliance certificate, past performance references, and technical capability documentation. The specific requirements vary by tender and agency — our readiness assessment identifies exactly which you're missing.",
   },
   {
-    q: "What does the Bid Analysis ($39) include?",
-    a: "For any tender in your pipeline, Bid Analysis gives you: a win probability score, a breakdown of every eligibility criterion and where you stand, a gap analysis with specific actions to close each gap, and competitor intelligence showing how many vendors are actively pursuing this opportunity.",
+    q: "What is the TenderPath dashboard and how much does it cost?",
+    a: "The dashboard is free on signup and includes the matched-tender feed (ranked and refreshed daily), the full tender database, a weekly matched digest, Telegram deal-flow alerts, deadline nudges, and three (3) bid/no-bid instant verdicts per calendar month. TenderPath Pro is an optional subscription at $49/month or $324/year (with a 30-day free trial, no card required) that unlocks the document vault, the readiness-gap Navigator, and unlimited bid/no-bid verdicts.",
   },
   {
-    q: "Can I cancel the Grants + Tenders Matching subscription?",
+    q: "What does the Bid Analysis ($39) include?",
+    a: "For any tender in your pipeline, Bid Analysis gives you: a win probability score, a breakdown of every eligibility criterion and where you stand, a gap analysis with specific actions to close each gap, and competitor intelligence showing how many vendors are actively pursuing this opportunity. This is a separate one-off deliverable, not subject to the monthly verdict cap.",
+  },
+  {
+    q: "Can I cancel TenderPath Pro?",
     a: "Yes, anytime. There's no long-term commitment. You can cancel from your account settings and you'll retain access until the end of your current billing period.",
   },
   {

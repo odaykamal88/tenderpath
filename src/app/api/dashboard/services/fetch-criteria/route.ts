@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { requireDashboardAccess } from "@/lib/access";
+import { requireAuth } from "@/lib/access";
 import { extractDocumentText } from "@/lib/documents/extract";
 
 export const runtime = "nodejs";
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   // opaque Vercel 500 — that was the symptom of the "Could not fetch
   // criteria (500)." error the user saw with no diagnostic text body.
   try {
-    const guard = await requireDashboardAccess(req);
+    const guard = await requireAuth(req);
     if (!guard.authorized) return guard.response!;
 
     let rawUrl: string;

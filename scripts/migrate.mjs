@@ -393,6 +393,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS bid_analyses_stripe_session_id_unique
   ON bid_analyses (stripe_session_id)
   WHERE stripe_session_id IS NOT NULL AND stripe_session_id <> '';
 
+CREATE TABLE IF NOT EXISTS bid_no_bid_usage (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_bid_no_bid_usage_user_month
+  ON bid_no_bid_usage (user_id, created_at);
+
 CREATE TABLE IF NOT EXISTS weekly_digest_logs (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,

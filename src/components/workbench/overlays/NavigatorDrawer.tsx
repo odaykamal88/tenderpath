@@ -13,6 +13,7 @@ import { Btn } from "../ui";
 import { Icon } from "../icons";
 import { useMedia } from "../useMedia";
 import { useWorkbench } from "../WorkbenchProvider";
+import { PRO_FEATURES } from "@/lib/workbench/pricing";
 import type { WbGap } from "@/lib/workbench/types";
 
 function Bubble({ children, delay }: { children: ReactNode; delay: number }) {
@@ -20,7 +21,7 @@ function Bubble({ children, delay }: { children: ReactNode; delay: number }) {
 }
 
 export function NavigatorDrawer({ gap, onClose }: { gap: WbGap; onClose: () => void }) {
-  const { markGapClosed, openVault, isClosed } = useWorkbench();
+  const { data, markGapClosed, openVault, openSubscribe, isClosed } = useWorkbench();
   const mobile = useMedia("(max-width: 1023px)");
   const cp = gap.copilot;
   const total = cp.steps.length;
@@ -55,6 +56,56 @@ export function NavigatorDrawer({ gap, onClose }: { gap: WbGap; onClose: () => v
     markGapClosed(gap);
     setClosedNow(true);
   };
+
+  // Freemium: the Gap Navigator (the guided, step-by-step fix workflow) is a Pro
+  // feature. Free accounts can SEE that they have gaps, but closing them with the
+  // Navigator needs a subscription. Gated here so every entry point — the gaps
+  // page, the Overview "next move", and Paste's "fix with the Navigator" — hits
+  // the same wall. (Anyone in the 30-day trial counts as Pro, so this never
+  // shows for trialing users.)
+  if (!data.access.pro) {
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 90, display: "flex", justifyContent: "flex-end" }}>
+        <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(15,22,32,0.55)", animation: "tpFade .2s ease" }} />
+        <div style={{ position: "relative", width: mobile ? "100%" : 480, maxWidth: "100%", background: C.paper, height: "100%", display: "flex", flexDirection: "column", boxShadow: "-20px 0 60px rgba(15,22,32,0.3)", animation: "tpSlideR .26s cubic-bezier(.2,.8,.2,1)" }}>
+          <div style={{ background: C.ink, color: C.paper, padding: "18px 22px", display: "flex", alignItems: "flex-start", gap: 14 }}>
+            <div style={{ width: 34, height: 34, borderRadius: 999, background: C.accent, color: C.white, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontFamily: F.display, fontSize: 17 }}>✦</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.14em", textTransform: "uppercase", color: C.accent2 }}>Gap Navigator · Pro</div>
+              <div style={{ fontFamily: F.display, fontSize: 19, color: C.paper, marginTop: 3, lineHeight: 1.15 }}>{gap.title}</div>
+              <div style={{ fontFamily: F.mono, fontSize: 10, color: "#9aa3ad", marginTop: 5 }}>{total > 0 ? `${total} guided step${total === 1 ? "" : "s"}` : "Guided fix"}{gap.impact > 0 ? ` · +${gap.impact} pts` : ""}</div>
+            </div>
+            <button onClick={onClose} aria-label="Close" style={{ background: "transparent", border: `1px solid #3a4654`, color: C.paper, width: 30, height: 30, cursor: "pointer", flexShrink: 0, display: "grid", placeItems: "center" }}>
+              <Icon name="close" size={13} />
+            </button>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "26px 24px" }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "#f8f2e2", border: `1px solid #e4d9bd`, padding: "6px 11px", marginBottom: 16 }}>
+              <span style={{ color: C.accent }}>🔒</span>
+              <span style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase", color: C.accent }}>Pro feature</span>
+            </div>
+            <p style={{ fontFamily: F.sans, fontSize: 14.5, lineHeight: 1.6, color: C.ink2, margin: "0 0 14px" }}>{gap.why}</p>
+            <p style={{ fontFamily: F.sans, fontSize: 14, lineHeight: 1.6, color: C.ink2, margin: "0 0 18px" }}>
+              The Gap Navigator walks you through closing this step by step — pre-filled templates, the exact registration links, and a re-scan of your matches when it&apos;s done{gap.impact > 0 ? <>, folding <b style={{ color: C.ink }}>+{gap.impact} points</b> into your readiness</> : ""}. It&apos;s part of <b style={{ color: C.ink }}>TenderPath Pro</b>.
+            </p>
+            <div style={{ border: `1px solid ${C.rule}`, background: C.white }}>
+              {PRO_FEATURES.map((f, i) => (
+                <div key={f} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", borderBottom: i < PRO_FEATURES.length - 1 ? `1px solid ${C.ruleSoft}` : "0" }}>
+                  <span style={{ color: C.pos, fontSize: 13 }}>✓</span>
+                  <span style={{ fontFamily: F.sans, fontSize: 13.5, color: C.ink }}>{f}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ borderTop: `1px solid ${C.rule}`, background: C.white, padding: "14px 22px", display: "flex", gap: 10, alignItems: "center" }}>
+            <span style={{ fontFamily: F.mono, fontSize: 10.5, color: C.mute, flex: 1 }}>$49/mo · 30-day trial · cancel anytime</span>
+            <Btn kind="ghost" size="sm" onClick={onClose}>Later</Btn>
+            <Btn kind="gold" size="sm" onClick={() => { onClose(); openSubscribe(); }}>Subscribe →</Btn>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 90, display: "flex", justifyContent: "flex-end" }}>

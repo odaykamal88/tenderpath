@@ -55,7 +55,7 @@ export default function UpgradeGate({ children, title, description }: UpgradeGat
         {access === "trial" && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm flex items-center justify-between gap-4">
             <span className="text-amber-900">
-              You&apos;re on a free trial. Subscribe to keep full access after your trial ends.
+              You&apos;re in your Pro trial. Subscribe to keep the vault, gap Navigator &amp; unlimited bid/no-bid after it ends.
             </span>
             <Link
               href="/pay?plan=grants-tenders-matching"

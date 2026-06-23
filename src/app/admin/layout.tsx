@@ -132,6 +132,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <span className={styles.navLabel}>User Dashboard</span>
         </Link>
 
+        <a
+          href="/data-room"
+          target="_blank"
+          rel="noreferrer"
+          className={`${styles.navItem} ${styles.navSecondary}`}
+        >
+          <span className={`${styles.navHint} ${styles.mono}`}>↗</span>
+          <span className={styles.navLabel}>Investor Data Room</span>
+        </a>
+
         <div className={styles.sidebarFoot}>
           <div className={styles.footUser}>
             <div className={styles.footAvatar}>{initials}</div>

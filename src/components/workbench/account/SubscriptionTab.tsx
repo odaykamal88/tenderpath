@@ -12,13 +12,12 @@ import { requestBillingPortal } from "./portal";
 import { CheckoutCard } from "@/components/checkout/CheckoutCard";
 import { SUBSCRIPTION_PLANS, ANNUAL_SAVING_PCT } from "@/lib/workbench/pricing";
 
+// Pro unlocks (the rest of the dashboard is free) — kept in sync with
+// PRO_FEATURES in src/lib/workbench/pricing.ts and the landing Pricing card.
 const INCLUDED = [
-  "Live matched tenders, ranked by fit",
-  "The full tender database (Browse)",
-  "Readiness score + the gap Navigator",
-  "Document Vault",
-  "Bid / no-bid decision engine",
-  "Deadline alerts & weekly digest",
+  "Unlimited bid / no-bid verdicts",
+  "The Gap Navigator for every readiness gap",
+  "Document Vault + readiness tracking",
 ];
 
 // Subscriptions carry no tender/work-order/submission context.
@@ -52,12 +51,12 @@ export function SubscriptionTab() {
     else setMsg(r.message ?? "Couldn't open the billing portal.");
   };
 
-  const planLabel = access.isPaid ? "Active subscription" : access.locked ? "Trial ended" : "Free trial";
+  const planLabel = access.isPaid ? "Pro · active" : access.locked ? "Pro trial ended" : "Pro trial";
   const planSub = access.isPaid
-    ? "Full Workbench access."
+    ? "Vault, gap Navigator & unlimited bid/no-bid are unlocked."
     : access.locked
-      ? "Subscribe to keep your dashboard access."
-      : `${access.trialDaysLeft} day${access.trialDaysLeft === 1 ? "" : "s"} left — no card required.`;
+      ? "Subscribe to unlock the vault, gap Navigator & unlimited bid/no-bid."
+      : `${access.trialDaysLeft} day${access.trialDaysLeft === 1 ? "" : "s"} left of Pro — no card required.`;
 
   const annual = SUBSCRIPTION_PLANS.annual;
   const monthly = SUBSCRIPTION_PLANS.monthly;
@@ -129,7 +128,7 @@ export function SubscriptionTab() {
       )}
 
       <div style={{ background: C.white, border: `1px solid ${C.rule}`, padding: "20px 22px", marginBottom: 20 }}>
-        <h3 style={{ fontFamily: F.display, fontSize: 18, fontWeight: 400, color: C.ink, margin: "0 0 14px" }}>What&apos;s included</h3>
+        <h3 style={{ fontFamily: F.display, fontSize: 18, fontWeight: 400, color: C.ink, margin: "0 0 14px" }}>What Pro unlocks</h3>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px" }}>
           {INCLUDED.map((f) => (
             <div key={f} style={{ display: "flex", gap: 8, alignItems: "baseline", fontFamily: F.sans, fontSize: 13, color: C.ink2 }}>
@@ -138,7 +137,7 @@ export function SubscriptionTab() {
           ))}
         </div>
         <p style={{ fontFamily: F.sans, fontSize: 12.5, color: C.mute, marginTop: 16 }}>
-          Proposal submissions are billed separately — per submission, only when you commit to a bid.
+          Matched tenders, the tender database, the weekly digest and 3 bid/no-bid calls a month stay free. Proposal submissions are billed separately — per submission, only when you commit to a bid.
         </p>
       </div>
 

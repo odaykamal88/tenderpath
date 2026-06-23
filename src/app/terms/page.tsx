@@ -32,9 +32,10 @@ export default function TermsPage() {
         <p className="text-sm">
           TenderPath provides AI-assisted tools to help businesses discover UN and donor-agency
           procurement opportunities, assess their readiness, and prepare for tender processes.
-          The platform includes a free company assessment plus a subscription Workbench — a matched
-          tender feed, full tender database, readiness analysis, bid/no-bid analysis, and a document
-          vault — together with per-submission proposal drafting and related workflow features.
+          The platform includes a free readiness assessment and a free dashboard (the Workbench) —
+          a matched tender feed, full tender database, weekly digest, Telegram alerts, and a limited
+          monthly bid/no-bid verdict allowance — together with an optional paid subscription
+          (TenderPath Pro), per-submission proposal drafting, and related workflow features.
         </p>
         <p className="text-sm font-medium text-gray-800 bg-gray-50 rounded-lg px-4 py-3">
           All outputs — including assessments, sector classifications, readiness scores, tender
@@ -74,26 +75,30 @@ export default function TermsPage() {
         </ul>
       </Section>
 
-      <Section heading="5. Free assessment and trial">
+      <Section heading="5. Free dashboard and trial of Pro">
         <p className="text-sm">
-          The free company assessment is available without payment. New accounts also receive a
-          <strong> 30-day free trial</strong> of the paid Workbench dashboard — <strong>no card
-          required</strong> to start. We will send you a reminder email before the trial ends.
-          When the trial ends, you may subscribe (monthly or annual) to keep full access; if you
-          started a subscription with a card on file during the trial, it converts automatically at
-          the standard plan rate at the end of the trial unless you cancel first. You may cancel at
-          any time by contacting us at{" "}
+          The free company assessment is available without payment. The dashboard is provided free
+          on signup and includes the matched-tender feed, full tender database, weekly matched digest,
+          Telegram alerts and deadline nudges, and three (3) bid/no-bid instant verdicts per calendar
+          month — no card required. New accounts may also elect to try <strong>TenderPath Pro with a
+          30-day free trial</strong> — no card required to start. We will send you a reminder email
+          before the trial ends. When the trial ends, you may subscribe (monthly or annual) to keep
+          Pro features (the document vault, the readiness-gap Navigator, and unlimited bid/no-bid
+          verdicts); if you added a card on file during the trial, it converts automatically at the
+          standard plan rate at the end of the trial unless you cancel first. You may cancel at any
+          time by contacting us at{" "}
           <a href="mailto:info@tenderpath.me" className="underline">info@tenderpath.me</a>.
         </p>
       </Section>
 
       <Section heading="6. Paid services and billing">
         <p className="text-sm">
-          The Workbench dashboard — including the matched tender feed, tender database, bid/no-bid
-          analysis, the readiness gap navigator, and the document vault — is offered as a single
-          subscription (monthly or annual) after your free trial. Proposal submission drafting (EOI,
-          RFQ, ITB, and RFP packages) is billed separately, per submission. Prices are displayed at
-          the point of purchase.
+          <strong>TenderPath Pro</strong> is an optional paid subscription (monthly or annual)
+          that unlocks three Pro-only features: the document vault, the readiness-gap Navigator,
+          and unlimited bid/no-bid verdicts (free accounts are limited to three per calendar month).
+          Proposal submission drafting (EOI, RFQ, ITB, and RFP packages) is billed separately,
+          per submission, and is not part of any subscription. Prices are displayed at the point
+          of purchase.
         </p>
         <p className="text-sm font-medium text-gray-800 mb-1">Payment:</p>
         <p className="text-sm">

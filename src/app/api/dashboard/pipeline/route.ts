@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { requireDashboardAccess } from "@/lib/access";
+import { requireAuth, evaluateAccess } from "@/lib/access";
 import { normalizeAssessmentTenders, seedPipelineItems, type PipelineSeedResult } from "@/lib/pipeline/seed";
 
 const STAGES = ["matched", "evaluating", "preparing", "submitted", "won", "lost"] as const;
@@ -69,7 +69,7 @@ async function autoSeedPipelineIfEmpty(userId: number, email: string): Promise<P
 }
 
 export async function GET(request: Request) {
-  const guard = await requireDashboardAccess(request);
+  const guard = await requireAuth(request);
   if (!guard.authorized) return guard.response!;
 
   await ensurePipelineColumns();
@@ -130,11 +130,11 @@ export async function GET(request: Request) {
     });
   }
 
-  return NextResponse.json({ items, access: guard.access, pipeline_seed: autoSeed });
+  return NextResponse.json({ items, access: evaluateAccess(guard.user!), pipeline_seed: autoSeed });
 }
 
 export async function POST(request: Request) {
-  const guard = await requireDashboardAccess(request);
+  const guard = await requireAuth(request);
   if (!guard.authorized) return guard.response!;
 
   await ensurePipelineColumns();

@@ -271,8 +271,8 @@ export function ScoreTab({
           </div>
           <p style={{ fontFamily: F.sans, fontSize: 12.5, color: "#cdc6b3", lineHeight: 1.5, margin: 0 }}>
             {viewerSignedIn
-              ? `Your score, ${matchedCount || peek.length} live matches, and a guided path through every gap.`
-              : `Your score, ${matchedCount || peek.length} live matches, and a guided path through every gap — your 30-day trial starts when you do, no card.`}
+              ? `Your score, ${matchedCount || peek.length} live matches, and your ranked tender feed — free to open.`
+              : `Your score, ${matchedCount || peek.length} live matches, and your ranked tender feed — free to open, no card.`}
           </p>
 
           {viewerSignedIn ? (

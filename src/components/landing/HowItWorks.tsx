@@ -4,10 +4,10 @@ import { LC, LF, SectionTag, Ic, type IcName } from "./kit";
 import { useMedia } from "@/components/workbench/useMedia";
 
 const STEPS: Array<[string, IcName, string, string]> = [
-  ["01", "target", "Assess & match", "Take the readiness assessment once. We score you and surface every live tender you actually fit — ranked, refreshed daily."],
-  ["02", "paste", "Paste & decide", "Drop any tender. Get an instant bid/no-bid verdict with a fit score and the exact compliance checklist it demands."],
-  ["03", "compass", "Close the gaps", "The Navigator walks you through each gap — UNGM, certifications, financials — hand-held, pre-filled, step by step."],
-  ["04", "doc", "Submit & win", "Turn the brief into a submission-ready, compliance-mapped proposal in under an hour. Pay only when you bid."],
+  ["01", "target", "Assess & match", "Take the readiness assessment once. We score you and surface every live tender you actually fit — ranked, refreshed daily. Free forever."],
+  ["02", "paste", "Paste & decide", "Drop any tender. Get an instant bid/no-bid verdict with a fit score and the exact compliance checklist it demands. Free up to 3 a month."],
+  ["03", "compass", "Close the gaps", "The Navigator walks you through each gap — UNGM, certifications, financials — hand-held, pre-filled, step by step. Part of Pro."],
+  ["04", "doc", "Submit & win", "Turn the brief into a submission-ready, compliance-mapped proposal in under an hour. Pay only when you bid. First submission free."],
 ];
 
 export default function HowItWorks() {

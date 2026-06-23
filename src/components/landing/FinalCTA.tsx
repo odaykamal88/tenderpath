@@ -45,7 +45,7 @@ export default function FinalCTA() {
           Paste your website. In about a minute you&rsquo;ll see your readiness score, the live tenders you fit, and the three fixes that matter — then step straight into your Workbench.
         </p>
         <div style={{ marginTop: 32 }}>
-          <AssessPaste dark note={`No signup to see your score · ${30}-day Workbench trial when you're ready · no card`} />
+          <AssessPaste dark note={`No signup to see your score · free dashboard, no card · Pro free for 30 days`} />
         </div>
       </div>
     </section>

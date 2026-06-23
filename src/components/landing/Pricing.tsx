@@ -11,14 +11,19 @@ import {
 } from "@/lib/workbench/pricing";
 
 // Single-sourced from src/lib/workbench/pricing.ts so the marketing rates and
-// the in-product Subscribe modal / Submissions screen can never drift.
-const SUB_INCLUDES = [
+// the in-product Subscribe modal / Submissions screen can never drift. Freemium
+// (2026-06): the dashboard is free on signup; Pro adds the vault, the gap
+// Navigator and unlimited bid/no-bid.
+const FREE_INCLUDES = [
   "Every matched tender, ranked & refreshed daily",
   "Browse the full tender database",
+  "3 bid/no-bid verdicts a month",
+  "Telegram deal-flow alerts & deadline nudges",
+];
+const PRO_ADDS = [
   "Unlimited paste → bid/no-bid verdicts",
   "The Gap Navigator for every readiness gap",
   "Document vault + readiness score tracking",
-  "Telegram deal-flow alerts & deadline nudges",
 ];
 
 export default function Pricing() {
@@ -39,10 +44,10 @@ export default function Pricing() {
             <SectionTag n="05" label="Pricing" />
           </div>
           <h2 style={{ fontFamily: LF.display, fontSize: mobile ? 30 : 46, fontWeight: 400, letterSpacing: "-0.02em", color: LC.ink, margin: "16px 0 0", lineHeight: 1.05 }}>
-            One subscription. Pay per win.
+            Free to start. Pro when you&apos;re ready.
           </h2>
-          <p style={{ fontFamily: LF.sans, fontSize: mobile ? 15 : 17, color: LC.ink2, margin: "14px auto 0", maxWidth: 560, lineHeight: 1.6 }}>
-            The dashboard is a flat subscription. Proposals are billed only when you commit to bidding — our skin in the game with yours.
+          <p style={{ fontFamily: LF.sans, fontSize: mobile ? 15 : 17, color: LC.ink2, margin: "14px auto 0", maxWidth: 580, lineHeight: 1.6 }}>
+            Your matched tenders, the full database, deal-flow alerts and 3 bid/no-bid calls a month are free — no card. Pro unlocks the document vault, the gap Navigator and unlimited verdicts. Proposals are billed only when you commit to a bid.
           </p>
         </div>
 
@@ -83,19 +88,17 @@ export default function Pricing() {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: mobile ? 18 : 24, marginTop: 30, alignItems: "stretch" }}>
-          {/* subscription */}
+          {/* free dashboard + Pro unlock */}
           <div style={{ border: `1px solid ${LC.ink}`, background: LC.white, padding: mobile ? "26px 22px" : "34px 30px", display: "flex", flexDirection: "column" }}>
-            <Eyebrow>Workbench subscription</Eyebrow>
+            <Eyebrow>The dashboard · free</Eyebrow>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 8, margin: "16px 0 4px" }}>
-              <span style={{ fontFamily: LF.display, fontSize: 56, color: LC.ink, lineHeight: 0.85 }}>${subPrice}</span>
-              <span style={{ fontFamily: LF.mono, fontSize: 12, color: LC.mute, marginBottom: 6 }}>/ month</span>
+              <span style={{ fontFamily: LF.display, fontSize: 56, color: LC.ink, lineHeight: 0.85 }}>$0</span>
+              <span style={{ fontFamily: LF.mono, fontSize: 12, color: LC.mute, marginBottom: 6 }}>to start · no card</span>
             </div>
-            <div style={{ fontFamily: LF.sans, fontSize: 13, color: LC.mute, minHeight: 20 }}>
-              {annual ? <>Billed ${annualPlan.price}/yr — save ${annualSaving} vs monthly</> : <>Billed monthly · switch to annual to save {ANNUAL_SAVING_PCT}%</>}
-            </div>
+            <div style={{ fontFamily: LF.sans, fontSize: 13, color: LC.mute, minHeight: 20 }}>Sign up free — these stay free.</div>
             <div style={{ height: 1, background: LC.ruleSoft, margin: "20px 0" }} />
-            <div style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1 }}>
-              {SUB_INCLUDES.map((f, i) => (
+            <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+              {FREE_INCLUDES.map((f, i) => (
                 <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                   <span style={{ color: LC.pos, marginTop: 1 }}>
                     <Ic name="check" size={15} color={LC.pos} />
@@ -104,11 +107,36 @@ export default function Pricing() {
                 </div>
               ))}
             </div>
+
+            {/* Pro unlock */}
+            <div style={{ marginTop: 22, borderTop: `1px solid ${LC.ruleSoft}`, paddingTop: 20, flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+                <Eyebrow color={LC.accent}>Pro unlocks</Eyebrow>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+                  <span style={{ fontFamily: LF.display, fontSize: 30, color: LC.ink, lineHeight: 1 }}>${subPrice}</span>
+                  <span style={{ fontFamily: LF.mono, fontSize: 10, color: LC.mute }}>/mo</span>
+                </div>
+              </div>
+              <div style={{ fontFamily: LF.mono, fontSize: 9.5, color: LC.faint, textAlign: "right", marginTop: 2 }}>
+                {annual ? <>Billed ${annualPlan.price}/yr · save ${annualSaving}</> : <>Switch to annual to save {ANNUAL_SAVING_PCT}%</>}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 9, marginTop: 14 }}>
+                {PRO_ADDS.map((f, i) => (
+                  <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    <span style={{ color: LC.accent, marginTop: 1 }}>
+                      <Ic name="check" size={15} color={LC.accent} />
+                    </span>
+                    <span style={{ fontFamily: LF.sans, fontSize: 13.5, color: LC.ink2, lineHeight: 1.45 }}>{f}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <Btn kind="gold" size="lg" href="/assessment?goal=track-tenders" style={{ marginTop: 24, width: "100%" }}>
               Start with a free score →
             </Btn>
             <div style={{ fontFamily: LF.mono, fontSize: 9.5, color: LC.faint, textAlign: "center", marginTop: 11, letterSpacing: "0.04em" }}>
-              No card · your {TRIAL_DAYS}-day trial starts when you enter the Workbench
+              Free forever · Pro is a {TRIAL_DAYS}-day trial, no card
             </div>
           </div>
 

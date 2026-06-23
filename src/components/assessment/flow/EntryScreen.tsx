@@ -171,7 +171,7 @@ export function EntryScreen({
               }}
             >
               <span style={{ width: 5, height: 5, borderRadius: 999, background: C.pos, display: "inline-block", flexShrink: 0 }} />
-              Free to see your score · your 30-day Workbench trial only starts when you open it — no card.
+              Free to see your score · free dashboard the moment you open it — no card.
             </div>
           </div>
         </div>
@@ -203,7 +203,7 @@ export function EntryScreen({
               ))}
             </ol>
             <div style={{ fontFamily: F.mono, fontSize: 9.5, color: "rgba(246,243,236,0.5)", marginTop: 18, letterSpacing: "0.05em", lineHeight: 1.5 }}>
-              Free to see your score · 30-day Workbench trial · no card.
+              Free to see your score · free dashboard, no card.
             </div>
           </div>
         </aside>
