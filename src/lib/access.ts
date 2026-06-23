@@ -12,6 +12,14 @@ export const TRIAL_DAYS = 30;
 // users whose elapsed day == TRIAL_WARNING_DAY exactly once.
 export const TRIAL_WARNING_DAY = 27;
 
+// FREEMIUM MODEL (2026-06): `hasAccess` no longer gates the dashboard itself —
+// the matched feed, tender database, weekly digest and Telegram alerts are free
+// for any signed-in user (use `requireAuth` for those routes). `hasAccess` now
+// means "has the Pro entitlement": the Document Vault, the Readiness-gap
+// Navigator and *unlimited* bid/no-bid are unlocked. That entitlement is held by
+// admins, active subscribers, Stripe-trialing users, and anyone still inside the
+// 30-day platform trial. `requireDashboardAccess` is the Pro gate for those
+// premium routes; the function name is kept to avoid churn across callers.
 export interface AccessInfo {
   hasAccess: boolean;
   reason: "admin" | "subscribed" | "trial" | "expired" | "no_subscription";
@@ -52,6 +60,33 @@ export function evaluateAccess(user: User): AccessInfo {
     trialDaysLeft: 0,
     isTrialing: false,
   };
+}
+
+export interface AuthGuardResult {
+  authorized: boolean;
+  user: User | null;
+  response?: NextResponse;
+}
+
+/** Authentication-only guard for FREE dashboard routes (matched feed, pipeline,
+ *  browse, the free bid/no-bid triage). Unlike `requireDashboardAccess` it does
+ *  NOT require the Pro entitlement — the dashboard is free for any signed-in
+ *  user under the freemium model. Premium routes (vault, readiness gaps) keep
+ *  using `requireDashboardAccess`; bid/no-bid uses this guard plus its own
+ *  monthly-cap check (src/lib/bid-no-bid-usage.ts). */
+export async function requireAuth(request: Request): Promise<AuthGuardResult> {
+  const user = await getUserFromRequest(request);
+  if (!user) {
+    return {
+      authorized: false,
+      user: null,
+      response: NextResponse.json(
+        { error: "Authentication required", code: "AUTH_REQUIRED" },
+        { status: 401 }
+      ),
+    };
+  }
+  return { authorized: true, user };
 }
 
 export interface DashboardGuardResult {

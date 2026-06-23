@@ -28,7 +28,7 @@ const NAV: NavDef[] = [
   { id: "overview", label: "Overview", icon: "overview", group: "Workbench", href: "/dashboard" },
   { id: "matches", label: "Matches", icon: "matches", group: "Workbench", href: "/dashboard/matches" },
   { id: "browse", label: "Browse tenders", icon: "browse", group: "Workbench", href: "/dashboard/browse" },
-  { id: "gaps", label: "Readiness gaps", icon: "gaps", group: "Readiness", href: "/dashboard/gaps" },
+  { id: "gaps", label: "Readiness gaps", icon: "gaps", group: "Readiness", href: "/dashboard/gaps", paid: true },
   { id: "proposals", label: "Submissions", icon: "proposals", group: "Submit", href: "/dashboard/proposals", paid: true },
 ];
 
@@ -112,7 +112,14 @@ function Sidebar({ onNavTap }: { onNavTap?: () => void }) {
         <button onClick={() => { openPaste(); onNavTap?.(); }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "11px 13px", background: C.accent, color: C.white, border: 0, cursor: "pointer", fontFamily: F.mono, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase" }}>
           <Icon name="paste" /> <span style={{ flex: 1, textAlign: "left" }}>Paste a tender</span> <span style={{ opacity: 0.7 }}>+</span>
         </button>
-        <div style={{ fontFamily: F.mono, fontSize: 9.5, color: C.spineDim, marginTop: 7, lineHeight: 1.5, padding: "0 2px" }}>Drop any tender link or text → instant bid / no-bid call.</div>
+        <div style={{ fontFamily: F.mono, fontSize: 9.5, color: C.spineDim, marginTop: 7, lineHeight: 1.5, padding: "0 2px" }}>
+          Drop any tender link or text → instant bid / no-bid call.
+          {!data.access.bidNoBid.unlimited && (
+            <span style={{ display: "block", marginTop: 4, color: data.access.bidNoBid.remaining > 0 ? C.spineDim : C.accent2 }}>
+              {data.access.bidNoBid.remaining} of {data.access.bidNoBid.limit} free left this month.
+            </span>
+          )}
+        </div>
       </div>
 
       {/* nav */}
@@ -138,8 +145,11 @@ function Sidebar({ onNavTap }: { onNavTap?: () => void }) {
           <div style={{ background: C.spineLine, padding: "11px 13px", marginBottom: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
               <span style={{ fontFamily: F.sans, fontSize: 12, color: C.white, fontWeight: 500, whiteSpace: "nowrap" }}>
-                {data.access.locked ? "Trial ended" : `${data.access.trialDaysLeft} day${data.access.trialDaysLeft === 1 ? "" : "s"} left`}
+                {data.access.locked ? "Pro trial ended" : `${data.access.trialDaysLeft} day${data.access.trialDaysLeft === 1 ? "" : "s"} left · Pro`}
               </span>
+            </div>
+            <div style={{ fontFamily: F.mono, fontSize: 8.5, color: C.spineDim, marginTop: 5, lineHeight: 1.5 }}>
+              {data.access.locked ? "Subscribe to unlock the vault, gap Navigator & unlimited bid/no-bid." : "Vault · gap Navigator · unlimited bid/no-bid."}
             </div>
             <button onClick={() => { openSubscribe(); onNavTap?.(); }} style={{ marginTop: 8, width: "100%", background: C.white, color: C.ink, border: 0, padding: "8px 0", cursor: "pointer", fontFamily: F.mono, fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase" }}>Subscribe →</button>
           </div>
@@ -190,25 +200,29 @@ function Topbar({ mobile, onBurger }: { mobile: boolean; onBurger: () => void })
 
 function TrialBanner() {
   const { data } = useWorkbench();
-  const { isTrialing, locked, trialDaysLeft } = data.access;
+  const { isTrialing, locked, trialDaysLeft, newSubscriptionLive } = data.access;
   if (!isTrialing && !locked) return null;
-  const band = locked || trialDaysLeft <= 3 ? "red" : trialDaysLeft <= 7 ? "orange" : "amber";
+  // The dashboard stays free either way — this banner only nudges toward Pro, so
+  // keep the tone calm (amber), warming to orange only in the last few days of
+  // the Pro trial. Nothing is "lost" when it ends, so never the red alarm band.
+  const band = !locked && trialDaysLeft <= 3 ? "orange" : "amber";
   const palette =
-    band === "red"
-      ? { bg: "#fbeceb", border: "#e6c9c9", fg: C.neg }
-      : band === "orange"
-        ? { bg: "#fbf1e6", border: "#e8d4b8", fg: C.warn }
-        : { bg: "#f8f2e2", border: "#e4d9bd", fg: C.accent };
+    band === "orange"
+      ? { bg: "#fbf1e6", border: "#e8d4b8", fg: C.warn }
+      : { bg: "#f8f2e2", border: "#e4d9bd", fg: C.accent };
+  const plan = newSubscriptionLive ? "sub-annual" : "annual-access";
   return (
     <div style={{ padding: "9px 18px", borderBottom: `1px solid ${palette.border}`, background: palette.bg, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
-        <span style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.16em", textTransform: "uppercase", color: palette.fg, flexShrink: 0 }}>Trial</span>
+        <span style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.16em", textTransform: "uppercase", color: palette.fg, flexShrink: 0 }}>Pro</span>
         <span style={{ fontFamily: F.sans, fontSize: 12.5, color: C.ink2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {locked ? "Trial ended — subscribe to keep dashboard access." : `${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} remaining on your free trial.`}
+          {locked
+            ? "Your Pro trial ended — subscribe to unlock the vault, gap Navigator & unlimited bid/no-bid."
+            : `${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} left of Pro — vault, gap Navigator & unlimited bid/no-bid.`}
         </span>
       </div>
-      <a href="/pay?plan=annual-access" style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: palette.fg, borderBottom: `1px solid ${palette.fg}`, textDecoration: "none", flexShrink: 0 }}>
-        {locked ? "Subscribe →" : "Subscribe →"}
+      <a href={`/pay?plan=${plan}`} style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: palette.fg, borderBottom: `1px solid ${palette.fg}`, textDecoration: "none", flexShrink: 0 }}>
+        Subscribe →
       </a>
     </div>
   );

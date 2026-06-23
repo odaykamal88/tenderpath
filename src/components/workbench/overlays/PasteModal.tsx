@@ -49,7 +49,7 @@ interface PasteVerdict {
 
 export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: () => void }) {
   const router = useRouter();
-  const { data, token, go, openNavigator } = useWorkbench();
+  const { data, token, go, openNavigator, openSubscribe } = useWorkbench();
   const mobile = useMedia("(max-width: 1023px)");
 
   // A seed is "scored" only when it carries a real fit (i.e. it's one of the
@@ -60,13 +60,16 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
   const seededText = seed
     ? `${seed.title}\n${seed.agency} · ${seed.type}\nSource: ${seed.source} · ${seed.value}`
     : "";
-  const [stage, setStage] = useState<"input" | "analysing" | "verdict">("input");
+  const [stage, setStage] = useState<"input" | "analysing" | "verdict" | "capped">("input");
   const [text, setText] = useState(seededText);
   const [file, setFile] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [decided, setDecided] = useState<"bid" | "pass" | null>(null);
   const [analysis, setAnalysis] = useState<PasteVerdict | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  /** Set when the free monthly bid/no-bid allowance is exhausted (402 from the
+   *  cap) — drives the "capped" subscribe panel. */
+  const [capUsage, setCapUsage] = useState<{ used: number; limit: number; remaining: number } | null>(null);
   /** Real win/loss record from submission outcomes — the calibration line only
    *  speaks when history exists (SPEC §6: never invent a record). */
   const [history, setHistory] = useState<{ wins: number; losses: number; lessonsApplied: boolean } | null>(null);
@@ -107,8 +110,22 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
 
   const analyse = async () => {
     if (scored) {
-      // Seeded from a match — instant verdict from data we already hold.
+      // Seeded from a match — instant verdict from data we already hold. Still
+      // claim one bid/no-bid credit so the free 3/month cap covers this path too
+      // (the free-text path meters via /paste-analyze instead).
+      setAnalysisError(null);
       setStage("analysing");
+      try {
+        const res = await fetch("/api/dashboard/bid-no-bid/consume", { method: "POST", headers: authHeaders });
+        if (res.status === 402) {
+          const b = (await res.json().catch(() => ({}))) as { usage?: { used: number; limit: number; remaining: number } };
+          setCapUsage(b.usage ?? null);
+          setStage("capped");
+          return;
+        }
+      } catch {
+        // A metering hiccup must never block a verdict the user can already see.
+      }
       setTimeout(() => setStage("verdict"), 1300);
       return;
     }
@@ -119,7 +136,7 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
       router.push("/dashboard/services/bid-no-bid");
       return;
     }
-    // Free-text / URL — run the real quick verdict.
+    // Free-text / URL — run the real quick verdict (consumes a credit on success).
     setAnalysisError(null);
     setStage("analysing");
     const t = text.trim();
@@ -131,7 +148,12 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
         body: JSON.stringify(isUrl ? { url: t } : { text: t }),
       });
       if (!res.ok) {
-        const b = (await res.json().catch(() => ({}))) as { error?: string };
+        const b = (await res.json().catch(() => ({}))) as { code?: string; error?: string; usage?: { used: number; limit: number; remaining: number } };
+        if (res.status === 402 && b.code === "BID_NO_BID_LIMIT") {
+          setCapUsage(b.usage ?? null);
+          setStage("capped");
+          return;
+        }
         setAnalysisError(b.error ?? "Couldn't analyse this tender. Please try again.");
         setStage("input");
         return;
@@ -235,7 +257,7 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
           <div style={{ flex: 1 }}>
             <Eyebrow color={C.accent2}>Bid / no-bid engine</Eyebrow>
             <div style={{ fontFamily: F.display, fontSize: 21, color: C.paper, marginTop: 3 }}>
-              {stage === "input" ? "Paste a tender" : stage === "analysing" ? "Reading the tender…" : "The verdict"}
+              {stage === "input" ? "Paste a tender" : stage === "analysing" ? "Reading the tender…" : stage === "capped" ? "Monthly limit reached" : "The verdict"}
             </div>
           </div>
           <button onClick={onClose} aria-label="Close" style={{ background: "transparent", border: `1px solid #3a4654`, color: C.paper, width: 30, height: 30, cursor: "pointer", display: "grid", placeItems: "center" }}>
@@ -253,6 +275,18 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
                   ? "We've pre-filled this tender. We'll read it, check it against your file, and give you a bid / no-bid call."
                   : "Drop a tender link or paste the notice text — we'll read it, check it against your file, and give you an instant bid / no-bid call. Upload a PDF/Word doc and we'll run the full paid analysis."}
             </p>
+            {!data.access.bidNoBid.unlimited && (
+              <div style={{ marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", borderLeft: `2px solid ${C.accent}`, background: "#faf6ec", padding: "9px 12px" }}>
+                <span style={{ fontFamily: F.sans, fontSize: 12.5, color: C.ink2 }}>
+                  {data.access.bidNoBid.remaining > 0
+                    ? <><b>{data.access.bidNoBid.remaining}</b> of {data.access.bidNoBid.limit} free bid/no-bid calls left this month.</>
+                    : <>You&apos;ve used all {data.access.bidNoBid.limit} free calls this month.</>}
+                </span>
+                <button onClick={() => { onClose(); openSubscribe(); }} style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.06em", textTransform: "uppercase", color: C.accent, background: "none", border: 0, borderBottom: `1px solid ${C.accent}`, cursor: "pointer", flexShrink: 0 }}>
+                  Go unlimited →
+                </button>
+              </div>
+            )}
             {analysisError && (
               <div style={{ marginBottom: 14, borderLeft: `2px solid ${C.neg}`, background: "#fbeceb", padding: "9px 12px", fontFamily: F.sans, fontSize: 12.5, color: C.neg }}>{analysisError}</div>
             )}
@@ -305,6 +339,28 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
                   <span style={{ color: C.pos }}>✓</span> {l}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* CAPPED — free monthly bid/no-bid allowance exhausted */}
+        {stage === "capped" && (
+          <div style={{ padding: "34px 30px", textAlign: "center" }}>
+            <div style={{ width: 46, height: 46, margin: "0 auto", borderRadius: 999, background: "#f8f2e2", border: `1px solid #e4d9bd`, display: "grid", placeItems: "center", color: C.accent, fontSize: 20 }}>🔒</div>
+            <div style={{ fontFamily: F.display, fontSize: 23, color: C.ink, marginTop: 16 }}>
+              You&apos;ve used your {capUsage?.limit ?? data.access.bidNoBid.limit} free calls this month
+            </div>
+            <p style={{ fontFamily: F.sans, fontSize: 14, color: C.ink2, maxWidth: 430, margin: "10px auto 0", lineHeight: 1.6 }}>
+              Free accounts get {capUsage?.limit ?? data.access.bidNoBid.limit} instant bid/no-bid verdicts a month. Subscribe to TenderPath Pro for unlimited verdicts — plus the Document Vault and the Readiness-gap Navigator.
+            </p>
+            <div style={{ marginTop: 22, display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+              <Btn kind="ghost" size="sm" onClick={onClose}>Maybe later</Btn>
+              <button onClick={() => { onClose(); openSubscribe(); }} style={{ background: C.accent, color: C.white, border: 0, padding: "11px 20px", cursor: "pointer", fontFamily: F.mono, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                Subscribe — $49/mo →
+              </button>
+            </div>
+            <div style={{ fontFamily: F.mono, fontSize: 10, color: C.faint, marginTop: 16 }}>
+              Resets on the 1st · {capUsage?.used ?? data.access.bidNoBid.used}/{capUsage?.limit ?? data.access.bidNoBid.limit} used · 30-day trial included
             </div>
           </div>
         )}

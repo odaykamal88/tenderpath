@@ -122,6 +122,23 @@ export const ANNUAL_SAVING_PCT = 45;
 /** Free-trial window (matches src/lib/access.ts TRIAL_DAYS). No card required. */
 export const TRIAL_DAYS = 30;
 
+/** Freemium model (2026-06): the dashboard itself — matched feed, tender
+ *  database, weekly digest and Telegram alerts — is free on signup, no card.
+ *  The Pro subscription ($49/mo · $324/yr, with a 30-day trial) unlocks the
+ *  Document Vault, the Readiness-gap Navigator, and *unlimited* instant
+ *  bid/no-bid verdicts. Free accounts get BID_NO_BID_FREE_MONTHLY verdicts per
+ *  calendar month. This is the single source for the cap — enforced in
+ *  src/lib/bid-no-bid-usage.ts and surfaced in the Paste modal + sidebar hint. */
+export const BID_NO_BID_FREE_MONTHLY = 3;
+
+/** The three features the Pro subscription unlocks (the rest of the dashboard is
+ *  free). Used for copy + gating labels so the list stays single-sourced. */
+export const PRO_FEATURES = [
+  "Document Vault",
+  "Readiness-gap Navigator",
+  "Unlimited bid/no-bid verdicts",
+] as const;
+
 /** Resolves a configured Stripe price id for a submission type, or null when
  *  the env var is unset (→ the UI must fall back to an existing working flow
  *  rather than charge a mismatched amount). */

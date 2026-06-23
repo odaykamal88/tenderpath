@@ -178,7 +178,7 @@ function LoginForm() {
       <div style={{ fontFamily: F.mono, fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: C.accent, textAlign: mobile ? "center" : undefined }}>Sign in · workspace</div>
       <h1 style={{ fontFamily: F.display, fontSize: 33, fontWeight: 400, letterSpacing: "-0.02em", color: C.ink, lineHeight: 1.08, margin: "6px 0 0", textAlign: mobile ? "center" : undefined }}>Open your Workbench</h1>
       <p style={{ fontFamily: F.sans, fontSize: 13.5, lineHeight: 1.55, color: C.ink2, margin: "10px 0 0", textAlign: mobile ? "center" : undefined }}>
-        30-day free trial — no card required. We&apos;ll email a secure sign-in link, or use a password for the demo workspace.
+        Free dashboard — no card required. We&apos;ll email a secure sign-in link, or use a password for the demo workspace.
       </p>
 
       {/* mode toggle */}

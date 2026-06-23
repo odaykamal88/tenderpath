@@ -133,6 +133,16 @@ export interface WbNextMove {
   thenThisWeek: { label: string; meta: string; action: WbAction }[];
 }
 
+/** Instant bid/no-bid allowance. Free accounts get `limit` verdicts per calendar
+ *  month; Pro (subscribed / admin / in-trial) is `unlimited`. Drives the Paste
+ *  modal counter, the sidebar hint, and the at-cap subscribe prompt. */
+export interface WbBidNoBidUsage {
+  unlimited: boolean;
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
 export interface WbAccess {
   hasAccess: boolean;
   reason: string;
@@ -140,6 +150,12 @@ export interface WbAccess {
   isTrialing: boolean;
   locked: boolean;
   isPaid: boolean;
+  /** Pro entitlement — the Document Vault, Readiness-gap Navigator and unlimited
+   *  bid/no-bid are unlocked (active subscription, admin, or inside the 30-day
+   *  trial). The rest of the dashboard is free regardless. Equals `!locked`. */
+  pro: boolean;
+  /** Free-tier instant bid/no-bid allowance + usage this calendar month. */
+  bidNoBid: WbBidNoBidUsage;
   /** Trial user who hasn't used their one free proposal submission yet — the UI
    *  advertises "first one's on us" at the proposal-commission points. */
   freeSubmissionEligible: boolean;

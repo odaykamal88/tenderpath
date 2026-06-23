@@ -46,8 +46,36 @@ function GapRow({ g, closed }: { g: WbGap; closed: boolean }) {
   );
 }
 
+/** Pro-lock shown to free accounts on the Readiness-gaps page: the projection
+ *  banner above still shows the score they'd gain (funnel), but the Navigator
+ *  fix workflow is gated behind the subscription. */
+function GapsProLock({ open, potential, onSubscribe }: { open: number; potential: number; onSubscribe: () => void }) {
+  return (
+    <Card pad={0} style={{ overflow: "hidden" }}>
+      <div style={{ background: C.ink, color: C.paper, padding: "24px 26px" }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 7, marginBottom: 12 }}>
+          <span style={{ color: C.accent2 }}>🔒</span>
+          <Eyebrow color={C.accent2}>Pro feature</Eyebrow>
+        </div>
+        <div style={{ fontFamily: F.display, fontSize: 23, color: C.paper, lineHeight: 1.15 }}>
+          Close your {open} {open === 1 ? "gap" : "gaps"} with the Navigator
+        </div>
+        <p style={{ fontFamily: F.sans, fontSize: 14, lineHeight: 1.6, color: "#cdc6b3", margin: "10px 0 0", maxWidth: 460 }}>
+          The Gap Navigator walks you through each blocker step by step{potential > 0 ? <> — worth <b style={{ color: C.accent2 }}>+{potential} points</b> to your readiness</> : ""}. Unlock it with TenderPath Pro, alongside the Document Vault and unlimited bid/no-bid.
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 20, flexWrap: "wrap" }}>
+          <button onClick={onSubscribe} style={{ background: C.accent, color: C.white, border: 0, padding: "12px 20px", cursor: "pointer", fontFamily: F.mono, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Subscribe — $49/mo →
+          </button>
+          <span style={{ fontFamily: F.mono, fontSize: 10, color: "#9aa3ad" }}>30-day trial · cancel anytime</span>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export function GapsPage() {
-  const { data, liveScore, openNavigator, isClosed } = useWorkbench();
+  const { data, liveScore, openNavigator, openSubscribe, isClosed } = useWorkbench();
   const mobile = useMedia("(max-width: 1023px)");
   const gaps = data.gaps;
   const open = gaps.filter((g) => g.status === "open" && !isClosed(g.id));
@@ -90,21 +118,27 @@ export function GapsPage() {
             )}
           </p>
         </div>
-        {high > 0 && !mobile && (
+        {high > 0 && !mobile && data.access.pro && (
           <button onClick={() => openNavigator(open[0].id)} style={{ background: C.accent, color: C.white, border: 0, padding: "13px 20px", cursor: "pointer", fontFamily: F.mono, fontSize: 11.5, letterSpacing: "0.08em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
             Fix top gap →
           </button>
         )}
       </div>
 
-      {/* register */}
-      <Card style={{ overflow: "hidden" }}>
-        {gaps.map((g) => <GapRow key={g.id} g={g} closed={isClosed(g.id) || g.status === "covered"} />)}
-      </Card>
+      {/* register — Pro unlocks the Navigator fix workflow */}
+      {data.access.pro ? (
+        <>
+          <Card style={{ overflow: "hidden" }}>
+            {gaps.map((g) => <GapRow key={g.id} g={g} closed={isClosed(g.id) || g.status === "covered"} />)}
+          </Card>
 
-      <p style={{ fontFamily: F.sans, fontSize: 12.5, color: C.mute, marginTop: 16 }}>
-        Gaps are detected from your assessment and re-checked whenever you upload to the Vault or a new tender demands something you don&apos;t have on file.
-      </p>
+          <p style={{ fontFamily: F.sans, fontSize: 12.5, color: C.mute, marginTop: 16 }}>
+            Gaps are detected from your assessment and re-checked whenever you upload to the Vault or a new tender demands something you don&apos;t have on file.
+          </p>
+        </>
+      ) : (
+        <GapsProLock open={open.length} potential={potential} onSubscribe={openSubscribe} />
+      )}
     </div>
   );
 }

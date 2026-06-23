@@ -9,10 +9,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { requireDashboardAccess } from "@/lib/access";
+import { requireAuth } from "@/lib/access";
 import { extractDocumentText } from "@/lib/documents/extract";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { loadWorkbenchSource } from "@/lib/assessment/data";
+import { canRunBidNoBid, recordBidNoBidUse, bidNoBidLimitResponse } from "@/lib/bid-no-bid-usage";
 
 export const runtime = "nodejs";
 export const maxDuration = 45;
@@ -39,7 +40,7 @@ export interface PasteVerdict {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await requireDashboardAccess(req);
+  const guard = await requireAuth(req);
   if (!guard.authorized) return guard.response!;
   const limited = enforceRateLimit(req, {
     namespace: "paste-analyze",
@@ -48,6 +49,16 @@ export async function POST(req: NextRequest) {
     keyParts: [guard.user!.id],
   });
   if (limited) return limited;
+
+  // Freemium cap: free accounts get BID_NO_BID_FREE_MONTHLY instant verdicts per
+  // calendar month; Pro (subscribed / admin / in-trial) is unlimited. Checked
+  // here, but only RECORDED on a successful verdict below, so a failed read
+  // (unreadable PDF, LLM error) never burns a free credit.
+  const { allowed, usage } = await canRunBidNoBid(guard.user!);
+  if (!allowed) {
+    console.log("[paste-analyze:cap_reached]", { userId: guard.user!.id, used: usage.used, limit: usage.limit });
+    return NextResponse.json(bidNoBidLimitResponse(usage), { status: 402 });
+  }
 
   let body: { text?: string; url?: string };
   try {
@@ -195,8 +206,9 @@ Return ONLY a JSON object (no prose, no markdown fence) with this exact shape:
       gaps: arr(p.gaps, 6),
       asks: arr(p.asks, 4),
     };
-    console.log("[paste-analyze:ok]", { userId: guard.user!.id, fit: verdict.fit, recommend: verdict.recommend });
-    return NextResponse.json(verdict);
+    const usageAfter = await recordBidNoBidUse(guard.user!);
+    console.log("[paste-analyze:ok]", { userId: guard.user!.id, fit: verdict.fit, recommend: verdict.recommend, used: usageAfter.used });
+    return NextResponse.json({ ...verdict, usage: usageAfter });
   } catch {
     console.error("[paste-analyze:parse_failed]", { userId: guard.user!.id, rawPrefix: raw.slice(0, 200) });
     return NextResponse.json({ error: "Couldn't read the analysis. Please try again." }, { status: 502 });

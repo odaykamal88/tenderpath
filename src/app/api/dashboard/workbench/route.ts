@@ -15,6 +15,7 @@ import { sql } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/auth";
 import { evaluateAccess } from "@/lib/access";
 import { getFreeSubmissionStatus } from "@/lib/free-submission";
+import { getBidNoBidUsage } from "@/lib/bid-no-bid-usage";
 import { newSubscriptionConfigured } from "@/lib/workbench/pricing";
 import { loadWorkbenchSource, getViewerActivityForUser } from "@/lib/assessment/data";
 import { refreshAssessmentMatches } from "@/lib/assessment/match";
@@ -141,8 +142,11 @@ export async function GET(request: Request) {
   }
 
   const accessInfo = evaluateAccess(user);
-  // Fail-closed DB read (ensures its own schema) — never blocks the dashboard.
-  const freeSubmission = await getFreeSubmissionStatus(user);
+  // Fail-closed DB reads (each ensures its own schema) — never block the dashboard.
+  const [freeSubmission, bidNoBid] = await Promise.all([
+    getFreeSubmissionStatus(user),
+    getBidNoBidUsage(user),
+  ]);
   const access: WbAccess = {
     hasAccess: accessInfo.hasAccess,
     reason: accessInfo.reason,
@@ -150,6 +154,10 @@ export async function GET(request: Request) {
     isTrialing: accessInfo.isTrialing,
     locked: !accessInfo.hasAccess,
     isPaid: accessInfo.reason === "subscribed" || accessInfo.reason === "admin",
+    // Freemium: `pro` unlocks vault, readiness gaps & unlimited bid/no-bid; the
+    // dashboard itself is free. Equals !locked but named for the gating UI.
+    pro: accessInfo.hasAccess,
+    bidNoBid,
     freeSubmissionEligible: freeSubmission.eligible,
     newSubscriptionLive: newSubscriptionConfigured(),
   };

@@ -100,19 +100,13 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL("/login?next=" + encodeURIComponent(pathname), request.url));
     }
     try {
-      const { payload } = await jwtVerify(cookieToken, new TextEncoder().encode(secret));
-      const trialExpiresAt = payload.trialExpiresAt as string | null | undefined;
-      const subscriptionStatus = payload.subscriptionStatus as string | null | undefined;
-      const isAdmin = payload.isAdmin as boolean | undefined;
-
-      // Admins and active subscribers bypass trial check
-      if (!isAdmin && subscriptionStatus !== "active") {
-        if (trialExpiresAt && new Date(trialExpiresAt) < new Date()) {
-          return NextResponse.redirect(
-            new URL("/pay?plan=grants-tenders-matching&trial_expired=1", request.url)
-          );
-        }
-      }
+      // Freemium (2026-06): the dashboard is free for any authenticated user, so
+      // we only verify the session cookie here. Premium features (Document Vault,
+      // Readiness-gap Navigator, unlimited bid/no-bid) gate themselves server-side
+      // via requireDashboardAccess + the bid/no-bid monthly cap. This block used
+      // to redirect trial-expired users to /pay — removed when dashboard access
+      // became free on signup.
+      await jwtVerify(cookieToken, new TextEncoder().encode(secret));
       return NextResponse.next();
     } catch {
       return NextResponse.redirect(new URL("/login?next=" + encodeURIComponent(pathname), request.url));

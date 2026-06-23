@@ -241,16 +241,16 @@ export default function Features() {
             id="f-verdict"
             tag="Paste → bid / no-bid"
             title="An honest verdict before you invest a single hour."
-            body="Paste a link or drop the PDF. TenderPath reads the requirements, checks them against your file, and gives a clear call — then asks only for what it doesn't already have."
+            body="Paste a link or drop the PDF. TenderPath reads the requirements, checks them against your file, and gives a clear call — then asks only for what it doesn't already have. Free up to 3 a month — unlimited on Pro."
             points={["Fit score + bid / no-bid recommendation", "Compliance ledger: on-file vs. gaps", "Requests just the missing inputs"]}
             visual={<VPaste />}
           />
           <FeatureRow
             mobile={mobile}
             id="f-navigator"
-            tag="The Gap Navigator"
+            tag="The Gap Navigator · Pro"
             title="Every blocker, closed with your hand held."
-            body="UNGM registration, ISO certification, audited financials — the Navigator walks each one step by step, pre-fills what it can, and lifts your readiness score as you go."
+            body="UNGM registration, ISO certification, audited financials — the Navigator walks each one step by step, pre-fills what it can, and lifts your readiness score as you go. Part of TenderPath Pro."
             points={["Guided, conversational, pre-filled steps", "Deep-links to the right portals & your vault", "Watch your score and eligibility climb"]}
             visual={<VNavigator />}
           />
