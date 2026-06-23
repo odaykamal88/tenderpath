@@ -58,17 +58,10 @@ export interface DataRoomMetrics {
     userCumulative: MonthPoint[];
     assessments: MonthPoint[];
     revenueUsd: MonthPoint[];
-    visitors: MonthPoint[];
   };
   revenueMix: Array<{ label: string; amountUsd: number; orders: number }>;
-  offerings: Array<{ key: string; label: string; price: string; note: string; revenueUsd: number; orders: number }>;
   subscriptionsByTier: Array<{ tier: string; label: string; count: number }>;
   funnel: Array<{ step: string; label: string; count: number }>;
-  traffic: {
-    trackedVisitors: number;
-    trackedEvents: number;
-    demoSessions: number;
-  };
   provenance: string[];
 }
 
@@ -208,9 +201,6 @@ export async function getDataRoomMetrics(): Promise<DataRoomMetrics> {
     openGrants,
     sourcesCount,
     networkCount,
-    visitorsMonthly,
-    trafficTotals,
-    demoTotal,
     funnelRows,
   ] = await Promise.all([
     safeRows(sql`SELECT COUNT(*)::int AS value FROM users`, "users_total"),
@@ -317,20 +307,6 @@ export async function getDataRoomMetrics(): Promise<DataRoomMetrics> {
       "sources",
     ),
     safeRows(sql`SELECT COUNT(*)::int AS value FROM network_companies`, "network_companies"),
-    safeRows(
-      sql`
-        SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') AS month,
-               COUNT(DISTINCT COALESCE(user_id::text, anon_id))::int AS value
-        FROM funnel_events
-        WHERE created_at >= date_trunc('month', NOW()) - INTERVAL '11 months'
-        GROUP BY 1 ORDER BY 1`,
-      "visitors_monthly",
-    ),
-    safeRows(
-      sql`SELECT COUNT(*)::int AS events, COUNT(DISTINCT COALESCE(user_id::text, anon_id))::int AS visitors FROM funnel_events`,
-      "traffic_totals",
-    ),
-    safeRows(sql`SELECT COUNT(*)::int AS value FROM demo_sessions`, "demo_total"),
     safeRows(sql`SELECT event, COUNT(*)::int AS count FROM funnel_events GROUP BY event`, "funnel"),
   ]);
 
@@ -343,7 +319,6 @@ export async function getDataRoomMetrics(): Promise<DataRoomMetrics> {
     month: p.month,
     value: Math.round(p.value / 100),
   }));
-  const visitors = fillSeries(visitorsMonthly, months);
 
   const subscriptionsByTier = subsByTier
     .map((r) => ({
@@ -424,22 +399,15 @@ export async function getDataRoomMetrics(): Promise<DataRoomMetrics> {
       userCumulative,
       assessments,
       revenueUsd: revenueUsdSeries,
-      visitors,
     },
     revenueMix,
-    offerings,
     subscriptionsByTier,
     funnel,
-    traffic: {
-      trackedVisitors: num(trafficTotals, "visitors"),
-      trackedEvents: num(trafficTotals, "events"),
-      demoSessions: num(demoTotal),
-    },
     provenance: [
       "Users / assessments / submissions / tenders / grants are live row counts from the production database.",
       "Revenue counts only completed Stripe checkouts for the current live offerings — TenderPath Pro ($49/mo · $324/yr subscription) and the per-bid services (Proposal Draft $299, Submissions EOI/RFQ/ITB/RFP, Roster Fast-Track $749). Discontinued bid/no-bid and uncategorized test checkouts are excluded, so the figure reflects real product revenue (pre-revenue until the first sale). Paid orders count work_orders with payment_status = 'paid'.",
+      "New users / month is unique new accounts from the users table and reconciles to the total-users count (same source).",
       `Est. MRR = active Pro subscriptions × $${MRR_PER_TIER["tender-intelligence"]}/mo list price; ARR = MRR × 12. Forward-looking, separate from realized revenue.`,
-      "Tracked visitors / sessions come from the funnel_events activity log (distinct user_id or anonymous id) and demo_sessions — first-party event tracking, not third-party pageview analytics.",
       "Activation funnel counts are all-time funnel_events by step.",
     ],
   };
