@@ -256,7 +256,7 @@ export default function DataRoomPage() {
               <span className={styles.panelMeta}>realized · 12 mo</span>
             </div>
             <div className={styles.chartWrap}>
-              <Bars points={m.series.revenueUsd} format={fmtUsdK} />
+              <Bars points={m.series.revenueUsd} format={fmtUsdK} tipFormat={fmtUsd} />
             </div>
           </section>
         </div>
@@ -304,7 +304,7 @@ export default function DataRoomPage() {
               <div className={styles.empty}>No revenue recorded yet.</div>
             ) : (
               <div className={styles.donutRow}>
-                <Donut segments={mixSegments} centerLabel={fmtUsdK(h.revenueUsd)} centerSub="total" />
+                <Donut segments={mixSegments} centerLabel={fmtUsdK(h.revenueUsd)} centerSub="total" format={fmtUsd} />
                 <div className={styles.legend}>
                   {mixSegments.map((s) => (
                     <div key={s.label} className={styles.legendItem}>
