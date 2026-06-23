@@ -220,6 +220,63 @@
 .chip:hover { color: var(--color-ink); border-color: var(--color-ink-3); }
 .chipActive { background: var(--color-ink); color: var(--color-paper-3); border-color: var(--color-ink); }
 
+/* ---------- Facet combobox + filter cells (admin matching) ---------- */
+.filterCell { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.filterCellLabel {
+  font-family: var(--font-mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--color-mute, var(--color-ink-3));
+}
+.combo { position: relative; }
+.comboControl {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  min-height: 36px;
+  border: 1px solid var(--color-rule);
+  border-radius: 4px;
+  background: var(--color-paper-3);
+  padding: 4px 8px;
+  cursor: text;
+}
+.comboControl:focus-within {
+  outline: 2px solid rgba(176,133,48,0.18);
+  border-color: var(--color-accent);
+}
+.comboInput {
+  flex: 1; min-width: 90px;
+  border: 0; outline: 0; background: transparent;
+  color: var(--color-ink); font: inherit; font-size: 13px;
+  padding: 2px 0;
+}
+.comboChip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--color-ink); color: var(--color-paper-3);
+  border-radius: 3px; padding: 3px 4px 3px 8px;
+  font-size: 12px; line-height: 1.4; white-space: nowrap;
+}
+.comboChipX {
+  background: none; border: 0; color: inherit; cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 0 2px; opacity: 0.75;
+}
+.comboChipX:hover { opacity: 1; }
+.comboMenu {
+  position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; right: 0;
+  max-height: 260px; overflow-y: auto;
+  margin: 0; padding: 4px; list-style: none;
+  background: var(--color-paper-3);
+  border: 1px solid var(--color-rule); border-radius: 6px;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.14);
+}
+.comboOpt, .comboOptActive {
+  padding: 7px 10px; border-radius: 4px; cursor: pointer;
+  font-size: 13px; color: var(--color-ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.comboOptActive, .comboOpt:hover { background: var(--color-paper-2); }
+.comboAdd {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--color-accent);
+}
+
 /* ---------- Subscription rows ---------- */
 .subRow      { padding: 12px 0; border-bottom: 1px dashed var(--color-rule); }
 .subRow:last-child  { border-bottom: 0; padding-bottom: 0; }

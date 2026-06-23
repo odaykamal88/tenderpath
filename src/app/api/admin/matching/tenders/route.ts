@@ -42,8 +42,9 @@ export async function GET(request: Request) {
   // Country is now multi-select: a comma list of exact (case-insensitive)
   // country names picked from the harmonized suggestions.
   const countries = parseList(url.searchParams.get("country"));
-  const agency = url.searchParams.get("agency")?.trim() ?? "";
-  const sector = url.searchParams.get("sector")?.trim() ?? "";
+  // Agency + sector are now multi-select too (comma lists), mirroring country.
+  const agencies = parseList(url.searchParams.get("agency"));
+  const sectors = parseList(url.searchParams.get("sector"));
   // Minimum lead time: only surface tenders whose deadline is at least N days
   // out, so there's still time to actually apply. 0 (or absent) = no floor,
   // which also lets through past-deadline and no-deadline rows (legacy view).
@@ -79,14 +80,29 @@ export async function GET(request: Request) {
   const countriesLc = countries.map((c) => c.toLowerCase());
   const countryClause = countriesLc.length ? sql`AND LOWER(t.country) = ANY(${countriesLc})` : sql``;
 
-  // A canonical-label pick resolves to its raw variants (exact match); free-typed
-  // text falls back to a partial ILIKE.
-  const agencyRaws = agency ? resolveAgencyRaws(agency, canonicalToRaws) : null;
-  const agencyClause = agencyRaws
-    ? sql`AND t.agency = ANY(${agencyRaws})`
-    : agency
-      ? sql`AND t.agency ILIKE ${`%${agency}%`}`
-      : sql``;
+  // Each requested agency is either a canonical label (→ resolve to every raw
+  // variant present in the DB, exact match) or free-typed text (→ partial
+  // ILIKE). Collect both kinds across all picks and OR them into one predicate.
+  const agencyRaws: string[] = [];
+  const agencyIlike: string[] = [];
+  for (const a of agencies) {
+    const raws = resolveAgencyRaws(a, canonicalToRaws);
+    if (raws && raws.length) agencyRaws.push(...raws);
+    else agencyIlike.push(`%${a}%`);
+  }
+  const agencyClause =
+    agencyRaws.length && agencyIlike.length
+      ? sql`AND (t.agency = ANY(${agencyRaws}) OR t.agency ILIKE ANY(${agencyIlike}))`
+      : agencyRaws.length
+        ? sql`AND t.agency = ANY(${agencyRaws})`
+        : agencyIlike.length
+          ? sql`AND t.agency ILIKE ANY(${agencyIlike})`
+          : sql``;
+
+  // Sector stays free-text matched (numeric/JSON-coded values are dropped from
+  // the suggestion list): a partial ILIKE per requested sector, OR'd together.
+  const sectorIlike = sectors.map((s) => `%${s}%`);
+  const sectorClause = sectorIlike.length ? sql`AND t.sector ILIKE ANY(${sectorIlike})` : sql``;
 
   const rows = (await sql`
     SELECT
@@ -107,7 +123,7 @@ export async function GET(request: Request) {
       )
       ${countryClause}
       ${agencyClause}
-      AND (${sector} = '' OR t.sector ILIKE ${`%${sector}%`})
+      ${sectorClause}
       AND (
         ${minDays} <= 0
         OR (t.deadline IS NOT NULL AND t.deadline >= CURRENT_DATE + (${minDays})::int)
@@ -140,6 +156,6 @@ export async function GET(request: Request) {
       agencies: agencyLabels,
       sectors: harmonizeFacetValues(sectorsRows.map((r) => r.sector as string | null), { dropCoded: true }),
     },
-    applied: { q, country: countries.join(","), agency, sector, minDays, limit },
+    applied: { q, country: countries.join(","), agency: agencies.join(","), sector: sectors.join(","), minDays, limit },
   });
 }

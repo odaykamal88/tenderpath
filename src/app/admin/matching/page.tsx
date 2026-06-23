@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import styles from "../admin.module.css";
+import FacetCombobox from "./FacetCombobox";
 
 interface MatchingTender {
   id: number;
@@ -35,9 +36,16 @@ interface MatchingTendersResponse {
 interface Filters {
   q: string;
   countries: string[];
-  agency: string;
-  sector: string;
+  agencies: string[];
+  sectors: string[];
   minDays: string;
+}
+
+// Preset lead-time floors — kept in sync with the /admin/network "Min lead time"
+// control so both admin surfaces speak the same language.
+const MIN_DAYS_PRESETS = ["10", "7", "3", "0"];
+function minDaysLabel(v: string): string {
+  return v === "0" || v === "" ? "All (incl. closing soon)" : `${v}+ days`;
 }
 
 function authHeaders(): HeadersInit {
@@ -79,9 +87,8 @@ export default function AdminMatchingPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [countries, setCountries] = useState<string[]>([]);
-  const [countryInput, setCountryInput] = useState("");
-  const [agency, setAgency] = useState("");
-  const [sector, setSector] = useState("");
+  const [agencies, setAgencies] = useState<string[]>([]);
+  const [sectors, setSectors] = useState<string[]>([]);
   const [minDays, setMinDays] = useState("10");
   const reqSeq = useRef(0);
 
@@ -93,8 +100,8 @@ export default function AdminMatchingPage() {
       const u = new URLSearchParams({ limit: "200" });
       if (params.q) u.set("q", params.q);
       if (params.countries.length) u.set("country", params.countries.join(","));
-      if (params.agency) u.set("agency", params.agency);
-      if (params.sector) u.set("sector", params.sector);
+      if (params.agencies.length) u.set("agency", params.agencies.join(","));
+      if (params.sectors.length) u.set("sector", params.sectors.join(","));
       u.set("min_days", params.minDays || "0");
 
       // Keep the address bar in sync so a filtered view is shareable/bookmarkable
@@ -103,8 +110,8 @@ export default function AdminMatchingPage() {
         const addr = new URLSearchParams();
         if (params.q) addr.set("q", params.q);
         if (params.countries.length) addr.set("country", params.countries.join(","));
-        if (params.agency) addr.set("agency", params.agency);
-        if (params.sector) addr.set("sector", params.sector);
+        if (params.agencies.length) addr.set("agency", params.agencies.join(","));
+        if (params.sectors.length) addr.set("sector", params.sectors.join(","));
         addr.set("min_days", params.minDays || "0");
         const qs = addr.toString();
         window.history.replaceState(null, "", qs ? `/admin/matching?${qs}` : "/admin/matching");
@@ -129,8 +136,8 @@ export default function AdminMatchingPage() {
     const initMin = getInitial("min_days");
     setQ(getInitial("q"));
     setCountries(parseCsv(getInitial("country")));
-    setAgency(getInitial("agency"));
-    setSector(getInitial("sector"));
+    setAgencies(parseCsv(getInitial("agency")));
+    setSectors(parseCsv(getInitial("sector")));
     // Absent min_days defaults to a 10-day floor (the actionable view); an
     // explicit value — including "0" for "show everything" — is honoured as-is.
     setMinDays(initMin === "" ? "10" : initMin);
@@ -140,32 +147,19 @@ export default function AdminMatchingPage() {
   // once on mount (the hydrate effect above reschedules it with URL values
   // before the 220ms timer elapses, so exactly one initial request goes out).
   useEffect(() => {
-    const t = setTimeout(() => load({ q, countries, agency, sector, minDays }), 220);
+    const t = setTimeout(() => load({ q, countries, agencies, sectors, minDays }), 220);
     return () => clearTimeout(t);
-  }, [q, countries, agency, sector, minDays, load]);
-
-  const addCountry = useCallback(
-    (val: string) => {
-      const v = val.trim();
-      if (!v) return;
-      const match = (data?.filters.countries ?? []).find((c) => c.toLowerCase() === v.toLowerCase());
-      const final = match ?? v;
-      setCountries((cs) => (cs.some((c) => c.toLowerCase() === final.toLowerCase()) ? cs : [...cs, final]));
-      setCountryInput("");
-    },
-    [data],
-  );
+  }, [q, countries, agencies, sectors, minDays, load]);
 
   const clearAll = () => {
     setQ("");
     setCountries([]);
-    setCountryInput("");
-    setAgency("");
-    setSector("");
+    setAgencies([]);
+    setSectors([]);
     setMinDays("0");
   };
 
-  const hasFilters = Boolean(q || countries.length || agency || sector);
+  const hasFilters = Boolean(q || countries.length || agencies.length || sectors.length);
   const tendersWithMatches = useMemo(
     () => (data?.tenders ?? []).filter((t) => t.match_count > 0).length,
     [data]
@@ -173,6 +167,12 @@ export default function AdminMatchingPage() {
   const totalMatchRows = useMemo(
     () => (data?.tenders ?? []).reduce((acc, t) => acc + t.match_count, 0),
     [data]
+  );
+
+  // Preserve an arbitrary ?min_days=N from the URL by surfacing it as an option.
+  const minDaysOptions = useMemo(
+    () => (MIN_DAYS_PRESETS.includes(minDays) ? MIN_DAYS_PRESETS : [minDays, ...MIN_DAYS_PRESETS]),
+    [minDays]
   );
 
   return (
@@ -190,7 +190,7 @@ export default function AdminMatchingPage() {
           <button
             type="button"
             className={styles.btnGhost}
-            onClick={() => load({ q, countries, agency, sector, minDays })}
+            onClick={() => load({ q, countries, agencies, sectors, minDays })}
             disabled={loading}
           >
             {loading ? "Loading…" : "Refresh"}
@@ -223,7 +223,7 @@ export default function AdminMatchingPage() {
         <header className={styles.panelHead}>
           <div>
             <h2 className={styles.panelTitle}>Filters</h2>
-            <p className={styles.panelSub}>Results update as you type — no need to apply. Search hits title, agency, and reference.</p>
+            <p className={styles.panelSub}>Results update as you type — no need to apply. Pick from the dropdown or type your own. Search hits title, agency, and reference.</p>
           </div>
           {hasFilters && (
             <button type="button" onClick={clearAll} className={styles.btnGhost}>Clear all</button>
@@ -232,106 +232,57 @@ export default function AdminMatchingPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-            gap: 10,
+            gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+            gap: 12,
             padding: "16px 22px 22px",
             alignItems: "start",
           }}
         >
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search title / agency / ref"
-            className={styles.adminSearchInput}
-          />
-
-          {/* Country — type to add multiple */}
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 6,
-              alignItems: "center",
-              minHeight: 36,
-              border: "1px solid var(--color-rule)",
-              borderRadius: 4,
-              background: "var(--color-paper-3)",
-              padding: "4px 8px",
-            }}
-          >
-            {countries.map((c) => (
-              <span key={c} className={styles.chipActive} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                {c}
-                <button
-                  type="button"
-                  aria-label={`Remove ${c}`}
-                  onClick={() => setCountries((cs) => cs.filter((x) => x !== c))}
-                  style={{ background: "none", border: 0, color: "inherit", cursor: "pointer", fontSize: 13, lineHeight: 1, padding: 0 }}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
+          <div className={styles.filterCell}>
+            <span className={styles.filterCellLabel}>Search</span>
             <input
-              value={countryInput}
-              onChange={(e) => {
-                const v = e.target.value;
-                if ((data?.filters.countries ?? []).some((c) => c.toLowerCase() === v.toLowerCase())) addCountry(v);
-                else setCountryInput(v);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addCountry(countryInput);
-                } else if (e.key === "Backspace" && !countryInput && countries.length) {
-                  setCountries((cs) => cs.slice(0, -1));
-                }
-              }}
-              placeholder={countries.length ? "Add another…" : "Country — type to add"}
-              list="match-countries"
-              autoComplete="off"
-              style={{ flex: 1, minWidth: 110, border: 0, outline: 0, background: "transparent", color: "var(--color-ink)", font: "inherit", fontSize: 13 }}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Title / agency / ref"
+              className={styles.adminSearchInput}
             />
-            <datalist id="match-countries">
-              {(data?.filters.countries ?? [])
-                .filter((c) => !countries.some((sel) => sel.toLowerCase() === c.toLowerCase()))
-                .map((c) => <option key={c} value={c} />)}
-            </datalist>
           </div>
 
-          <input
-            value={agency}
-            onChange={(e) => setAgency(e.target.value)}
-            placeholder="Agency — type or pick"
-            list="match-agencies"
-            autoComplete="off"
-            className={styles.adminSearchInput}
+          <FacetCombobox
+            label="Country"
+            placeholder="Type or pick a country"
+            options={data?.filters.countries ?? []}
+            selected={countries}
+            onChange={setCountries}
           />
-          <datalist id="match-agencies">
-            {data?.filters.agencies.map((a) => <option key={a} value={a} />)}
-          </datalist>
-          <input
-            value={sector}
-            onChange={(e) => setSector(e.target.value)}
-            placeholder="Sector — type or pick"
-            list="match-sectors"
-            autoComplete="off"
-            className={styles.adminSearchInput}
+          <FacetCombobox
+            label="Agency"
+            placeholder="Type or pick an agency"
+            options={data?.filters.agencies ?? []}
+            selected={agencies}
+            onChange={setAgencies}
           />
-          <datalist id="match-sectors">
-            {data?.filters.sectors.map((s) => <option key={s} value={s} />)}
-          </datalist>
-          <label style={{ display: "grid", gap: 4, fontSize: 11, color: "var(--color-mute, #888)" }}>
-            Min days to deadline
-            <input
-              type="number"
-              min={0}
+          <FacetCombobox
+            label="Sector"
+            placeholder="Type or pick a sector"
+            options={data?.filters.sectors ?? []}
+            selected={sectors}
+            onChange={setSectors}
+          />
+
+          <div className={styles.filterCell}>
+            <span className={styles.filterCellLabel}>Min days to deadline</span>
+            <select
               value={minDays}
               onChange={(e) => setMinDays(e.target.value)}
               className={styles.adminSearchInput}
-              title="Only show tenders closing at least this many days out. 0 = show all, including closing-soon and past-deadline."
-            />
-          </label>
+              title="Only show tenders closing at least this many days out. All = include closing-soon and past-deadline."
+            >
+              {minDaysOptions.map((v) => (
+                <option key={v} value={v}>{minDaysLabel(v)}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </section>
 
@@ -339,7 +290,7 @@ export default function AdminMatchingPage() {
         <header className={styles.panelHead}>
           <div>
             <h2 className={styles.panelTitle}>Open tenders</h2>
-            <p className={styles.panelSub}>Soonest deadline first. Broken-link tenders excluded. Showing tenders closing 10+ days out by default — set <em>Min days to deadline</em> to 0 to include closing-soon and past-deadline tenders.</p>
+            <p className={styles.panelSub}>Soonest deadline first. Broken-link tenders excluded. Showing tenders closing 10+ days out by default — set <em>Min days to deadline</em> to <em>All</em> to include closing-soon and past-deadline tenders.</p>
           </div>
           {data && <span className={styles.panelMeta}>{data.total} shown</span>}
         </header>
