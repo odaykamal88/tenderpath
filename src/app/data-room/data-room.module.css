@@ -209,30 +209,6 @@
 .legendLabel { color: var(--color-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .legendVal { margin-left: auto; font-family: var(--font-mono); font-size: 12px; }
 
-/* ---------- Product offerings (pre-revenue) ---------- */
-.offerIntro { font-size: 12.5px; color: var(--color-ink-3); margin: 0 0 14px; line-height: 1.5; }
-.offerList { display: flex; flex-direction: column; gap: 9px; }
-.offerRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 14px;
-  padding: 11px 13px;
-  border: 1px solid var(--color-rule);
-  border-radius: 9px;
-  background: var(--color-paper);
-}
-.offerName { font-size: 13.5px; font-weight: 600; color: var(--color-ink); }
-.offerNote { font-size: 11px; color: var(--color-ink-3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.offerPrice {
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--color-accent);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
 /* ---------- Supply stats ---------- */
 .supplyRow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 .supplyCard {

@@ -273,11 +273,11 @@ export default function DataRoomPage() {
           </section>
           <section className={styles.panel}>
             <div className={styles.panelHead}>
-              <h2 className={styles.panelTitle}>Unique visitors / month</h2>
-              <span className={styles.panelMeta}>{fmtNum(m.traffic.trackedVisitors)} tracked · {fmtNum(m.traffic.demoSessions)} demo</span>
+              <h2 className={styles.panelTitle}>New users / month</h2>
+              <span className={styles.panelMeta}>{fmtNum(h.totalUsers)} unique total</span>
             </div>
             <div className={styles.chartWrap}>
-              <Bars points={m.series.visitors} format={fmtNum} />
+              <Bars points={m.series.userSignups} format={fmtNum} />
             </div>
           </section>
         </div>
@@ -297,26 +297,11 @@ export default function DataRoomPage() {
         <div className={styles.grid2}>
           <section className={styles.panel}>
             <div className={styles.panelHead}>
-              <h2 className={styles.panelTitle}>{mixSegments.length === 0 ? "Product offerings" : "Revenue mix"}</h2>
-              <span className={styles.panelMeta}>{mixSegments.length === 0 ? "pre-revenue" : "by product"}</span>
+              <h2 className={styles.panelTitle}>Revenue mix</h2>
+              <span className={styles.panelMeta}>by product</span>
             </div>
             {mixSegments.length === 0 ? (
-              <div>
-                <p className={styles.offerIntro}>
-                  Subscription plus per-bid services — live and ready to sell. No product sales yet, so revenue is $0.
-                </p>
-                <div className={styles.offerList}>
-                  {m.offerings.map((o) => (
-                    <div key={o.key} className={styles.offerRow}>
-                      <div style={{ minWidth: 0 }}>
-                        <div className={styles.offerName}>{o.label}</div>
-                        <div className={styles.offerNote}>{o.note}</div>
-                      </div>
-                      <div className={styles.offerPrice}>{o.price}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <div className={styles.empty}>No product revenue yet — the per-product breakdown appears here once a subscription or bid is purchased.</div>
             ) : (
               <div className={styles.donutRow}>
                 <Donut segments={mixSegments} centerLabel={fmtUsdK(h.revenueUsd)} centerSub="total" format={fmtUsd} />
