@@ -72,6 +72,11 @@ function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true;
   if (PUBLIC_ASSESSMENT_POLL_RE.test(pathname)) return true;
   if (PUBLIC_ASSESSMENT_PDF_RE.test(pathname)) return true;
+  // Investor data room API. Investors have no JWT — these endpoints self-
+  // authorize via the shared data-room password (login → httpOnly cookie) or a
+  // super-admin Bearer. The proxy default-deny would 401 the cookie path, so
+  // the prefix is allowlisted here, same model as the Stripe/cron webhooks.
+  if (pathname.startsWith("/api/data-room/")) return true;
   if (!pathname.startsWith("/api/") && !pathname.startsWith("/dashboard")) return true;
   return false;
 }
