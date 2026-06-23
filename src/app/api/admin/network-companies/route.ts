@@ -78,10 +78,34 @@ export async function GET(request: Request) {
         t.id AS tender_id, t.title AS tender_title, t.agency AS tender_agency,
         t.country AS tender_country, t.sector AS tender_sector, t.deadline AS tender_deadline,
         t.estimated_value AS tender_value, t.source_url AS tender_source_url, t.reference_id AS tender_reference,
-        t.opportunity_type AS tender_type
+        t.opportunity_type AS tender_type,
+        -- Per-company engagement context (operator judgement aids; never shown to the prospect).
+        COALESCE(eng.contacted_count, 0)::int AS contacted_count,
+        COALESCE(eng.won_count, 0)::int AS won_count,
+        COALESCE(eng.lost_count, 0)::int AS lost_count,
+        (
+          t.agency IS NOT NULL AND TRIM(t.agency) <> ''
+          AND eng.lost_agencies IS NOT NULL
+          AND LOWER(TRIM(t.agency)) = ANY(eng.lost_agencies)
+        ) AS lost_agency_before
       FROM network_company_matches m
       JOIN network_companies c ON c.id = m.network_company_id
       JOIN tenders t ON t.id = m.tender_id
+      LEFT JOIN (
+        SELECT
+          em.network_company_id AS cid,
+          COUNT(*) FILTER (WHERE em.status = 'contacted') AS contacted_count,
+          COUNT(*) FILTER (WHERE em.status = 'won') AS won_count,
+          COUNT(*) FILTER (WHERE em.status = 'lost') AS lost_count,
+          COALESCE(
+            ARRAY_AGG(DISTINCT LOWER(TRIM(et.agency)))
+              FILTER (WHERE em.status = 'lost' AND et.agency IS NOT NULL AND TRIM(et.agency) <> ''),
+            '{}'::text[]
+          ) AS lost_agencies
+        FROM network_company_matches em
+        JOIN tenders et ON et.id = em.tender_id
+        GROUP BY em.network_company_id
+      ) eng ON eng.cid = c.id
       WHERE m.status = 'new' AND c.is_active = TRUE
         AND t.status = 'open' AND COALESCE(t.has_broken_link, false) = false
         AND t.deadline >= CURRENT_DATE

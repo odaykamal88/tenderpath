@@ -33,6 +33,14 @@ export interface OutreachMatch {
   tender_source_url: string | null;
   tender_reference: string | null;
   tender_type: string | null;
+  // Per-company engagement context (same for every match of a company), plus a
+  // per-row flag — operator judgement aids, never shown to the prospect. All
+  // optional so callers/builders that don't hydrate them still typecheck.
+  contacted_count?: number;
+  won_count?: number;
+  lost_count?: number;
+  /** This company has a `lost` match with the same agency as this tender. */
+  lost_agency_before?: boolean;
 }
 
 export interface OutreachDraft {
@@ -253,6 +261,9 @@ export function buildLinkedInDraft(m: OutreachMatch, signoff: string): LinkedInD
   return { note, message };
 }
 
+/** Primary ordering of the worklist + bundles. */
+export type OutreachSort = "deadline" | "fit";
+
 export interface ShortlistOptions {
   /** Minimum business days until the deadline (default 10 — below that it's too close to pitch). */
   minBusinessDays?: number;
@@ -262,6 +273,19 @@ export interface ShortlistOptions {
   excludeConsultancies?: boolean;
   /** Email-ready (we hold a usable email) only. */
   sendReadyOnly?: boolean;
+  /**
+   * Drop tenders from agencies this company has already LOST with. Default
+   * false: a prior loss is surfaced as a flag (operator judgement), not silently
+   * hidden — losing one bid ≠ never pitch that agency again. Opt-in bulk hide.
+   */
+  hideLostAgencies?: boolean;
+  /** Lead with soonest deadline (default) or highest fit. */
+  sort?: OutreachSort;
+}
+
+/** Comparator for the chosen primary ordering. */
+function comparatorFor(sort: OutreachSort): (a: OutreachMatch, b: OutreachMatch) => number {
+  return sort === "fit" ? byScoreThenDeadline : byDeadlineThenScore;
 }
 
 export const OUTREACH_DEFAULTS = {
@@ -287,11 +311,13 @@ export function rankForOutreach(matches: OutreachMatch[], opts: ShortlistOptions
   const minBusinessDays = opts.minBusinessDays ?? OUTREACH_DEFAULTS.minBusinessDays;
   const minScore = opts.minScore ?? OUTREACH_DEFAULTS.minScore;
   const excludeConsultancies = opts.excludeConsultancies ?? OUTREACH_DEFAULTS.excludeConsultancies;
+  const cmp = comparatorFor(opts.sort ?? "deadline");
 
   return matches
     .filter((m) => {
       if (minScore > 0 && m.score < minScore) return false;
       if (excludeConsultancies && isConsultancyTender(m)) return false;
+      if (opts.hideLostAgencies && m.lost_agency_before) return false;
       if (minBusinessDays > 0) {
         const biz = businessDaysUntil(m.tender_deadline);
         // No deadline → keep (can't disqualify on a date we don't have).
@@ -300,7 +326,7 @@ export function rankForOutreach(matches: OutreachMatch[], opts: ShortlistOptions
       if (opts.sendReadyOnly && readiness(m) !== "send_ready") return false;
       return true;
     })
-    .sort(byDeadlineThenScore);
+    .sort(cmp);
 }
 
 /** A company and the qualifying tenders we can pitch it in one go. */
@@ -319,7 +345,7 @@ export interface CompanyGroup {
  * the incoming (deadline-first) order; companies are ordered by their soonest
  * deadline so the most time-critical bundles surface first.
  */
-export function groupByCompany(matches: OutreachMatch[]): CompanyGroup[] {
+export function groupByCompany(matches: OutreachMatch[], sort: OutreachSort = "deadline"): CompanyGroup[] {
   const groups = new Map<number, CompanyGroup>();
   for (const m of matches) {
     let g = groups.get(m.company_id);
@@ -337,7 +363,10 @@ export function groupByCompany(matches: OutreachMatch[]): CompanyGroup[] {
     }
     g.matches.push(m);
   }
-  return [...groups.values()].sort((a, b) => byDeadlineThenScore(a.matches[0], b.matches[0]));
+  // Order companies by their leading match under the same comparator the list
+  // was ranked with, so a fit-first list also surfaces best-fit companies first.
+  const cmp = comparatorFor(sort);
+  return [...groups.values()].sort((a, b) => cmp(a.matches[0], b.matches[0]));
 }
 
 /** One numbered tender line for a bundle email body. */
@@ -399,6 +428,17 @@ function byDeadlineThenScore(a: OutreachMatch, b: OutreachMatch): number {
   if (db === null) return -1;
   if (da !== db) return da - db;
   return b.score - a.score;
+}
+
+/** Highest fit first; ties broken by soonest deadline (no-deadline last). */
+function byScoreThenDeadline(a: OutreachMatch, b: OutreachMatch): number {
+  if (a.score !== b.score) return b.score - a.score;
+  const da = daysUntil(a.tender_deadline);
+  const db = daysUntil(b.tender_deadline);
+  if (da === null && db === null) return 0;
+  if (da === null) return 1;
+  if (db === null) return -1;
+  return da - db;
 }
 
 function csvCell(v: unknown): string {
