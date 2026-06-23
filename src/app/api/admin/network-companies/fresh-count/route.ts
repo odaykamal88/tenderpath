@@ -10,8 +10,17 @@ export async function GET(request: Request) {
   if (!guard.authorized) return guard.response!;
   await ensureNetworkMatchingColumns();
 
+  // Count DISTINCT (company, opportunity), not raw match rows: cross-posted
+  // duplicates (same opportunity under different reference_ids → separate tenders
+  // rows) would otherwise inflate this badge above the deduped worklist on the
+  // Network page. Key mirrors dedupeTenders(): normalized title+agency+deadline.
   const rows = await sql`
-    SELECT COUNT(*)::int AS count
+    SELECT COUNT(DISTINCT (
+      m.network_company_id::text || '|' ||
+      LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.title, '')),  '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
+      LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.agency, '')), '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
+      COALESCE(t.deadline::date::text, '')
+    ))::int AS count
     FROM network_company_matches m
     JOIN tenders t ON t.id = m.tender_id
     JOIN network_companies c ON c.id = m.network_company_id

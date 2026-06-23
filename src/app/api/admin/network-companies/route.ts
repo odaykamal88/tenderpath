@@ -49,8 +49,20 @@ export async function GET(request: Request) {
       LEFT JOIN (
         SELECT
           m.network_company_id,
-          COUNT(*) AS total,
-          COUNT(*) FILTER (
+          -- Count DISTINCT opportunities, not raw match rows. Cross-posted
+          -- duplicates (same opportunity under different reference_ids → separate
+          -- tenders rows) would otherwise inflate these badges above the deduped
+          -- worklist below. Key mirrors dedupeTenders(): normalized title+agency+deadline.
+          COUNT(DISTINCT (
+            LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.title, '')),  '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
+            LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.agency, '')), '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
+            COALESCE(t.deadline::date::text, '')
+          )) AS total,
+          COUNT(DISTINCT (
+            LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.title, '')),  '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
+            LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.agency, '')), '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
+            COALESCE(t.deadline::date::text, '')
+          )) FILTER (
             WHERE m.status = 'new'
               AND (
                 ${minDays} <= 0
@@ -66,54 +78,76 @@ export async function GET(request: Request) {
       ) mc ON mc.network_company_id = c.id
       ORDER BY c.is_active DESC, COALESCE(mc.fresh, 0) DESC, c.created_at DESC
     `,
-    // Outreach worklist. LIMIT raised 100→1000 (2026-06-19): with a busy radar
-    // (700+ fresh matches) the soonest-deadline-first cap truncated the furthest-out
-    // tenders, so far-out opportunities never surfaced. 1000 covers the current peak
-    // with headroom; the per-company Fresh count (the `rows` query above) is
-    // unbounded, so badge and list now agree. Revisit with pagination only if exceeded.
+    // Outreach worklist. Collapses cross-posted duplicates per company: the same
+    // opportunity is published by overlapping sources under different reference_ids
+    // and stored as separate tenders rows, so one company can match the same
+    // opportunity more than once and show it twice in a bundle. We keep one row per
+    // (company, opportunity) on the crawler's canonical key (normalized
+    // title+agency+deadline, matching dedupeTenders()), preferring the highest score.
+    // LIMIT 1000 (raised 100→1000, 2026-06-19) applies AFTER dedup so far-out
+    // tenders still surface; the per-company Fresh count above counts the same
+    // distinct opportunities, so badge and list stay in agreement.
     sql`
-      SELECT
-        m.id, m.score, m.match_reasons, m.status, m.first_seen_at,
-        c.id AS company_id, c.name AS company_name, c.contact_name, c.contact_email, c.contact_linkedin,
-        t.id AS tender_id, t.title AS tender_title, t.agency AS tender_agency,
-        t.country AS tender_country, t.sector AS tender_sector, t.deadline AS tender_deadline,
-        t.estimated_value AS tender_value, t.source_url AS tender_source_url, t.reference_id AS tender_reference,
-        t.opportunity_type AS tender_type,
-        -- Per-company engagement context (operator judgement aids; never shown to the prospect).
-        COALESCE(eng.contacted_count, 0)::int AS contacted_count,
-        COALESCE(eng.won_count, 0)::int AS won_count,
-        COALESCE(eng.lost_count, 0)::int AS lost_count,
-        (
-          t.agency IS NOT NULL AND TRIM(t.agency) <> ''
-          AND eng.lost_agencies IS NOT NULL
-          AND LOWER(TRIM(t.agency)) = ANY(eng.lost_agencies)
-        ) AS lost_agency_before
-      FROM network_company_matches m
-      JOIN network_companies c ON c.id = m.network_company_id
-      JOIN tenders t ON t.id = m.tender_id
-      LEFT JOIN (
+      WITH worklist AS (
         SELECT
-          em.network_company_id AS cid,
-          COUNT(*) FILTER (WHERE em.status = 'contacted') AS contacted_count,
-          COUNT(*) FILTER (WHERE em.status = 'won') AS won_count,
-          COUNT(*) FILTER (WHERE em.status = 'lost') AS lost_count,
-          COALESCE(
-            ARRAY_AGG(DISTINCT LOWER(TRIM(et.agency)))
-              FILTER (WHERE em.status = 'lost' AND et.agency IS NOT NULL AND TRIM(et.agency) <> ''),
-            '{}'::text[]
-          ) AS lost_agencies
-        FROM network_company_matches em
-        JOIN tenders et ON et.id = em.tender_id
-        GROUP BY em.network_company_id
-      ) eng ON eng.cid = c.id
-      WHERE m.status = 'new' AND c.is_active = TRUE
-        AND t.status = 'open' AND COALESCE(t.has_broken_link, false) = false
-        AND t.deadline >= CURRENT_DATE
-        AND (
-          ${minDays} <= 0
-          OR (t.deadline IS NOT NULL AND t.deadline >= CURRENT_DATE + (${minDays})::int)
-        )
-      ORDER BY t.deadline ASC NULLS LAST, m.score DESC
+          m.id, m.score, m.match_reasons, m.status, m.first_seen_at,
+          c.id AS company_id, c.name AS company_name, c.contact_name, c.contact_email, c.contact_linkedin,
+          t.id AS tender_id, t.title AS tender_title, t.agency AS tender_agency,
+          t.country AS tender_country, t.sector AS tender_sector, t.deadline AS tender_deadline,
+          t.estimated_value AS tender_value, t.source_url AS tender_source_url, t.reference_id AS tender_reference,
+          t.opportunity_type AS tender_type,
+          -- Per-company engagement context (operator judgement aids; never shown to the prospect).
+          COALESCE(eng.contacted_count, 0)::int AS contacted_count,
+          COALESCE(eng.won_count, 0)::int AS won_count,
+          COALESCE(eng.lost_count, 0)::int AS lost_count,
+          (
+            t.agency IS NOT NULL AND TRIM(t.agency) <> ''
+            AND eng.lost_agencies IS NOT NULL
+            AND LOWER(TRIM(t.agency)) = ANY(eng.lost_agencies)
+          ) AS lost_agency_before
+        FROM network_company_matches m
+        JOIN network_companies c ON c.id = m.network_company_id
+        JOIN tenders t ON t.id = m.tender_id
+        LEFT JOIN (
+          SELECT
+            em.network_company_id AS cid,
+            COUNT(*) FILTER (WHERE em.status = 'contacted') AS contacted_count,
+            COUNT(*) FILTER (WHERE em.status = 'won') AS won_count,
+            COUNT(*) FILTER (WHERE em.status = 'lost') AS lost_count,
+            COALESCE(
+              ARRAY_AGG(DISTINCT LOWER(TRIM(et.agency)))
+                FILTER (WHERE em.status = 'lost' AND et.agency IS NOT NULL AND TRIM(et.agency) <> ''),
+              '{}'::text[]
+            ) AS lost_agencies
+          FROM network_company_matches em
+          JOIN tenders et ON et.id = em.tender_id
+          GROUP BY em.network_company_id
+        ) eng ON eng.cid = c.id
+        WHERE m.status = 'new' AND c.is_active = TRUE
+          AND t.status = 'open' AND COALESCE(t.has_broken_link, false) = false
+          AND t.deadline >= CURRENT_DATE
+          AND (
+            ${minDays} <= 0
+            OR (t.deadline IS NOT NULL AND t.deadline >= CURRENT_DATE + (${minDays})::int)
+          )
+      ),
+      deduped AS (
+        SELECT DISTINCT ON (
+          company_id,
+          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(tender_title, '')),  '[^a-z0-9]+', ' ', 'g')), 120),
+          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(tender_agency, '')), '[^a-z0-9]+', ' ', 'g')), 120),
+          tender_deadline::date
+        ) *
+        FROM worklist
+        ORDER BY
+          company_id,
+          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(tender_title, '')),  '[^a-z0-9]+', ' ', 'g')), 120),
+          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(tender_agency, '')), '[^a-z0-9]+', ' ', 'g')), 120),
+          tender_deadline::date,
+          score DESC, id DESC
+      )
+      SELECT * FROM deduped
+      ORDER BY tender_deadline ASC NULLS LAST, score DESC
       LIMIT 1000
     `,
   ]);

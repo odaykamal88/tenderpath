@@ -202,7 +202,9 @@ export default function AdminMatchingPage() {
 
       <section className={styles.heroRow}>
         <div className={styles.heroStat}>
-          <div className={styles.heroStatLabel}>Tenders shown</div>
+          <div className={styles.heroStatLabel}>
+            {minDays === "0" || minDays === "" ? "Tenders shown · all active" : `Tenders shown · ${minDays}+ days`}
+          </div>
           <div className={styles.heroStatValue}>{data?.total ?? 0}</div>
         </div>
         <div className={styles.heroStat}>
@@ -219,7 +221,7 @@ export default function AdminMatchingPage() {
         </div>
       </section>
 
-      <section className={styles.panel}>
+      <section className={`${styles.panel} ${styles.panelOverflowVisible}`}>
         <header className={styles.panelHead}>
           <div>
             <h2 className={styles.panelTitle}>Filters</h2>
@@ -292,7 +294,11 @@ export default function AdminMatchingPage() {
             <h2 className={styles.panelTitle}>Open tenders</h2>
             <p className={styles.panelSub}>Soonest deadline first. Broken-link tenders excluded. Showing tenders closing 10+ days out by default — set <em>Min days to deadline</em> to <em>All</em> to include closing-soon and past-deadline tenders.</p>
           </div>
-          {data && <span className={styles.panelMeta}>{data.total} shown</span>}
+          {data && (
+            <span className={styles.panelMeta}>
+              {data.total} shown · {minDays === "0" || minDays === "" ? "all active" : `closing ${minDays}+ days out`}
+            </span>
+          )}
         </header>
         {loading ? (
           <div className={styles.woEmpty}>Loading tenders…</div>
