@@ -61,6 +61,7 @@ export interface DataRoomMetrics {
     visitors: MonthPoint[];
   };
   revenueMix: Array<{ label: string; amountUsd: number; orders: number }>;
+  offerings: Array<{ key: string; label: string; price: string; note: string; revenueUsd: number; orders: number }>;
   subscriptionsByTier: Array<{ tier: string; label: string; count: number }>;
   funnel: Array<{ step: string; label: string; count: number }>;
   traffic: {
@@ -110,27 +111,40 @@ function prettyPlan(plan: string | null): string {
   );
 }
 
-// Current sellable price tiers (src/lib/pricing.ts). purchase_logs.plan values —
-// canonical slugs and their legacy aliases — are bucketed into these for the
-// revenue mix. Bid/No-Bid is deliberately NOT a tier: it is metered inside the
-// Pro subscription (free monthly cap, unlimited on Pro), not a standalone SKU.
-// Any legacy or uncategorized sale (including historical bid-no-bid) falls
-// under "Other" so the breakdown still reconciles to total realized revenue.
-const REVENUE_TIERS: Array<{ key: string; order: number; label: string; plans: string[]; prefix?: string }> = [
-  { key: "pro",        order: 0, label: "Pro · Grants + Tenders", plans: ["grants-tenders-matching", "tender-intelligence"] },
-  { key: "proposal",   order: 1, label: "Proposal Draft",        plans: ["proposal-draft", "submission-package", "proposal"] },
-  { key: "roster",     order: 2, label: "Roster Fast-Track",     plans: ["roster-fast-track", "strategic-partnership", "lta-roster"] },
-  { key: "submission", order: 3, label: "Submissions",           plans: ["eoi", "rfq", "itb", "rfp"], prefix: "submission-" },
+// The live, sellable product offerings (src/lib/pricing.ts + submissions). These
+// are the ONLY plans that count as product revenue. Bid/No-Bid is excluded — it
+// is metered inside the Pro subscription, not a standalone SKU — as are test /
+// uncategorized checkouts. So revenue reflects real sales of the current
+// offerings only; there is no "Other" catch-all and the figure is honestly $0
+// until a subscription or a bid service is purchased.
+const REVENUE_TIERS: Array<{ key: string; plans: string[]; prefix?: string }> = [
+  { key: "pro",        plans: ["grants-tenders-matching", "tender-intelligence"] },
+  { key: "proposal",   plans: ["proposal-draft", "submission-package", "proposal"] },
+  { key: "roster",     plans: ["roster-fast-track", "strategic-partnership", "lta-roster"] },
+  { key: "submission", plans: ["eoi", "rfq", "itb", "rfp"], prefix: "submission-" },
 ];
 
-function tierForPlan(plan: string | null): { key: string; order: number; label: string } {
+// purchase_logs.plan slugs that count as product revenue (everything in
+// REVENUE_TIERS, minus the prefix-matched submission-* which is handled in SQL).
+const PRODUCT_PLANS = REVENUE_TIERS.flatMap((t) => t.plans);
+
+function tierForPlan(plan: string | null): string | null {
   const p = (plan ?? "").toLowerCase();
   for (const t of REVENUE_TIERS) {
-    if (t.plans.includes(p)) return t;
-    if (t.prefix && p.startsWith(t.prefix)) return t;
+    if (t.plans.includes(p)) return t.key;
+    if (t.prefix && p.startsWith(t.prefix)) return t.key;
   }
-  return { key: "other", order: 9, label: "Other" };
+  return null;
 }
+
+// Offerings catalog — the monetization model, shown even at $0 so investors see
+// what generates revenue. Order: subscription first, then the per-bid services.
+const OFFERINGS: Array<{ key: string; label: string; price: string; note: string }> = [
+  { key: "pro",        label: "TenderPath Pro",    price: "$49/mo",          note: "Subscription · weekly matched grants + tenders" },
+  { key: "proposal",   label: "Proposal Draft",    price: "$299",            note: "Per bid · 80%-drafted technical + financial proposal" },
+  { key: "submission", label: "Submissions",       price: "EOI · RFQ · ITB · RFP", note: "Per bid · full managed submission package" },
+  { key: "roster",     label: "Roster Fast-Track", price: "$749",            note: "Per agency · UN roster / vendor registration" },
+];
 
 const FUNNEL_STEPS: Array<{ event: string; label: string }> = [
   { event: "assessment_started", label: "Assessment started" },
@@ -246,7 +260,8 @@ export async function getDataRoomMetrics(): Promise<DataRoomMetrics> {
       "subs_by_tier",
     ),
     safeRows(
-      sql`SELECT COALESCE(SUM(amount_cents), 0)::bigint AS cents FROM purchase_logs`,
+      sql`SELECT COALESCE(SUM(amount_cents), 0)::bigint AS cents FROM purchase_logs
+          WHERE (plan = ANY(${PRODUCT_PLANS}::text[]) OR plan ILIKE 'submission-%')`,
       "revenue_total",
     ),
     safeRows(
@@ -254,11 +269,15 @@ export async function getDataRoomMetrics(): Promise<DataRoomMetrics> {
         SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') AS month, COALESCE(SUM(amount_cents), 0)::bigint AS cents
         FROM purchase_logs
         WHERE created_at >= date_trunc('month', NOW()) - INTERVAL '11 months'
+          AND (plan = ANY(${PRODUCT_PLANS}::text[]) OR plan ILIKE 'submission-%')
         GROUP BY 1 ORDER BY 1`,
       "revenue_monthly",
     ),
     safeRows(
-      sql`SELECT plan, COALESCE(SUM(amount_cents), 0)::bigint AS cents, COUNT(*)::int AS orders FROM purchase_logs GROUP BY plan ORDER BY cents DESC`,
+      sql`SELECT plan, COALESCE(SUM(amount_cents), 0)::bigint AS cents, COUNT(*)::int AS orders
+          FROM purchase_logs
+          WHERE (plan = ANY(${PRODUCT_PLANS}::text[]) OR plan ILIKE 'submission-%')
+          GROUP BY plan ORDER BY cents DESC`,
       "revenue_by_plan",
     ),
     safeRows(
@@ -266,11 +285,13 @@ export async function getDataRoomMetrics(): Promise<DataRoomMetrics> {
         SELECT
           COALESCE(SUM(amount_cents) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days'), 0)::bigint AS last30,
           COALESCE(SUM(amount_cents) FILTER (WHERE created_at >= NOW() - INTERVAL '60 days' AND created_at < NOW() - INTERVAL '30 days'), 0)::bigint AS prev30
-        FROM purchase_logs`,
+        FROM purchase_logs
+        WHERE (plan = ANY(${PRODUCT_PLANS}::text[]) OR plan ILIKE 'submission-%')`,
       "revenue_window",
     ),
     safeRows(
-      sql`SELECT COUNT(DISTINCT COALESCE(user_id::text, stripe_customer_id))::int AS value FROM purchase_logs`,
+      sql`SELECT COUNT(DISTINCT COALESCE(user_id::text, stripe_customer_id))::int AS value FROM purchase_logs
+          WHERE (plan = ANY(${PRODUCT_PLANS}::text[]) OR plan ILIKE 'submission-%')`,
       "paying_customers",
     ),
     safeRows(
@@ -337,20 +358,26 @@ export async function getDataRoomMetrics(): Promise<DataRoomMetrics> {
     0,
   );
 
-  // Aggregate realized revenue into the current product tiers. Accumulate in
-  // cents and round once so per-bucket totals reconcile to the headline figure.
-  const mixAcc = new Map<string, { label: string; order: number; cents: number; orders: number }>();
+  // Roll realized revenue into the current offerings (queries already exclude
+  // non-product plans, so every row maps to an offering — no "Other").
+  const bucketByKey = new Map<string, { cents: number; orders: number }>();
   for (const r of revenueByPlan) {
-    const tier = tierForPlan(r.plan as string | null);
-    const e = mixAcc.get(tier.key) ?? { label: tier.label, order: tier.order, cents: 0, orders: 0 };
+    const key = tierForPlan(r.plan as string | null);
+    if (!key) continue;
+    const e = bucketByKey.get(key) ?? { cents: 0, orders: 0 };
     e.cents += Number(r.cents ?? 0);
     e.orders += Number(r.orders ?? 0);
-    mixAcc.set(tier.key, e);
+    bucketByKey.set(key, e);
   }
-  const revenueMix = [...mixAcc.values()]
-    .filter((e) => e.cents > 0 || e.orders > 0)
-    .sort((a, b) => a.order - b.order || b.cents - a.cents)
-    .map((e) => ({ label: e.label, amountUsd: Math.round(e.cents / 100), orders: e.orders }));
+  // Full catalog with collected revenue (0 until purchased) — shown even at $0.
+  const offerings = OFFERINGS.map((o) => {
+    const b = bucketByKey.get(o.key);
+    return { ...o, revenueUsd: b ? Math.round(b.cents / 100) : 0, orders: b?.orders ?? 0 };
+  });
+  // Mix = only offerings with actual sales (empty while pre-revenue).
+  const revenueMix = offerings
+    .filter((o) => o.revenueUsd > 0 || o.orders > 0)
+    .map((o) => ({ label: o.label, amountUsd: o.revenueUsd, orders: o.orders }));
 
   const funnelMap = new Map<string, number>();
   for (const r of funnelRows) funnelMap.set(String(r.event), Number(r.count ?? 0));
@@ -400,6 +427,7 @@ export async function getDataRoomMetrics(): Promise<DataRoomMetrics> {
       visitors,
     },
     revenueMix,
+    offerings,
     subscriptionsByTier,
     funnel,
     traffic: {
@@ -409,8 +437,7 @@ export async function getDataRoomMetrics(): Promise<DataRoomMetrics> {
     },
     provenance: [
       "Users / assessments / submissions / tenders / grants are live row counts from the production database.",
-      "Realized revenue is SUM(purchase_logs.amount_cents) — every completed Stripe checkout. Paid orders count work_orders with payment_status = 'paid'.",
-      "Revenue mix is grouped into the current product tiers — Pro ($49/mo · $324/yr), Proposal Draft ($299), Roster Fast-Track ($749), and Submissions (EOI/RFQ/ITB/RFP, per-type). Bid/No-Bid is metered inside Pro, not a standalone tier; legacy or uncategorized sales fall under Other.",
+      "Revenue counts only completed Stripe checkouts for the current live offerings — TenderPath Pro ($49/mo · $324/yr subscription) and the per-bid services (Proposal Draft $299, Submissions EOI/RFQ/ITB/RFP, Roster Fast-Track $749). Discontinued bid/no-bid and uncategorized test checkouts are excluded, so the figure reflects real product revenue (pre-revenue until the first sale). Paid orders count work_orders with payment_status = 'paid'.",
       `Est. MRR = active Pro subscriptions × $${MRR_PER_TIER["tender-intelligence"]}/mo list price; ARR = MRR × 12. Forward-looking, separate from realized revenue.`,
       "Tracked visitors / sessions come from the funnel_events activity log (distinct user_id or anonymous id) and demo_sessions — first-party event tracking, not third-party pageview analytics.",
       "Activation funnel counts are all-time funnel_events by step.",

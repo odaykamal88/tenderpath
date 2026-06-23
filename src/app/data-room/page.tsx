@@ -297,11 +297,26 @@ export default function DataRoomPage() {
         <div className={styles.grid2}>
           <section className={styles.panel}>
             <div className={styles.panelHead}>
-              <h2 className={styles.panelTitle}>Revenue mix</h2>
-              <span className={styles.panelMeta}>by product</span>
+              <h2 className={styles.panelTitle}>{mixSegments.length === 0 ? "Product offerings" : "Revenue mix"}</h2>
+              <span className={styles.panelMeta}>{mixSegments.length === 0 ? "pre-revenue" : "by product"}</span>
             </div>
             {mixSegments.length === 0 ? (
-              <div className={styles.empty}>No revenue recorded yet.</div>
+              <div>
+                <p className={styles.offerIntro}>
+                  Subscription plus per-bid services — live and ready to sell. No product sales yet, so revenue is $0.
+                </p>
+                <div className={styles.offerList}>
+                  {m.offerings.map((o) => (
+                    <div key={o.key} className={styles.offerRow}>
+                      <div style={{ minWidth: 0 }}>
+                        <div className={styles.offerName}>{o.label}</div>
+                        <div className={styles.offerNote}>{o.note}</div>
+                      </div>
+                      <div className={styles.offerPrice}>{o.price}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : (
               <div className={styles.donutRow}>
                 <Donut segments={mixSegments} centerLabel={fmtUsdK(h.revenueUsd)} centerSub="total" format={fmtUsd} />
