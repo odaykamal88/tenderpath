@@ -157,13 +157,13 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
   function composeBundle(group: { company_id: number; company_name: string; contact_name: string | null; matches: OutreachMatch[] }) {
     const picked = selectedFor(group);
     if (picked.length === 0) return;
-    const d = buildBundleEmail(group, picked, signoff, { origin: browserOrigin() });
+    const d = buildBundleEmail(group, picked, signoff);
     setDraft({ kind: "bundle", companyId: group.company_id, subject: d.subject, body: d.body });
     setCopied("");
     setDismissingId(null);
   }
   function openLinkedIn(m: OutreachMatch) {
-    const d = buildLinkedInDraft(m, signoff, { origin: browserOrigin() });
+    const d = buildLinkedInDraft(m, signoff);
     setDraft({ kind: "linkedin", matchId: m.id, note: d.note, message: d.message });
     setCopied("");
     setDismissingId(null);

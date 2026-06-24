@@ -323,9 +323,8 @@ function firstName(contactName: string | null): string {
   return first || "there";
 }
 
-function topReasons(reasons: string[] | null, n = 2): string {
-  if (!Array.isArray(reasons)) return "";
-  return reasons.map((r) => String(r).trim()).filter(Boolean).slice(0, n).join("; ");
+function companyInSentence(companyName: string): string {
+  return companyName.trim().replace(/[.!?]+$/, "") || "your team";
 }
 
 function agencyOf(m: OutreachMatch): string { return m.tender_agency?.trim() || "A buyer"; }
@@ -341,18 +340,12 @@ function deadlinePhraseOf(m: OutreachMatch): string {
   return `closing in ${days} day${days === 1 ? "" : "s"}${dateShort ? ` (${dateShort})` : ""}`;
 }
 
-/** "Why you" line, anchored in real match reasons; degrades to sector when reasons are thin. */
-function fitSentenceOf(m: OutreachMatch): string {
-  const reasons = topReasons(m.match_reasons);
-  const sector = sectorOf(m);
-  return reasons
-    ? `Based on what ${m.company_name} does, you look like a strong fit: ${reasons}.`
-    : `Based on what ${m.company_name} does, you look like a strong fit${sector ? ` for ${sector} work` : ""}.`;
+function humanTenderIntro(companyName: string, count: number): string {
+  const company = companyInSentence(companyName);
+  return count === 1
+    ? `I came across this and thought it was worth putting in front of ${company}. Details are below so you can check quickly.`
+    : `I came across these and thought they were worth putting in front of ${company}. Details are below so you can check quickly.`;
 }
-
-// The CTA is the free bid/no-bid read first, with the paid proposal package as
-// the natural next step only if the opportunity is worth pursuing.
-const PITCH = "I can do a no-cost bid/no-bid read first: deadline, key requirements, and whether it's worth pursuing. If it looks promising, the paid next step is a proposal package so you can move quickly.";
 
 /**
  * Turn a match into a short, specific, deadline-anchored cold EMAIL draft.
@@ -367,19 +360,20 @@ export function buildOutreachDraft(m: OutreachMatch, signoff: string): OutreachD
   const subject = (
     dateShort
       ? `${agency} ${subjectSector}tender — closes ${dateShort}`
-      : `${agency} ${subjectSector}tender — ${m.company_name} looks like a fit`
+      : `${agency} ${subjectSector}tender I thought worth sending`
   ).replace(/\s+/g, " ").trim();
 
   const value = meaningfulValue(m.tender_value);
-  const valueSentence = value ? `Estimated value: ${value}. ` : "";
-  const sectorWord = sector ? `${sector} ` : "";
+  const where = [m.tender_agency?.trim(), m.tender_country?.trim(), sector].filter(Boolean).join(" · ");
 
   const body = [
     `Hi ${firstName(m.contact_name)},`,
     "",
-    `${agency} has a live ${sectorWord}opportunity — "${m.tender_title}" — ${deadlinePhraseOf(m)}. ${fitSentenceOf(m)}`,
+    humanTenderIntro(m.company_name, 1),
     "",
-    `${valueSentence}${PITCH}`,
+    `"${m.tender_title}"${where ? ` — ${where}` : ""}`,
+    `${deadlinePhraseOf(m).replace(/^closing/, "Closes")}${value ? ` · est. ${value}` : ""}`,
+    ...(m.tender_source_url ? [m.tender_source_url] : []),
     "",
     signoff || "[Your name]\nTenderPath",
   ].join("\n");
@@ -393,38 +387,30 @@ export interface LinkedInDraft {
 }
 
 const NOTE_LIMIT = 300;
-const NOTE_PITCH = "I can share a no-cost bid/no-bid read on it. Worth a look?";
-
 /**
  * LinkedIn variant for the majority of bizdev prospects who have no email.
  * `note` is trimmed to LinkedIn's 300-char connection-note ceiling; `message`
  * is the fuller follow-up to send once they accept.
  */
-export function buildLinkedInDraft(m: OutreachMatch, signoff: string, opts: { origin?: string | null } = {}): LinkedInDraft {
+export function buildLinkedInDraft(m: OutreachMatch, signoff: string): LinkedInDraft {
   const agency = agencyOf(m);
   const sector = sectorOf(m);
   const dateShort = shortDate(m.tender_deadline);
   const sectorWord = sector ? `${sector} ` : "";
 
-  let note = `Hi ${firstName(m.contact_name)} — I found a live ${agency} ${sectorWord}tender${dateShort ? ` (closes ${dateShort})` : ""} ${m.company_name} looks like a strong fit for. ${NOTE_PITCH}`
+  let note = `Hi ${firstName(m.contact_name)} — I came across a live ${agency} ${sectorWord}tender${dateShort ? ` (closes ${dateShort})` : ""} and thought of ${companyInSentence(m.company_name)}. Might be useful.`
     .replace(/\s+/g, " ")
     .trim();
   if (note.length > NOTE_LIMIT) note = `${note.slice(0, NOTE_LIMIT - 1).trimEnd()}…`;
 
-  const value = meaningfulValue(m.tender_value);
-  const valueSentence = value ? `Estimated value: ${value}. ` : "";
-  // The 300-char note stays lean; the fuller follow-up carries the UNGM note +
-  // a link to the briefing (which itself holds the strengths/gaps).
-  const ungm = ungmReadiness([m], m.ungm_status);
-  const share = briefingUrl(m.share_token, opts.origin);
   const messageParts: string[] = [
-    `Hi ${firstName(m.contact_name)}, thanks for connecting.`,
+    `Hi ${firstName(m.contact_name)},`,
     "",
-    `${agency} has a live ${sectorWord}opportunity — "${m.tender_title}" — ${deadlinePhraseOf(m)}. ${fitSentenceOf(m)}`,
+    humanTenderIntro(m.company_name, 1),
+    "",
+    bundleTenderLine(m, 0),
   ];
-  if (ungm.line) messageParts.push("", ungm.line);
-  if (share) messageParts.push("", `I put the quick read here — the match, why it looks relevant, and what I'd check before bidding: ${share}`);
-  messageParts.push("", `${valueSentence}${PITCH}`, "", signoff || "[Your name]\nTenderPath");
+  messageParts.push("", signoff || "[Your name]\nTenderPath");
 
   return { note, message: messageParts.join("\n") };
 }
@@ -541,12 +527,10 @@ export function groupByCompany(matches: OutreachMatch[], sort: OutreachSort = "d
 function bundleTenderLine(m: OutreachMatch, idx: number): string {
   const where = [m.tender_agency?.trim(), m.tender_country?.trim()].filter(Boolean).join(" · ");
   const value = meaningfulValue(m.tender_value);
-  const reason = topReasons(m.match_reasons, 1);
   const parts = [
     `${idx + 1}. "${m.tender_title}"${where ? ` — ${where}` : ""}`,
     `   ${deadlinePhraseOf(m).replace(/^closing/, "Closes")}${value ? ` · est. ${value}` : ""}`,
   ];
-  if (reason) parts.push(`   Why you: ${reason}`);
   if (m.tender_source_url) parts.push(`   ${m.tender_source_url}`);
   return parts.join("\n");
 }
@@ -561,59 +545,21 @@ export function buildBundleEmail(
   group: Pick<CompanyGroup, "company_name" | "contact_name">,
   matches: OutreachMatch[],
   signoff: string,
-  opts: { origin?: string | null } = {},
 ): OutreachDraft {
   const n = matches.length;
   const subject = n === 1
     ? buildOutreachDraft(matches[0], signoff).subject
-    : `${n} live tenders ${group.company_name} looks a strong fit for`;
-
-  const intro = n === 1
-    ? `I had a look at ${group.company_name} against the live tenders we track, and one stood out as a strong fit:`
-    : `I had a look at ${group.company_name} against the live tenders we track. A few stood out as a strong fit:`;
-
-  // Company-level signals are mirrored onto every row — read them off the first.
-  const m0 = matches[0];
-  const strengths = Array.isArray(m0?.company_strengths)
-    ? m0!.company_strengths!.map((s) => String(s).trim()).filter(Boolean).slice(0, 3)
-    : [];
-  const gaps = selectInsightfulGaps(m0?.company_gaps, 3);
-  const ungm = ungmReadiness(matches, m0?.ungm_status);
-  const share = briefingUrl(m0?.share_token, opts.origin);
+    : "A few tenders I thought worth sending";
 
   const sections: string[] = [
     `Hi ${firstName(group.contact_name)},`,
     "",
-    intro,
+    humanTenderIntro(group.company_name, n),
     "",
     matches.map(bundleTenderLine).join("\n\n"),
-  ];
-
-  if (strengths.length) {
-    sections.push("", `Where you're strong: ${strengths.join("; ")}.`);
-  }
-  if (gaps.length) {
-    sections.push(
-      "",
-      "If you want to pursue these, the first things I'd check before bidding:",
-      gaps.map((g) => `• ${prospectGapText(g)}`).join("\n"),
-    );
-  }
-  if (ungm.line) {
-    sections.push("", ungm.line);
-  }
-  if (share) {
-    sections.push("", `I put the full picture together here — the matches, why they look relevant, and what I'd check before bidding: ${share}`);
-  }
-
-  sections.push(
-    "",
-    n === 1
-      ? PITCH
-      : "I can do a no-cost bid/no-bid read on the strongest one first: deadline, key requirements, and whether it's worth pursuing. If it looks promising, the paid next step is a proposal package so you can move quickly.",
     "",
     signoff || "[Your name]\nTenderPath",
-  );
+  ];
 
   return { subject, body: sections.join("\n") };
 }
@@ -708,8 +654,8 @@ export function toPilotCsv(groups: CompanyGroup[], signoff: string, opts: { orig
   const rows = pilot.map((g) => {
     const picked = g.matches.slice(0, 3);
     const top = picked[0];
-    const draft = buildBundleEmail(g, picked, signoff, opts);
-    const linkedIn = top ? buildLinkedInDraft(top, signoff, opts) : { note: "", message: "" };
+    const draft = buildBundleEmail(g, picked, signoff);
+    const linkedIn = top ? buildLinkedInDraft(top, signoff) : { note: "", message: "" };
     return [
       g.channel,
       g.company_name,
@@ -758,7 +704,7 @@ export function toOutreachCsv(matches: OutreachMatch[], signoff: string, opts: {
 
   const rows = ordered.map((m) => {
     const draft = buildOutreachDraft(m, signoff);
-    const li = buildLinkedInDraft(m, signoff, opts);
+    const li = buildLinkedInDraft(m, signoff);
     return [
       readiness(m), reachableChannel(m), m.company_name, m.contact_name ?? "", m.contact_email ?? "", m.contact_linkedin ?? "",
       m.tender_title, m.tender_agency ?? "", m.tender_sector ?? "", m.tender_country ?? "",
