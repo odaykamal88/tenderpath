@@ -40,6 +40,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       id, name, website, services_text, countries, sectors, org_type,
       ai_analysis, crawled_data, profile_status, profile_error,
       contact_name, contact_email, contact_phone, notes, is_active,
+      ungm_status, share_token,
       last_matched_at, created_at, updated_at
     FROM network_companies WHERE id = ${id} LIMIT 1
   `;
@@ -97,13 +98,20 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const contactPhone = has("contact_phone") ? cleanStr(b.contact_phone, 50) : (existing.contact_phone as string | null);
   const notes = has("notes") ? cleanStr(b.notes, 4000) : (existing.notes as string | null);
   const isActive = has("is_active") ? Boolean(b.is_active) : Boolean(existing.is_active);
+  // Operator-recorded UNGM status. Validated against the allowlist; anything else
+  // falls back to the existing value (never silently writes garbage). No re-crawl.
+  const UNGM_STATUSES = ["unknown", "not_registered", "basic", "level-1", "level-2"];
+  const ungmStatus = has("ungm_status") && UNGM_STATUSES.includes(String(b.ungm_status))
+    ? String(b.ungm_status)
+    : ((existing.ungm_status as string | null) ?? "unknown");
 
   await sql`
     UPDATE network_companies SET
       name = ${name}, website = ${website}, services_text = ${servicesText},
       countries = ${JSON.stringify(countries)}::jsonb, sectors = ${JSON.stringify(sectors)}::jsonb,
       org_type = ${orgType}, contact_name = ${contactName}, contact_email = ${contactEmail},
-      contact_phone = ${contactPhone}, notes = ${notes}, is_active = ${isActive}, updated_at = NOW()
+      contact_phone = ${contactPhone}, notes = ${notes}, is_active = ${isActive},
+      ungm_status = ${ungmStatus}, updated_at = NOW()
     WHERE id = ${id}
   `;
 
@@ -131,6 +139,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       id, name, website, services_text, countries, sectors, org_type,
       ai_analysis, crawled_data, profile_status, profile_error,
       contact_name, contact_email, contact_phone, notes, is_active,
+      ungm_status, share_token,
       last_matched_at, created_at, updated_at
     FROM network_companies WHERE id = ${id} LIMIT 1
   `;

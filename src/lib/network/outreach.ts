@@ -9,7 +9,23 @@
 // project_network_bizdev_matching note + AGENTS.md.
 //
 
+import type { Gap } from "@/lib/types";
+import { isUngmAgency } from "@/lib/tenders/submission-portals";
+
 export type OutreachReadiness = "send_ready" | "needs_email";
+
+/**
+ * Operator-recorded UNGM vendor-registration status of a prospect. We can't
+ * auto-detect it, so this reflects what the operator knows; 'unknown' is the
+ * safe default and keeps the outreach copy conditional rather than asserting a
+ * registration the prospect may not have.
+ */
+export type ProspectUngmStatus =
+  | "unknown"
+  | "not_registered"
+  | "basic"
+  | "level-1"
+  | "level-2";
 
 /** Shape of a fresh match row as returned by /api/admin/network-companies (GET). */
 export interface OutreachMatch {
@@ -41,6 +57,21 @@ export interface OutreachMatch {
   lost_count?: number;
   /** This company has a `lost` match with the same agency as this tender. */
   lost_agency_before?: boolean;
+  // ── Company-level profile signals (identical on every match of a company,
+  // mirrored onto each row like the engagement counts above). They power the
+  // value-first "mini-assessment" framing in the bundle email + the shareable
+  // prospect briefing. All optional so callers that don't hydrate them still
+  // typecheck (single-tender CSV drafts, tests, older callers).
+  company_industry?: string | null;
+  company_website?: string | null;
+  /** Confirmed strengths from the company's profile (ai_analysis.strengths). */
+  company_strengths?: string[] | null;
+  /** Raw gaps from the company's profile; filter with selectInsightfulGaps before showing. */
+  company_gaps?: Gap[] | null;
+  /** Operator-recorded UNGM status of the prospect. */
+  ungm_status?: ProspectUngmStatus | null;
+  /** Unguessable token for the public briefing page (/n/<token>). */
+  share_token?: string | null;
 }
 
 export interface OutreachDraft {
@@ -154,6 +185,93 @@ export function meaningfulValue(raw: string | null): string | null {
   return s;
 }
 
+// ── Boilerplate gaps we never surface to a cold prospect: administrative /
+// financial / paperwork items that (a) every vendor needs, so they aren't
+// insightful, and (b) read as presumptuous in a first-touch email. We keep the
+// capability / experience / track-record / sector-evidence gaps — the ones that
+// show we understood the business and that TenderPath actually helps close. The
+// assessment prompt already avoids scoring audited financials as a gap; this is
+// a second, display-time net for whatever boilerplate still slips through.
+const BOILERPLATE_GAP_RE =
+  /audited|audit report|financial statement|\bfinancials\b|annual turnover|\bturnover\b|balance sheet|bank (?:statement|reference|guarantee)|proof of funds|tax (?:registration|clearance|compliance|certificate|id)|\bvat\b|certificate of (?:incorporation|registration)|business registration|company registration|trade licen[sc]e|registration certificate|legal registration|professional indemnity|liability insurance|\binsurance\b|power of attorney|ungm (?:registration|vendor)|register(?:ed|ing)? (?:on|with) ungm|vendor registration|notar(?:ised|ized|y)/i;
+
+const GAP_SEVERITY_RANK: Record<Gap["severity"], number> = { high: 0, medium: 1, low: 2 };
+
+/**
+ * Pick the gaps worth showing a prospect: drop administrative/financial
+ * boilerplate (audited statements, registration certs, tax/VAT, insurance — the
+ * stuff every vendor needs and that reads as presumptuous cold), keep the
+ * capability/experience/positioning gaps, most-severe first, capped at n.
+ */
+export function selectInsightfulGaps(gaps: Gap[] | null | undefined, n = 3): Gap[] {
+  if (!Array.isArray(gaps)) return [];
+  return gaps
+    .filter((g) => g && typeof g.gap === "string" && g.gap.trim() && !BOILERPLATE_GAP_RE.test(g.gap))
+    .slice()
+    .sort((a, b) => (GAP_SEVERITY_RANK[a.severity] ?? 1) - (GAP_SEVERITY_RANK[b.severity] ?? 1))
+    .slice(0, Math.max(0, n));
+}
+
+export interface UngmReadiness {
+  /** UNGM is relevant — at least one matched tender is a genuine UN-agency buyer. */
+  applies: boolean;
+  /** How many of the supplied matches are UN-agency (UNGM-submitted) tenders. */
+  unCount: number;
+  /** Honest one-line readiness note, or null when UNGM doesn't apply. */
+  line: string | null;
+}
+
+const UNGM_LEVEL_LABEL: Record<"basic" | "level-1" | "level-2", string> = {
+  basic: "Basic",
+  "level-1": "Level 1",
+  "level-2": "Level 2",
+};
+
+/**
+ * Compute the UNGM-readiness note for a prospect's matches. Only fires when some
+ * matched tenders are genuine UN-agency buyers (isUngmAgency). Honest by
+ * construction — never claims a registration the operator hasn't recorded; when
+ * status is unknown the copy stays conditional ("if you're not registered…").
+ */
+export function ungmReadiness(
+  matches: Pick<OutreachMatch, "tender_agency">[],
+  status: ProspectUngmStatus | null | undefined,
+): UngmReadiness {
+  const unCount = matches.filter((m) => isUngmAgency(m.tender_agency)).length;
+  if (unCount === 0) return { applies: false, unCount: 0, line: null };
+  const noun = unCount === 1 ? "opportunity" : "opportunities";
+  let line: string;
+  if (status === "basic" || status === "level-1" || status === "level-2") {
+    line = `You're already registered on UNGM (${UNGM_LEVEL_LABEL[status]}), so you can move straight to bidding on the ${unCount} UN-agency ${noun} here.`;
+  } else if (status === "not_registered") {
+    line = `${unCount} of these are UN-agency tenders, submitted through UNGM (ungm.org). You'll need a free UNGM vendor account to bid — first-time registration is quick at Basic level, so worth starting now.`;
+  } else {
+    line = `${unCount} of these are UN-agency tenders, submitted through UNGM (ungm.org). If you're not already registered there, the free Basic level is usually enough to bid and is quick to set up.`;
+  }
+  return { applies: true, unCount, line };
+}
+
+const DEFAULT_BRIEFING_ORIGIN = "https://www.tenderpath.me";
+
+/** Relative path to a prospect's public briefing, or null without a token. */
+export function prospectBriefingPath(token: string | null | undefined): string | null {
+  const t = (token ?? "").trim();
+  return t ? `/n/${encodeURIComponent(t)}` : null;
+}
+
+/**
+ * Absolute URL to a prospect's public briefing for pasting into outreach. Pass
+ * the runtime origin (window.location.origin client-side, NEXT_PUBLIC_APP_URL
+ * server-side); falls back to the prod origin so a generated draft always has a
+ * working link even when no origin is supplied (e.g. the CSV export).
+ */
+export function briefingUrl(token: string | null | undefined, origin?: string | null): string | null {
+  const path = prospectBriefingPath(token);
+  if (!path) return null;
+  const base = (origin && origin.trim() ? origin : DEFAULT_BRIEFING_ORIGIN).replace(/\/+$/, "");
+  return `${base}${path}`;
+}
+
 function firstName(contactName: string | null): string {
   const first = (contactName ?? "").trim().split(/\s+/)[0] ?? "";
   return first || "there";
@@ -235,7 +353,7 @@ const NOTE_PITCH = "I help firms turn matches like this into submission-ready bi
  * `note` is trimmed to LinkedIn's 300-char connection-note ceiling; `message`
  * is the fuller follow-up to send once they accept.
  */
-export function buildLinkedInDraft(m: OutreachMatch, signoff: string): LinkedInDraft {
+export function buildLinkedInDraft(m: OutreachMatch, signoff: string, opts: { origin?: string | null } = {}): LinkedInDraft {
   const agency = agencyOf(m);
   const sector = sectorOf(m);
   const dateShort = shortDate(m.tender_deadline);
@@ -248,17 +366,20 @@ export function buildLinkedInDraft(m: OutreachMatch, signoff: string): LinkedInD
 
   const value = meaningfulValue(m.tender_value);
   const valueSentence = value ? `Estimated value: ${value}. ` : "";
-  const message = [
+  // The 300-char note stays lean; the fuller follow-up carries the UNGM note +
+  // a link to the briefing (which itself holds the strengths/gaps).
+  const ungm = ungmReadiness([m], m.ungm_status);
+  const share = briefingUrl(m.share_token, opts.origin);
+  const messageParts: string[] = [
     `Hi ${firstName(m.contact_name)}, thanks for connecting.`,
     "",
     `${agency} has a live ${sectorWord}opportunity — "${m.tender_title}" — ${deadlinePhraseOf(m)}. ${fitSentenceOf(m)}`,
-    "",
-    `${valueSentence}${PITCH}`,
-    "",
-    signoff || "[Your name]\nTenderPath",
-  ].join("\n");
+  ];
+  if (ungm.line) messageParts.push("", ungm.line);
+  if (share) messageParts.push("", `I put a quick read on where you'd be strong (and what to close) here: ${share}`);
+  messageParts.push("", `${valueSentence}${PITCH}`, "", signoff || "[Your name]\nTenderPath");
 
-  return { note, message };
+  return { note, message: messageParts.join("\n") };
 }
 
 /** Primary ordering of the worklist + bundles. */
@@ -393,6 +514,7 @@ export function buildBundleEmail(
   group: Pick<CompanyGroup, "company_name" | "contact_name">,
   matches: OutreachMatch[],
   signoff: string,
+  opts: { origin?: string | null } = {},
 ): OutreachDraft {
   const n = matches.length;
   const subject = n === 1
@@ -400,24 +522,53 @@ export function buildBundleEmail(
     : `${n} live tenders ${group.company_name} looks a strong fit for`;
 
   const intro = n === 1
-    ? `A live opportunity just came up that ${group.company_name} looks like a strong fit for:`
-    : `A few live opportunities just came up that ${group.company_name} looks like a strong fit for:`;
+    ? `I had a look at ${group.company_name} against the live tenders we track, and one stood out as a strong fit:`
+    : `I had a look at ${group.company_name} against the live tenders we track. A few stood out as a strong fit:`;
 
-  const body = [
+  // Company-level signals are mirrored onto every row — read them off the first.
+  const m0 = matches[0];
+  const strengths = Array.isArray(m0?.company_strengths)
+    ? m0!.company_strengths!.map((s) => String(s).trim()).filter(Boolean).slice(0, 3)
+    : [];
+  const gaps = selectInsightfulGaps(m0?.company_gaps, 3);
+  const ungm = ungmReadiness(matches, m0?.ungm_status);
+  const share = briefingUrl(m0?.share_token, opts.origin);
+
+  const sections: string[] = [
     `Hi ${firstName(group.contact_name)},`,
     "",
     intro,
     "",
     matches.map(bundleTenderLine).join("\n\n"),
+  ];
+
+  if (strengths.length) {
+    sections.push("", `Where you're strong: ${strengths.join("; ")}.`);
+  }
+  if (gaps.length) {
+    sections.push(
+      "",
+      "To be competitive on these, the main gaps to close:",
+      gaps.map((g) => `• ${g.gap}${g.fix ? ` — ${g.fix}` : ""}`).join("\n"),
+    );
+  }
+  if (ungm.line) {
+    sections.push("", ungm.line);
+  }
+  if (share) {
+    sections.push("", `I put the full picture together here — the matches, where you're strong, and what to close: ${share}`);
+  }
+
+  sections.push(
     "",
     n === 1
       ? PITCH
       : "I help companies turn matches like these into submission-ready bids, fast. Want a quick read on any of them — the deadlines, the key requirements, and where you'd be strong or weak? No cost to look.",
     "",
     signoff || "[Your name]\nTenderPath",
-  ].join("\n");
+  );
 
-  return { subject, body };
+  return { subject, body: sections.join("\n") };
 }
 
 function byDeadlineThenScore(a: OutreachMatch, b: OutreachMatch): number {
@@ -451,7 +602,7 @@ function csvCell(v: unknown): string {
  * Send-ready rows first so you can fire those immediately and enrich the rest
  * in parallel. Includes the generated draft so the sheet doubles as the tracker.
  */
-export function toOutreachCsv(matches: OutreachMatch[], signoff: string): string {
+export function toOutreachCsv(matches: OutreachMatch[], signoff: string, opts: { origin?: string | null } = {}): string {
   const ordered = matches.slice().sort((a, b) => {
     const ra = readiness(a) === "send_ready" ? 0 : 1;
     const rb = readiness(b) === "send_ready" ? 0 : 1;
@@ -463,17 +614,17 @@ export function toOutreachCsv(matches: OutreachMatch[], signoff: string): string
     "readiness", "channel", "company", "contact_name", "contact_email", "contact_linkedin",
     "tender", "agency", "sector", "country",
     "deadline", "days_to_deadline", "value", "fit_score",
-    "source_url", "reference", "status", "draft_subject", "draft_body", "linkedin_note",
+    "source_url", "reference", "status", "briefing_url", "draft_subject", "draft_body", "linkedin_note",
   ];
 
   const rows = ordered.map((m) => {
     const draft = buildOutreachDraft(m, signoff);
-    const li = buildLinkedInDraft(m, signoff);
+    const li = buildLinkedInDraft(m, signoff, opts);
     return [
       readiness(m), reachableChannel(m), m.company_name, m.contact_name ?? "", m.contact_email ?? "", m.contact_linkedin ?? "",
       m.tender_title, m.tender_agency ?? "", m.tender_sector ?? "", m.tender_country ?? "",
       m.tender_deadline ?? "", daysUntil(m.tender_deadline) ?? "", meaningfulValue(m.tender_value) ?? "", m.score,
-      m.tender_source_url ?? "", m.tender_reference ?? "", m.status, draft.subject, draft.body, li.note,
+      m.tender_source_url ?? "", m.tender_reference ?? "", m.status, briefingUrl(m.share_token, opts.origin) ?? "", draft.subject, draft.body, li.note,
     ].map(csvCell).join(",");
   });
 

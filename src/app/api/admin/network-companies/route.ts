@@ -42,6 +42,7 @@ export async function GET(request: Request) {
         c.profile_status, c.profile_error, c.contact_name, c.contact_email, c.contact_phone,
         c.notes, c.is_active, c.last_matched_at, c.created_at, c.updated_at,
         c.ai_analysis->>'detected_industry' AS detected_industry,
+        c.ungm_status, c.share_token,
         COALESCE(mc.total, 0)::int AS match_count,
         COALESCE(mc.fresh, 0)::int AS fresh_count,
         COALESCE(mc.top_score, 0)::int AS top_score
@@ -96,6 +97,15 @@ export async function GET(request: Request) {
           t.country AS tender_country, t.sector AS tender_sector, t.deadline AS tender_deadline,
           t.estimated_value AS tender_value, t.source_url AS tender_source_url, t.reference_id AS tender_reference,
           t.opportunity_type AS tender_type,
+          -- Company-level profile signals (identical on every row of a company),
+          -- powering the value-first mini-assessment in the bundle email + the
+          -- shareable briefing. Strengths/gaps come straight off the stored analysis.
+          c.ai_analysis->'strengths' AS company_strengths,
+          c.ai_analysis->'gaps' AS company_gaps,
+          c.ai_analysis->>'detected_industry' AS company_industry,
+          c.website AS company_website,
+          c.ungm_status,
+          c.share_token,
           -- Per-company engagement context (operator judgement aids; never shown to the prospect).
           COALESCE(eng.contacted_count, 0)::int AS contacted_count,
           COALESCE(eng.won_count, 0)::int AS won_count,

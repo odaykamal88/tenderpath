@@ -334,6 +334,32 @@ export function resolveUngmRequirement(
   };
 }
 
+// Genuine UN bodies that procure through UNGM. Precision-biased (allowlist of
+// specific UN agencies, NOT a bare "un" token) because this can auto-render on a
+// public page: a false positive would wrongly tell a prospect "this is a UNGM
+// tender". Bare "un" is deliberately omitted (matches French/Spanish "un").
+const UN_AGENCY_RE =
+  /\b(undp|unicef|unhcr|wfp|who|unfpa|unops|iom|fao|unesco|unrwa|unep|unido|ilo|uncdf|unv|ohchr|unaids|unodc|unctad|ocha|itu|wipo|wmo|ifad|unu|unicri|paho)\b|\bun[\s-]?women\b|\bun[\s-]?habitat\b|united nations|world health organization|world food (?:programme|program)/i;
+// Non-UN buyers (IFIs, EU institutions, bilateral donors) that do NOT use UNGM.
+// A defensive guard in case a name ever carries both a UN-looking token and one
+// of these — these win and we treat the buyer as non-UNGM.
+const NON_UN_AGENCY_RE =
+  /world bank|international finance corporation|\bifc\b|\bebrd\b|\bafdb\b|african development bank|asian development bank|\badb\b|islamic development bank|\bisdb\b|inter-american development bank|european (?:union|commission|bank|investment)|\beib\b|\bgiz\b|\bkfw\b|\bafd\b|\bjica\b|\busaid\b|\bdfid\b|\bfcdo\b/i;
+
+/**
+ * True when a buying agency is a UN body that bids are submitted to via UNGM —
+ * so a UNGM vendor account is genuinely relevant. Used to decide whether to
+ * surface the UNGM-readiness note on prospect outreach + the briefing page.
+ * Honest by construction: returns false for the World Bank, EU, EBRD, bilateral
+ * donors, and governments even though those still appear on aggregator feeds.
+ */
+export function isUngmAgency(agency: string | null | undefined): boolean {
+  const hay = (agency ?? "").toLowerCase();
+  if (!hay.trim()) return false;
+  if (NON_UN_AGENCY_RE.test(hay)) return false;
+  return UN_AGENCY_RE.test(hay);
+}
+
 /**
  * Judge whether a supplier can realistically reach a given UNGM level before
  * this tender's deadline. Reuses the same coarse band logic as portal timing.
