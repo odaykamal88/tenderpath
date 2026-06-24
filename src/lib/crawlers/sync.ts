@@ -43,6 +43,8 @@ export interface SyncSummary {
   totalUpdated: number;
   totalExpired: number;
   totalDeduped: number;
+  /** Cross-posted duplicate rows folded onto a survivor this run (collapseDuplicateTenders). */
+  totalCollapsed: number;
   totalBrokenLinks: number;
 }
 
@@ -232,6 +234,167 @@ export async function expireAllOverdue(): Promise<number> {
   return result.length;
 }
 
+let _dedupSchemaReady: Promise<void> | null = null;
+
+/**
+ * Idempotent runtime self-heal for the generated `dedup_key` column + its partial
+ * index. Mirrors the tenders block in scripts/migrate.mjs (which does NOT auto-run
+ * on Vercel — see ensureNetworkMatchingColumns / ensureBotRuntimeSchema). Memoized
+ * so the crawl hot path runs the DDL at most once per process; a transient failure
+ * clears the cache so the next call retries.
+ */
+export async function ensureTenderDedupSchema(): Promise<void> {
+  if (!_dedupSchemaReady) {
+    _dedupSchemaReady = (async () => {
+      await sql`
+        ALTER TABLE tenders ADD COLUMN IF NOT EXISTS dedup_key TEXT GENERATED ALWAYS AS (
+          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(title, '')),  '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
+          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(agency, '')), '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
+          COALESCE(deadline::text, '')
+        ) STORED
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS tenders_dedup_key_open_idx ON tenders (dedup_key) WHERE status = 'open'`;
+    })().catch((err) => {
+      _dedupSchemaReady = null;
+      throw err;
+    });
+  }
+  return _dedupSchemaReady;
+}
+
+export interface CollapseResult {
+  /** Duplicate opportunity-groups found (a dedup_key shared by >1 open row). */
+  groups: number;
+  /** Loser rows superseded (or, in dry-run, that WOULD be). */
+  collapsed: number;
+  details: Array<{ dedupKey: string; survivorId: number; survivorSource: string | null; loserIds: number[] }>;
+  dryRun: boolean;
+}
+
+type DupRow = {
+  id: number;
+  dedup_key: string;
+  source_name: string | null;
+  updated_at: string | null;
+  match_count: number;
+};
+
+/** Lower = better survivor: primary source → most matches → most recent → highest id. */
+function compareSurvivor(a: DupRow, b: DupRow): number {
+  const pa = SOURCE_PRIORITY[a.source_name ?? ""] ?? 0;
+  const pb = SOURCE_PRIORITY[b.source_name ?? ""] ?? 0;
+  if (pa !== pb) return pb - pa;
+  if (a.match_count !== b.match_count) return b.match_count - a.match_count;
+  const ta = a.updated_at ? Date.parse(a.updated_at) : 0;
+  const tb = b.updated_at ? Date.parse(b.updated_at) : 0;
+  if (ta !== tb) return tb - ta;
+  return b.id - a.id;
+}
+
+/**
+ * Fold cross-posted duplicate tenders onto one canonical survivor. Overlapping
+ * sources publish the same opportunity under different reference_ids and
+ * upsertTenders() dedups ON CONFLICT (reference_id) only, so each copy persists as
+ * its own row. This collapses any OPEN rows sharing dedupKey() (normalized
+ * title+agency+deadline, via the generated `dedup_key` column) down to the
+ * highest-priority-source survivor:
+ *   - repoints child rows (vendor/network matches, pipeline, feedback, bids,
+ *     submissions) onto the survivor so nothing is orphaned, guarding the three
+ *     UNIQUE(…, tender_id) tables against collisions; and
+ *   - marks the losers status='superseded'. Every tender reader filters
+ *     status='open', so they leave display AND matching at once. Reversible, and
+ *     no re-crawl churn — a future ON CONFLICT (reference_id) just updates the
+ *     hidden tombstone instead of re-inserting.
+ *
+ * Runs at the end of every sync (continuous prevention) and from
+ * scripts/dedupe-tenders.ts (one-off backlog cleanup). Idempotent: a second run
+ * finds zero groups. Does NOT touch upsertTenders / dedupeTenders / link verify.
+ */
+export async function collapseDuplicateTenders(opts: { dryRun?: boolean } = {}): Promise<CollapseResult> {
+  const dryRun = opts.dryRun ?? false;
+  await ensureTenderDedupSchema();
+
+  // Every row in a duplicate group, with a match count so the copy already
+  // carrying the most matches wins a source-priority tie. One query.
+  const rows = (await sql`
+    WITH dups AS (
+      SELECT dedup_key
+      FROM tenders
+      WHERE status = 'open' AND COALESCE(title, '') <> '' AND dedup_key IS NOT NULL
+      GROUP BY dedup_key
+      HAVING COUNT(*) > 1
+    )
+    SELECT
+      t.id, t.dedup_key, t.source_name, t.updated_at::text AS updated_at,
+      (
+        COALESCE((SELECT COUNT(*) FROM tender_vendor_matches m WHERE m.tender_id = t.id), 0)
+        + COALESCE((SELECT COUNT(*) FROM network_company_matches n WHERE n.tender_id = t.id), 0)
+      )::int AS match_count
+    FROM tenders t
+    JOIN dups d ON d.dedup_key = t.dedup_key
+    WHERE t.status = 'open' AND COALESCE(t.title, '') <> ''
+    ORDER BY t.dedup_key, t.id
+  `) as DupRow[];
+
+  const byKey = new Map<string, DupRow[]>();
+  for (const r of rows) {
+    const g = byKey.get(r.dedup_key) ?? [];
+    g.push(r);
+    byKey.set(r.dedup_key, g);
+  }
+
+  const details: CollapseResult["details"] = [];
+  const loserIds: number[] = [];
+  const survivorForLoser: number[] = []; // aligned 1:1 with loserIds
+
+  for (const [key, group] of byKey) {
+    if (group.length < 2) continue;
+    const survivor = group.reduce((best, cur) => (compareSurvivor(cur, best) < 0 ? cur : best));
+    const losers = group.filter((r) => r.id !== survivor.id);
+    if (losers.length === 0) continue;
+    details.push({ dedupKey: key, survivorId: survivor.id, survivorSource: survivor.source_name, loserIds: losers.map((l) => l.id) });
+    for (const l of losers) {
+      loserIds.push(l.id);
+      survivorForLoser.push(survivor.id);
+    }
+  }
+
+  const result: CollapseResult = { groups: details.length, collapsed: loserIds.length, details, dryRun };
+  if (dryRun || loserIds.length === 0) return result;
+
+  // Repoint children loser → survivor. unnest() zips the two aligned arrays into
+  // (loser, survivor) pairs for one set-based UPDATE per table. The three tables
+  // with UNIQUE(…, tender_id) get a NOT EXISTS guard so a repoint never collides
+  // with a row the survivor already has; collided leftovers stay on the hidden
+  // loser (harmless). Order children before the supersede.
+  await sql`
+    UPDATE tender_vendor_matches x SET tender_id = m.survivor
+    FROM unnest(${loserIds}::int[], ${survivorForLoser}::int[]) AS m(loser, survivor)
+    WHERE x.tender_id = m.loser
+      AND NOT EXISTS (SELECT 1 FROM tender_vendor_matches y WHERE y.tender_id = m.survivor AND y.assessment_id = x.assessment_id)
+  `;
+  await sql`
+    UPDATE network_company_matches x SET tender_id = m.survivor
+    FROM unnest(${loserIds}::int[], ${survivorForLoser}::int[]) AS m(loser, survivor)
+    WHERE x.tender_id = m.loser
+      AND NOT EXISTS (SELECT 1 FROM network_company_matches y WHERE y.network_company_id = x.network_company_id AND y.tender_id = m.survivor)
+  `;
+  await sql`
+    UPDATE user_tender_feedback x SET tender_id = m.survivor
+    FROM unnest(${loserIds}::int[], ${survivorForLoser}::int[]) AS m(loser, survivor)
+    WHERE x.tender_id = m.loser
+      AND NOT EXISTS (SELECT 1 FROM user_tender_feedback y WHERE y.user_id = x.user_id AND y.tender_id = m.survivor)
+  `;
+  // No UNIQUE(…, tender_id) — repoint freely to keep users' saved/pipeline continuity.
+  await sql`UPDATE pipeline_items x SET tender_id = m.survivor FROM unnest(${loserIds}::int[], ${survivorForLoser}::int[]) AS m(loser, survivor) WHERE x.tender_id = m.loser`;
+  await sql`UPDATE bid_analyses x SET tender_id = m.survivor FROM unnest(${loserIds}::int[], ${survivorForLoser}::int[]) AS m(loser, survivor) WHERE x.tender_id = m.loser`;
+  await sql`UPDATE submission_orders x SET tender_id = m.survivor FROM unnest(${loserIds}::int[], ${survivorForLoser}::int[]) AS m(loser, survivor) WHERE x.tender_id = m.loser`;
+
+  await sql`UPDATE tenders SET status = 'superseded', updated_at = NOW() WHERE id = ANY(${loserIds}::int[])`;
+
+  return result;
+}
+
 /**
  * Sample-verify recent source URLs. Bounded sample so we don't hammer providers.
  * Requires `last_link_check TIMESTAMP` and `has_broken_link BOOLEAN` columns.
@@ -385,6 +548,27 @@ export async function syncAllTenders(): Promise<SyncSummary> {
   }
 
   const totalExpired = await expireAllOverdue();
+
+  // Durable cross-run dedup: fold cross-posted duplicate rows (same opportunity,
+  // different reference_id) onto one survivor. Display and matching both filter
+  // status='open', so the superseded copies vanish from both at once. Wrapped so
+  // a dedup hiccup never fails the crawl (no silent failure: it logs a tagged line).
+  let totalCollapsed = 0;
+  try {
+    const collapse = await collapseDuplicateTenders();
+    totalCollapsed = collapse.collapsed;
+    if (collapse.collapsed > 0) {
+      await logCrawl({
+        platform: "_dedup_collapse",
+        status: "success",
+        added: 0, updated: 0, expired: 0, brokenLinks: 0, durationMs: 0,
+        metadata: { collapsedDuplicates: collapse.collapsed, duplicateGroups: collapse.groups },
+      });
+    }
+  } catch (err) {
+    console.error("[crawler:collapse_duplicates:failed]", err instanceof Error ? err.message : String(err));
+  }
+
   const totalBrokenLinks = await verifyRecentLinks();
 
   return {
@@ -393,6 +577,7 @@ export async function syncAllTenders(): Promise<SyncSummary> {
     totalUpdated: results.reduce((s, r) => s + r.updated, 0),
     totalExpired,
     totalDeduped: deduped,
+    totalCollapsed,
     totalBrokenLinks,
   };
 }
