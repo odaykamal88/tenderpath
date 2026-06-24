@@ -108,6 +108,10 @@ export async function GET(request: Request) {
           c.share_token,
           -- Per-company engagement context (operator judgement aids; never shown to the prospect).
           COALESCE(eng.contacted_count, 0)::int AS contacted_count,
+          COALESCE(eng.replied_count, 0)::int AS replied_count,
+          COALESCE(eng.booked_count, 0)::int AS booked_count,
+          COALESCE(eng.paid_count, 0)::int AS paid_count,
+          COALESCE(eng.not_relevant_count, 0)::int AS not_relevant_count,
           COALESCE(eng.won_count, 0)::int AS won_count,
           COALESCE(eng.lost_count, 0)::int AS lost_count,
           (
@@ -122,6 +126,10 @@ export async function GET(request: Request) {
           SELECT
             em.network_company_id AS cid,
             COUNT(*) FILTER (WHERE em.status = 'contacted') AS contacted_count,
+            COUNT(*) FILTER (WHERE em.status = 'replied') AS replied_count,
+            COUNT(*) FILTER (WHERE em.status = 'booked') AS booked_count,
+            COUNT(*) FILTER (WHERE em.status = 'paid') AS paid_count,
+            COUNT(*) FILTER (WHERE em.status = 'not_relevant') AS not_relevant_count,
             COUNT(*) FILTER (WHERE em.status = 'won') AS won_count,
             COUNT(*) FILTER (WHERE em.status = 'lost') AS lost_count,
             COALESCE(

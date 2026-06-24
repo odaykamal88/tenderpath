@@ -3,7 +3,18 @@ import { requireAdmin } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
 import { ensureNetworkMatchingColumns } from "@/lib/network/schema";
 
-const STATUSES = new Set(["new", "seen", "contacted", "dismissed", "won", "lost"]);
+const STATUSES = new Set([
+  "new",
+  "seen",
+  "contacted",
+  "replied",
+  "booked",
+  "paid",
+  "not_relevant",
+  "dismissed",
+  "won",
+  "lost",
+]);
 
 export async function PATCH(request: Request, context: { params: Promise<{ matchId: string }> }) {
   const guard = await requireAdmin(request);

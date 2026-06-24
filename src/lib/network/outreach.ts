@@ -53,6 +53,10 @@ export interface OutreachMatch {
   // per-row flag — operator judgement aids, never shown to the prospect. All
   // optional so callers/builders that don't hydrate them still typecheck.
   contacted_count?: number;
+  replied_count?: number;
+  booked_count?: number;
+  paid_count?: number;
+  not_relevant_count?: number;
   won_count?: number;
   lost_count?: number;
   /** This company has a `lost` match with the same agency as this tender. */
@@ -79,12 +83,31 @@ export interface OutreachDraft {
   body: string;
 }
 
-/** Whole-day count until a deadline. null when missing/unparseable. Negative = already past. */
+const MS_PER_DAY = 86_400_000;
+
+function todayLocalDateAsUtcMs(): number {
+  const today = new Date();
+  return Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+}
+
+function deadlineUtcDateAsUtcMs(deadline: string): number | null {
+  const end = new Date(deadline);
+  if (Number.isNaN(end.getTime())) return null;
+  return Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+}
+
+function deadlineAsLocalMidnight(deadline: string): Date | null {
+  const end = new Date(deadline);
+  if (Number.isNaN(end.getTime())) return null;
+  return new Date(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+}
+
+/** Calendar-day count until a deadline. null when missing/unparseable. Negative = already past. */
 export function daysUntil(deadline: string | null): number | null {
   if (!deadline) return null;
-  const t = new Date(deadline).getTime();
-  if (Number.isNaN(t)) return null;
-  return Math.round((t - Date.now()) / 86_400_000);
+  const target = deadlineUtcDateAsUtcMs(deadline);
+  if (target === null) return null;
+  return Math.round((target - todayLocalDateAsUtcMs()) / MS_PER_DAY);
 }
 
 /**
@@ -95,15 +118,13 @@ export function daysUntil(deadline: string | null): number | null {
  */
 export function businessDaysUntil(deadline: string | null): number | null {
   if (!deadline) return null;
-  const end = new Date(deadline);
-  if (Number.isNaN(end.getTime())) return null;
+  const end = deadlineAsLocalMidnight(deadline);
+  if (!end) return null;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const target = new Date(end);
-  target.setHours(0, 0, 0, 0);
   let count = 0;
   const cur = new Date(today);
-  while (cur < target) {
+  while (cur < end) {
     cur.setDate(cur.getDate() + 1);
     const dow = cur.getDay();
     if (dow !== 0 && dow !== 6) count += 1;
@@ -196,6 +217,31 @@ const BOILERPLATE_GAP_RE =
   /audited|audit report|financial statement|\bfinancials\b|annual turnover|\bturnover\b|balance sheet|bank (?:statement|reference|guarantee)|proof of funds|tax (?:registration|clearance|compliance|certificate|id)|\bvat\b|certificate of (?:incorporation|registration)|business registration|company registration|trade licen[sc]e|registration certificate|legal registration|professional indemnity|liability insurance|\binsurance\b|power of attorney|ungm (?:registration|vendor)|register(?:ed|ing)? (?:on|with) ungm|vendor registration|notar(?:ised|ized|y)/i;
 
 const GAP_SEVERITY_RANK: Record<Gap["severity"], number> = { high: 0, medium: 1, low: 2 };
+
+export function prospectGapIssueText(gap: Pick<Gap, "gap"> | string): string {
+  const value = typeof gap === "string" ? gap : gap.gap;
+  const raw = value
+    .replace(/^\s*(evidence needed|need evidence|missing|gap)\s*:?\s*/i, "")
+    .replace(/^\s*no evidence of\s+/i, "")
+    .replace(/^\s*no\s+/i, "confirm ")
+    .replace(/website content is minimal\/placeholder\s*[—-]\s*/i, "")
+    .trim();
+  return raw || value.trim();
+}
+
+export function prospectGapFixText(fix: string | null | undefined): string {
+  return fix
+    ? fix
+        .replace(/^\s*(supply|provide|add|attach)\s+/i, "")
+        .trim()
+    : "";
+}
+
+export function prospectGapText(gap: Gap): string {
+  const issue = prospectGapIssueText(gap);
+  const fix = prospectGapFixText(gap.fix);
+  return `${issue}${fix ? ` — ${fix}` : ""}`;
+}
 
 /**
  * Pick the gaps worth showing a prospect: drop administrative/financial
@@ -304,8 +350,9 @@ function fitSentenceOf(m: OutreachMatch): string {
     : `Based on what ${m.company_name} does, you look like a strong fit${sector ? ` for ${sector} work` : ""}.`;
 }
 
-// The CTA is the FREE bid/no-bid read (the on-ramp), not a hard sell.
-const PITCH = "I help companies turn a match like this into a submission-ready bid, fast. Want a quick read on whether it's worth going for — the deadline, the key requirements, and where you'd be strong or weak? No cost to look.";
+// The CTA is the free bid/no-bid read first, with the paid proposal package as
+// the natural next step only if the opportunity is worth pursuing.
+const PITCH = "I can do a no-cost bid/no-bid read first: deadline, key requirements, and whether it's worth pursuing. If it looks promising, the paid next step is a proposal package so you can move quickly.";
 
 /**
  * Turn a match into a short, specific, deadline-anchored cold EMAIL draft.
@@ -346,7 +393,7 @@ export interface LinkedInDraft {
 }
 
 const NOTE_LIMIT = 300;
-const NOTE_PITCH = "I help firms turn matches like this into submission-ready bids — happy to share a quick read. Worth a look?";
+const NOTE_PITCH = "I can share a no-cost bid/no-bid read on it. Worth a look?";
 
 /**
  * LinkedIn variant for the majority of bizdev prospects who have no email.
@@ -359,7 +406,7 @@ export function buildLinkedInDraft(m: OutreachMatch, signoff: string, opts: { or
   const dateShort = shortDate(m.tender_deadline);
   const sectorWord = sector ? `${sector} ` : "";
 
-  let note = `Hi ${firstName(m.contact_name)} — ${agency} has a live ${sectorWord}tender${dateShort ? ` (closes ${dateShort})` : ""} ${m.company_name} looks a strong fit for. ${NOTE_PITCH}`
+  let note = `Hi ${firstName(m.contact_name)} — I found a live ${agency} ${sectorWord}tender${dateShort ? ` (closes ${dateShort})` : ""} ${m.company_name} looks like a strong fit for. ${NOTE_PITCH}`
     .replace(/\s+/g, " ")
     .trim();
   if (note.length > NOTE_LIMIT) note = `${note.slice(0, NOTE_LIMIT - 1).trimEnd()}…`;
@@ -376,7 +423,7 @@ export function buildLinkedInDraft(m: OutreachMatch, signoff: string, opts: { or
     `${agency} has a live ${sectorWord}opportunity — "${m.tender_title}" — ${deadlinePhraseOf(m)}. ${fitSentenceOf(m)}`,
   ];
   if (ungm.line) messageParts.push("", ungm.line);
-  if (share) messageParts.push("", `I put a quick read on where you'd be strong (and what to close) here: ${share}`);
+  if (share) messageParts.push("", `I put the quick read here — the match, why it looks relevant, and what I'd check before bidding: ${share}`);
   messageParts.push("", `${valueSentence}${PITCH}`, "", signoff || "[Your name]\nTenderPath");
 
   return { note, message: messageParts.join("\n") };
@@ -548,22 +595,22 @@ export function buildBundleEmail(
   if (gaps.length) {
     sections.push(
       "",
-      "To be competitive on these, the main gaps to close:",
-      gaps.map((g) => `• ${g.gap}${g.fix ? ` — ${g.fix}` : ""}`).join("\n"),
+      "If you want to pursue these, the first things I'd check before bidding:",
+      gaps.map((g) => `• ${prospectGapText(g)}`).join("\n"),
     );
   }
   if (ungm.line) {
     sections.push("", ungm.line);
   }
   if (share) {
-    sections.push("", `I put the full picture together here — the matches, where you're strong, and what to close: ${share}`);
+    sections.push("", `I put the full picture together here — the matches, why they look relevant, and what I'd check before bidding: ${share}`);
   }
 
   sections.push(
     "",
     n === 1
       ? PITCH
-      : "I help companies turn matches like these into submission-ready bids, fast. Want a quick read on any of them — the deadlines, the key requirements, and where you'd be strong or weak? No cost to look.",
+      : "I can do a no-cost bid/no-bid read on the strongest one first: deadline, key requirements, and whether it's worth pursuing. If it looks promising, the paid next step is a proposal package so you can move quickly.",
     "",
     signoff || "[Your name]\nTenderPath",
   );
@@ -595,6 +642,98 @@ function byScoreThenDeadline(a: OutreachMatch, b: OutreachMatch): number {
 function csvCell(v: unknown): string {
   const s = v == null ? "" : String(v);
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+export const PILOT_EMAIL_TARGET = 25;
+export const PILOT_LINKEDIN_TARGET = 25;
+export const PILOT_MIN_SCORE = 85;
+export const PILOT_MIN_MATCHES = 2;
+
+/**
+ * A conservative first shipping batch: high-fit companies with at least two
+ * live opportunities and a shareable briefing. Keeps the first cold run small,
+ * measurable, and worth manual review before scaling.
+ */
+export function isPilotEligibleGroup(group: CompanyGroup): boolean {
+  if (group.matches.length < PILOT_MIN_MATCHES) return false;
+  const topScore = Math.max(...group.matches.map((m) => m.score));
+  return (
+    topScore >= PILOT_MIN_SCORE &&
+    Boolean(group.matches[0]?.share_token) &&
+    (group.channel === "email" || group.channel === "linkedin")
+  );
+}
+
+/** Select the first 25 email-ready + first 25 LinkedIn-ready eligible bundles. */
+export function selectPilotGroups(
+  groups: CompanyGroup[],
+  opts: { emailTarget?: number; linkedinTarget?: number } = {},
+): CompanyGroup[] {
+  const emailTarget = opts.emailTarget ?? PILOT_EMAIL_TARGET;
+  const linkedinTarget = opts.linkedinTarget ?? PILOT_LINKEDIN_TARGET;
+  const eligible = groups.filter(isPilotEligibleGroup);
+  const email = eligible.filter((g) => g.channel === "email").slice(0, emailTarget);
+  const linkedin = eligible.filter((g) => g.channel === "linkedin").slice(0, linkedinTarget);
+  return [...email, ...linkedin];
+}
+
+/**
+ * Pilot CSV for the first revenue run. One row per company, with outcome
+ * columns included so the exported sheet can become the reply/booked/paid log.
+ */
+export function toPilotCsv(groups: CompanyGroup[], signoff: string, opts: { origin?: string | null } = {}): string {
+  const pilot = selectPilotGroups(groups);
+  const headers = [
+    "pilot_channel",
+    "company",
+    "contact_name",
+    "contact_email",
+    "contact_linkedin",
+    "top_fit_score",
+    "selected_tender_count",
+    "soonest_deadline",
+    "briefing_url",
+    "draft_subject",
+    "draft_body",
+    "linkedin_note",
+    "linkedin_follow_up",
+    "outcome_contacted",
+    "outcome_replied",
+    "outcome_booked",
+    "outcome_paid",
+    "outcome_not_relevant",
+    "notes",
+  ];
+
+  const rows = pilot.map((g) => {
+    const picked = g.matches.slice(0, 3);
+    const top = picked[0];
+    const draft = buildBundleEmail(g, picked, signoff, opts);
+    const linkedIn = top ? buildLinkedInDraft(top, signoff, opts) : { note: "", message: "" };
+    return [
+      g.channel,
+      g.company_name,
+      g.contact_name ?? "",
+      g.contact_email ?? "",
+      g.contact_linkedin ?? "",
+      Math.max(...g.matches.map((m) => m.score)),
+      picked.length,
+      top?.tender_deadline ?? "",
+      briefingUrl(top?.share_token, opts.origin) ?? "",
+      draft.subject,
+      draft.body,
+      g.channel === "linkedin" ? linkedIn.note : "",
+      g.channel === "linkedin" ? linkedIn.message : "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+    ].map(csvCell).join(",");
+  });
+
+  return [headers.join(","), ...rows].join("\r\n");
 }
 
 /**

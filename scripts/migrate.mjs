@@ -579,12 +579,21 @@ CREATE TABLE IF NOT EXISTS network_company_matches (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT network_company_matches_unique UNIQUE (network_company_id, tender_id),
-  CONSTRAINT network_company_matches_status_chk CHECK (status IN ('new','seen','contacted','dismissed','won','lost'))
+  CONSTRAINT network_company_matches_status_chk CHECK (status IN ('new','seen','contacted','replied','booked','paid','not_relevant','dismissed','won','lost'))
 );
 CREATE INDEX IF NOT EXISTS network_company_matches_company_idx ON network_company_matches (network_company_id);
 CREATE INDEX IF NOT EXISTS network_company_matches_status_idx ON network_company_matches (status, score DESC);
 CREATE INDEX IF NOT EXISTS network_company_matches_tender_idx ON network_company_matches (tender_id);
 ALTER TABLE network_company_matches ADD COLUMN IF NOT EXISTS dismiss_reason TEXT;
+ALTER TABLE network_company_matches DROP CONSTRAINT IF EXISTS network_company_matches_status_chk;
+ALTER TABLE network_company_matches
+  ADD CONSTRAINT network_company_matches_status_chk
+  CHECK (status IN ('new','seen','contacted','replied','booked','paid','not_relevant','dismissed','won','lost'));
+ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS contact_linkedin TEXT;
+ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS ungm_status TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS share_token TEXT DEFAULT md5(random()::text || clock_timestamp()::text);
+UPDATE network_companies SET share_token = md5(random()::text || clock_timestamp()::text || id::text) WHERE share_token IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS network_companies_share_token_idx ON network_companies (share_token);
 
 -- Bot (Telegram/WhatsApp) channel-agnostic session store. Replaces telegram_sessions.
 CREATE TABLE IF NOT EXISTS bot_sessions (

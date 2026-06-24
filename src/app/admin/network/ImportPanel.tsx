@@ -32,11 +32,16 @@ export default function ImportPanel({ existingNames, onClose, onImported }: Prop
     () => new Set(existingNames.map((n) => n.trim().toLowerCase())),
     [existingNames],
   );
-  const toImport = useMemo(
-    () => (parsed?.rows ?? []).filter((r) => !existing.has(r.name.trim().toLowerCase())),
-    [parsed, existing],
-  );
-  const dupes = (parsed?.rows.length ?? 0) - toImport.length;
+  const toImport = useMemo(() => {
+    const seen = new Set(existing);
+    return (parsed?.rows ?? []).filter((r) => {
+      const key = r.name.trim().toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [parsed, existing]);
+  const skippedDuplicateNames = (parsed?.rows.length ?? 0) - toImport.length;
 
   function doParse(t: string) {
     try {
@@ -143,7 +148,7 @@ export default function ImportPanel({ existingNames, onClose, onImported }: Prop
           <div className={styles.sessionSubtle}>
             Parsed <strong>{parsed.rows.length}</strong> companies
             {parsed.skippedNoName > 0 && <> · {parsed.skippedNoName} skipped (no name)</>}
-            {dupes > 0 && <> · {dupes} already in your list (will skip)</>}
+            {skippedDuplicateNames > 0 && <> · {skippedDuplicateNames} duplicate/existing name{skippedDuplicateNames === 1 ? "" : "s"} skipped</>}
             {" · "}<strong>{toImport.length}</strong> new to import
           </div>
         ) : null}

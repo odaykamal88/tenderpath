@@ -84,6 +84,7 @@ function cleanValue(raw: unknown): string | null {
 
 const MAX_TENDERS = 8;
 const MIN_BRIEFING_SCORE = 70; // only show strong matches to a prospect
+const MIN_BRIEFING_LEAD_DAYS = 10; // keep the public briefing aligned with the outreach worklist runway
 
 /**
  * Load and assemble a prospect briefing by its share token. Returns null when
@@ -121,7 +122,7 @@ export async function loadProspectBriefing(token: string): Promise<ProspectBrief
       AND m.status IN ('new', 'seen', 'contacted')
       AND m.score >= ${MIN_BRIEFING_SCORE}
       AND t.status = 'open' AND COALESCE(t.has_broken_link, false) = false
-      AND t.deadline >= CURRENT_DATE
+      AND t.deadline >= CURRENT_DATE + (${MIN_BRIEFING_LEAD_DAYS})::int
     ORDER BY m.score DESC, t.deadline ASC NULLS LAST
   `;
 

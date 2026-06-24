@@ -6,6 +6,10 @@ export type NetworkMatchStatus =
   | "new"
   | "seen"
   | "contacted"
+  | "replied"
+  | "booked"
+  | "paid"
+  | "not_relevant"
   | "dismissed"
   | "won"
   | "lost";

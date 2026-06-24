@@ -6,10 +6,19 @@ import { sql } from "@/lib/db";
 // so the first request after deploy doesn't 500 with "relation does not exist"
 // if migrate.mjs hasn't been re-run yet. All statements are idempotent.
 let ensured = false;
+let ensuring: Promise<void> | null = null;
 
 export async function ensureNetworkMatchingColumns(): Promise<void> {
   if (ensured) return;
+  if (!ensuring) {
+    ensuring = ensureNetworkMatchingColumnsOnce()
+      .then(() => { ensured = true; })
+      .finally(() => { ensuring = null; });
+  }
+  await ensuring;
+}
 
+async function ensureNetworkMatchingColumnsOnce(): Promise<void> {
   await sql`
     CREATE TABLE IF NOT EXISTS network_companies (
       id SERIAL PRIMARY KEY,
@@ -51,7 +60,7 @@ export async function ensureNetworkMatchingColumns(): Promise<void> {
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW(),
       CONSTRAINT network_company_matches_unique UNIQUE (network_company_id, tender_id),
-      CONSTRAINT network_company_matches_status_chk CHECK (status IN ('new','seen','contacted','dismissed','won','lost'))
+      CONSTRAINT network_company_matches_status_chk CHECK (status IN ('new','seen','contacted','replied','booked','paid','not_relevant','dismissed','won','lost'))
     )
   `;
   await sql`CREATE INDEX IF NOT EXISTS network_company_matches_company_idx ON network_company_matches (network_company_id)`;
@@ -59,6 +68,33 @@ export async function ensureNetworkMatchingColumns(): Promise<void> {
   await sql`CREATE INDEX IF NOT EXISTS network_company_matches_tender_idx ON network_company_matches (tender_id)`;
   // Operator's free-text reason for a dismissal — fuels the AI feedback pass.
   await sql`ALTER TABLE network_company_matches ADD COLUMN IF NOT EXISTS dismiss_reason TEXT`;
+  await sql`
+    DO $$
+    BEGIN
+      PERFORM pg_advisory_xact_lock(hashtext('tenderpath_network_matching_schema'));
+
+      IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'network_company_matches'::regclass
+          AND conname = 'network_company_matches_status_chk'
+          AND pg_get_constraintdef(oid) NOT LIKE '%not_relevant%'
+      ) THEN
+        ALTER TABLE network_company_matches DROP CONSTRAINT network_company_matches_status_chk;
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'network_company_matches'::regclass
+          AND conname = 'network_company_matches_status_chk'
+      ) THEN
+        ALTER TABLE network_company_matches
+          ADD CONSTRAINT network_company_matches_status_chk
+          CHECK (status IN ('new','seen','contacted','replied','booked','paid','not_relevant','dismissed','won','lost'));
+      END IF;
+    END $$;
+  `;
   // LinkedIn URL of the prospect's contact — powers the LinkedIn outreach motion
   // for prospects with no email on file (the majority of bizdev imports).
   await sql`ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS contact_linkedin TEXT`;
@@ -75,6 +111,4 @@ export async function ensureNetworkMatchingColumns(): Promise<void> {
   await sql`ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS share_token TEXT DEFAULT md5(random()::text || clock_timestamp()::text)`;
   await sql`UPDATE network_companies SET share_token = md5(random()::text || clock_timestamp()::text || id::text) WHERE share_token IS NULL`;
   await sql`CREATE UNIQUE INDEX IF NOT EXISTS network_companies_share_token_idx ON network_companies (share_token)`;
-
-  ensured = true;
 }

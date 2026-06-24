@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { loadProspectBriefing, type ProspectBriefing, type BriefingTender } from "@/lib/network/briefing";
+import { prospectGapFixText, prospectGapIssueText } from "@/lib/network/outreach";
 import type { Gap } from "@/lib/types";
 
 // Read-only, request-time render (DB-backed, deadlines are time-sensitive).
@@ -20,7 +21,7 @@ export async function generateMetadata(
   if (!b) return { title: "Briefing not found · TenderPath", robots };
   return {
     title: `${b.companyName} — opportunity briefing · TenderPath`,
-    description: `Live UN & donor tenders ${b.companyName} is well placed to win, where they're strong, and what to close to be competitive.`,
+    description: `Live UN & donor tenders ${b.companyName} is well placed to win, where they're strong, and what to check before bidding.`,
     robots,
   };
 }
@@ -31,12 +32,16 @@ const PAPER = "#f7f4ee";
 const CARD = "#ffffff";
 const BORDER = "rgba(15,22,32,0.12)";
 const MUTED = "#5b6470";
+const MS_PER_DAY = 86_400_000;
 
 function daysUntil(iso: string | null): number | null {
   if (!iso) return null;
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return null;
-  return Math.round((t - Date.now()) / 86_400_000);
+  const deadline = new Date(iso);
+  if (Number.isNaN(deadline.getTime())) return null;
+  const today = new Date();
+  const start = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  const target = Date.UTC(deadline.getUTCFullYear(), deadline.getUTCMonth(), deadline.getUTCDate());
+  return Math.round((target - start) / MS_PER_DAY);
 }
 
 function fmtDate(iso: string | null): string {
@@ -155,23 +160,24 @@ function Briefing({ b }: { b: ProspectBriefing }) {
           </section>
         )}
 
-        {/* Gaps — listed prominently */}
+        {/* Practical bid checks — listed prominently */}
         {b.gaps.length > 0 && (
           <section style={{ marginTop: 28 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>Gaps to close to be competitive</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>Things to tighten before bidding</h2>
             <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px" }}>
-              The few things that most move the needle on these bids. None are administrative box-ticking.
+              Practical checks to make before spending time on the bid. None are administrative box-ticking.
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {b.gaps.map((g, i) => {
                 const s = SEVERITY_STYLE[g.severity] ?? SEVERITY_STYLE.medium;
+                const fix = prospectGapFixText(g.fix);
                 return (
                   <div key={i} style={{ border: `1px solid ${BORDER}`, borderRadius: 12, background: CARD, padding: "14px 16px" }}>
                     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
                       {chip(s.label, s.bg, s.fg)}
                     </div>
-                    <div style={{ fontSize: 15, fontWeight: 650, color: INK, lineHeight: 1.4 }}>{g.gap}</div>
-                    {g.fix && <div style={{ fontSize: 14, color: MUTED, marginTop: 6, lineHeight: 1.55 }}>{`How to close it: ${g.fix}`}</div>}
+                    <div style={{ fontSize: 15, fontWeight: 650, color: INK, lineHeight: 1.4 }}>{prospectGapIssueText(g)}</div>
+                    {fix && <div style={{ fontSize: 14, color: MUTED, marginTop: 6, lineHeight: 1.55 }}>{`How to close it: ${fix}`}</div>}
                   </div>
                 );
               })}

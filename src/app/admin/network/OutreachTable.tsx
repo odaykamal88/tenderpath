@@ -16,8 +16,10 @@ import {
   OUTREACH_DEFAULTS,
   rankForOutreach,
   relBusinessDeadline,
+  selectPilotGroups,
   selectInsightfulGaps,
   toOutreachCsv,
+  toPilotCsv,
   ungmReadiness,
 } from "@/lib/network/outreach";
 
@@ -130,6 +132,7 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
 
   const shortlist = useMemo(() => rankForOutreach(matches, filters), [matches, filters]);
   const groups = useMemo(() => groupByCompany(shortlist, filters.sort), [shortlist, filters.sort]);
+  const pilotGroups = useMemo(() => selectPilotGroups(groups), [groups]);
 
   // Transparency on what the filters removed — never silently drop tenders.
   const hidden = useMemo(() => {
@@ -189,6 +192,19 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
     const a = document.createElement("a");
     a.href = url;
     a.download = `tenderpath-outreach-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportPilotCsv() {
+    const csv = toPilotCsv(groups, signoff, { origin: browserOrigin() });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tenderpath-pilot-50-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -258,6 +274,16 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
         <button type="button" className={styles.btnGhost} onClick={exportCsv} disabled={shortlist.length === 0} style={{ padding: "5px 10px", fontSize: 12 }}>
           Export CSV ({shortlist.length})
         </button>
+        <button
+          type="button"
+          className={styles.btnPrimary}
+          onClick={exportPilotCsv}
+          disabled={pilotGroups.length === 0}
+          title="Exports the first 25 email-ready and first 25 LinkedIn-ready companies with 2+ tenders, 85+ top fit, and a briefing link."
+          style={{ padding: "5px 10px", fontSize: 12 }}
+        >
+          Export pilot 50 ({pilotGroups.length})
+        </button>
       </div>
 
       {hiddenParts.length > 0 && (
@@ -295,6 +321,10 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
             const m0 = g.matches[0];
             const history = [
               (m0?.contacted_count ?? 0) > 0 ? `${m0!.contacted_count} contacted` : null,
+              (m0?.replied_count ?? 0) > 0 ? `${m0!.replied_count} replied` : null,
+              (m0?.booked_count ?? 0) > 0 ? `${m0!.booked_count} booked` : null,
+              (m0?.paid_count ?? 0) > 0 ? `${m0!.paid_count} paid` : null,
+              (m0?.not_relevant_count ?? 0) > 0 ? `${m0!.not_relevant_count} not relevant` : null,
               (m0?.won_count ?? 0) > 0 ? `${m0!.won_count} won` : null,
               (m0?.lost_count ?? 0) > 0 ? `${m0!.lost_count} lost` : null,
             ].filter(Boolean).join(" · ");
@@ -444,6 +474,10 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
                                   <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => openLinkedIn(m)} style={{ padding: "4px 8px", fontSize: 11 }}>LinkedIn</button>
                                 )}
                                 <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => onSetStatus(m.id, "contacted")} style={{ padding: "4px 8px", fontSize: 11 }}>Contacted</button>
+                                <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => onSetStatus(m.id, "replied")} style={{ padding: "4px 8px", fontSize: 11 }} title="They replied — keep this prospect out of the cold-outreach queue and follow up manually">Replied</button>
+                                <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => onSetStatus(m.id, "booked")} style={{ padding: "4px 8px", fontSize: 11 }} title="Discovery or bid/no-bid call booked">Booked</button>
+                                <button type="button" className={styles.btnPrimary} disabled={busy === m.id} onClick={() => onSetStatus(m.id, "paid")} style={{ padding: "4px 8px", fontSize: 11 }} title="Paid proposal package or related service sold">Paid</button>
+                                <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => onSetStatus(m.id, "not_relevant")} style={{ padding: "4px 8px", fontSize: 11 }} title="They replied or you learned this is not relevant right now">Not relevant</button>
                                 <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => onSetStatus(m.id, "won")} style={{ padding: "4px 8px", fontSize: 11 }} title="Mark this tender won — records the outcome and drops it from the worklist">Won</button>
                                 <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => onSetStatus(m.id, "lost")} style={{ padding: "4px 8px", fontSize: 11 }} title="Mark this tender lost — records the outcome and flags this agency on future matches">Lost</button>
                                 <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => { setDismissingId(m.id); setDismissReason(""); }} style={{ padding: "4px 8px", fontSize: 11 }}>Dismiss</button>
@@ -482,6 +516,7 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
                                     <a href={m.contact_linkedin ?? "#"} target="_blank" rel="noreferrer" className={styles.btnGhost} style={{ padding: "5px 12px", fontSize: 12, textDecoration: "none" }}>Open LinkedIn ↗</a>
                                   )}
                                   <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => { onSetStatus(m.id, "contacted"); setDraft(null); }} style={{ padding: "5px 12px", fontSize: 12 }}>Mark contacted</button>
+                                  <button type="button" className={styles.btnGhost} disabled={busy === m.id} onClick={() => { onSetStatus(m.id, "replied"); setDraft(null); }} style={{ padding: "5px 12px", fontSize: 12 }}>Mark replied</button>
                                   <button type="button" className={styles.btnGhost} onClick={() => setDraft(null)} style={{ padding: "5px 12px", fontSize: 12 }}>Close</button>
                                 </div>
                               </div>

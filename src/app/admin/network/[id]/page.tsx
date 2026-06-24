@@ -7,7 +7,20 @@ import styles from "../../admin.module.css";
 import { briefingUrl, selectInsightfulGaps } from "@/lib/network/outreach";
 import type { Gap } from "@/lib/types";
 
-const STATUSES = ["new", "seen", "contacted", "dismissed", "won", "lost"] as const;
+const STATUSES = ["new", "seen", "contacted", "replied", "booked", "paid", "not_relevant", "dismissed", "won", "lost"] as const;
+
+const STATUS_LABELS: Record<(typeof STATUSES)[number], string> = {
+  new: "new",
+  seen: "seen",
+  contacted: "contacted",
+  replied: "replied",
+  booked: "booked",
+  paid: "paid",
+  not_relevant: "not relevant",
+  dismissed: "dismissed",
+  won: "won",
+  lost: "lost",
+};
 
 interface AIAnalysisLite {
   detected_industry?: string;
@@ -408,7 +421,7 @@ export default function AdminNetworkCompanyPage() {
                         className={styles.adminSearchInput}
                         style={{ padding: "4px 6px", fontSize: 11 }}
                       >
-                        {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                        {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
                       </select>
                       {m.status === "dismissed" && (
                         editReasonId === m.id ? (
