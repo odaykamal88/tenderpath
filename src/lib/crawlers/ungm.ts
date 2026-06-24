@@ -9,8 +9,13 @@
  * loops every page fetch inside the same page context — real TLS/JA3
  * fingerprint, cookies + session reused across all N requests. This is
  * the fix for the 300s Vercel timeout: per-page calls cost ~15s each in
- * Chromium cold-start, which blew the cron budget for N=15. One batched
- * call totals ~30-40s for all 20 pages.
+ * Chromium cold-start, which blew the cron budget; one batched call of
+ * ~60 pages totals ~150-170s.
+ *
+ * Coverage: UNGM has ~1,555 active notices — far more than fits one run. We
+ * mirror the full active set via DEADLINE-banded pagination (see the band
+ * constants below): the bid-able 10+-day set is captured in full every run,
+ * and the closing-soon remainder rotates so the DB converges to all of it.
  *
  * Detail enrichment is best-effort and capped so listing coverage remains the
  * reliability anchor while recent rows get richer matching fields when the
@@ -24,21 +29,43 @@ const UNGM_WARMUP = "https://www.ungm.org/Public/Notice";
 // Server caps at ~15 rows/page regardless of what we send. 100 matches what
 // the UI sends so our payload looks real.
 const PAGE_SIZE = 100;
-// 20 pages × ~15 rows ≈ 300 notices per run. All 20 pages ride a single
-// worker call (/fetch-many) so warmup cost is amortized once — total
-// wall-clock dominated by 20 × ~1-2s origin latency, not 20 × Chromium
-// cold-start. Comfortably under Vercel's 300s budget with headroom for
-// the other 8 crawlers.
-const MAX_PAGES = 20;
+const ROWS_PER_PAGE = 15; // server hard cap per page; used to size band budgets
 
-const SUPPLEMENTAL_TITLE_SEARCHES = [
-  "Light Construction Works",
-  "Adult Diapers",
-  "Accommodation of Persons",
-  "Transportation of Persons",
-  "School Furniture",
-  "Non-Food Items",
-];
+// Full active-set mirror via deadline-banded pagination.
+//
+// UNGM exposes ~1,555 active notices. The old strategy — sort publish-date-desc
+// and take the newest ~450 — only reached ~1 week of postings, so older-but-
+// still-active notices (especially from low-volume agencies like WFP/WHO, and
+// any long-lead opportunity) were never captured. Measured split:
+//   • deadline ≥ today+10  → ~473 notices   (the bid-able / "actionable" set)
+//   • deadline today..+9   → ~1,082 notices (closing-soon; hidden by the 10+ UI default)
+//
+// Deadline filters (DeadlineFrom/DeadlineTo, DD-MMM-YYYY) are server-verified, so
+// we page by deadline band instead of publish recency:
+//   1. ACTIONABLE band (deadline ≥ today + ACTIONABLE_LEAD_DAYS): mirrored in FULL
+//      every run, so the matched dashboard (10+ day default) is always complete.
+//   2. CLOSING-SOON band: split into deadline sub-windows, ONE crawled per run
+//      (rotating by day-of-month). Over a full rotation the DB converges to the
+//      entire active set without exceeding the shared cron / worker budget.
+// All bands ride a single /fetch-many call (one Cloudflare warmup); dedupeNotices
+// collapses the deliberate overlap between bands.
+const ACTIONABLE_LEAD_DAYS = 10;
+const ACTIONABLE_MAX_PAGES = 36; // 36×15=540 cap — headroom over the ~473 actionable
+const SOON_MAX_PAGES = 24;       // 24×15=360 cap ≈ one third of the ~1,082 closing-soon
+// Deadline-day offset sub-windows (inclusive) for the closing-soon band.
+const SOON_SUBWINDOWS: ReadonlyArray<readonly [number, number]> = [[0, 3], [4, 6], [7, 9]];
+
+const MONTHS_ABBR = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+] as const;
+
+// UNGM date filters expect DD-MMM-YYYY (e.g. 03-Jul-2026). offsetDays is relative
+// to "now" in UTC; negative offsets reach into the past.
+function ungmDate(offsetDays: number): string {
+  const d = new Date(Date.now() + offsetDays * 86_400_000);
+  return `${String(d.getUTCDate()).padStart(2, "0")}-${MONTHS_ABBR[d.getUTCMonth()]}-${d.getUTCFullYear()}`;
+}
 
 function workerConfigured(): boolean {
   return !!(process.env.CRAWLER_WORKER_URL && process.env.CRAWLER_WORKER_KEY);
@@ -198,17 +225,20 @@ function parseNoticeRows(html: string): UNGMNotice[] {
   return out;
 }
 
-function buildSearchPayload(pageIndex: number, title = ""): string {
+function buildSearchPayload(
+  pageIndex: number,
+  opts: { title?: string; deadlineFrom?: string; deadlineTo?: string } = {},
+): string {
   return JSON.stringify({
     PageIndex: pageIndex,
     PageSize: PAGE_SIZE,
-    Title: title,
+    Title: opts.title ?? "",
     Description: "",
     Reference: "",
     PublishedFrom: "",
     PublishedTo: "",
-    DeadlineFrom: "",
-    DeadlineTo: "",
+    DeadlineFrom: opts.deadlineFrom ?? "",
+    DeadlineTo: opts.deadlineTo ?? "",
     Countries: [],
     Agencies: [],
     UNSPSCs: [],
@@ -222,10 +252,6 @@ function buildSearchPayload(pageIndex: number, title = ""): string {
     NoticeDisplayType: null,
     NoticeSearchTotalLabelId: "noticeSearchTotal",
   });
-}
-
-function buildPagePayload(pageIndex: number): string {
-  return buildSearchPayload(pageIndex);
 }
 
 function dedupeNotices(tenders: RawTender[]): RawTender[] {
@@ -361,22 +387,46 @@ export async function crawlUNGM(): Promise<CrawlResult> {
   }
 
   try {
-    // Build all page payloads upfront — we fire them as a single worker call.
-    const pageRequests: UngmRequest[] = Array.from({ length: MAX_PAGES }, (_, i) => ({
-      kind: "page",
-      label: `page ${i}`,
-      method: "POST" as const,
-      body: buildPagePayload(i),
-      headers: PAGE_HEADERS,
-    }));
-    const supplementalRequests: UngmRequest[] = SUPPLEMENTAL_TITLE_SEARCHES.map((title) => ({
-      kind: "title-search",
-      label: `title search "${title}"`,
-      method: "POST" as const,
-      body: buildSearchPayload(0, title),
-      headers: PAGE_HEADERS,
-    }));
-    const requests = [...pageRequests, ...supplementalRequests];
+    // Build deadline bands for this run (see ACTIONABLE/CLOSING-SOON notes above).
+    // ACTIONABLE is mirrored in full every run; one rotating CLOSING-SOON
+    // sub-window is added so the DB converges to the whole active set over a cycle.
+    const soonIdx = new Date().getUTCDate() % SOON_SUBWINDOWS.length;
+    const [soonLo, soonHi] = SOON_SUBWINDOWS[soonIdx];
+    const bandSpecs: Array<{
+      key: string;
+      maxPages: number;
+      deadlineFrom: string;
+      deadlineTo?: string;
+    }> = [
+      {
+        key: "actionable(>=10d)",
+        maxPages: ACTIONABLE_MAX_PAGES,
+        deadlineFrom: ungmDate(ACTIONABLE_LEAD_DAYS),
+      },
+      {
+        key: `closing-soon(${soonLo}-${soonHi}d)`,
+        maxPages: SOON_MAX_PAGES,
+        deadlineFrom: ungmDate(soonLo),
+        deadlineTo: ungmDate(soonHi),
+      },
+    ];
+
+    // Flatten bands into one request list (single warmup) while remembering each
+    // band's slice so we can stop paginating that band at its first empty page.
+    const requests: UngmRequest[] = [];
+    const bandRanges = bandSpecs.map((band) => {
+      const startIndex = requests.length;
+      for (let p = 0; p < band.maxPages; p++) {
+        requests.push({
+          kind: "page",
+          label: `${band.key} p${p}`,
+          method: "POST",
+          body: buildSearchPayload(p, { deadlineFrom: band.deadlineFrom, deadlineTo: band.deadlineTo }),
+          headers: PAGE_HEADERS,
+        });
+      }
+      return { ...band, startIndex };
+    });
 
     // Fast-fail detection: the common failure mode is the worker returning
     // HTML (CF edge error / challenge / Workers cold-start hiccup) in 3-4s
@@ -399,20 +449,33 @@ export async function crawlUNGM(): Promise<CrawlResult> {
 
     const tenders: RawTender[] = [];
     let parseErrors = 0;
-    for (let i = 0; i < results.length; i++) {
-      let notices: UNGMNotice[];
-      try {
-        notices = parsePageResult(i, results[i]);
-      } catch (err) {
-        // One bad page shouldn't drop the whole run. Log and continue — the
-        // worker-level retry already covered transient failures.
-        console.error(`[ungm] ${requests[i]?.label ?? `request ${i}`} parse failed:`, err instanceof Error ? err.message : err);
-        parseErrors++;
-        continue;
+    for (const band of bandRanges) {
+      let pagesParsed = 0;
+      for (let p = 0; p < band.maxPages; p++) {
+        const res = results[band.startIndex + p];
+        if (!res) break;
+        let notices: UNGMNotice[];
+        try {
+          notices = parsePageResult(p, res);
+        } catch (err) {
+          // One bad page shouldn't drop the whole run. Log and continue — the
+          // worker-level retry already covered transient failures.
+          console.error(`[ungm] ${band.key} p${p} parse failed:`, err instanceof Error ? err.message : err);
+          parseErrors++;
+          continue;
+        }
+        if (!notices.length) break; // empty page = end of this band's notices
+        tenders.push(...notices.map(mapNotice));
+        pagesParsed++;
       }
-      if (!notices.length && requests[i]?.kind === "page") break; // empty page = end of active notices
-      if (!notices.length) continue;
-      tenders.push(...notices.map(mapNotice));
+      // No silent truncation: consuming the whole page budget without an empty
+      // page means the band has more notices than we paged this run.
+      if (pagesParsed >= band.maxPages) {
+        console.warn(
+          `[ungm] band ${band.key} hit page cap ${band.maxPages} (~${band.maxPages * ROWS_PER_PAGE} rows) — `
+          + "more notices exist; raise the cap or split the deadline window finer",
+        );
+      }
     }
 
     // 0-tender success is not a real success — it means the worker silently
