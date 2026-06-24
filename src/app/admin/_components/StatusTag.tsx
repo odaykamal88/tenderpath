@@ -18,6 +18,7 @@ const TAG_CLASS: Record<string, string> = {
   never_run: styles.tagMute,
   unconfigured: styles.tagMute,
   unreachable: styles.tagNeg,
+  disabled: styles.tagMute,
 };
 
 const DOT_COLOR: Record<string, string> = {
@@ -38,6 +39,7 @@ const DOT_COLOR: Record<string, string> = {
   never_run: "var(--color-mute, #8a8377)",
   unconfigured: "var(--color-mute, #8a8377)",
   unreachable: "var(--color-red)",
+  disabled: "var(--color-mute, #8a8377)",
 };
 
 export function StatusDot({ status }: { status: string }) {

@@ -16,7 +16,7 @@ type WorkerHealth = {
   error?: string;
 };
 
-type PlatformStatus = "healthy" | "degraded" | "down" | "never_run";
+type PlatformStatus = "healthy" | "degraded" | "down" | "never_run" | "disabled";
 
 type ExpectedPlatform = {
   platform: string;
@@ -72,6 +72,7 @@ type UngmFamilyHealth = {
   message: string;
   agencies: Array<{
     agency: string;
+    tier: "core" | "intermittent";
     open_tenders: number;
   }>;
 };
@@ -98,21 +99,32 @@ const EXPECTED_PLATFORMS: ExpectedPlatform[] = [
   { platform: "UNDP", role: "primary", staleAfterHours: 72 },
 ];
 
-const UNGM_FAMILY_AGENCIES = [
-  { agency: "UNICEF", patterns: ["UNICEF", "United Nations Children's Fund"] },
-  { agency: "UNHCR", patterns: ["UNHCR", "United Nations High Commissioner for Refugees"] },
-  { agency: "IOM", patterns: ["IOM", "International Organization for Migration"] },
-  { agency: "ILO", patterns: ["ILO", "International Labour Organization", "International Labor Organization"] },
-  { agency: "WFP", patterns: ["WFP", "World Food Programme", "World Food Program"] },
-  { agency: "WHO", patterns: ["WHO", "World Health Organization"] },
-  { agency: "UNOPS", patterns: ["UNOPS", "United Nations Office for Project Services"] },
-  { agency: "FAO", patterns: ["FAO", "Food and Agriculture Organization"] },
-  { agency: "UNFPA", patterns: ["UNFPA", "United Nations Population Fund"] },
-  { agency: "UNESCO", patterns: ["UNESCO", "United Nations Educational, Scientific and Cultural Organization"] },
-  { agency: "UN-Women", patterns: ["UN-Women", "UN Women", "United Nations Entity for Gender Equality"] },
-  { agency: "UNIDO", patterns: ["UNIDO", "United Nations Industrial Development Organization"] },
-  { agency: "IAEA", patterns: ["IAEA", "International Atomic Energy Agency"] },
-  { agency: "UNRWA", patterns: ["UNRWA", "United Nations Relief and Works Agency"] },
+// `tier` separates consistently high-volume posters from intermittent ones.
+// "core" agencies reliably have open notices on UNGM at all times, so a 0 there
+// is a real coverage signal. "intermittent" agencies (notably WFP and WHO, which
+// run much of their procurement off-UNGM) legitimately sit at 0 for stretches —
+// painting those red reads as a crawler failure when UNGM is healthy. Volume
+// bands are from live crawl sampling (UNICEF/FAO/IOM/ILO/UNOPS ≈ 18–37 notices
+// each; WFP ≈ 2, WHO ≈ 10, others in the low single digits).
+const UNGM_FAMILY_AGENCIES: Array<{
+  agency: string;
+  tier: "core" | "intermittent";
+  patterns: string[];
+}> = [
+  { agency: "UNICEF", tier: "core", patterns: ["UNICEF", "United Nations Children's Fund"] },
+  { agency: "FAO", tier: "core", patterns: ["FAO", "Food and Agriculture Organization"] },
+  { agency: "IOM", tier: "core", patterns: ["IOM", "International Organization for Migration"] },
+  { agency: "ILO", tier: "core", patterns: ["ILO", "International Labour Organization", "International Labor Organization"] },
+  { agency: "UNOPS", tier: "core", patterns: ["UNOPS", "United Nations Office for Project Services"] },
+  { agency: "UNHCR", tier: "intermittent", patterns: ["UNHCR", "United Nations High Commissioner for Refugees"] },
+  { agency: "WFP", tier: "intermittent", patterns: ["WFP", "World Food Programme", "World Food Program"] },
+  { agency: "WHO", tier: "intermittent", patterns: ["WHO", "World Health Organization"] },
+  { agency: "UNFPA", tier: "intermittent", patterns: ["UNFPA", "United Nations Population Fund"] },
+  { agency: "UNESCO", tier: "intermittent", patterns: ["UNESCO", "United Nations Educational, Scientific and Cultural Organization"] },
+  { agency: "UN-Women", tier: "intermittent", patterns: ["UN-Women", "UN Women", "United Nations Entity for Gender Equality"] },
+  { agency: "UNIDO", tier: "intermittent", patterns: ["UNIDO", "United Nations Industrial Development Organization"] },
+  { agency: "IAEA", tier: "intermittent", patterns: ["IAEA", "International Atomic Energy Agency"] },
+  { agency: "UNRWA", tier: "intermittent", patterns: ["UNRWA", "United Nations Relief and Works Agency"] },
 ];
 
 const DEFAULT_QUALITY_THRESHOLDS: SourceQualityThresholds = {
@@ -232,6 +244,7 @@ function buildSourceHealth(
     empty_successes_24h: number | string | null;
   }>,
   openRows: Array<{ platform: string; open_tenders: number | string | null }>,
+  disabledPlatforms: Set<string>,
 ): SourceHealth[] {
   const expectedByPlatform = new Map(EXPECTED_PLATFORMS.map((p) => [p.platform, p]));
   const logsByPlatform = new Map(logRows.map((r) => [r.platform, r]));
@@ -260,7 +273,15 @@ function buildSourceHealth(
     let likelyCause = "Crawler is producing usable records inside the expected freshness window.";
     let nextAction = "Keep monitoring source freshness and output quality.";
 
-    if (!lastRun) {
+    if (disabledPlatforms.has(platform)) {
+      // Intentionally-off, known-blocked source (ADB/AfDB/EBRD): show a neutral
+      // "disabled" state instead of a red "down/never-run" that reads as a fault.
+      status = "disabled";
+      issueClass = "none";
+      message = "Intentionally disabled — known Cloudflare/CAS-blocked source.";
+      likelyCause = "Disabled to avoid burning crawl budget on a guaranteed-zero source (gated behind ENABLE_BLOCKED_CRAWLERS).";
+      nextAction = "Re-enable via ENABLE_BLOCKED_CRAWLERS once a recovery path lands.";
+    } else if (!lastRun) {
       status = "never_run";
       message = expected ? "Expected source has no crawl log yet." : "Observed source has tenders but no crawl log.";
       issueClass = "job_not_running";
@@ -320,7 +341,7 @@ function buildSourceHealth(
       message,
     };
   }).sort((a, b) => {
-    const order: Record<PlatformStatus, number> = { down: 0, never_run: 1, degraded: 2, healthy: 3 };
+    const order: Record<PlatformStatus, number> = { down: 0, never_run: 1, degraded: 2, healthy: 3, disabled: 4 };
     return order[a.status] - order[b.status] || a.platform.localeCompare(b.platform);
   });
 }
@@ -328,35 +349,42 @@ function buildSourceHealth(
 function buildUngmFamilyHealth(
   rows: Array<{ agency: string; open_tenders: number | string | null }>,
 ): UngmFamilyHealth {
-  const agencies = UNGM_FAMILY_AGENCIES.map(({ agency, patterns }) => {
+  const agencies = UNGM_FAMILY_AGENCIES.map(({ agency, tier, patterns }) => {
     const openTenders = rows.reduce((sum, row) => {
       const rowAgency = (row.agency ?? "").toLowerCase();
       const matched = patterns.some((pattern) => rowAgency.includes(pattern.toLowerCase()));
       return matched ? sum + Number(row.open_tenders ?? 0) : sum;
     }, 0);
-    return { agency, open_tenders: openTenders };
+    return { agency, tier, open_tenders: openTenders };
   });
-  const missing = agencies.filter((a) => a.open_tenders === 0);
 
-  if (missing.length === agencies.length) {
+  // Health is judged on core (always-on) agencies only. Intermittent agencies
+  // at 0 are normal and must not read as a crawler failure when UNGM is healthy.
+  const coreMissing = agencies.filter((a) => a.tier === "core" && a.open_tenders === 0);
+  const intermittentMissing = agencies.filter((a) => a.tier === "intermittent" && a.open_tenders === 0);
+  const intermittentNote = intermittentMissing.length
+    ? ` Low-volume agencies with no live notices right now (normal — they post intermittently): ${intermittentMissing.map((a) => a.agency).join(", ")}.`
+    : "";
+
+  if (coreMissing.length === agencies.filter((a) => a.tier === "core").length) {
     return {
       status: "critical",
-      message: "No open tenders found for the tracked UN-family agencies inside UNGM coverage.",
+      message: "UNGM UN-family coverage looks broken — even high-volume agencies (UNICEF/FAO/IOM/ILO/UNOPS) have no open notices. Check the UNGM crawl and worker health.",
       agencies,
     };
   }
 
-  if (missing.length > 0) {
+  if (coreMissing.length > 0) {
     return {
       status: "degraded",
-      message: `No open tenders currently visible for ${missing.map((a) => a.agency).join(", ")}.`,
+      message: `A normally high-volume agency dropped to 0 open notices: ${coreMissing.map((a) => a.agency).join(", ")}. Worth a look at UNGM coverage.${intermittentNote}`,
       agencies,
     };
   }
 
   return {
     status: "healthy",
-    message: "Tracked UN-family agencies have open tender coverage.",
+    message: `Core UN-family agencies have open tender coverage.${intermittentNote}`,
     agencies,
   };
 }
@@ -526,6 +554,16 @@ export async function GET(request: Request) {
     checkWorkerHealth(),
   ]);
 
+  // Sources marked "blocked" in SOURCE_COVERAGE (ADB/AfDB/EBRD) are gated behind
+  // ENABLE_BLOCKED_CRAWLERS in syncAllTenders. When that flag is off they never
+  // run, so surface them as a neutral "disabled" state rather than a red fault.
+  const blockedCrawlersEnabled = process.env.ENABLE_BLOCKED_CRAWLERS === "true";
+  const disabledPlatforms = new Set(
+    blockedCrawlersEnabled
+      ? []
+      : SOURCE_COVERAGE.filter((s) => s.status === "blocked").map((s) => s.canonicalPlatform),
+  );
+
   const platformHealth = buildSourceHealth(
     platformLogRows as Array<{
       platform: string;
@@ -538,6 +576,7 @@ export async function GET(request: Request) {
       empty_successes_24h: number | string | null;
     }>,
     platformOpenRows as Array<{ platform: string; open_tenders: number | string | null }>,
+    disabledPlatforms,
   );
   const ungmFamilyHealth = buildUngmFamilyHealth(
     ungmFamilyRows as Array<{ agency: string; open_tenders: number | string | null }>,

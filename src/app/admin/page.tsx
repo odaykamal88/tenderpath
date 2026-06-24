@@ -49,7 +49,7 @@ interface SubscriptionRow { tier: string; count: number; }
 interface PlatformHealth {
   platform: string;
   role: "primary" | "supplement" | "observed";
-  status: "healthy" | "degraded" | "down" | "never_run";
+  status: "healthy" | "degraded" | "down" | "never_run" | "disabled";
   issue_class: "none" | "job_not_running" | "crawler_failure" | "empty_output" | "stale_success" | "low_inventory";
   likely_cause: string;
   next_action: string;
@@ -113,7 +113,7 @@ interface Stats {
   ungmFamilyHealth: {
     status: "healthy" | "degraded" | "critical";
     message: string;
-    agencies: Array<{ agency: string; open_tenders: number }>;
+    agencies: Array<{ agency: string; tier: "core" | "intermittent"; open_tenders: number }>;
   };
   workerHealth: {
     configured: boolean;
@@ -299,7 +299,7 @@ export default function AdminPage() {
   };
 
   const totalSubs = stats?.activeSubscriptions.reduce((s, r) => s + Number(r.count), 0) ?? 0;
-  const flagged = stats?.platformHealth.filter((p) => p.status !== "healthy") ?? [];
+  const flagged = stats?.platformHealth.filter((p) => p.status !== "healthy" && p.status !== "disabled") ?? [];
 
   return (
     <>
@@ -441,7 +441,21 @@ export default function AdminPage() {
                         <div className={styles.ungmName}>{a.agency}</div>
                         <div
                           className={styles.ungmNum}
-                          style={{ color: a.open_tenders > 0 ? "var(--color-accent)" : "var(--color-red)" }}
+                          title={
+                            a.open_tenders === 0 && a.tier === "intermittent"
+                              ? "Low-volume agency — 0 live notices is normal, not a crawler fault"
+                              : undefined
+                          }
+                          style={{
+                            // Red only when a high-volume "core" agency drops to 0
+                            // (a real signal). Intermittent agencies at 0 are muted,
+                            // not alarming — they legitimately post in bursts.
+                            color: a.open_tenders > 0
+                              ? "var(--color-accent)"
+                              : a.tier === "core"
+                              ? "var(--color-red)"
+                              : "var(--color-mute, #8a8377)",
+                          }}
                         >
                           {a.open_tenders}
                         </div>
