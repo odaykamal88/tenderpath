@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import styles from "../../admin.module.css";
+import { briefingUrl, selectInsightfulGaps } from "@/lib/network/outreach";
+import type { Gap } from "@/lib/types";
 
 const STATUSES = ["new", "seen", "contacted", "dismissed", "won", "lost"] as const;
 
@@ -14,6 +16,7 @@ interface AIAnalysisLite {
   capabilities?: string[];
   certifications_detected?: string[];
   strengths?: string[];
+  gaps?: Gap[];
 }
 
 interface Company {
@@ -32,6 +35,8 @@ interface Company {
   contact_phone: string | null;
   notes: string | null;
   is_active: boolean;
+  ungm_status: string | null;
+  share_token: string | null;
   last_matched_at: string | null;
   created_at: string;
 }
@@ -92,6 +97,7 @@ export default function AdminNetworkCompanyPage() {
   const [editReasonId, setEditReasonId] = useState<number | null>(null);
   const [reasonDraft, setReasonDraft] = useState("");
   const [showDismissed, setShowDismissed] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const load = useCallback(async () => {
     if (!Number.isInteger(id) || id <= 0) {
@@ -178,6 +184,39 @@ export default function AdminNetworkCompanyPage() {
     }
   }
 
+  // Operator-recorded UNGM status. Optimistic + background PATCH (no re-crawl —
+  // the route only re-builds the profile when website/services/countries change).
+  async function setUngm(status: string) {
+    setData((d) => (d && d.company ? { ...d, company: { ...d.company, ungm_status: status } } : d));
+    setToast(null);
+    try {
+      const res = await fetch(`/api/admin/network-companies/${id}`, {
+        method: "PATCH",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ ungm_status: status }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+      setToast({ ok: true, msg: "UNGM status saved." });
+    } catch (err) {
+      setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to save UNGM status" });
+      await load();
+    }
+  }
+
+  async function copyBriefing() {
+    const token = data?.company?.share_token;
+    const href = token ? briefingUrl(token, typeof window !== "undefined" ? window.location.origin : undefined) : null;
+    if (!href) return;
+    try {
+      await navigator.clipboard.writeText(href);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 1800);
+    } catch {
+      /* clipboard blocked — the read-only input stays visible for manual copy */
+    }
+  }
+
   if (error && !data) {
     return (
       <header className={styles.pageHeader}>
@@ -195,6 +234,10 @@ export default function AdminNetworkCompanyPage() {
 
   const c = data?.company;
   const ai = c?.ai_analysis;
+  const insightfulGaps = selectInsightfulGaps(ai?.gaps, 3);
+  const briefingHref = c?.share_token
+    ? briefingUrl(c.share_token, typeof window !== "undefined" ? window.location.origin : undefined)
+    : null;
   const allMatches = data?.matches ?? [];
   const dismissedCount = allMatches.filter((m) => m.status === "dismissed").length;
   const visibleMatches = showDismissed ? allMatches : allMatches.filter((m) => m.status !== "dismissed");
@@ -245,7 +288,66 @@ export default function AdminNetworkCompanyPage() {
             <p className={styles.sessionSubtle}><strong>Capabilities:</strong> {chips(ai?.capabilities, 10)}</p>
             <p className={styles.sessionSubtle}><strong>Sectors:</strong> {chips(c.sectors, 10)}</p>
             <p className={styles.sessionSubtle}><strong>Certifications:</strong> {chips(ai?.certifications_detected, 10)}</p>
+            {Array.isArray(ai?.strengths) && ai!.strengths!.length > 0 && (
+              <p className={styles.sessionSubtle}><strong>Strengths:</strong> {chips(ai?.strengths, 6)}</p>
+            )}
+            {insightfulGaps.length > 0 && (
+              <div className={styles.sessionSubtle}>
+                <strong>Gaps shown to prospect:</strong>
+                <ul style={{ margin: "4px 0 0", paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
+                  {insightfulGaps.map((g, i) => (
+                    <li key={i}>{g.gap}{g.fix ? ` — ${g.fix}` : ""}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {c.services_text && <p className={styles.sessionSubtle}><strong>Your notes:</strong> {c.services_text}</p>}
+          </div>
+        </section>
+      )}
+
+      {c && (
+        <section className={styles.panel}>
+          <header className={styles.panelHead}>
+            <div>
+              <h2 className={styles.panelTitle}>Outreach &amp; sharing</h2>
+              <p className={styles.panelSub}>What the bizdev email and the shareable briefing will say about this prospect.</p>
+            </div>
+          </header>
+          <div style={{ padding: "12px 22px 22px", display: "grid", gap: 16 }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 380 }}>
+              <span className={styles.sessionSubtle}>UNGM registration status (what you know)</span>
+              <select
+                className={styles.adminSearchInput}
+                value={c.ungm_status ?? "unknown"}
+                onChange={(e) => setUngm(e.target.value)}
+                disabled={busy}
+                style={{ padding: "6px 8px" }}
+              >
+                <option value="unknown">Unknown</option>
+                <option value="not_registered">Not registered on UNGM</option>
+                <option value="basic">Registered — Basic</option>
+                <option value="level-1">Registered — Level 1</option>
+                <option value="level-2">Registered — Level 2</option>
+              </select>
+              <span className={styles.sessionSubtle} style={{ fontSize: 11 }}>
+                When set to a registered level, the outreach says they can bid on UN tenders right away. We never assert a registration you haven&rsquo;t recorded.
+              </span>
+            </label>
+
+            {briefingHref && (
+              <div style={{ display: "grid", gap: 6 }}>
+                <span className={styles.sessionSubtle}>Shareable prospect briefing (public, unlisted, no-index)</span>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <input className={styles.adminSearchInput} readOnly value={briefingHref} suppressHydrationWarning style={{ flex: 1, minWidth: 260, padding: "6px 8px", fontSize: 12 }} />
+                  <button type="button" className={styles.btnPrimary} onClick={copyBriefing} style={{ padding: "6px 11px", fontSize: 12 }}>{copiedLink ? "Copied ✓" : "Copy link"}</button>
+                  <a href={briefingHref} target="_blank" rel="noreferrer" className={styles.btnGhost} style={{ padding: "6px 11px", fontSize: 12, textDecoration: "none" }}>Open ↗</a>
+                </div>
+                <span className={styles.sessionSubtle} style={{ fontSize: 11 }}>
+                  Shows this prospect&rsquo;s matches, strengths, and gaps — paste it into your outreach. Pausing the company disables the link.
+                </span>
+              </div>
+            )}
           </div>
         </section>
       )}

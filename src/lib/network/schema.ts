@@ -62,6 +62,19 @@ export async function ensureNetworkMatchingColumns(): Promise<void> {
   // LinkedIn URL of the prospect's contact — powers the LinkedIn outreach motion
   // for prospects with no email on file (the majority of bizdev imports).
   await sql`ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS contact_linkedin TEXT`;
+  // Operator-recorded UNGM vendor-registration status of the prospect. We can't
+  // honestly auto-detect it, so the operator records what they know; when known
+  // it sharpens the outreach ("you're already set up to bid"), when 'unknown' the
+  // copy stays conditional. One of: unknown | not_registered | basic | level-1 | level-2.
+  await sql`ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS ungm_status TEXT NOT NULL DEFAULT 'unknown'`;
+  // Unguessable token for the public, read-only prospect briefing page (/n/<token>).
+  // The volatile default backfills existing rows with distinct tokens on ADD; the
+  // explicit UPDATE + unique index are belt-and-suspenders for a column that may
+  // already exist without a default. Not a security boundary (it only reveals a
+  // prospect's own company analysis + public tenders) — just hard to guess.
+  await sql`ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS share_token TEXT DEFAULT md5(random()::text || clock_timestamp()::text)`;
+  await sql`UPDATE network_companies SET share_token = md5(random()::text || clock_timestamp()::text || id::text) WHERE share_token IS NULL`;
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS network_companies_share_token_idx ON network_companies (share_token)`;
 
   ensured = true;
 }

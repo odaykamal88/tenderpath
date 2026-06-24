@@ -5,7 +5,7 @@ import Link from "next/link";
 import styles from "../admin.module.css";
 import OutreachTable from "./OutreachTable";
 import ImportPanel from "./ImportPanel";
-import { type OutreachMatch } from "@/lib/network/outreach";
+import { type OutreachMatch, briefingUrl } from "@/lib/network/outreach";
 
 interface CompanyRow {
   id: number;
@@ -22,6 +22,8 @@ interface CompanyRow {
   last_matched_at: string | null;
   created_at: string;
   detected_industry: string | null;
+  ungm_status: string | null;
+  share_token: string | null;
   match_count: number;
   fresh_count: number;
   top_score: number;
@@ -415,6 +417,18 @@ export default function AdminNetworkPage() {
                     <td className={styles.num}>
                       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                         <Link href={`/admin/network/${c.id}`} className={styles.btnGhost} style={{ padding: "5px 9px", fontSize: 11 }}>Open</Link>
+                        {c.share_token && (
+                          <a
+                            href={briefingUrl(c.share_token, typeof window !== "undefined" ? window.location.origin : undefined) ?? "#"}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={styles.btnGhost}
+                            style={{ padding: "5px 9px", fontSize: 11, textDecoration: "none" }}
+                            title="Open the public prospect briefing"
+                          >
+                            Briefing ↗
+                          </a>
+                        )}
                         <button type="button" className={styles.btnGhost} disabled={busy === c.id} onClick={() => deleteCompany(c.id, c.name)} style={{ padding: "5px 9px", fontSize: 11, color: "var(--color-red)" }}>Delete</button>
                       </div>
                     </td>

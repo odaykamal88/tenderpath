@@ -6,6 +6,8 @@ import styles from "../admin.module.css";
 import {
   type OutreachMatch,
   type OutreachSort,
+  type ProspectUngmStatus,
+  briefingUrl,
   buildBundleEmail,
   buildLinkedInDraft,
   groupByCompany,
@@ -14,8 +16,23 @@ import {
   OUTREACH_DEFAULTS,
   rankForOutreach,
   relBusinessDeadline,
+  selectInsightfulGaps,
   toOutreachCsv,
+  ungmReadiness,
 } from "@/lib/network/outreach";
+
+/** Origin for building absolute briefing links (falls back to prod server-side). */
+function browserOrigin(): string | undefined {
+  return typeof window !== "undefined" ? window.location.origin : undefined;
+}
+
+const UNGM_STATUS_LABEL: Record<ProspectUngmStatus, string> = {
+  unknown: "UNGM status unknown",
+  not_registered: "not on UNGM",
+  basic: "UNGM Basic",
+  "level-1": "UNGM Level 1",
+  "level-2": "UNGM Level 2",
+};
 
 const SIGNOFF_KEY = "tp_outreach_signoff";
 // v3: dropped the client-side "min business days" lead-time floor entirely. Lead
@@ -137,13 +154,13 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
   function composeBundle(group: { company_id: number; company_name: string; contact_name: string | null; matches: OutreachMatch[] }) {
     const picked = selectedFor(group);
     if (picked.length === 0) return;
-    const d = buildBundleEmail(group, picked, signoff);
+    const d = buildBundleEmail(group, picked, signoff, { origin: browserOrigin() });
     setDraft({ kind: "bundle", companyId: group.company_id, subject: d.subject, body: d.body });
     setCopied("");
     setDismissingId(null);
   }
   function openLinkedIn(m: OutreachMatch) {
-    const d = buildLinkedInDraft(m, signoff);
+    const d = buildLinkedInDraft(m, signoff, { origin: browserOrigin() });
     setDraft({ kind: "linkedin", matchId: m.id, note: d.note, message: d.message });
     setCopied("");
     setDismissingId(null);
@@ -166,7 +183,7 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
   }
 
   function exportCsv() {
-    const csv = toOutreachCsv(shortlist, signoff);
+    const csv = toOutreachCsv(shortlist, signoff, { origin: browserOrigin() });
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -281,6 +298,12 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
               (m0?.won_count ?? 0) > 0 ? `${m0!.won_count} won` : null,
               (m0?.lost_count ?? 0) > 0 ? `${m0!.lost_count} lost` : null,
             ].filter(Boolean).join(" · ");
+            // What the value-first email will carry for this prospect (same on every row).
+            const insightfulGaps = selectInsightfulGaps(m0?.company_gaps, 3);
+            const ungm = ungmReadiness(g.matches, m0?.ungm_status);
+            const ungmStatus = (m0?.ungm_status ?? "unknown") as ProspectUngmStatus;
+            const ungmRegistered = ungmStatus === "basic" || ungmStatus === "level-1" || ungmStatus === "level-2";
+            const briefingLink = briefingUrl(m0?.share_token, browserOrigin());
             return (
               <div key={g.company_id} style={{ border: "1px solid var(--admin-border, rgba(127,127,127,0.22))", borderRadius: 10, overflow: "hidden" }}>
                 <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, padding: "10px 14px", background: "var(--admin-panel-alt, rgba(127,127,127,0.06))" }}>
@@ -319,6 +342,47 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
                     Mark contacted
                   </button>
                 </div>
+
+                {(insightfulGaps.length > 0 || ungm.applies || briefingLink) && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", padding: "8px 14px", borderTop: "1px solid var(--admin-border, rgba(127,127,127,0.22))" }}>
+                    <span className={styles.sessionSubtle} style={{ fontSize: 11 }}>In the email + briefing:</span>
+                    {insightfulGaps.length > 0 && (
+                      <span className={`${styles.tag} ${styles.tagMute}`} title={insightfulGaps.map((g) => g.gap).join(" · ")}>
+                        {insightfulGaps.length} gap{insightfulGaps.length === 1 ? "" : "s"} to close
+                      </span>
+                    )}
+                    {ungm.applies && (
+                      <span
+                        className={`${styles.tag} ${ungmRegistered ? styles.tagPos : ungmStatus === "not_registered" ? styles.tagWarn : styles.tagMute}`}
+                        title={ungm.line ?? undefined}
+                      >
+                        {ungm.unCount} UN · {UNGM_STATUS_LABEL[ungmStatus]}
+                      </span>
+                    )}
+                    <div style={{ flex: 1 }} />
+                    {briefingLink && (
+                      <>
+                        <button
+                          type="button"
+                          className={styles.btnGhost}
+                          onClick={() => copy(briefingLink, `link-${g.company_id}`)}
+                          style={{ padding: "4px 9px", fontSize: 11 }}
+                        >
+                          {copied === `link-${g.company_id}` ? "Copied ✓" : "Copy briefing link"}
+                        </button>
+                        <a
+                          href={briefingLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={styles.btnGhost}
+                          style={{ padding: "4px 9px", fontSize: 11, textDecoration: "none" }}
+                        >
+                          Open ↗
+                        </a>
+                      </>
+                    )}
+                  </div>
+                )}
 
                 <table className={styles.dossierTable}>
                   <tbody>
