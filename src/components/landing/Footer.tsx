@@ -21,9 +21,8 @@ const COLS: Array<[string, Array<[string, string]>]> = [
     ["Proposals", "#f-proposal"],
   ]],
   ["Company", [
-    ["Pricing", "#pricing"],
+    ["Request invite", "/#top"],
     ["Contact", "/contact"],
-    ["Free assessment", "/assessment"],
   ]],
   ["Resources", [
     ["FAQ", "/faq"],

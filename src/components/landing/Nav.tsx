@@ -21,7 +21,6 @@ export default function Nav({ viewer }: { viewer: LandingViewer }) {
   const links: Array<[string, string]> = [
     ["How it works", "#how"],
     ["Features", "#features"],
-    ["Pricing", "#pricing"],
   ];
 
   return (
@@ -47,9 +46,6 @@ export default function Nav({ viewer }: { viewer: LandingViewer }) {
 
         {!mobile && (
           <nav style={{ display: "flex", gap: 26, marginLeft: 18 }}>
-            <Link href="/assessment" className="lk-navlink" style={{ fontFamily: LF.sans, fontSize: 14, color: LC.ink2, textDecoration: "none" }}>
-              Free assessment
-            </Link>
             {links.map(([l, h]) => (
               <a key={h} href={h} className="lk-navlink" style={{ fontFamily: LF.sans, fontSize: 14, color: LC.ink2, textDecoration: "none" }}>
                 {l}
@@ -74,8 +70,8 @@ export default function Nav({ viewer }: { viewer: LandingViewer }) {
                 >
                   Sign in
                 </Link>
-                <Btn kind="gold" size="sm" href="/assessment?goal=track-tenders">
-                  Get my free score
+                <Btn kind="gold" size="sm" href="#top">
+                  Request invite
                 </Btn>
               </>
             )}
@@ -105,13 +101,6 @@ export default function Nav({ viewer }: { viewer: LandingViewer }) {
               {l}
             </a>
           ))}
-          <Link
-            href="/assessment"
-            onClick={() => setOpen(false)}
-            style={{ display: "block", fontFamily: LF.sans, fontSize: 16, color: LC.ink, textDecoration: "none", padding: "11px 0", borderBottom: `1px solid ${LC.ruleSoft}` }}
-          >
-            Free assessment
-          </Link>
           <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
             {viewer ? (
               <Btn kind="gold" size="sm" href="/dashboard" style={{ flex: 1 }}>
@@ -122,8 +111,8 @@ export default function Nav({ viewer }: { viewer: LandingViewer }) {
                 <Btn kind="ghost" size="sm" href="/login" style={{ flex: 1 }}>
                   Sign in
                 </Btn>
-                <Btn kind="gold" size="sm" href="/assessment?goal=track-tenders" style={{ flex: 1 }}>
-                  Get my free score
+                <Btn kind="gold" size="sm" href="#top" onClick={() => setOpen(false)} style={{ flex: 1 }}>
+                  Request invite
                 </Btn>
               </>
             )}

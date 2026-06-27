@@ -283,3 +283,145 @@ export function AssessPaste({
     </div>
   );
 }
+
+/* ── invite-request capture → POST /api/waitlist ──────────────────────────── */
+export function InviteCapture({
+  dark = false,
+  autoFocus = false,
+  source = "landing",
+  note = "Invite-only for now — we onboard teams in small batches.",
+}: {
+  dark?: boolean;
+  autoFocus?: boolean;
+  source?: string;
+  note?: string;
+}) {
+  const [v, setV] = useState("");
+  const [state, setState] = useState<"idle" | "busy" | "done" | "error">("idle");
+  const [err, setErr] = useState<string | null>(null);
+  const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const ink = dark ? LC.paper : LC.ink;
+
+  const submit = async () => {
+    const email = v.trim();
+    if (!EMAIL.test(email)) {
+      setErr("Enter a valid email address.");
+      setState("error");
+      return;
+    }
+    setState("busy");
+    setErr(null);
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, source }),
+      });
+      if (!res.ok) {
+        const b = (await res.json().catch(() => ({}))) as { error?: string };
+        setErr(b.error ?? "Couldn't save your request. Please try again.");
+        setState("error");
+        return;
+      }
+      setState("done");
+    } catch {
+      setErr("Couldn't reach the server. Please try again.");
+      setState("error");
+    }
+  };
+
+  if (state === "done") {
+    return (
+      <div style={{ maxWidth: 560, margin: "0 auto", width: "100%" }}>
+        <div
+          style={{
+            border: `2px solid ${dark ? LC.paper : LC.ink}`,
+            background: dark ? "rgba(255,255,255,0.05)" : LC.white,
+            padding: "16px 18px",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <span style={{ width: 22, height: 22, borderRadius: "50%", background: LC.pos, display: "grid", placeItems: "center", flexShrink: 0 }}>
+            <Ic name="check" size={14} color="#fff" />
+          </span>
+          <span style={{ fontFamily: LF.sans, fontSize: 14.5, color: ink, lineHeight: 1.5 }}>
+            You&rsquo;re on the list — we&rsquo;ll email your invite soon.
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 560, margin: "0 auto", width: "100%" }}>
+      <div
+        style={{
+          display: "flex",
+          border: `2px solid ${dark ? LC.paper : LC.ink}`,
+          background: dark ? "rgba(255,255,255,0.05)" : LC.white,
+        }}
+      >
+        <input
+          type="email"
+          autoFocus={autoFocus}
+          value={v}
+          onChange={(e) => {
+            setV(e.target.value);
+            if (state === "error") setState("idle");
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submit();
+          }}
+          placeholder="you@company.org"
+          spellCheck={false}
+          aria-label="Your work email"
+          style={{
+            flex: 1,
+            border: 0,
+            outline: "none",
+            background: "transparent",
+            fontFamily: LF.mono,
+            fontSize: 15,
+            color: ink,
+            padding: "15px 6px 15px 16px",
+            minWidth: 0,
+          }}
+        />
+        <button
+          onClick={submit}
+          disabled={state === "busy"}
+          className="lk-btn"
+          style={{
+            background: dark ? LC.accent : LC.ink,
+            color: dark ? LC.white : LC.paper,
+            border: 0,
+            padding: "0 24px",
+            fontFamily: LF.mono,
+            fontSize: 11.5,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            cursor: state === "busy" ? "default" : "pointer",
+            whiteSpace: "nowrap",
+            opacity: state === "busy" ? 0.6 : 1,
+          }}
+        >
+          {state === "busy" ? "Sending…" : "Request invite →"}
+        </button>
+      </div>
+      <div
+        style={{
+          fontFamily: LF.mono,
+          fontSize: 10.5,
+          color: state === "error" ? LC.neg : dark ? LC.onDarkMute : LC.mute,
+          marginTop: 11,
+          letterSpacing: "0.04em",
+          textAlign: "center",
+        }}
+      >
+        {state === "error" && err ? err : note}
+      </div>
+    </div>
+  );
+}

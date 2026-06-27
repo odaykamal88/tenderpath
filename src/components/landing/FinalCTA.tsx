@@ -1,6 +1,6 @@
 "use client";
 
-import { LC, LF, Eyebrow, AssessPaste } from "./kit";
+import { LC, LF, Eyebrow, InviteCapture } from "./kit";
 import { useMedia } from "@/components/workbench/useMedia";
 
 export default function FinalCTA() {
@@ -25,7 +25,7 @@ export default function FinalCTA() {
       </div>
       <div className="lk-container" style={{ maxWidth: 1180, margin: "0 auto", padding: "0 24px", position: "relative", textAlign: "center" }}>
         <Eyebrow color={LC.accent2} style={{ display: "inline-block" }}>
-          Your free readiness assessment
+          Invite-only access
         </Eyebrow>
         <h2
           style={{
@@ -42,10 +42,10 @@ export default function FinalCTA() {
           Your next contract is already in the feed.
         </h2>
         <p style={{ fontFamily: LF.sans, fontSize: mobile ? 16 : 18, color: LC.onDark, margin: "18px auto 0", maxWidth: 540, lineHeight: 1.6 }}>
-          Paste your website. In about a minute you&rsquo;ll see your readiness score, the live tenders you fit, and the three fixes that matter — then step straight into your Workbench.
+          We&rsquo;re onboarding teams in small batches. Request an invite and we&rsquo;ll set you up with your matched tenders, readiness score, and the fixes that matter.
         </p>
         <div style={{ marginTop: 32 }}>
-          <AssessPaste dark note={`No signup to see your score · free dashboard, no card · Pro free for 30 days`} />
+          <InviteCapture dark source="final-cta" note="We onboard in small batches — we'll email your invite." />
         </div>
       </div>
     </section>

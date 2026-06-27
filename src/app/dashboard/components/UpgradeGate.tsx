@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { COMMERCE_ENABLED } from "@/lib/commerce";
 
 interface Me {
   subscription_status: string | null;
@@ -23,9 +24,13 @@ function authHeaders(): HeadersInit {
 }
 
 export default function UpgradeGate({ children, title, description }: UpgradeGateProps) {
-  const [access, setAccess] = useState<AccessState>("loading");
+  // Invite-only beta: commerce paused → start "open" and skip the gate check.
+  const [access, setAccess] = useState<AccessState>(COMMERCE_ENABLED ? "loading" : "open");
 
   useEffect(() => {
+    // Invite-only beta: commerce paused → access starts "open"; skip the gate
+    // check entirely. Restore gating with COMMERCE_ENABLED.
+    if (!COMMERCE_ENABLED) return;
     const headers = authHeaders();
 
     Promise.all([

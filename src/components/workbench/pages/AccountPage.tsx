@@ -8,14 +8,13 @@ import { C, F } from "../tokens";
 import { SectionHead } from "../ui";
 import { useMedia } from "../useMedia";
 import { CompanyProfileTab } from "../account/CompanyProfileTab";
-import { SubscriptionTab } from "../account/SubscriptionTab";
-import { BillingTab } from "../account/BillingTab";
 import { TeamTab } from "../account/TeamTab";
 
+// Invite-only beta: pricing/payment is hidden, so the Subscription and Billing
+// tabs are omitted (SubscriptionTab/BillingTab remain in the repo — restore them
+// here when COMMERCE_ENABLED is flipped back on).
 const TABS = [
   { id: "profile", label: "Company profile" },
-  { id: "subscription", label: "Subscription" },
-  { id: "billing", label: "Billing & transactions" },
   { id: "team", label: "Profile & team" },
 ] as const;
 
@@ -56,8 +55,6 @@ export function AccountPage() {
         </div>
         <div style={{ minWidth: 0 }}>
           {tab === "profile" && <CompanyProfileTab />}
-          {tab === "subscription" && <SubscriptionTab />}
-          {tab === "billing" && <BillingTab />}
           {tab === "team" && <TeamTab />}
         </div>
       </div>

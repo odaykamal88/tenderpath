@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUserFromRequest } from "./auth";
 import type { User } from "./types";
+import { COMMERCE_ENABLED } from "./commerce";
 
 // PR-M (2026-05-23): trial extended 14 → 30 days. Day 27 is the warning-
 // email trigger (see src/app/api/cron/trial-reminders/route.ts). Bumping
@@ -28,6 +29,14 @@ export interface AccessInfo {
 }
 
 export function evaluateAccess(user: User): AccessInfo {
+  // Invite-only beta: commerce is paused, so every signed-in user holds the full
+  // Pro entitlement (vault · gap Navigator · unlimited bid/no-bid) and no trial/
+  // subscribe UI shows (every such surface is keyed on access.isTrialing/locked,
+  // both false here). Flip COMMERCE_ENABLED to restore trials + gating.
+  if (!COMMERCE_ENABLED) {
+    return { hasAccess: true, reason: "subscribed", trialDaysLeft: 0, isTrialing: false };
+  }
+
   if (user.is_super_admin) {
     return { hasAccess: true, reason: "admin", trialDaysLeft: 0, isTrialing: false };
   }

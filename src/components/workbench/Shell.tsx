@@ -28,8 +28,7 @@ const NAV: NavDef[] = [
   { id: "overview", label: "Overview", icon: "overview", group: "Workbench", href: "/dashboard" },
   { id: "matches", label: "Matches", icon: "matches", group: "Workbench", href: "/dashboard/matches" },
   { id: "browse", label: "Browse tenders", icon: "browse", group: "Workbench", href: "/dashboard/browse" },
-  { id: "gaps", label: "Readiness gaps", icon: "gaps", group: "Readiness", href: "/dashboard/gaps", paid: true },
-  { id: "proposals", label: "Submissions", icon: "proposals", group: "Submit", href: "/dashboard/proposals", paid: true },
+  { id: "gaps", label: "Readiness gaps", icon: "gaps", group: "Readiness", href: "/dashboard/gaps" },
 ];
 
 const TITLES: { match: string; title: string }[] = [
@@ -55,7 +54,8 @@ function Sidebar({ onNavTap }: { onNavTap?: () => void }) {
     if (id === "gaps") return openGaps || null;
     return null;
   };
-  const groups: NavDef["group"][] = ["Workbench", "Readiness", "Submit"];
+  // "Submit" (paid Submissions) is hidden during the invite-only beta.
+  const groups: NavDef["group"][] = ["Workbench", "Readiness"];
 
   const navLink = (n: NavDef) => {
     const active = isActive(pathname, n.href);

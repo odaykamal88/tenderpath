@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LC, LF, AssessPaste } from "./kit";
+import { LC, LF, InviteCapture } from "./kit";
 import { useMedia } from "@/components/workbench/useMedia";
 import type { LandingViewer } from "./types";
 
@@ -99,7 +99,7 @@ export default function Hero({ viewer }: { viewer: LandingViewer }) {
         </p>
 
         <div style={{ marginTop: 34 }}>
-          <AssessPaste />
+          <InviteCapture source="hero" />
         </div>
 
         <div style={{ marginTop: 18, display: "flex", gap: 22, justifyContent: "center", flexWrap: "wrap" }}>
@@ -134,11 +134,11 @@ export default function Hero({ viewer }: { viewer: LandingViewer }) {
             color: LC.faint,
           }}
         >
-          <span>No card required</span>
+          <span>Invite-only access</span>
           <span style={{ color: LC.rule }}>·</span>
-          <span>Bid/no-bid in &lt; 1 min</span>
+          <span>30+ UN agencies, EU &amp; AfDB feeds</span>
           <span style={{ color: LC.rule }}>·</span>
-          <span>30+ UN agencies, EU, AfDB feeds</span>
+          <span>New tenders every day</span>
         </div>
       </div>
     </section>

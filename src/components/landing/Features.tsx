@@ -241,16 +241,16 @@ export default function Features() {
             id="f-verdict"
             tag="Paste → bid / no-bid"
             title="An honest verdict before you invest a single hour."
-            body="Paste a link or drop the PDF. TenderPath reads the requirements, checks them against your file, and gives a clear call — then asks only for what it doesn't already have. Free up to 3 a month — unlimited on Pro."
+            body="Paste a link or drop the PDF. TenderPath reads the requirements, checks them against your file, and gives a clear call — then asks only for what it doesn't already have."
             points={["Fit score + bid / no-bid recommendation", "Compliance ledger: on-file vs. gaps", "Requests just the missing inputs"]}
             visual={<VPaste />}
           />
           <FeatureRow
             mobile={mobile}
             id="f-navigator"
-            tag="The Gap Navigator · Pro"
+            tag="The Gap Navigator"
             title="Every blocker, closed with your hand held."
-            body="UNGM registration, ISO certification, audited financials — the Navigator walks each one step by step, pre-fills what it can, and lifts your readiness score as you go. Part of TenderPath Pro."
+            body="UNGM registration, ISO certification, audited financials — the Navigator walks each one step by step, pre-fills what it can, and lifts your readiness score as you go."
             points={["Guided, conversational, pre-filled steps", "Deep-links to the right portals & your vault", "Watch your score and eligibility climb"]}
             visual={<VNavigator />}
           />
@@ -260,8 +260,8 @@ export default function Features() {
             id="f-proposal"
             tag="Proposals"
             title="A submission-ready proposal in under an hour."
-            body="Turn the brief into a full EOI, RFQ, RFP or ITB response — mapped to the tender's scoring matrix, compliance-checked, ready to submit. Billed per submission, only when you bid."
-            points={["EOI · RFQ · ITB · RFP, matrix-mapped", "Compliance-mapped, evaluator-ready", "Pay per submission — skin in the game"]}
+            body="Turn the brief into a full EOI, RFQ, RFP or ITB response — mapped to the tender's scoring matrix, compliance-checked, ready to submit."
+            points={["EOI · RFQ · ITB · RFP, matrix-mapped", "Compliance-mapped, evaluator-ready", "Built from your file and the scoring matrix"]}
             visual={<VProposal />}
           />
         </div>

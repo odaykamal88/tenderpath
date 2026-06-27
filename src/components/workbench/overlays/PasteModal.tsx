@@ -11,8 +11,7 @@
  *    tender yet, so rather than fabricate a verdict we route to the real paid
  *    bid/no-bid analysis (carrying the pasted text for the intake to pick up). */
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { C, F } from "../tokens";
 import { Eyebrow, Btn, daysUntil, fitColor, shortDate } from "../ui";
 import { Icon } from "../icons";
@@ -48,7 +47,6 @@ interface PasteVerdict {
 }
 
 export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: () => void }) {
-  const router = useRouter();
   const { data, token, go, openNavigator, openSubscribe } = useWorkbench();
   const mobile = useMedia("(max-width: 1023px)");
 
@@ -130,10 +128,9 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
       return;
     }
     if (file && !text.trim()) {
-      // A file upload needs the paid extraction pipeline — hand off rather than
-      // fake a verdict from a filename.
-      onClose();
-      router.push("/dashboard/services/bid-no-bid");
+      // File extraction is a paid add-on, paused during the invite-only beta —
+      // keep the user in the free flow instead of routing to a pricing page.
+      setAnalysisError("Paste the tender text or a link for an instant verdict — PDF / Word extraction is coming soon.");
       return;
     }
     // Free-text / URL — run the real quick verdict (consumes a credit on success).
@@ -485,65 +482,30 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
             )}
 
             {decided === "bid" && (
-              <UpsellBlock
-                price={subType.price}
-                code={subType.code}
-                asksAnswered={asksAnswered}
-                onCommission={() => {
-                  onClose();
-                  // Deep-link straight into the intake wizard with the detected
-                  // format + this opportunity preselected.
-                  router.push(`/dashboard/proposals?start=${subType.code}${seed ? `&match=${seed.id}` : ""}`);
-                }}
-                onPipelineOnly={() => { onClose(); go("matches"); }}
-              />
+              <div style={{ margin: "14px 26px 0", animation: "tpFade .3s ease" }}>
+                <div style={{ background: `linear-gradient(100deg, ${C.ink}, #2a2013)`, color: C.paper, padding: "22px 24px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                    <span style={{ color: C.accent2 }}>✓</span>
+                    <Eyebrow color={C.accent2}>Added to your pipeline</Eyebrow>
+                  </div>
+                  <div style={{ fontFamily: F.display, fontSize: 22, color: C.paper, lineHeight: 1.15 }}>
+                    You&apos;re bidding on {bidTitle}.
+                  </div>
+                  <p style={{ fontFamily: F.sans, fontSize: 13.5, lineHeight: 1.6, color: "#cdc6b3", margin: "10px 0 0", maxWidth: 480 }}>
+                    It&apos;s now in your active pipeline. Close any open gaps with the Navigator and keep your
+                    documents in the Vault so you&apos;re submission-ready before the deadline.
+                  </p>
+                  <div style={{ display: "flex", gap: 12, marginTop: 18, flexWrap: "wrap" }}>
+                    <Btn kind="ghost" size="sm" onClick={() => { onClose(); go("matches"); }} style={{ color: C.paper, borderColor: "#3a4654" }}>
+                      Go to pipeline →
+                    </Btn>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function UpsellBlock({
-  price,
-  code,
-  asksAnswered,
-  onCommission,
-  onPipelineOnly,
-}: {
-  price: number;
-  code: string;
-  asksAnswered: number;
-  onCommission: () => void;
-  onPipelineOnly: () => void;
-}) {
-  const children: ReactNode = (
-    <>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <span style={{ color: C.accent2 }}>🔒</span>
-        <Eyebrow color={C.accent2}>Submissions · paid add-on</Eyebrow>
-      </div>
-      <div style={{ fontFamily: F.display, fontSize: 23, color: C.paper, lineHeight: 1.1 }}>You&apos;re bidding. Want us to build the submission?</div>
-      <p style={{ fontFamily: F.sans, fontSize: 13.5, lineHeight: 1.6, color: "#cdc6b3", margin: "10px 0 0", maxWidth: 480 }}>
-        We&apos;ll turn everything above — your file, the {asksAnswered} input{asksAnswered === 1 ? "" : "s"} you gave, and the detected scoring matrix — into a submission-ready {code} package. Billed separately from your subscription.
-      </p>
-      <div style={{ display: "flex", alignItems: "center", gap: 18, marginTop: 18, flexWrap: "wrap" }}>
-        <div>
-          <span style={{ fontFamily: F.display, fontSize: 30, color: C.paper }}>${price}</span>
-          <span style={{ fontFamily: F.mono, fontSize: 10, color: "#9aa3ad" }}> /submission · under 1 hr</span>
-        </div>
-        <div style={{ flex: 1 }} />
-        <Btn kind="ghost" size="sm" onClick={onPipelineOnly} style={{ color: C.paper, borderColor: "#3a4654" }}>Add to pipeline only</Btn>
-        <button onClick={onCommission} style={{ background: C.accent, color: C.white, border: 0, padding: "11px 18px", cursor: "pointer", fontFamily: F.mono, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-          Start the {code} →
-        </button>
-      </div>
-    </>
-  );
-  return (
-    <div style={{ margin: "14px 26px 0", animation: "tpFade .3s ease" }}>
-      <div style={{ background: `linear-gradient(100deg, ${C.ink}, #2a2013)`, color: C.paper, padding: "22px 24px", position: "relative", overflow: "hidden" }}>{children}</div>
     </div>
   );
 }

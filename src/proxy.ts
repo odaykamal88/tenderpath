@@ -10,6 +10,9 @@ const PUBLIC_PATHS = new Set([
   "/api/auth/google",
   "/api/auth/google/callback",
   "/api/health",
+  // Invite-only landing: anonymous visitors POST their email to request an
+  // invite. Self-authorizes (no JWT) — validates + dedupes server-side.
+  "/api/waitlist",
   "/api/webhooks/stripe",
   "/api/cron/crawl",
   "/api/cron/grants",

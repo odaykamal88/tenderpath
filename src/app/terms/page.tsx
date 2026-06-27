@@ -18,7 +18,7 @@ export default function TermsPage() {
   return (
     <LegalShell
       title="Terms & Conditions"
-      subtitle="Please read these terms carefully before using TenderPath."
+      subtitle="Plain-language terms for using TenderPath. If anything here is unclear, just email us — we're happy to explain."
       lastUpdated="June 2026"
     >
       <Section heading="1. Who we are">
@@ -33,25 +33,21 @@ export default function TermsPage() {
           TenderPath provides AI-assisted tools to help businesses discover UN and donor-agency
           procurement opportunities, assess their readiness, and prepare for tender processes.
           The platform includes a free readiness assessment and a free dashboard (the Workbench) —
-          a matched tender feed, full tender database, weekly digest, Telegram alerts, and a limited
-          monthly bid/no-bid verdict allowance — together with an optional paid subscription
-          (TenderPath Pro), per-submission proposal drafting, and related workflow features.
+          a matched tender feed, full tender database, weekly digest, Telegram alerts, and bid/no-bid
+          verdicts. TenderPath is currently invite-only and free to use while we&apos;re in beta; we&apos;ll
+          always show prices clearly before introducing any paid feature.
         </p>
         <p className="text-sm font-medium text-gray-800 bg-gray-50 rounded-lg px-4 py-3">
           All outputs — including assessments, sector classifications, readiness scores, tender
-          matches, and bid analysis — are informational and assistive only. They do not constitute
-          professional procurement, legal, or financial advice. You remain solely responsible for
-          your procurement decisions.
+          matches, and bid analysis — are informational and assistive only. They aren&apos;t professional
+          procurement, legal, or financial advice, and the final call on any procurement decision is
+          always yours.
         </p>
-        <p className="text-sm font-medium text-red-700 bg-red-50 border border-red-100 rounded-lg px-4 py-3 mt-3">
-          <strong>AI-generated content — user responsibility.</strong> TenderPath uses artificial
-          intelligence to generate assessments, tender matches, bid analyses, proposal drafts, and
-          application content. All AI-generated outputs may contain errors, omissions, or
-          inaccuracies. <strong>You are solely responsible for reviewing, verifying, and approving
-          all AI-generated content before submitting it to any procurement authority, donor agency,
-          or third party.</strong> TenderPath makes no warranty that AI-generated content is
-          accurate, complete, or fit for submission. Submitting unreviewed AI output is done
-          entirely at your own risk.
+        <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-4 py-3 mt-3">
+          <strong>A note on AI-assisted content.</strong> TenderPath uses AI to help generate
+          assessments, tender matches, bid analyses, and draft content. AI can get things wrong, so
+          please review and verify anything before you submit it to a procurement authority, donor
+          agency, or third party. You know your organization best — the final review is always yours.
         </p>
       </Section>
 
@@ -75,77 +71,34 @@ export default function TermsPage() {
         </ul>
       </Section>
 
-      <Section heading="5. Free dashboard and trial of Pro">
+      <Section heading="5. Access during the beta">
         <p className="text-sm">
-          The free company assessment is available without payment. The dashboard is provided free
-          on signup and includes the matched-tender feed, full tender database, weekly matched digest,
-          Telegram alerts and deadline nudges, and three (3) bid/no-bid instant verdicts per calendar
-          month — no card required. New accounts may also elect to try <strong>TenderPath Pro with a
-          30-day free trial</strong> — no card required to start. We will send you a reminder email
-          before the trial ends. When the trial ends, you may subscribe (monthly or annual) to keep
-          Pro features (the document vault, the readiness-gap Navigator, and unlimited bid/no-bid
-          verdicts); if you added a card on file during the trial, it converts automatically at the
-          standard plan rate at the end of the trial unless you cancel first. You may cancel at any
-          time by contacting us at{" "}
-          <a href="mailto:info@tenderpath.me" className="underline">info@tenderpath.me</a>.
+          The company assessment and the dashboard (the Workbench) are free to use. TenderPath is
+          currently <strong>invite-only</strong> — you can request an invite from our homepage, and we
+          onboard new teams in small batches. No payment or card is required to use the platform during
+          the beta. You can stop using your account at any time, and you can reach us whenever you like
+          at <a href="mailto:info@tenderpath.me" className="underline">info@tenderpath.me</a>.
         </p>
       </Section>
 
-      <Section heading="6. Paid services and billing">
+      <Section heading="6. Paid features and billing">
         <p className="text-sm">
-          <strong>TenderPath Pro</strong> is an optional paid subscription (monthly or annual)
-          that unlocks three Pro-only features: the document vault, the readiness-gap Navigator,
-          and unlimited bid/no-bid verdicts (free accounts are limited to three per calendar month).
-          Proposal submission drafting (EOI, RFQ, ITB, and RFP packages) is billed separately,
-          per submission, and is not part of any subscription. Prices are displayed at the point
-          of purchase.
+          TenderPath is free during the invite-only beta. We may introduce optional paid features
+          later — for example, additional workflow or proposal-drafting tools. If and when we do,
+          we&apos;ll show the price and terms clearly before you buy anything, and update this section
+          to match.
         </p>
-        <p className="text-sm font-medium text-gray-800 mb-1">Payment:</p>
         <p className="text-sm">
-          Payments are processed by <strong>card</strong> (Visa, Mastercard, and other major cards)
-          through <a href="https://stripe.com/legal" target="_blank" rel="noreferrer" className="underline">Stripe</a>.
-          Card details are handled entirely by Stripe and are never stored on TenderPath servers. By
-          paying, you agree to Stripe&apos;s terms of service.
+          Any payments would be processed securely by{" "}
+          <a href="https://stripe.com/legal" target="_blank" rel="noreferrer" className="underline">Stripe</a>.
+          Card details are handled entirely by Stripe and are never stored on TenderPath servers.
         </p>
-        <p className="text-sm font-medium text-gray-800 mt-2 mb-1">Subscriptions:</p>
-        <ul className="list-disc pl-5 space-y-1 text-sm">
-          <li>Subscriptions renew automatically at the end of each billing cycle.</li>
-          <li>We will send a renewal reminder at least <strong>30 days</strong> before the next charge.</li>
-          <li>You may cancel at any time; cancellation takes effect at the end of the current billing period and you retain access until then.</li>
-        </ul>
-        <p id="refunds" className="text-sm font-medium text-gray-800 mt-2 mb-1">Refunds:</p>
-        <ul className="list-disc pl-5 space-y-1 text-sm">
-          <li><strong>Subscription fees</strong> paid beyond the current billing period are refunded on a pro-rated basis.</li>
-          <li><strong>One-off service fees</strong> (proposal submission drafting — EOI / RFQ / ITB / RFP packages) are non-refundable once the deliverable has been delivered, subject to the submission drafting guarantee below.</li>
-          <li>
-            <strong>Submission drafting guarantee (EOI / RFQ / ITB / RFP orders).</strong> If we
-            deliver your draft pack late against the promise shown at checkout, or your submission
-            is rejected by the agency for a compliance error that we made in the documents we
-            drafted, we refund the order in full — no questions. Email{" "}
-            <a href="mailto:info@tenderpath.me" className="underline">info@tenderpath.me</a> with
-            your order reference (TP-…).
-          </li>
-          <li>
-            <strong>Tender already closed.</strong> If you paid for a proposal submission or
-            Bid/No-Bid analysis tied to a tender whose deadline had passed at checkout — and we
-            failed to block the purchase — we refund in full within 5 business days. Email{" "}
-            <a href="mailto:info@tenderpath.me" className="underline">info@tenderpath.me</a> with
-            your Stripe session ID.
-          </li>
-          <li>
-            <strong>Compliance gate held your order.</strong> If our compliance gate detects a
-            mandatory eligibility blocker after payment (e.g. you can&apos;t meet an ineligibility
-            criterion the call requires), no service deliverable is generated. You can either
-            (a) provide the missing evidence within 30 days and we&apos;ll generate the deliverable,
-            or (b) request a full refund within 30 days by emailing{" "}
-            <a href="mailto:info@tenderpath.me" className="underline">info@tenderpath.me</a>.
-          </li>
-          <li>
-            <strong>Generation failed on our side.</strong> If we are unable to deliver the
-            Bid/No-Bid analysis, proposal submission, or Roster Fast-Track within 72 hours of payment due to
-            a TenderPath technical failure (not a missing input from you), we refund in full.
-          </li>
-        </ul>
+        <p id="refunds" className="text-sm">
+          <strong>Refunds.</strong> If you ever pay for something and we don&apos;t deliver what was
+          promised, email us at{" "}
+          <a href="mailto:info@tenderpath.me" className="underline">info@tenderpath.me</a> and we&apos;ll
+          make it right — including a full refund where that&apos;s the fair outcome.
+        </p>
       </Section>
 
       <Section heading="7. Intellectual property">
@@ -162,16 +115,14 @@ export default function TermsPage() {
 
       <Section heading="8. Service availability">
         <p className="text-sm">
-          TenderPath will use commercially reasonable efforts to make the core production service
-          available at least <strong>99.5%</strong> of each calendar month, excluding scheduled
-          maintenance, emergency maintenance, force majeure events, third-party service failures
-          (including Vercel, Neon, Stripe, and Resend), and other circumstances outside our
-          reasonable control.
+          We work hard to keep TenderPath available and reliable, using commercially reasonable
+          efforts to keep the core service running. From time to time it may be unavailable — for
+          example during maintenance, third-party service issues (including Vercel, Neon, Stripe, and
+          Resend), or circumstances outside our reasonable control.
         </p>
         <p className="text-sm text-gray-500">
-          This availability commitment applies only to the core platform and does not create
-          guaranteed support response times or remediation timelines unless expressly agreed
-          in writing.
+          While we aim for high availability, we don&apos;t publish a guaranteed uptime figure or fixed
+          support-response times during the beta.
         </p>
       </Section>
 

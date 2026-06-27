@@ -3,6 +3,7 @@ import { Resend } from "resend";
 import { sql } from "@/lib/db";
 import { defaultEmailMeta } from "@/lib/email/defaults";
 import { TRIAL_DAYS, TRIAL_WARNING_DAY } from "@/lib/access";
+import { COMMERCE_ENABLED } from "@/lib/commerce";
 
 // PR-M (2026-05-23): daily cron that fires the day-27 trial-ending email
 // to platform-trial users (no Stripe subscription on file yet). Stripe-
@@ -39,6 +40,12 @@ interface CandidateRow {
 export async function GET(request: Request) {
   if (!authorized(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Invite-only beta: pricing/payment is hidden, so don't email anyone a
+  // "subscribe at $X" trial-ending reminder. Re-enable with COMMERCE_ENABLED.
+  if (!COMMERCE_ENABLED) {
+    return NextResponse.json({ sent: 0, skipped: 0, reason: "commerce_disabled" });
   }
 
   // Day 27 of the trial = exactly TRIAL_WARNING_DAY full days after

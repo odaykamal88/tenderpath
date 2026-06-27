@@ -674,6 +674,13 @@ CREATE TABLE IF NOT EXISTS submission_drafts (
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (user_id, type)
 );
+
+CREATE TABLE IF NOT EXISTS waitlist_signups (
+  id SERIAL PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  source TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 `;
 
 async function migrate() {
