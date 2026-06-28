@@ -82,6 +82,29 @@ type NetworkProspectRow = {
   duplicate_match_ids: number[] | null;
 };
 
+type ExternalProspectRow = {
+  id: number;
+  tender_id: number;
+  network_company_id: number | null;
+  name: string;
+  website: string | null;
+  country: string | null;
+  countries: unknown;
+  sectors: unknown;
+  org_type: string | null;
+  services_text: string | null;
+  score: number;
+  confidence: string;
+  fit_reasons: unknown;
+  evidence_urls: unknown;
+  search_queries: unknown;
+  provider: string;
+  status: string;
+  last_discovered_at: string;
+  updated_at: string;
+  duplicate_count: number | string | null;
+};
+
 function asArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.map((v) => String(v)).map((v) => v.trim()).filter(Boolean);
   if (typeof value === "string") {
@@ -353,7 +376,7 @@ export async function GET(
     const tender = tenderRows[0];
     const siblingIds = Array.isArray(tender.sibling_ids) && tender.sibling_ids.length ? tender.sibling_ids : [id];
 
-    const [candidateRows, matchRows, networkProspectRows] = await Promise.all([
+    const [candidateRows, matchRows, networkProspectRows, externalProspectRows] = await Promise.all([
       sql`
       SELECT
         a.id, a.company_name, a.email, a.website, a.description,
@@ -442,6 +465,41 @@ export async function GET(
         updated_at DESC
       LIMIT 100
     `,
+      sql`
+      WITH ranked AS (
+        SELECT
+          p.id, p.tender_id, p.network_company_id, p.name, p.website,
+          p.country, p.countries, p.sectors, p.org_type, p.services_text,
+          p.score, p.confidence, p.fit_reasons, p.evidence_urls,
+          p.search_queries, p.provider, p.status, p.last_discovered_at,
+          p.updated_at,
+          COUNT(*) OVER (PARTITION BY p.dedup_key)::int AS duplicate_count,
+          ROW_NUMBER() OVER (
+            PARTITION BY p.dedup_key
+            ORDER BY p.score DESC, p.updated_at DESC, p.id DESC
+          ) AS rn
+        FROM network_external_prospects p
+        WHERE p.tender_id = ANY(${siblingIds}::int[])
+      )
+      SELECT
+        id, tender_id, network_company_id, name, website, country, countries,
+        sectors, org_type, services_text, score, confidence, fit_reasons,
+        evidence_urls, search_queries, provider, status, last_discovered_at,
+        updated_at, duplicate_count
+      FROM ranked
+      WHERE rn = 1
+      ORDER BY
+        CASE status
+          WHEN 'suggested' THEN 0
+          WHEN 'reviewed' THEN 1
+          WHEN 'added_to_network' THEN 2
+          WHEN 'dismissed' THEN 3
+          ELSE 4
+        END,
+        score DESC,
+        updated_at DESC
+      LIMIT 100
+    `,
     ]);
 
     const byVendor = new Map<string, ScoredCandidate>();
@@ -473,6 +531,15 @@ export async function GET(
         countries: asArray(row.countries),
         sectors: asArray(row.sectors),
         match_reasons: asArray(row.match_reasons),
+        duplicate_count: Number(row.duplicate_count ?? 1),
+      })),
+      externalProspects: (externalProspectRows as ExternalProspectRow[]).map((row) => ({
+        ...row,
+        countries: asArray(row.countries),
+        sectors: asArray(row.sectors),
+        fit_reasons: asArray(row.fit_reasons),
+        evidence_urls: asArray(row.evidence_urls),
+        search_queries: asArray(row.search_queries),
         duplicate_count: Number(row.duplicate_count ?? 1),
       })),
     });

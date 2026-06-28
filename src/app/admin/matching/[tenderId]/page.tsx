@@ -121,11 +121,35 @@ interface NetworkProspect {
   duplicate_match_ids: number[] | null;
 }
 
+interface ExternalProspect {
+  id: number;
+  tender_id: number;
+  network_company_id: number | null;
+  name: string;
+  website: string | null;
+  country: string | null;
+  countries: string[] | null;
+  sectors: string[] | null;
+  org_type: string | null;
+  services_text: string | null;
+  score: number;
+  confidence: "high" | "medium" | "low";
+  fit_reasons: string[] | null;
+  evidence_urls: string[] | null;
+  search_queries: string[] | null;
+  provider: string;
+  status: string;
+  last_discovered_at: string;
+  updated_at: string;
+  duplicate_count: number;
+}
+
 interface DetailResponse {
   tender: TenderDetail;
   candidates: Candidate[];
   matches: Match[];
   networkProspects: NetworkProspect[];
+  externalProspects: ExternalProspect[];
 }
 
 function authHeaders(): HeadersInit {
@@ -182,6 +206,8 @@ export default function AdminMatchingDetailPage() {
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [discovering, setDiscovering] = useState(false);
+  const [externalDiscovering, setExternalDiscovering] = useState(false);
+  const [externalQueries, setExternalQueries] = useState<string[]>([]);
 
   const load = useCallback(async (query: string) => {
     if (!Number.isInteger(tenderId) || tenderId <= 0) {
@@ -337,6 +363,47 @@ export default function AdminMatchingDetailPage() {
     }
   }
 
+  async function runExternalDiscovery() {
+    setExternalDiscovering(true);
+    setExternalQueries([]);
+    setToast(null);
+    try {
+      const res = await fetch(`/api/admin/matching/tenders/${tenderId}/external-discovery`, {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ limit: 8 }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+      const run = body.run as {
+        mode?: "web_search" | "queries_only";
+        providerConfigured?: boolean;
+        inserted?: number;
+        refreshed?: number;
+        prospects?: unknown[];
+        queries?: string[];
+        error?: string;
+      } | undefined;
+      setExternalQueries(run?.queries ?? []);
+      if (run?.mode === "queries_only") {
+        setToast({
+          ok: false,
+          msg: "External search needs OPENAI_API_KEY. I generated the search queries below for now.",
+        });
+      } else {
+        setToast({
+          ok: true,
+          msg: `External search found ${run?.prospects?.length ?? 0} prospects: ${run?.inserted ?? 0} new, ${run?.refreshed ?? 0} refreshed.`,
+        });
+        await load(appliedQ);
+      }
+    } catch (err) {
+      setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to run external discovery" });
+    } finally {
+      setExternalDiscovering(false);
+    }
+  }
+
   if (error && !data) {
     return (
       <>
@@ -356,6 +423,7 @@ export default function AdminMatchingDetailPage() {
 
   const t = data?.tender;
   const networkProspects = data?.networkProspects ?? [];
+  const externalProspects = data?.externalProspects ?? [];
 
   return (
     <>
@@ -482,6 +550,114 @@ export default function AdminMatchingDetailPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </section>
+
+      <section className={styles.panel}>
+        <header className={styles.panelHead}>
+          <div>
+            <h2 className={styles.panelTitle}>External discovery ({externalProspects.length})</h2>
+            <p className={styles.panelSub}>Web-search prospects outside the current Tenderpath network. Evidence links are required before a company appears here.</p>
+          </div>
+          <div className={styles.panelActions}>
+            <button
+              type="button"
+              className={styles.btnGhost}
+              onClick={runExternalDiscovery}
+              disabled={externalDiscovering || loading}
+            >
+              {externalDiscovering ? "Searching…" : "Search web"}
+            </button>
+          </div>
+        </header>
+
+        {externalQueries.length > 0 && (
+          <div style={{ padding: "12px 22px 0" }}>
+            <div className={styles.sessionSubtle} style={{ marginBottom: 8 }}>
+              Search queries prepared for this tender:
+            </div>
+            <div style={{ display: "grid", gap: 6 }}>
+              {externalQueries.map((query) => (
+                <div key={query} className={styles.mono} style={{ fontSize: 11, border: "1px solid var(--color-rule)", padding: "6px 8px" }}>
+                  {query}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {loading ? (
+          <div className={styles.woEmpty}>Loading external discoveries…</div>
+        ) : externalProspects.length === 0 ? (
+          <div className={styles.woEmpty}>No external prospects yet — run web search when the provider is configured.</div>
+        ) : (
+          <div style={{ padding: "8px 22px 22px", display: "grid", gap: 12 }}>
+            {externalProspects.map((p) => (
+              <article
+                key={p.id}
+                style={{
+                  border: "1px solid var(--color-rule)",
+                  padding: 14,
+                  background: p.status === "suggested" ? "transparent" : "var(--color-bg-2, #fafafa)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+                  <div>
+                    <div className={styles.cellName}>{p.name}</div>
+                    <div className={styles.sessionSubtle}>
+                      {p.website ?? "—"}
+                      {p.country && ` · ${p.country}`}
+                      {p.duplicate_count > 1 && ` · ${p.duplicate_count} folded discoveries`}
+                    </div>
+                    <div className={styles.sessionSubtle} style={{ marginTop: 4 }}>
+                      {label(p.org_type)} · {chipList(p.countries, 4)}
+                    </div>
+                    <div className={styles.sessionSubtle} style={{ marginTop: 4 }}>
+                      sectors: {chipList(p.sectors, 5)}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 6, flexShrink: 0 }}>
+                    <div style={{ textAlign: "right", minWidth: 70, paddingRight: 4 }}>
+                      <div className={styles.mono} style={{ color: "var(--color-ink)", fontWeight: 600 }}>{p.score}</div>
+                      <div className={styles.sessionSubtle}>{p.confidence}</div>
+                    </div>
+                    {p.website && (
+                      <a
+                        href={p.website}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={styles.btnGhost}
+                        style={{ padding: "5px 9px", fontSize: 11, textDecoration: "none" }}
+                      >
+                        Website
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                <div className={styles.sessionSubtle} style={{ marginTop: -2, marginBottom: 8 }}>
+                  <strong>Fit:</strong> {chipList(p.fit_reasons, 4)}
+                </div>
+
+                {p.services_text && (
+                  <div className={styles.sessionSubtle} style={{ lineHeight: 1.5, marginBottom: 8 }}>
+                    {p.services_text.length > 240 ? `${p.services_text.slice(0, 240)}…` : p.services_text}
+                  </div>
+                )}
+
+                {(p.evidence_urls?.length ?? 0) > 0 && (
+                  <div className={styles.sessionSubtle} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    <strong>Evidence:</strong>
+                    {p.evidence_urls?.slice(0, 3).map((url, index) => (
+                      <a key={`${p.id}-${url}`} href={url} target="_blank" rel="noreferrer" style={{ color: "var(--color-accent)" }}>
+                        source {index + 1}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </article>
+            ))}
           </div>
         )}
       </section>
