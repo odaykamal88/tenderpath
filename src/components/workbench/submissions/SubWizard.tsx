@@ -26,6 +26,7 @@ import { EMPTY_DRAFT } from "@/lib/submissions/types";
 import { flowFor, FLOW_GUARANTEE, type FlowBlock, type FlowStep, type SubmissionFlow } from "@/lib/submissions/flows";
 import { docSpec } from "@/lib/submissions/docs-catalog";
 import { auditDraft, PAY_GATE_PCT, type AuditResult } from "@/lib/submissions/audit";
+import { COMMERCE_ENABLED } from "@/lib/commerce";
 import {
   commission,
   listVaultDocs,
@@ -283,17 +284,26 @@ function ReviewStep({
               Start this submission
             </div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "8px 0 4px" }}>
-              <span style={{ fontFamily: F.display, fontSize: 38, lineHeight: 1, color: C.paper }}>${flow.price}</span>
-              <span style={{ fontFamily: F.mono, fontSize: 10.5, color: "#7d8794" }}>one-time · {flow.sla.toLowerCase()}</span>
+              {COMMERCE_ENABLED ? (
+                <>
+                  <span style={{ fontFamily: F.display, fontSize: 38, lineHeight: 1, color: C.paper }}>${flow.price}</span>
+                  <span style={{ fontFamily: F.mono, fontSize: 10.5, color: "#7d8794" }}>one-time · {flow.sla.toLowerCase()}</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontFamily: F.display, fontSize: 38, lineHeight: 1, color: C.paper }}>Free</span>
+                  <span style={{ fontFamily: F.mono, fontSize: 10.5, color: "#7d8794" }}>no charge during the beta · {flow.sla.toLowerCase()}</span>
+                </>
+              )}
             </div>
-            {freeEligible && (
+            {freeEligible && COMMERCE_ENABLED && (
               <div style={{ fontFamily: F.sans, fontSize: 12, color: "#9fd0ae", margin: "4px 0 0" }}>
                 First submission · on us — your trial credit is applied automatically at checkout.
               </div>
             )}
             <div style={{ fontFamily: F.sans, fontSize: 12, color: "#aab3bf", lineHeight: 1.55, maxWidth: 420, marginTop: 6 }}>
               Includes drafting, the compliance QA gate, unlimited revisions until you approve, and final
-              files in {tender?.portal || "the agency"}&apos;s required format. Pay now — drafting starts immediately.
+              files in {tender?.portal || "the agency"}&apos;s required format. {COMMERCE_ENABLED ? "Pay now" : "Submit now"} — drafting starts immediately.
             </div>
             <div style={{ display: "flex", gap: 9, alignItems: "flex-start", marginTop: 12, maxWidth: 420 }}>
               <span style={{ fontFamily: F.mono, fontSize: 8, letterSpacing: "0.12em", textTransform: "uppercase", color: C.ink, background: C.accent2, padding: "2px 7px", flexShrink: 0, marginTop: 1 }}>
@@ -302,10 +312,19 @@ function ReviewStep({
               <span style={{ fontFamily: F.sans, fontSize: 11.5, color: "#cdc6b3", lineHeight: 1.5 }}>{FLOW_GUARANTEE}</span>
             </div>
             <div style={{ fontFamily: F.sans, fontSize: 10.5, color: "#7d8794", lineHeight: 1.5, marginTop: 10, maxWidth: 420 }}>
-              By paying you agree to the{" "}
-              <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: "#aab3bf" }}>Service Terms</a> and{" "}
-              <a href="/terms#refunds" target="_blank" rel="noopener noreferrer" style={{ color: "#aab3bf" }}>refund policy</a>.
-              A receipt is emailed on payment and available on every order.
+              {COMMERCE_ENABLED ? (
+                <>
+                  By paying you agree to the{" "}
+                  <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: "#aab3bf" }}>Service Terms</a> and{" "}
+                  <a href="/terms#refunds" target="_blank" rel="noopener noreferrer" style={{ color: "#aab3bf" }}>refund policy</a>.
+                  A receipt is emailed on payment and available on every order.
+                </>
+              ) : (
+                <>
+                  By submitting you agree to the{" "}
+                  <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: "#aab3bf" }}>Service Terms</a>.
+                </>
+              )}
             </div>
             {payError && <div style={{ fontFamily: F.sans, fontSize: 12.5, color: "#e8b9b9", marginTop: 10 }}>{payError}</div>}
           </div>
@@ -317,7 +336,7 @@ function ReviewStep({
             ) : (
               <>
                 <Btn kind="gold" onClick={onPay} style={{ opacity: canGo && !paying ? 1 : 0.45, pointerEvents: canGo && !paying ? "auto" : "none" }}>
-                  {paying ? "Processing…" : `Pay $${flow.price} & start drafting →`}
+                  {paying ? "Processing…" : COMMERCE_ENABLED ? `Pay $${flow.price} & start drafting →` : "Start drafting →"}
                 </Btn>
                 {!canGo && (
                   <div style={{ fontFamily: F.mono, fontSize: 9, color: "#7d8794", marginTop: 8, maxWidth: 220, letterSpacing: "0.08em", textTransform: "uppercase" }}>
@@ -462,6 +481,18 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
     try {
       await saveDraft(type, { ...draft, step }).catch(() => {});
       const res = await commission(type, draft);
+      // Invite-only beta: the order is placed free and already live — no payment
+      // card. Hand the placed order id to the Submissions page (it toasts and
+      // surfaces it) and close the wizard.
+      if (res.free || !res.pay_url) {
+        try {
+          sessionStorage.setItem("tp_sub_placed", String(res.order.id));
+        } catch {
+          // sessionStorage unavailable — the order still appears on refetch.
+        }
+        onClose();
+        return;
+      }
       // Mount the shared embedded checkout inline rather than redirecting to
       // /pay — the order + billing work order now exist, so checkout has
       // everything it needs (the wizard's ≥80% gate is authoritative, so
@@ -478,7 +509,7 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
       setPayError(err instanceof Error ? err.message : "Could not start checkout — try again.");
       setPaying(false);
     }
-  }, [type, draft, step]);
+  }, [type, draft, step, onClose]);
 
   const renderBlock = (block: FlowBlock, stepId: string, i: number) => {
     switch (block.kind) {
@@ -512,7 +543,7 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
       <div style={{ display: "flex", alignItems: "center", gap: 16, padding: mobile ? "12px 16px" : "14px 28px", borderBottom: `1px solid ${C.rule}`, background: C.white, flexShrink: 0 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.16em", textTransform: "uppercase", color: C.accent }}>
-            New submission · ${flow.price}
+            New submission{COMMERCE_ENABLED ? ` · $${flow.price}` : ""}
           </div>
           <div style={{ fontFamily: F.display, fontSize: mobile ? 17 : 20, color: C.ink, letterSpacing: "-0.01em", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {flow.code} — {flow.name}
@@ -712,7 +743,7 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
           </Btn>
         ) : (
           <span style={{ fontFamily: F.mono, fontSize: 10, color: C.faint, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Pay & start above ↑
+            {COMMERCE_ENABLED ? "Pay & start above ↑" : "Start above ↑"}
           </span>
         )}
       </div>

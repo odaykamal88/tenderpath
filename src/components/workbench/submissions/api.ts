@@ -60,7 +60,7 @@ export function clientAct(id: number, action: ClientOrderAction): Promise<{ orde
 export function commission(
   type: SubmissionCode,
   draft: WizardDraftState,
-): Promise<{ order: SubmissionOrder; work_order_id: number; pay_url: string }> {
+): Promise<{ order: SubmissionOrder; work_order_id: number; pay_url?: string; free?: boolean }> {
   return request("/api/dashboard/submission-orders", {
     method: "POST",
     body: JSON.stringify({ type, draft }),

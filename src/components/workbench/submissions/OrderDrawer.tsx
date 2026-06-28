@@ -17,6 +17,7 @@ import type { ClientOrderAction, EnvelopeKey, SubmissionOrder, SubmissionStage }
 import { ENVELOPE_LABELS, shepherdSteps } from "@/lib/submissions/flows";
 import { STAGE_META, STAGES, stageIndex } from "@/lib/submissions/stages";
 import { agoLabel, clientAct, getOrder } from "./api";
+import { COMMERCE_ENABLED } from "@/lib/commerce";
 
 const fmtDT = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -605,7 +606,8 @@ export function OrderDrawer({
               {meta.user}
             </span>
             <span style={{ fontFamily: F.mono, fontSize: 10, color: C.faint }}>
-              {order.type} · {order.ref} · ${Math.round(order.priceCents / 100)} {order.paidAt ? "paid" : "payment pending"}
+              {order.type} · {order.ref}
+              {COMMERCE_ENABLED ? ` · $${Math.round(order.priceCents / 100)} ${order.paidAt ? "paid" : "payment pending"}` : ""}
             </span>
             <button onClick={onClose} aria-label="Close" style={{ marginLeft: "auto", background: "none", border: 0, cursor: "pointer", color: C.faint, fontFamily: F.mono, fontSize: 14 }}>
               ✕
