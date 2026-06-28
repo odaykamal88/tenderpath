@@ -49,33 +49,31 @@ export async function GET(request: Request) {
       FROM network_companies c
       LEFT JOIN (
         SELECT
-          m.network_company_id,
-          -- Count DISTINCT opportunities, not raw match rows. Cross-posted
-          -- duplicates (same opportunity under different reference_ids → separate
-          -- tenders rows) would otherwise inflate these badges above the deduped
-          -- worklist below. Key mirrors dedupeTenders(): normalized title+agency+deadline.
-          COUNT(DISTINCT (
-            LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.title, '')),  '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
-            LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.agency, '')), '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
-            COALESCE(t.deadline::date::text, '')
-          )) AS total,
-          COUNT(DISTINCT (
-            LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.title, '')),  '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
-            LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.agency, '')), '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
-            COALESCE(t.deadline::date::text, '')
-          )) FILTER (
-            WHERE m.status = 'new'
+          network_company_id,
+          COUNT(*) AS total,
+          COUNT(*) FILTER (
+            WHERE all_new
               AND (
                 ${minDays} <= 0
-                OR (t.deadline IS NOT NULL AND t.deadline >= CURRENT_DATE + (${minDays})::int)
+                OR (deadline_day IS NOT NULL AND deadline_day >= CURRENT_DATE + (${minDays})::int)
               )
           ) AS fresh,
-          MAX(m.score) AS top_score
-        FROM network_company_matches m
-        JOIN tenders t ON t.id = m.tender_id
-        WHERE t.status = 'open' AND COALESCE(t.has_broken_link, false) = false
-          AND t.deadline >= CURRENT_DATE
-        GROUP BY m.network_company_id
+          MAX(top_score) AS top_score
+        FROM (
+          SELECT
+            m.network_company_id,
+            LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.title, '')),  '[^a-z0-9]+', ' ', 'g')), 120) AS title_key,
+            LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.agency, '')), '[^a-z0-9]+', ' ', 'g')), 120) AS agency_key,
+            t.deadline::date AS deadline_day,
+            BOOL_AND(m.status = 'new') AS all_new,
+            MAX(m.score) AS top_score
+          FROM network_company_matches m
+          JOIN tenders t ON t.id = m.tender_id
+          WHERE t.status = 'open' AND COALESCE(t.has_broken_link, false) = false
+            AND t.deadline >= CURRENT_DATE
+          GROUP BY m.network_company_id, title_key, agency_key, deadline_day
+        ) opportunity_groups
+        GROUP BY network_company_id
       ) mc ON mc.network_company_id = c.id
       ORDER BY c.is_active DESC, COALESCE(mc.fresh, 0) DESC, c.created_at DESC
     `,
@@ -96,7 +94,10 @@ export async function GET(request: Request) {
           t.id AS tender_id, t.title AS tender_title, t.agency AS tender_agency,
           t.country AS tender_country, t.sector AS tender_sector, t.deadline AS tender_deadline,
           t.estimated_value AS tender_value, t.source_url AS tender_source_url, t.reference_id AS tender_reference,
-          t.opportunity_type AS tender_type,
+          t.source_name AS tender_source_name, t.opportunity_type AS tender_type,
+          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.title, '')),  '[^a-z0-9]+', ' ', 'g')), 120) AS title_key,
+          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.agency, '')), '[^a-z0-9]+', ' ', 'g')), 120) AS agency_key,
+          t.deadline::date AS deadline_day,
           -- Company-level profile signals (identical on every row of a company),
           -- powering the value-first mini-assessment in the bundle email + the
           -- shareable briefing. Strengths/gaps come straight off the stored analysis.
@@ -141,7 +142,7 @@ export async function GET(request: Request) {
           JOIN tenders et ON et.id = em.tender_id
           GROUP BY em.network_company_id
         ) eng ON eng.cid = c.id
-        WHERE m.status = 'new' AND c.is_active = TRUE
+        WHERE c.is_active = TRUE
           AND t.status = 'open' AND COALESCE(t.has_broken_link, false) = false
           AND t.deadline >= CURRENT_DATE
           AND (
@@ -149,19 +150,40 @@ export async function GET(request: Request) {
             OR (t.deadline IS NOT NULL AND t.deadline >= CURRENT_DATE + (${minDays})::int)
           )
       ),
-      deduped AS (
-        SELECT DISTINCT ON (
-          company_id,
-          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(tender_title, '')),  '[^a-z0-9]+', ' ', 'g')), 120),
-          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(tender_agency, '')), '[^a-z0-9]+', ' ', 'g')), 120),
-          tender_deadline::date
-        ) *
+      opportunity_groups AS (
+        SELECT
+          company_id, title_key, agency_key, deadline_day,
+          COUNT(*)::int AS duplicate_count,
+          ARRAY_AGG(id ORDER BY score DESC, id DESC) AS duplicate_match_ids,
+          COALESCE(ARRAY_AGG(DISTINCT tender_source_name) FILTER (WHERE tender_source_name IS NOT NULL AND tender_source_name <> ''), '{}'::text[]) AS source_names,
+          BOOL_AND(status = 'new') AS all_new
         FROM worklist
+        GROUP BY company_id, title_key, agency_key, deadline_day
+      ),
+      ranked AS (
+        SELECT
+          w.*,
+          g.duplicate_count,
+          g.duplicate_match_ids,
+          g.source_names,
+          ROW_NUMBER() OVER (
+            PARTITION BY w.company_id, w.title_key, w.agency_key, w.deadline_day
+            ORDER BY w.score DESC, w.id DESC
+          ) AS rn
+        FROM worklist w
+        JOIN opportunity_groups g
+          ON g.company_id = w.company_id
+         AND g.title_key = w.title_key
+         AND g.agency_key = w.agency_key
+         AND g.deadline_day IS NOT DISTINCT FROM w.deadline_day
+        WHERE g.all_new = TRUE
+      ),
+      deduped AS (
+        SELECT *
+        FROM ranked
+        WHERE rn = 1
         ORDER BY
-          company_id,
-          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(tender_title, '')),  '[^a-z0-9]+', ' ', 'g')), 120),
-          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(tender_agency, '')), '[^a-z0-9]+', ' ', 'g')), 120),
-          tender_deadline::date,
+          company_id, title_key, agency_key, deadline_day,
           score DESC, id DESC
       )
       SELECT * FROM deduped
