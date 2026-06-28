@@ -381,7 +381,14 @@ async function searchWithAnthropic(
     process.env.ANTHROPIC_WEB_SEARCH_MODEL?.trim() ||
     process.env.ANTHROPIC_MODEL?.trim() ||
     "claude-haiku-4-5-20251001";
-  const response = await getAnthropicClient().messages.create({
+  const client = getAnthropicClient();
+  const prompt = `${discoveryInput(tender, queries)}
+
+Return JSON only with this shape:
+{"prospects":[{"name":"","website":"","country":"","countries":[],"sectors":[],"org_type":"","services_text":"","confidence":"medium","fit_reasons":[],"evidence_urls":[],"source_notes":""}]}
+
+Aim for ${limit} prospects. Return an empty array only if no credible organization evidence can be found after trying the supplied queries. Use empty strings for unknown scalar values, but keep evidence_urls populated from web evidence.`;
+  const response = await client.messages.create({
     model,
     max_tokens: 4500,
     tools: [{
@@ -398,19 +405,57 @@ async function searchWithAnthropic(
     system: DISCOVERY_INSTRUCTIONS,
     messages: [{
       role: "user",
-      content: `${discoveryInput(tender, queries)}
-
-Return JSON only with this shape:
-{"prospects":[{"name":"","website":"","country":"","countries":[],"sectors":[],"org_type":"","services_text":"","confidence":"medium","fit_reasons":[],"evidence_urls":[],"source_notes":""}]}
-
-Return at most ${limit} prospects. Use empty strings for unknown scalar values, but keep evidence_urls populated from web evidence.`,
+      content: prompt,
     }],
   });
   const text = response.content
     .filter((block): block is Anthropic.TextBlock => block.type === "text")
     .map((block) => block.text)
     .join("\n");
-  return parseProspects(text || "{}", limit);
+  const prospects = parseProspects(text || "{}", limit);
+  if (prospects.length > 0) return prospects;
+
+  console.warn("[network:external-discovery:anthropic-empty]", {
+    tenderId: tender.id,
+    attempt: "structured",
+    stopReason: response.stop_reason,
+    contentTypes: response.content.map((block) => block.type),
+    textLength: text.length,
+    textSample: text.slice(0, 280),
+  });
+
+  const retry = await client.messages.create({
+    model,
+    max_tokens: 4500,
+    tools: [{
+      type: "web_search_20250305",
+      name: "web_search",
+      max_uses: Math.min(8, Math.max(3, queries.length + 2)),
+    }],
+    system: `${DISCOVERY_INSTRUCTIONS} Output must be parseable JSON only. Do not wrap it in markdown.`,
+    messages: [{
+      role: "user",
+      content: `${prompt}
+
+The prior structured extraction produced no persisted prospects. Broaden to credible company profile pages, supplier directories, chamber/registry pages, NGO profiles, and official organization pages. Each prospect still needs at least one evidence URL and at least one tender-specific fit reason.`,
+    }],
+  });
+  const retryText = retry.content
+    .filter((block): block is Anthropic.TextBlock => block.type === "text")
+    .map((block) => block.text)
+    .join("\n");
+  const retryProspects = parseProspects(retryText || "{}", limit);
+  if (retryProspects.length === 0) {
+    console.warn("[network:external-discovery:anthropic-empty]", {
+      tenderId: tender.id,
+      attempt: "loose_retry",
+      stopReason: retry.stop_reason,
+      contentTypes: retry.content.map((block) => block.type),
+      textLength: retryText.length,
+      textSample: retryText.slice(0, 280),
+    });
+  }
+  return retryProspects;
 }
 
 async function searchExternalProspects(
