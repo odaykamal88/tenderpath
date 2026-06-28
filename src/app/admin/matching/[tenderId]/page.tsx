@@ -535,6 +535,116 @@ export default function AdminMatchingDetailPage() {
             <div className={styles.sessionSubtle}>manual decisions logged</div>
           </div>
         </div>
+        {loading ? (
+          <div className={styles.woEmpty}>Loading saved prospects...</div>
+        ) : discoveredProspectCount === 0 ? (
+          <div className={styles.woEmpty}>No saved prospects yet — run network discovery for this tender.</div>
+        ) : (
+          <div style={{ padding: "0 22px 22px", display: "grid", gap: 12 }}>
+            {networkProspects.length > 0 && (
+              <div style={{ display: "grid", gap: 8 }}>
+                <div className={styles.sessionSubtle} style={{ fontWeight: 600, color: "var(--color-ink)" }}>
+                  Saved network prospects
+                </div>
+                {networkProspects.slice(0, 4).map((p) => (
+                  <article
+                    key={`top-network-${p.id}`}
+                    style={{
+                      border: "1px solid var(--color-rule)",
+                      padding: 12,
+                      background: p.status === "new" ? "transparent" : "var(--color-bg-2, #fafafa)",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                      <div style={{ minWidth: 220, flex: "1 1 260px" }}>
+                        <div className={styles.cellName}>{p.company_name}</div>
+                        <div className={styles.sessionSubtle}>
+                          {p.website ?? "—"}
+                          {p.contact_email && ` · ${p.contact_email}`}
+                          {p.ungm_status && ` · UNGM ${label(p.ungm_status)}`}
+                        </div>
+                        <div className={styles.sessionSubtle} style={{ marginTop: 5 }}>
+                          <strong>Fit:</strong> {chipList(p.match_reasons, 3)}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
+                        <div style={{ textAlign: "right", minWidth: 58, paddingRight: 2 }}>
+                          <div className={styles.mono} style={{ color: "var(--color-ink)", fontWeight: 600 }}>{p.score}</div>
+                          <div className={styles.sessionSubtle}>{p.structured_reasons?.confidence ?? "fit"}</div>
+                        </div>
+                        <Link
+                          href={`/admin/network/${p.network_company_id}`}
+                          className={styles.btnGhost}
+                          style={{ padding: "5px 9px", fontSize: 11, textDecoration: "none" }}
+                        >
+                          Network
+                        </Link>
+                        {p.share_token && (
+                          <a
+                            href={`/n/${p.share_token}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={styles.btnGhost}
+                            style={{ padding: "5px 9px", fontSize: 11, textDecoration: "none" }}
+                          >
+                            Briefing
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+            {externalProspects.length > 0 && (
+              <div style={{ display: "grid", gap: 8 }}>
+                <div className={styles.sessionSubtle} style={{ fontWeight: 600, color: "var(--color-ink)" }}>
+                  Saved external discoveries
+                </div>
+                {externalProspects.slice(0, 4).map((p) => (
+                  <article
+                    key={`top-external-${p.id}`}
+                    style={{
+                      border: "1px solid var(--color-rule)",
+                      padding: 12,
+                      background: p.status === "suggested" ? "transparent" : "var(--color-bg-2, #fafafa)",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                      <div style={{ minWidth: 220, flex: "1 1 260px" }}>
+                        <div className={styles.cellName}>{p.name}</div>
+                        <div className={styles.sessionSubtle}>
+                          {p.website ?? "—"}
+                          {p.country && ` · ${p.country}`}
+                        </div>
+                        <div className={styles.sessionSubtle} style={{ marginTop: 5 }}>
+                          <strong>Fit:</strong> {chipList(p.fit_reasons, 3)}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
+                        <div style={{ textAlign: "right", minWidth: 58, paddingRight: 2 }}>
+                          <div className={styles.mono} style={{ color: "var(--color-ink)", fontWeight: 600 }}>{p.score}</div>
+                          <div className={styles.sessionSubtle}>{p.confidence}</div>
+                        </div>
+                        {p.website && (
+                          <a
+                            href={p.website}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={styles.btnGhost}
+                            style={{ padding: "5px 9px", fontSize: 11, textDecoration: "none" }}
+                          >
+                            Website
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       <section className={styles.panel}>
