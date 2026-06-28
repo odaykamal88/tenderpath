@@ -39,6 +39,9 @@ interface TenderDetail {
   reference_id: string | null;
   status: string | null;
   has_broken_link: boolean | null;
+  copy_count: number | null;
+  source_names: string[] | null;
+  reference_ids: string[] | null;
 }
 
 interface Candidate {
@@ -61,6 +64,11 @@ interface Candidate {
   contact_phone: string | null;
   relationship_notes: string | null;
   already_matched: boolean;
+  fit_score: number;
+  fit_reasons: string[];
+  fit_caveats: string[];
+  assessment_count: number;
+  assessment_ids: number[];
 }
 
 interface Match {
@@ -148,7 +156,7 @@ export default function AdminMatchingDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const u = new URLSearchParams({ limit: "150" });
+      const u = new URLSearchParams({ limit: "250" });
       if (query) u.set("q", query);
       const res = await fetch(`/api/admin/matching/tenders/${tenderId}?${u.toString()}`, { headers: authHeaders() });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -298,6 +306,7 @@ export default function AdminMatchingDetailPage() {
               <p className={styles.panelSub}>
                 {t.opportunity_type ?? "RFP"} · {t.source_name ?? "—"}
                 {t.reference_id && ` · ref ${t.reference_id}`}
+                {(t.copy_count ?? 1) > 1 && ` · ${t.copy_count} folded copies`}
               </p>
             </div>
             {t.has_broken_link && <span className={`${styles.toast} ${styles.toastErr}`} style={{ margin: 0, padding: "4px 10px", fontSize: 11 }}>Broken link flagged</span>}
@@ -323,6 +332,12 @@ export default function AdminMatchingDetailPage() {
               experience: {label(t.experience_level)} ·
               language: {t.submission_language ?? "English"}
             </p>
+            {((t.source_names?.length ?? 0) > 1 || (t.reference_ids?.length ?? 0) > 1) && (
+              <p className={styles.sessionSubtle} style={{ marginTop: 8 }}>
+                <strong>Provenance:</strong> {(t.source_names ?? []).join(" · ") || "—"}
+                {(t.reference_ids?.length ?? 0) > 1 && ` · ${t.reference_ids?.length} references folded`}
+              </p>
+            )}
           </div>
         </section>
       )}
@@ -391,7 +406,7 @@ export default function AdminMatchingDetailPage() {
         <header className={styles.panelHead}>
           <div>
             <h2 className={styles.panelTitle}>Candidate vendors</h2>
-            <p className={styles.panelSub}>Search assessments by company, sector, or description. Ordered by readiness score.</p>
+            <p className={styles.panelSub}>Search assessments by company, sector, or description. Ordered by tender-specific fit, with readiness as a tie-breaker.</p>
           </div>
           {data && <span className={styles.panelMeta}>{data.candidates.length} candidates</span>}
         </header>
@@ -446,6 +461,7 @@ export default function AdminMatchingDetailPage() {
                         {c.email ?? "—"}
                         {c.website && ` · ${c.website}`}
                         {c.readiness_score != null && ` · readiness ${c.readiness_score}`}
+                        {(c.assessment_count ?? 1) > 1 && ` · ${c.assessment_count} assessments folded`}
                       </div>
                       <div className={styles.sessionSubtle} style={{ marginTop: 4 }}>
                         {label(c.sector)} · {label(c.org_type)} · {chipList(c.countries, 4)}
@@ -462,6 +478,10 @@ export default function AdminMatchingDetailPage() {
                       )}
                     </div>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <div style={{ textAlign: "right", minWidth: 70, paddingRight: 4 }}>
+                        <div className={styles.mono} style={{ color: "var(--color-ink)", fontWeight: 600 }}>{c.fit_score}</div>
+                        <div className={styles.sessionSubtle}>fit</div>
+                      </div>
                       <button
                         type="button"
                         className={styles.btnGhost}
@@ -487,6 +507,13 @@ export default function AdminMatchingDetailPage() {
                         {isMatched ? "Matched" : "Log match"}
                       </button>
                     </div>
+                  </div>
+
+                  <div className={styles.sessionSubtle} style={{ marginTop: -2, marginBottom: 8 }}>
+                    <strong>Fit:</strong> {chipList(c.fit_reasons, 4)}
+                    {c.fit_caveats.length > 0 && (
+                      <span> · caveats: {chipList(c.fit_caveats, 2)}</span>
+                    )}
                   </div>
 
                   {openTagFor === c.id && (
@@ -581,7 +608,9 @@ function MatchForm({
 }) {
   const [routedService, setRoutedService] = useState<string>(ROUTED_SERVICES[0].value);
   const [status, setStatus] = useState<string>("suggested");
-  const [reasoning, setReasoning] = useState("");
+  const [reasoning, setReasoning] = useState(
+    (candidate.fit_reasons ?? []).filter((r) => r !== "needs manual review").join("; ")
+  );
   const [outcome, setOutcome] = useState("");
   const minLen = 10;
   const tooShort = reasoning.trim().length < minLen;

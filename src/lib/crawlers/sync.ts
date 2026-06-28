@@ -237,21 +237,44 @@ export async function expireAllOverdue(): Promise<number> {
 let _dedupSchemaReady: Promise<void> | null = null;
 
 /**
- * Idempotent runtime self-heal for the generated `dedup_key` column + its partial
- * index. Mirrors the tenders block in scripts/migrate.mjs (which does NOT auto-run
- * on Vercel — see ensureNetworkMatchingColumns / ensureBotRuntimeSchema). Memoized
- * so the crawl hot path runs the DDL at most once per process; a transient failure
- * clears the cache so the next call retries.
+ * Idempotent runtime self-heal for the `dedup_key` column + its partial index.
+ * Mirrors the tenders block in scripts/migrate.mjs (which does NOT auto-run on
+ * Vercel — see ensureNetworkMatchingColumns / ensureBotRuntimeSchema). This is a
+ * plain maintained column, not GENERATED: live `deadline` is timestamptz, and
+ * timestamptz→text/date casts are timezone-sensitive enough that Postgres
+ * rejects them in generated expressions.
  */
 export async function ensureTenderDedupSchema(): Promise<void> {
   if (!_dedupSchemaReady) {
     _dedupSchemaReady = (async () => {
       await sql`
-        ALTER TABLE tenders ADD COLUMN IF NOT EXISTS dedup_key TEXT GENERATED ALWAYS AS (
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'tenders'
+              AND column_name = 'dedup_key'
+              AND is_generated <> 'NEVER'
+          ) THEN
+            DROP INDEX IF EXISTS tenders_dedup_key_open_idx;
+            ALTER TABLE tenders DROP COLUMN dedup_key;
+          END IF;
+        END $$;
+      `;
+      await sql`ALTER TABLE tenders ADD COLUMN IF NOT EXISTS dedup_key TEXT`;
+      await sql`
+        UPDATE tenders
+        SET dedup_key =
           LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(title, '')),  '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
           LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(agency, '')), '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
-          COALESCE(deadline::text, '')
-        ) STORED
+          COALESCE(deadline::date::text, '')
+        WHERE dedup_key IS DISTINCT FROM (
+          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(title, '')),  '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
+          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(agency, '')), '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
+          COALESCE(deadline::date::text, '')
+        )
       `;
       await sql`CREATE INDEX IF NOT EXISTS tenders_dedup_key_open_idx ON tenders (dedup_key) WHERE status = 'open'`;
     })().catch((err) => {
@@ -296,7 +319,7 @@ function compareSurvivor(a: DupRow, b: DupRow): number {
  * sources publish the same opportunity under different reference_ids and
  * upsertTenders() dedups ON CONFLICT (reference_id) only, so each copy persists as
  * its own row. This collapses any OPEN rows sharing dedupKey() (normalized
- * title+agency+deadline, via the generated `dedup_key` column) down to the
+ * title+agency+deadline, via the maintained `dedup_key` column) down to the
  * highest-priority-source survivor:
  *   - repoints child rows (vendor/network matches, pipeline, feedback, bids,
  *     submissions) onto the survivor so nothing is orphaned, guarding the three
