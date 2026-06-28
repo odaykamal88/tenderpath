@@ -424,6 +424,8 @@ export default function AdminMatchingDetailPage() {
   const t = data?.tender;
   const networkProspects = data?.networkProspects ?? [];
   const externalProspects = data?.externalProspects ?? [];
+  const loggedMatches = data?.matches ?? [];
+  const discoveredProspectCount = networkProspects.length + externalProspects.length;
 
   return (
     <>
@@ -497,12 +499,53 @@ export default function AdminMatchingDetailPage() {
       <section className={styles.panel}>
         <header className={styles.panelHead}>
           <div>
-            <h2 className={styles.panelTitle}>Existing matches ({data?.matches.length ?? 0})</h2>
-            <p className={styles.panelSub}>Decisions already logged for this tender. Status updates land in the pipeline view.</p>
+            <h2 className={styles.panelTitle}>Prospect discovery ({discoveredProspectCount})</h2>
+            <p className={styles.panelSub}>Find companies for this tender from the Tenderpath network first, then expand to evidence-backed web discovery.</p>
+          </div>
+          <div className={styles.panelActions}>
+            <button
+              type="button"
+              className={styles.btnPrimary}
+              onClick={runNetworkDiscovery}
+              disabled={discovering || loading}
+            >
+              {discovering ? "Finding…" : "Find network prospects"}
+            </button>
+            <button
+              type="button"
+              className={styles.btnGhost}
+              onClick={runExternalDiscovery}
+              disabled={externalDiscovering || loading}
+            >
+              {externalDiscovering ? "Searching…" : "Search web"}
+            </button>
           </div>
         </header>
-        {(!data || data.matches.length === 0) ? (
-          <div className={styles.woEmpty}>No matches yet — log one below.</div>
+        <div style={{ padding: "14px 22px 18px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+          <div style={{ border: "1px solid var(--color-rule)", padding: "10px 12px" }}>
+            <div className={styles.mono} style={{ fontSize: 18, color: "var(--color-ink)", fontWeight: 600 }}>{networkProspects.length}</div>
+            <div className={styles.sessionSubtle}>network prospects saved</div>
+          </div>
+          <div style={{ border: "1px solid var(--color-rule)", padding: "10px 12px" }}>
+            <div className={styles.mono} style={{ fontSize: 18, color: "var(--color-ink)", fontWeight: 600 }}>{externalProspects.length}</div>
+            <div className={styles.sessionSubtle}>external discoveries saved</div>
+          </div>
+          <div style={{ border: "1px solid var(--color-rule)", padding: "10px 12px" }}>
+            <div className={styles.mono} style={{ fontSize: 18, color: "var(--color-ink)", fontWeight: 600 }}>{loggedMatches.length}</div>
+            <div className={styles.sessionSubtle}>manual decisions logged</div>
+          </div>
+        </div>
+      </section>
+
+      <section className={styles.panel}>
+        <header className={styles.panelHead}>
+          <div>
+            <h2 className={styles.panelTitle}>Logged assessment matches ({loggedMatches.length})</h2>
+            <p className={styles.panelSub}>Manual assessment-to-tender decisions. Use Prospect discovery above to create the company shortlist.</p>
+          </div>
+        </header>
+        {(!data || loggedMatches.length === 0) ? (
+          <div className={styles.woEmpty}>No manual matches logged yet — use the discovery panels to build the shortlist.</div>
         ) : (
           <div className={styles.tableWrap}>
             <table className={styles.dossierTable}>
@@ -518,7 +561,7 @@ export default function AdminMatchingDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.matches.map((m) => (
+                {loggedMatches.map((m) => (
                   <tr key={m.id}>
                     <td>
                       <div className={styles.cellName}>{m.vendor_company ?? `assessment #${m.assessment_id}`}</div>
