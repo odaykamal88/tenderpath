@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { notifyAdmin } from "@/lib/email/notifyAdmin";
+import { sendInviteConfirmationEmail } from "@/lib/email/sendInviteConfirmation";
 
 export const dynamic = "force-dynamic";
 
@@ -53,22 +54,28 @@ export async function POST(request: Request) {
       ON CONFLICT (email) DO NOTHING
       RETURNING id
     `;
-    // Alert ops (info@tenderpath.me) only on a genuinely new request — a repeat
-    // email hits ON CONFLICT and returns no row. Best-effort: notifyAdmin
-    // swallows its own failures and no-ops without RESEND_API_KEY, so the alert
-    // can never block or fail the signup.
+    // Only on a genuinely new request — a repeat email hits ON CONFLICT and
+    // returns no row, so we neither re-alert ops nor re-confirm to the signup.
+    // Both sends are best-effort and run under allSettled: the row is already
+    // saved, so a mail failure (or a missing RESEND_API_KEY) can never block or
+    // fail the signup.
     if (inserted.length > 0) {
-      await notifyAdmin(
-        "New invite request",
-        [
-          "A new invite request just came in from the landing page.",
-          "",
-          `Email:  ${email}`,
-          `Source: ${source ?? "—"}`,
-          "",
-          "See all requests: https://www.tenderpath.me/admin/waitlist",
-        ].join("\n"),
-      );
+      await Promise.allSettled([
+        // Ops alert → info@tenderpath.me.
+        notifyAdmin(
+          "New invite request",
+          [
+            "A new invite request just came in from the landing page.",
+            "",
+            `Email:  ${email}`,
+            `Source: ${source ?? "—"}`,
+            "",
+            "See all requests: https://www.tenderpath.me/admin/waitlist",
+          ].join("\n"),
+        ),
+        // Confirmation → the person who signed up ("we've got your details").
+        sendInviteConfirmationEmail(email),
+      ]);
     }
     return NextResponse.json({ ok: true });
   } catch (err) {
