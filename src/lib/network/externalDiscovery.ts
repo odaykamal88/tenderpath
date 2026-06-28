@@ -1,3 +1,4 @@
+import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { sql } from "@/lib/db";
 import { ensureNetworkMatchingColumns } from "./schema";
@@ -21,6 +22,7 @@ type TenderExternalDiscoveryRow = {
 export type ExternalDiscoveryConfidence = "high" | "medium" | "low";
 
 export type ExternalDiscoveryMode = "web_search" | "queries_only";
+type ExternalDiscoveryProvider = "openai_web_search" | "anthropic_web_search";
 
 export interface ExternalProspectInput {
   name: string;
@@ -45,6 +47,7 @@ export interface ExternalDiscoveryResult {
   inserted: number;
   refreshed: number;
   prospects: ExternalProspectInput[];
+  provider: ExternalDiscoveryProvider | null;
   error?: string;
 }
 
@@ -191,10 +194,62 @@ function prospectSchema(limit: number) {
   };
 }
 
+function anthropicProspectSchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      prospects: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            name: { type: "string" },
+            website: { type: "string" },
+            country: { type: "string" },
+            countries: { type: "array", items: { type: "string" } },
+            sectors: { type: "array", items: { type: "string" } },
+            org_type: { type: "string" },
+            services_text: { type: "string" },
+            confidence: { type: "string" },
+            fit_reasons: { type: "array", items: { type: "string" } },
+            evidence_urls: { type: "array", items: { type: "string" } },
+            source_notes: { type: "string" },
+          },
+          required: [
+            "name",
+            "website",
+            "country",
+            "countries",
+            "sectors",
+            "org_type",
+            "services_text",
+            "confidence",
+            "fit_reasons",
+            "evidence_urls",
+            "source_notes",
+          ],
+        },
+      },
+    },
+    required: ["prospects"],
+  };
+}
+
+function jsonCandidate(raw: string): string {
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) return fenced[1].trim();
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start >= 0 && end > start) return raw.slice(start, end + 1);
+  return raw;
+}
+
 function parseProspects(raw: string, limit: number): ExternalProspectInput[] {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    parsed = JSON.parse(jsonCandidate(raw));
   } catch {
     return [];
   }
@@ -259,13 +314,25 @@ function getOpenAIClient(): OpenAI {
   });
 }
 
-async function searchExternalProspects(
-  tender: TenderExternalDiscoveryRow,
-  queries: string[],
-  limit: number,
-): Promise<ExternalProspectInput[]> {
-  const model = process.env.OPENAI_WEB_SEARCH_MODEL?.trim() || "gpt-4.1-mini";
-  const input = [
+function getAnthropicClient(): Anthropic {
+  return new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    maxRetries: 2,
+    timeout: 80_000,
+  });
+}
+
+function configuredProvider(): ExternalDiscoveryProvider | null {
+  if (process.env.OPENAI_API_KEY) return "openai_web_search";
+  if (process.env.ANTHROPIC_API_KEY) return "anthropic_web_search";
+  return null;
+}
+
+const DISCOVERY_INSTRUCTIONS =
+  "You are TenderPath's procurement prospect researcher. Use web search to find companies, NGOs, consultancies, contractors, or suppliers that could credibly pursue this tender. Return only organizations, not tender notices, procurement portals, job posts, government agencies, generic directories, or news-only results. Prefer official company pages and credible profile pages. Every prospect must include evidence URLs and concrete fit reasons tied to the tender. Do not invent contact details. When country names are ambiguous place names, verify the organization operates in or supplies to the tender country.";
+
+function discoveryInput(tender: TenderExternalDiscoveryRow, queries: string[]): string {
+  return [
     `Tender title: ${tender.title}`,
     `Agency: ${tender.agency ?? "unknown"}`,
     `Country: ${tender.country ?? "unknown"}`,
@@ -275,12 +342,18 @@ async function searchExternalProspects(
     tender.required_registrations ? `Required registrations: ${tender.required_registrations}` : null,
     `Search queries to use or adapt:\n${queries.map((q) => `- ${q}`).join("\n")}`,
   ].filter(Boolean).join("\n");
+}
 
+async function searchWithOpenAI(
+  tender: TenderExternalDiscoveryRow,
+  queries: string[],
+  limit: number,
+): Promise<ExternalProspectInput[]> {
+  const model = process.env.OPENAI_WEB_SEARCH_MODEL?.trim() || "gpt-4.1-mini";
   const response = await getOpenAIClient().responses.create({
     model,
-    input,
-    instructions:
-      "You are TenderPath's procurement prospect researcher. Use web search to find companies, NGOs, consultancies, contractors, or suppliers that could credibly pursue this tender. Return only organizations, not tender notices, procurement portals, job posts, government agencies, generic directories, or news-only results. Prefer official company pages and credible profile pages. Every prospect must include evidence URLs and concrete fit reasons tied to the tender. Do not invent contact details.",
+    input: discoveryInput(tender, queries),
+    instructions: DISCOVERY_INSTRUCTIONS,
     tools: [{ type: "web_search_preview", search_context_size: "medium" }],
     text: {
       format: {
@@ -299,6 +372,59 @@ async function searchExternalProspects(
   return parseProspects(response.output_text ?? "{}", limit);
 }
 
+async function searchWithAnthropic(
+  tender: TenderExternalDiscoveryRow,
+  queries: string[],
+  limit: number,
+): Promise<ExternalProspectInput[]> {
+  const model =
+    process.env.ANTHROPIC_WEB_SEARCH_MODEL?.trim() ||
+    process.env.ANTHROPIC_MODEL?.trim() ||
+    "claude-haiku-4-5-20251001";
+  const response = await getAnthropicClient().messages.create({
+    model,
+    max_tokens: 4500,
+    tools: [{
+      type: "web_search_20250305",
+      name: "web_search",
+      max_uses: Math.min(6, Math.max(2, queries.length + 1)),
+    }],
+    output_config: {
+      format: {
+        type: "json_schema",
+        schema: anthropicProspectSchema(),
+      },
+    },
+    system: DISCOVERY_INSTRUCTIONS,
+    messages: [{
+      role: "user",
+      content: `${discoveryInput(tender, queries)}
+
+Return JSON only with this shape:
+{"prospects":[{"name":"","website":"","country":"","countries":[],"sectors":[],"org_type":"","services_text":"","confidence":"medium","fit_reasons":[],"evidence_urls":[],"source_notes":""}]}
+
+Return at most ${limit} prospects. Use empty strings for unknown scalar values, but keep evidence_urls populated from web evidence.`,
+    }],
+  });
+  const text = response.content
+    .filter((block): block is Anthropic.TextBlock => block.type === "text")
+    .map((block) => block.text)
+    .join("\n");
+  return parseProspects(text || "{}", limit);
+}
+
+async function searchExternalProspects(
+  tender: TenderExternalDiscoveryRow,
+  queries: string[],
+  limit: number,
+  provider: ExternalDiscoveryProvider,
+): Promise<ExternalProspectInput[]> {
+  if (provider === "openai_web_search") {
+    return searchWithOpenAI(tender, queries, limit);
+  }
+  return searchWithAnthropic(tender, queries, limit);
+}
+
 export async function discoverExternalProspectsForTender(
   tenderId: number,
   opts: { limit?: number; createdBy?: number | null } = {},
@@ -309,8 +435,9 @@ export async function discoverExternalProspectsForTender(
 
   const limit = Math.max(1, Math.min(MAX_EXTERNAL_DISCOVERY_LIMIT, Math.round(opts.limit ?? DEFAULT_EXTERNAL_DISCOVERY_LIMIT)));
   const queries = buildExternalProspectQueries(tender);
+  const provider = configuredProvider();
 
-  if (!process.env.OPENAI_API_KEY) {
+  if (!provider) {
     return {
       mode: "queries_only",
       providerConfigured: false,
@@ -319,11 +446,12 @@ export async function discoverExternalProspectsForTender(
       inserted: 0,
       refreshed: 0,
       prospects: [],
-      error: "OPENAI_API_KEY is not configured; returning search queries only.",
+      provider: null,
+      error: "No web-search provider is configured; returning search queries only.",
     };
   }
 
-  const prospects = await searchExternalProspects(tender, queries, limit);
+  const prospects = await searchExternalProspects(tender, queries, limit, provider);
   const existingRows = await sql`
     SELECT dedup_key
     FROM network_external_prospects
@@ -348,7 +476,7 @@ export async function discoverExternalProspectsForTender(
         ${prospect.org_type}, ${prospect.services_text}, ${prospect.score},
         ${prospect.confidence}, ${JSON.stringify(prospect.fit_reasons)}::jsonb,
         ${JSON.stringify(prospect.evidence_urls)}::jsonb,
-        ${JSON.stringify(queries)}::jsonb, 'openai_web_search', 'suggested',
+        ${JSON.stringify(queries)}::jsonb, ${provider}, 'suggested',
         ${dedupKey}, ${JSON.stringify(prospect)}::jsonb, ${opts.createdBy ?? null},
         NOW()
       )
@@ -376,6 +504,7 @@ export async function discoverExternalProspectsForTender(
   const result: ExternalDiscoveryResult = {
     mode: "web_search",
     providerConfigured: true,
+    provider,
     tenderId: tender.id,
     queries,
     inserted,
@@ -384,6 +513,7 @@ export async function discoverExternalProspectsForTender(
   };
   console.info("[network:external-discovery:tender]", {
     tenderId: tender.id,
+    provider,
     inserted,
     refreshed,
     prospects: prospects.length,
