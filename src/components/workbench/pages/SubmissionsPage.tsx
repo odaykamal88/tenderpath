@@ -15,6 +15,7 @@ import { Btn, Card, deadlineLabel, daysUntil, SectionHead, shortDate } from "../
 import { useMedia } from "../useMedia";
 import { useWorkbench } from "../WorkbenchProvider";
 import { isSubmissionCode } from "@/lib/workbench/pricing";
+import { COMMERCE_ENABLED } from "@/lib/commerce";
 import type { ClientOrderAction, SubmissionCode, SubmissionOrder } from "@/lib/submissions/types";
 import { FLOWS, type SubmissionFlow } from "@/lib/submissions/flows";
 import { STAGE_META, STAGES, stageIndex } from "@/lib/submissions/stages";
@@ -142,9 +143,9 @@ function TypeCard({ flow, onStart }: { flow: SubmissionFlow; onStart: () => void
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "13px 18px", borderTop: `1px solid ${C.ruleSoft}` }}>
         <div>
-          <span style={{ fontFamily: F.display, fontSize: 22, color: C.ink }}>${flow.price}</span>
+          <span style={{ fontFamily: F.display, fontSize: 22, color: C.ink }}>{COMMERCE_ENABLED ? `$${flow.price}` : "Free"}</span>
           <div style={{ fontFamily: F.mono, fontSize: 9, color: C.mute, marginTop: 1, letterSpacing: "0.04em" }}>
-            {flow.sla.toUpperCase()}
+            {COMMERCE_ENABLED ? flow.sla.toUpperCase() : `${flow.sla.toUpperCase()} · BETA`}
           </div>
         </div>
         <Btn kind="primary" size="sm" onClick={onStart}>Start →</Btn>
@@ -319,7 +320,7 @@ export function SubmissionsPage() {
 
       {/* start a submission */}
       <div style={{ marginBottom: 38 }}>
-        <SectionHead title="Start a submission" hint="Fixed fee · unlimited revisions · full-refund guarantee" />
+        <SectionHead title="Start a submission" hint={COMMERCE_ENABLED ? "Fixed fee · unlimited revisions · full-refund guarantee" : "Drafted by our team · unlimited revisions · no charge during the beta"} />
         {data?.access.freeSubmissionEligible && (
           <Card style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", marginBottom: 14, borderLeft: `3px solid ${C.pos}`, background: "#f3f8f4", flexWrap: "wrap" }}>
             <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: C.white, background: C.pos, padding: "3px 8px" }}>On us</span>
@@ -337,7 +338,9 @@ export function SubmissionsPage() {
           <div>
             <div style={{ fontFamily: F.sans, fontSize: 14, color: C.ink, fontWeight: 500 }}>Not sure which format the notice is?</div>
             <div style={{ fontFamily: F.sans, fontSize: 12.5, color: C.mute, marginTop: 3 }}>
-              Paste it — we detect the type, price it, and ask only for the inputs it&apos;s scored on.
+              {COMMERCE_ENABLED
+                ? "Paste it — we detect the type, price it, and ask only for the inputs it's scored on."
+                : "Paste it — we detect the type and ask only for the inputs it's scored on."}
             </div>
           </div>
           <Btn kind="gold" onClick={() => openPaste()}>Paste a tender →</Btn>

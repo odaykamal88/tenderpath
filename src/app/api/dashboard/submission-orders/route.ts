@@ -11,6 +11,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
+import { COMMERCE_ENABLED } from "@/lib/commerce";
 import { track } from "@/lib/telemetry/funnel";
 import { isSubmissionCode } from "@/lib/workbench/pricing";
 import type { SubmissionCode, WizardDraftState } from "@/lib/submissions/types";
@@ -26,6 +27,7 @@ import {
 import {
   linkWorkOrder,
   listOrdersForUser,
+  markSubmissionOrderPaidByWorkOrder,
   putDraft,
   upsertPendingOrder,
 } from "@/lib/submissions/store";
@@ -150,6 +152,25 @@ export async function POST(request: Request) {
       { type, submission_order_id: order.id, work_order_id: workOrderId, completeness: audit.pct },
       { userId: user.id },
     );
+
+    // Invite-only beta: commerce is paused, so submissions are free for invited
+    // users. Mark the order paid for $0 right here — the same seam the Stripe
+    // webhook uses after a real payment — so it enters the ops drafting queue
+    // immediately, with no /pay hop and no charge. Flip COMMERCE_ENABLED to
+    // restore the paid checkout path below.
+    if (!COMMERCE_ENABLED) {
+      await sql`
+        UPDATE work_orders
+        SET payment_status = 'paid', amount_cents = 0, currency = 'usd'
+        WHERE id = ${workOrderId}
+      `;
+      const paidOrder = await markSubmissionOrderPaidByWorkOrder(workOrderId, 0, "usd");
+      return NextResponse.json({
+        order: paidOrder ?? order,
+        work_order_id: workOrderId,
+        free: true,
+      });
+    }
 
     const payParams = new URLSearchParams({
       plan: "proposal-draft",
