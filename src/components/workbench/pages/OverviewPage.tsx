@@ -49,7 +49,7 @@ export function OverviewPage() {
     <div>
       <FunnelBeacon event="dashboard_landed" props={{ report_id: data.reportId, score: liveScore, tier: readiness.tier }} />
       {/* hero */}
-      <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "minmax(0,360px) 1fr", gap: mobile ? 20 : 28, marginBottom: 40 }}>
+      <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "minmax(0,360px) minmax(0,1fr)", gap: mobile ? 20 : 28, marginBottom: 40 }}>
         {/* readiness */}
         <Card pad={24}>
           <Eyebrow color={C.accent}>Readiness</Eyebrow>
@@ -137,7 +137,7 @@ export function OverviewPage() {
       {/* this week */}
       <div style={{ marginBottom: 40 }}>
         <SectionHeadLite n="01" title="This week" hint="What needs you now" />
-        <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(3, 1fr)", gap: 1, background: C.rule, border: `1px solid ${C.rule}` }}>
+        <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 1, background: C.rule, border: `1px solid ${C.rule}` }}>
           <div style={{ background: C.white, padding: "18px 20px" }}>
             <Eyebrow>Deadlines this week</Eyebrow>
             <div style={{ marginTop: 12 }}>
@@ -193,7 +193,7 @@ export function OverviewPage() {
           {matches.slice(0, 4).map((m) => {
             const [, color] = bucketMeta(m.bucket);
             return (
-              <button key={m.id} onClick={() => go("matches")} style={{ display: "grid", gridTemplateColumns: "8px 1fr auto auto", gap: 14, alignItems: "center", width: "100%", textAlign: "left", padding: "13px 16px", borderBottom: `1px solid ${C.ruleSoft}`, background: "none", border: 0, cursor: "pointer" }}>
+              <button key={m.id} onClick={() => go("matches")} style={{ display: "grid", gridTemplateColumns: "8px minmax(0,1fr) auto auto", gap: 14, alignItems: "center", width: "100%", textAlign: "left", padding: "13px 16px", borderBottom: `1px solid ${C.ruleSoft}`, background: "none", border: 0, cursor: "pointer" }}>
                 <span style={{ width: 7, height: 7, borderRadius: 999, background: color }} />
                 <span style={{ minWidth: 0 }}>
                   <div style={{ fontFamily: F.sans, fontSize: 14, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.title}</div>
