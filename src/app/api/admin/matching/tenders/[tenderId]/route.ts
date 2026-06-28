@@ -466,20 +466,30 @@ export async function GET(
       LIMIT 100
     `,
       sql`
-      WITH ranked AS (
+      WITH normalized AS (
+        SELECT
+          p.*,
+          trim(regexp_replace(lower(coalesce(p.name, '')), '[^a-z0-9]+', ' ', 'g')) AS fold_key
+        FROM network_external_prospects p
+        WHERE p.tender_id = ANY(${siblingIds}::int[])
+      ), ranked AS (
         SELECT
           p.id, p.tender_id, p.network_company_id, p.name, p.website,
           p.country, p.countries, p.sectors, p.org_type, p.services_text,
           p.score, p.confidence, p.fit_reasons, p.evidence_urls,
           p.search_queries, p.provider, p.status, p.last_discovered_at,
           p.updated_at,
-          COUNT(*) OVER (PARTITION BY p.dedup_key)::int AS duplicate_count,
+          COUNT(*) OVER (PARTITION BY p.fold_key)::int AS duplicate_count,
           ROW_NUMBER() OVER (
-            PARTITION BY p.dedup_key
-            ORDER BY p.score DESC, p.updated_at DESC, p.id DESC
+            PARTITION BY p.fold_key
+            ORDER BY
+              p.score DESC,
+              (p.website IS NOT NULL) DESC,
+              jsonb_array_length(COALESCE(p.evidence_urls, '[]'::jsonb)) DESC,
+              p.updated_at DESC,
+              p.id DESC
           ) AS rn
-        FROM network_external_prospects p
-        WHERE p.tender_id = ANY(${siblingIds}::int[])
+        FROM normalized p
       )
       SELECT
         id, tender_id, network_company_id, name, website, country, countries,

@@ -79,15 +79,6 @@ function normalized(value: string | null | undefined): string {
 }
 
 function dedupKeyFor(prospect: Pick<ExternalProspectInput, "name" | "website">): string {
-  const website = cleanUrl(prospect.website);
-  if (website) {
-    try {
-      const host = new URL(website).hostname.replace(/^www\./, "");
-      if (host) return `site:${host}`;
-    } catch {
-      // fall through to company name
-    }
-  }
   return `name:${normalized(prospect.name).slice(0, 120)}`;
 }
 
