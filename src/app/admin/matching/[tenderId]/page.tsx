@@ -13,6 +13,7 @@ const ROUTED_SERVICES = [
 ] as const;
 
 const STATUSES = ["suggested", "contacted", "applied", "shortlisted", "won", "lost"] as const;
+const NETWORK_STATUSES = ["new", "seen", "contacted", "replied", "booked", "paid", "not_relevant", "dismissed", "won", "lost"] as const;
 const TIERS = ["T1", "T2", "REF"] as const;
 const UNGM_STATUSES = ["registered", "pending", "unregistered", "unknown"] as const;
 
@@ -87,10 +88,44 @@ interface Match {
   created_by_email: string | null;
 }
 
+interface NetworkProspect {
+  id: number;
+  tender_id: number;
+  network_company_id: number;
+  company_name: string;
+  website: string | null;
+  services_text: string | null;
+  countries: string[] | null;
+  sectors: string[] | null;
+  org_type: string | null;
+  profile_status: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  contact_linkedin: string | null;
+  ungm_status: string | null;
+  share_token: string | null;
+  score: number;
+  match_reasons: string[] | null;
+  structured_reasons: {
+    caveats?: string[];
+    confidence?: "high" | "medium" | "low";
+    matchedCapabilities?: string[];
+    matchedSectors?: string[];
+  } | null;
+  status: string;
+  first_seen_at: string;
+  last_scored_at: string;
+  updated_at: string;
+  duplicate_count: number;
+  duplicate_match_ids: number[] | null;
+}
+
 interface DetailResponse {
   tender: TenderDetail;
   candidates: Candidate[];
   matches: Match[];
+  networkProspects: NetworkProspect[];
 }
 
 function authHeaders(): HeadersInit {
@@ -146,6 +181,7 @@ export default function AdminMatchingDetailPage() {
   const [openTagFor, setOpenTagFor] = useState<number | null>(null);
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
 
   const load = useCallback(async (query: string) => {
     if (!Number.isInteger(tenderId) || tenderId <= 0) {
@@ -254,6 +290,53 @@ export default function AdminMatchingDetailPage() {
     }
   }
 
+  async function runNetworkDiscovery() {
+    setDiscovering(true);
+    setToast(null);
+    try {
+      const res = await fetch(`/api/admin/matching/tenders/${tenderId}/network-discovery`, {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ limit: 40 }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+      const run = body.run as { scanned?: number; inserted?: number; refreshed?: number; qualified?: number } | undefined;
+      const inserted = run?.inserted ?? 0;
+      const refreshed = run?.refreshed ?? 0;
+      const qualified = run?.qualified ?? inserted + refreshed;
+      setToast({
+        ok: true,
+        msg: `Found ${qualified} network prospects: ${inserted} new, ${refreshed} refreshed from ${run?.scanned ?? "the"} profiles.`,
+      });
+      await load(appliedQ);
+    } catch (err) {
+      setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to find network prospects" });
+    } finally {
+      setDiscovering(false);
+    }
+  }
+
+  async function patchNetworkProspectStatus(matchId: number, status: string) {
+    setSaving(true);
+    setToast(null);
+    try {
+      const res = await fetch(`/api/admin/network-companies/matches/${matchId}`, {
+        method: "PATCH",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ status }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+      setToast({ ok: true, msg: `Prospect moved to ${label(status)}.` });
+      await load(appliedQ);
+    } catch (err) {
+      setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to update prospect" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (error && !data) {
     return (
       <>
@@ -272,6 +355,7 @@ export default function AdminMatchingDetailPage() {
   }
 
   const t = data?.tender;
+  const networkProspects = data?.networkProspects ?? [];
 
   return (
     <>
@@ -398,6 +482,108 @@ export default function AdminMatchingDetailPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </section>
+
+      <section className={styles.panel}>
+        <header className={styles.panelHead}>
+          <div>
+            <h2 className={styles.panelTitle}>Network prospects ({networkProspects.length})</h2>
+            <p className={styles.panelSub}>Companies from the Tenderpath network persisted against this tender with evidence-backed fit reasons.</p>
+          </div>
+          <div className={styles.panelActions}>
+            <button
+              type="button"
+              className={styles.btnPrimary}
+              onClick={runNetworkDiscovery}
+              disabled={discovering || loading}
+            >
+              {discovering ? "Finding…" : "Find prospects"}
+            </button>
+          </div>
+        </header>
+        {loading ? (
+          <div className={styles.woEmpty}>Loading network prospects…</div>
+        ) : networkProspects.length === 0 ? (
+          <div className={styles.woEmpty}>No network prospects yet — run discovery for this tender.</div>
+        ) : (
+          <div style={{ padding: "8px 22px 22px", display: "grid", gap: 12 }}>
+            {networkProspects.map((p) => (
+              <article
+                key={p.id}
+                style={{
+                  border: "1px solid var(--color-rule)",
+                  padding: 14,
+                  background: p.status === "new" ? "transparent" : "var(--color-bg-2, #fafafa)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+                  <div>
+                    <div className={styles.cellName}>{p.company_name}</div>
+                    <div className={styles.sessionSubtle}>
+                      {p.website ?? "—"}
+                      {p.contact_email && ` · ${p.contact_email}`}
+                      {p.contact_linkedin && !p.contact_email && " · LinkedIn contact"}
+                      {p.ungm_status && ` · UNGM ${label(p.ungm_status)}`}
+                      {p.duplicate_count > 1 && ` · ${p.duplicate_count} folded copies`}
+                    </div>
+                    <div className={styles.sessionSubtle} style={{ marginTop: 4 }}>
+                      {label(p.org_type)} · {chipList(p.countries, 4)}
+                    </div>
+                    <div className={styles.sessionSubtle} style={{ marginTop: 4 }}>
+                      sectors: {chipList(p.sectors, 5)}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 6, flexShrink: 0 }}>
+                    <div style={{ textAlign: "right", minWidth: 70, paddingRight: 4 }}>
+                      <div className={styles.mono} style={{ color: "var(--color-ink)", fontWeight: 600 }}>{p.score}</div>
+                      <div className={styles.sessionSubtle}>{p.structured_reasons?.confidence ?? "fit"}</div>
+                    </div>
+                    <Link
+                      href={`/admin/network/${p.network_company_id}`}
+                      className={styles.btnGhost}
+                      style={{ padding: "5px 9px", fontSize: 11, textDecoration: "none" }}
+                    >
+                      Network
+                    </Link>
+                    {p.share_token && (
+                      <a
+                        href={`/n/${p.share_token}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={styles.btnGhost}
+                        style={{ padding: "5px 9px", fontSize: 11, textDecoration: "none" }}
+                      >
+                        Briefing
+                      </a>
+                    )}
+                    <select
+                      value={p.status}
+                      onChange={(e) => patchNetworkProspectStatus(p.id, e.target.value)}
+                      disabled={saving}
+                      className={styles.adminSearchInput}
+                      style={{ padding: "5px 7px", fontSize: 11 }}
+                    >
+                      {NETWORK_STATUSES.map((s) => <option key={s} value={s}>{label(s)}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className={styles.sessionSubtle} style={{ marginTop: -2, marginBottom: 8 }}>
+                  <strong>Fit:</strong> {chipList(p.match_reasons, 4)}
+                  {(p.structured_reasons?.caveats?.length ?? 0) > 0 && (
+                    <span> · caveats: {chipList(p.structured_reasons?.caveats, 2)}</span>
+                  )}
+                </div>
+
+                {p.services_text && (
+                  <div className={styles.sessionSubtle} style={{ lineHeight: 1.5 }}>
+                    {p.services_text.length > 220 ? `${p.services_text.slice(0, 220)}…` : p.services_text}
+                  </div>
+                )}
+              </article>
+            ))}
           </div>
         )}
       </section>

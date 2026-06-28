@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
+import { ensureNetworkMatchingColumns } from "@/lib/network/schema";
 
 type TenderDetailRow = {
   id: number;
@@ -51,6 +52,34 @@ type CandidateRow = {
   contact_phone: string | null;
   relationship_notes: string | null;
   already_matched: boolean;
+};
+
+type NetworkProspectRow = {
+  id: number;
+  tender_id: number;
+  network_company_id: number;
+  company_name: string;
+  website: string | null;
+  services_text: string | null;
+  countries: unknown;
+  sectors: unknown;
+  org_type: string | null;
+  profile_status: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  contact_linkedin: string | null;
+  ungm_status: string | null;
+  share_token: string | null;
+  score: number;
+  match_reasons: unknown;
+  structured_reasons: unknown;
+  status: string;
+  first_seen_at: string;
+  last_scored_at: string;
+  updated_at: string;
+  duplicate_count: number | string | null;
+  duplicate_match_ids: number[] | null;
 };
 
 function asArray(value: unknown): string[] {
@@ -247,6 +276,8 @@ export async function GET(
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 250), 1), 500);
 
   try {
+    await ensureNetworkMatchingColumns();
+
     const tenderRows = (await sql`
       WITH target AS (
         SELECT
@@ -322,7 +353,7 @@ export async function GET(
     const tender = tenderRows[0];
     const siblingIds = Array.isArray(tender.sibling_ids) && tender.sibling_ids.length ? tender.sibling_ids : [id];
 
-    const [candidateRows, matchRows] = await Promise.all([
+    const [candidateRows, matchRows, networkProspectRows] = await Promise.all([
       sql`
       SELECT
         a.id, a.company_name, a.email, a.website, a.description,
@@ -363,6 +394,54 @@ export async function GET(
       WHERE m.tender_id = ANY(${siblingIds}::int[])
       ORDER BY m.updated_at DESC
     `,
+      sql`
+      WITH ranked AS (
+        SELECT
+          m.id, m.tender_id, m.network_company_id, m.score, m.match_reasons,
+          m.structured_reasons, m.status, m.first_seen_at, m.last_scored_at,
+          m.updated_at,
+          c.name AS company_name, c.website, c.services_text, c.countries,
+          c.sectors, c.org_type, c.profile_status, c.contact_name,
+          c.contact_email, c.contact_phone, c.contact_linkedin, c.ungm_status,
+          c.share_token,
+          COUNT(*) OVER (PARTITION BY m.network_company_id)::int AS duplicate_count,
+          ARRAY_AGG(m.id) OVER (PARTITION BY m.network_company_id) AS duplicate_match_ids,
+          ROW_NUMBER() OVER (
+            PARTITION BY m.network_company_id
+            ORDER BY m.score DESC, m.updated_at DESC, m.id DESC
+          ) AS rn
+        FROM network_company_matches m
+        JOIN network_companies c ON c.id = m.network_company_id
+        WHERE m.tender_id = ANY(${siblingIds}::int[])
+          AND c.is_active = TRUE
+      )
+      SELECT
+        id, tender_id, network_company_id, score, match_reasons,
+        structured_reasons, status, first_seen_at, last_scored_at, updated_at,
+        company_name, website, services_text, countries, sectors, org_type,
+        profile_status, contact_name, contact_email, contact_phone,
+        contact_linkedin, ungm_status, share_token, duplicate_count,
+        duplicate_match_ids
+      FROM ranked
+      WHERE rn = 1
+      ORDER BY
+        CASE status
+          WHEN 'new' THEN 0
+          WHEN 'seen' THEN 1
+          WHEN 'contacted' THEN 2
+          WHEN 'replied' THEN 3
+          WHEN 'booked' THEN 4
+          WHEN 'paid' THEN 5
+          WHEN 'won' THEN 6
+          WHEN 'not_relevant' THEN 7
+          WHEN 'dismissed' THEN 8
+          WHEN 'lost' THEN 9
+          ELSE 10
+        END,
+        score DESC,
+        updated_at DESC
+      LIMIT 100
+    `,
     ]);
 
     const byVendor = new Map<string, ScoredCandidate>();
@@ -389,6 +468,13 @@ export async function GET(
       tender,
       candidates,
       matches: matchRows,
+      networkProspects: (networkProspectRows as NetworkProspectRow[]).map((row) => ({
+        ...row,
+        countries: asArray(row.countries),
+        sectors: asArray(row.sectors),
+        match_reasons: asArray(row.match_reasons),
+        duplicate_count: Number(row.duplicate_count ?? 1),
+      })),
     });
   } catch (err) {
     console.error("[matching:tender-detail:db_error]", { tenderId: id, err });
