@@ -33,25 +33,46 @@ const ROWS_PER_PAGE = 15; // server hard cap per page; used to size band budgets
 
 // Full active-set mirror via deadline-banded pagination.
 //
-// UNGM exposes ~1,555 active notices. The old strategy — sort publish-date-desc
-// and take the newest ~450 — only reached ~1 week of postings, so older-but-
-// still-active notices (especially from low-volume agencies like WFP/WHO, and
-// any long-lead opportunity) were never captured. Measured split:
-//   • deadline ≥ today+10  → ~473 notices   (the bid-able / "actionable" set)
-//   • deadline today..+9   → ~1,082 notices (closing-soon; hidden by the 10+ UI default)
+// UNGM exposes ~1,565 active notices. The original strategy — sort publish-date-
+// desc and take the newest ~450 — only reached ~1 week of postings. A first fix
+// banded by deadline but kept the ACTIONABLE set (deadline ≥ today+10) as ONE
+// publish-date-DESC band capped at 540 rows. That re-introduced a subtler drop:
+// the actionable set is heavily front-loaded by deadline but the band is ordered
+// by PUBLISH date, so LONG-LEAD notices (published weeks ago, deadline far out)
+// sort to the very tail and fall off the cap. A UNICEF MENA REOI published
+// 07-May with a 30-Jul deadline (notice 300153) was rank ~496/514 — one spike in
+// near-term volume above the cap and it vanishes silently.
+//
+// Measured split (2026-06-28), deadline ≥ today+10 → 514 notices, by lead-day:
+//   • [10,16]d → ~335   (closing in 1-2 weeks; mostly recent-publish = band head)
+//   • [17,30]d → ~138
+//   • [31,∞)d  → ~41     (long-lead; old-publish = the tail that was being dropped)
+//   • deadline today..+9 → ~1,050 (closing-soon; hidden by the 10+ UI default)
 //
 // Deadline filters (DeadlineFrom/DeadlineTo, DD-MMM-YYYY) are server-verified, so
-// we page by deadline band instead of publish recency:
-//   1. ACTIONABLE band (deadline ≥ today + ACTIONABLE_LEAD_DAYS): mirrored in FULL
-//      every run, so the matched dashboard (10+ day default) is always complete.
+// we now mirror the ACTIONABLE set as deadline SUB-WINDOWS, each paged in full
+// every run. No window's publish-DESC ordering can bury another window's notices,
+// so the long-lead tail is guaranteed regardless of near-term volume. Strategy:
+//   1. ACTIONABLE sub-windows (ACTIONABLE_SUBWINDOWS): every window every run.
 //   2. CLOSING-SOON band: split into deadline sub-windows, ONE crawled per run
 //      (rotating by day-of-month). Over a full rotation the DB converges to the
 //      entire active set without exceeding the shared cron / worker budget.
 // All bands ride a single /fetch-many call (one Cloudflare warmup); dedupeNotices
-// collapses the deliberate overlap between bands.
+// collapses any overlap. Per-window caps carry headroom over the measured page
+// counts; the "hit page cap" warning (below) still fires if a window overflows,
+// so re-truncation is observable rather than silent.
 const ACTIONABLE_LEAD_DAYS = 10;
-const ACTIONABLE_MAX_PAGES = 36; // 36×15=540 cap — headroom over the ~473 actionable
-const SOON_MAX_PAGES = 24;       // 24×15=360 cap ≈ one third of the ~1,082 closing-soon
+// Inclusive [leadLo, leadHi|null] deadline-lead ranges (null = open-ended) + a
+// per-window page cap. 15 rows/page; caps sized ~15-40% over measured pages.
+const ACTIONABLE_SUBWINDOWS: ReadonlyArray<{
+  lead: readonly [number, number | null];
+  maxPages: number;
+}> = [
+  { lead: [ACTIONABLE_LEAD_DAYS, 16], maxPages: 26 }, // ~335 notices / ~23 pages
+  { lead: [17, 30], maxPages: 14 },                   // ~138 notices / ~10 pages
+  { lead: [31, null], maxPages: 8 },                  // ~41  notices / ~3 pages — the long-lead tail
+];
+const SOON_MAX_PAGES = 24;       // 24×15=360 cap ≈ one third of the ~1,050 closing-soon
 // Deadline-day offset sub-windows (inclusive) for the closing-soon band.
 const SOON_SUBWINDOWS: ReadonlyArray<readonly [number, number]> = [[0, 3], [4, 6], [7, 9]];
 
@@ -114,7 +135,7 @@ async function workerFetchMany(
     body: JSON.stringify({
       warmupUrl: UNGM_WARMUP,
       waitMs: opts.waitMs ?? 2500,
-      delayMs: 700,
+      delayMs: 500,
       requests: requests.map((r) => ({
         url: r.url ?? UNGM_API,
         method: r.method,
@@ -122,9 +143,10 @@ async function workerFetchMany(
         headers: r.headers ?? {},
       })),
     }),
-    // Budget: warmup ~8-12s + N × ~1.5s origin latency + delays. 20 pages
-    // comfortably fits in 120s; 180s gives margin for a slow warmup.
-    signal: AbortSignal.timeout(180_000),
+    // Budget: warmup ~8-12s + N × (~1.5s origin latency + 0.5s delay). The
+    // deadline sub-windows total ~72 page fetches (~155-165s); 210s gives margin
+    // for slow warmup / worker contention while staying well under the 300s cron.
+    signal: AbortSignal.timeout(210_000),
   });
 
   // Read the body as text first — Cloudflare occasionally returns an
@@ -398,11 +420,14 @@ export async function crawlUNGM(): Promise<CrawlResult> {
       deadlineFrom: string;
       deadlineTo?: string;
     }> = [
-      {
-        key: "actionable(>=10d)",
-        maxPages: ACTIONABLE_MAX_PAGES,
-        deadlineFrom: ungmDate(ACTIONABLE_LEAD_DAYS),
-      },
+      // ACTIONABLE: one band per deadline sub-window, all mirrored every run so
+      // the long-lead tail can't be buried by near-term publish-DESC ordering.
+      ...ACTIONABLE_SUBWINDOWS.map(({ lead, maxPages }) => ({
+        key: `actionable(${lead[0]}-${lead[1] ?? "∞"}d)`,
+        maxPages,
+        deadlineFrom: ungmDate(lead[0]),
+        deadlineTo: lead[1] === null ? undefined : ungmDate(lead[1]),
+      })),
       {
         key: `closing-soon(${soonLo}-${soonHi}d)`,
         maxPages: SOON_MAX_PAGES,
