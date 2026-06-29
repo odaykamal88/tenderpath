@@ -144,12 +144,27 @@ interface ExternalProspect {
   duplicate_count: number;
 }
 
+interface ProcurementBrief {
+  intent?: "buyer_seeks_supplier" | "award_notice" | "grant_or_donor" | "unclear";
+  procured_object?: string;
+  supplier_role?: string;
+  supplier_archetypes?: string[];
+  must_have?: string[];
+  target_keywords?: string[];
+  avoid_keywords?: string[];
+  disqualifiers?: string[];
+  geography?: string;
+  domain?: string | null;
+  notes?: string | null;
+}
+
 interface DetailResponse {
   tender: TenderDetail;
   candidates: Candidate[];
   matches: Match[];
   networkProspects: NetworkProspect[];
   externalProspects: ExternalProspect[];
+  externalBrief: ProcurementBrief | null;
 }
 
 function authHeaders(): HeadersInit {
@@ -208,6 +223,7 @@ export default function AdminMatchingDetailPage() {
   const [discovering, setDiscovering] = useState(false);
   const [externalDiscovering, setExternalDiscovering] = useState(false);
   const [externalQueries, setExternalQueries] = useState<string[]>([]);
+  const [runBrief, setRunBrief] = useState<ProcurementBrief | null>(null);
 
   const load = useCallback(async (query: string) => {
     if (!Number.isInteger(tenderId) || tenderId <= 0) {
@@ -366,6 +382,7 @@ export default function AdminMatchingDetailPage() {
   async function runExternalDiscovery() {
     setExternalDiscovering(true);
     setExternalQueries([]);
+    setRunBrief(null);
     setToast(null);
     try {
       const res = await fetch(`/api/admin/matching/tenders/${tenderId}/external-discovery`, {
@@ -380,20 +397,25 @@ export default function AdminMatchingDetailPage() {
         providerConfigured?: boolean;
         inserted?: number;
         refreshed?: number;
+        dropped?: number;
         prospects?: unknown[];
         queries?: string[];
+        brief?: ProcurementBrief | null;
+        briefSource?: "model" | "heuristic" | null;
         error?: string;
       } | undefined;
       setExternalQueries(run?.queries ?? []);
+      setRunBrief(run?.brief ?? null);
+      const dropped = run?.dropped ?? 0;
       if (run?.mode === "queries_only") {
         setToast({
           ok: false,
-          msg: "External search needs OPENAI_API_KEY. I generated the search queries below for now.",
+          msg: "External search needs OPENAI_API_KEY. I read the notice and prepared the brief + queries below for now.",
         });
       } else {
         setToast({
           ok: true,
-          msg: `External search found ${run?.prospects?.length ?? 0} prospects: ${run?.inserted ?? 0} new, ${run?.refreshed ?? 0} refreshed.`,
+          msg: `External search found ${run?.prospects?.length ?? 0} prospects: ${run?.inserted ?? 0} new, ${run?.refreshed ?? 0} refreshed${dropped ? `, ${dropped} off-role dropped` : ""}.`,
         });
         await load(appliedQ);
       }
@@ -426,6 +448,7 @@ export default function AdminMatchingDetailPage() {
   const externalProspects = data?.externalProspects ?? [];
   const loggedMatches = data?.matches ?? [];
   const discoveredProspectCount = networkProspects.length + externalProspects.length;
+  const effectiveBrief = runBrief ?? data?.externalBrief ?? null;
 
   return (
     <>
@@ -725,6 +748,8 @@ export default function AdminMatchingDetailPage() {
           </div>
         </header>
 
+        {effectiveBrief && <BriefCard brief={effectiveBrief} />}
+
         {externalQueries.length > 0 && (
           <div style={{ padding: "12px 22px 0" }}>
             <div className={styles.sessionSubtle} style={{ marginBottom: 8 }}>
@@ -775,6 +800,15 @@ export default function AdminMatchingDetailPage() {
                       <div className={styles.mono} style={{ color: "var(--color-ink)", fontWeight: 600 }}>{p.score}</div>
                       <div className={styles.sessionSubtle}>{p.confidence}</div>
                     </div>
+                    {p.network_company_id && (
+                      <Link
+                        href={`/admin/network/${p.network_company_id}`}
+                        className={styles.btnGhost}
+                        style={{ padding: "5px 9px", fontSize: 11, textDecoration: "none" }}
+                      >
+                        In network
+                      </Link>
+                    )}
                     {p.website && (
                       <a
                         href={p.website}
@@ -1044,6 +1078,68 @@ export default function AdminMatchingDetailPage() {
         )}
       </section>
     </>
+  );
+}
+
+function BriefCard({ brief }: { brief: ProcurementBrief }) {
+  const intent = brief.intent ?? "buyer_seeks_supplier";
+  const intentWarning =
+    intent === "award_notice"
+      ? "This reads as an award/result notice — a winner may already be selected, so prospecting may not apply."
+      : intent === "grant_or_donor"
+        ? "This reads as a grant/funding call seeking applicants, not a buyer hiring a vendor — discovery targets may differ."
+        : intent === "unclear"
+          ? "The notice intent was unclear — sanity-check the role below before trusting results."
+          : null;
+  const archetypes = brief.supplier_archetypes ?? [];
+  const avoid = brief.avoid_keywords ?? [];
+  const disq = brief.disqualifiers ?? [];
+  const mustHave = brief.must_have ?? [];
+
+  return (
+    <div style={{ padding: "12px 22px 0" }}>
+      <div style={{ border: "1px solid var(--color-rule)", padding: "12px 14px", background: "var(--color-bg-2, #fafafa)" }}>
+        <div className={styles.sessionSubtle} style={{ fontWeight: 600, color: "var(--color-ink)", marginBottom: 6 }}>
+          What the system is searching for {brief.domain ? `· ${brief.domain}` : ""}
+        </div>
+        {intentWarning && (
+          <div className={`${styles.toast} ${styles.toastErr}`} style={{ margin: "0 0 8px", padding: "5px 10px", fontSize: 11 }}>
+            {intentWarning}
+          </div>
+        )}
+        <div style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 4 }}>
+          <strong>Role being hired:</strong> {brief.supplier_role ?? "—"}
+        </div>
+        {brief.procured_object && (
+          <div className={styles.sessionSubtle} style={{ marginBottom: 6 }}>
+            Buying: {brief.procured_object}
+          </div>
+        )}
+        {archetypes.length > 0 && (
+          <div className={styles.sessionSubtle} style={{ marginBottom: 4 }}>
+            <strong>Finding:</strong> {archetypes.join(" · ")}
+          </div>
+        )}
+        {mustHave.length > 0 && (
+          <div className={styles.sessionSubtle} style={{ marginBottom: 4 }}>
+            <strong>Must have:</strong> {mustHave.slice(0, 5).join(" · ")}
+          </div>
+        )}
+        {(avoid.length > 0 || disq.length > 0) && (
+          <div className={styles.sessionSubtle} style={{ marginBottom: 4 }}>
+            <strong>Excluding:</strong> {[...avoid, ...disq].slice(0, 6).join(" · ")}
+          </div>
+        )}
+        {brief.geography && (
+          <div className={styles.sessionSubtle}>
+            <strong>Geography:</strong> {brief.geography}
+          </div>
+        )}
+        <div className={styles.sessionSubtle} style={{ marginTop: 6, fontSize: 11, opacity: 0.8 }}>
+          If the role above is wrong, the web results will be too — that mismatch is the signal to skip them.
+        </div>
+      </div>
+    </div>
   );
 }
 

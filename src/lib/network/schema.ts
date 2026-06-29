@@ -144,4 +144,9 @@ async function ensureNetworkMatchingColumnsOnce(): Promise<void> {
   `;
   await sql`CREATE INDEX IF NOT EXISTS network_external_prospects_tender_idx ON network_external_prospects (tender_id, status, score DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS network_external_prospects_network_company_idx ON network_external_prospects (network_company_id) WHERE network_company_id IS NOT NULL`;
+  // Structured "procurement brief" the discovery run was searching against —
+  // what role the buyer is hiring, what to find, what to avoid. Persisted so the
+  // operator can see (on reload) WHY a given set of external prospects surfaced,
+  // and catch a misread (e.g. an audit notice that surfaced energy companies).
+  await sql`ALTER TABLE network_external_prospects ADD COLUMN IF NOT EXISTS search_brief JSONB`;
 }

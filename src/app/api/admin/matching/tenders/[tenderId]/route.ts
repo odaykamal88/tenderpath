@@ -98,6 +98,7 @@ type ExternalProspectRow = {
   fit_reasons: unknown;
   evidence_urls: unknown;
   search_queries: unknown;
+  search_brief: unknown;
   provider: string;
   status: string;
   last_discovered_at: string;
@@ -122,6 +123,26 @@ function asArray(value: unknown): string[] {
 
 function normalized(value: string | null | undefined): string {
   return (value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+// The discovery brief is stored as JSONB (already parsed by the driver). Return
+// it as a plain object when present so the UI can explain what role the run
+// searched for; null when absent or malformed.
+function coerceBrief(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 function tokenSet(value: string): Set<string> {
@@ -477,8 +498,8 @@ export async function GET(
           p.id, p.tender_id, p.network_company_id, p.name, p.website,
           p.country, p.countries, p.sectors, p.org_type, p.services_text,
           p.score, p.confidence, p.fit_reasons, p.evidence_urls,
-          p.search_queries, p.provider, p.status, p.last_discovered_at,
-          p.updated_at,
+          p.search_queries, p.search_brief, p.provider, p.status,
+          p.last_discovered_at, p.updated_at,
           COUNT(*) OVER (PARTITION BY p.fold_key)::int AS duplicate_count,
           ROW_NUMBER() OVER (
             PARTITION BY p.fold_key
@@ -494,8 +515,8 @@ export async function GET(
       SELECT
         id, tender_id, network_company_id, name, website, country, countries,
         sectors, org_type, services_text, score, confidence, fit_reasons,
-        evidence_urls, search_queries, provider, status, last_discovered_at,
-        updated_at, duplicate_count
+        evidence_urls, search_queries, search_brief, provider, status,
+        last_discovered_at, updated_at, duplicate_count
       FROM ranked
       WHERE rn = 1
       ORDER BY
@@ -532,9 +553,14 @@ export async function GET(
 
     const candidates = [...byVendor.values()].sort(compareCandidates);
 
+    const externalRows = externalProspectRows as ExternalProspectRow[];
+    const briefRow = externalRows.find((row) => row.search_brief != null);
+    const externalBrief = briefRow ? coerceBrief(briefRow.search_brief) : null;
+
     return NextResponse.json({
       tender,
       candidates,
+      externalBrief,
       matches: matchRows,
       networkProspects: (networkProspectRows as NetworkProspectRow[]).map((row) => ({
         ...row,
@@ -543,8 +569,21 @@ export async function GET(
         match_reasons: asArray(row.match_reasons),
         duplicate_count: Number(row.duplicate_count ?? 1),
       })),
-      externalProspects: (externalProspectRows as ExternalProspectRow[]).map((row) => ({
-        ...row,
+      externalProspects: externalRows.map((row) => ({
+        id: row.id,
+        tender_id: row.tender_id,
+        network_company_id: row.network_company_id,
+        name: row.name,
+        website: row.website,
+        country: row.country,
+        org_type: row.org_type,
+        services_text: row.services_text,
+        score: row.score,
+        confidence: row.confidence,
+        provider: row.provider,
+        status: row.status,
+        last_discovered_at: row.last_discovered_at,
+        updated_at: row.updated_at,
         countries: asArray(row.countries),
         sectors: asArray(row.sectors),
         fit_reasons: asArray(row.fit_reasons),
