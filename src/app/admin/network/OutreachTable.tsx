@@ -10,6 +10,8 @@ import {
   briefingUrl,
   buildBundleEmail,
   buildLinkedInDraft,
+  foldedOpportunityCount,
+  foldedSourceLabel,
   groupByCompany,
   hasLinkedIn,
   isConsultancyTender,
@@ -139,7 +141,8 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
     const consultancy = filters.excludeConsultancies ? matches.filter(isConsultancyTender).length : 0;
     const lowFit = filters.minScore > 0 ? matches.filter((m) => m.score < filters.minScore).length : 0;
     const lostAgency = filters.hideLostAgencies ? matches.filter((m) => m.lost_agency_before).length : 0;
-    return { consultancy, lowFit, lostAgency };
+    const foldedCrawlerRows = matches.reduce((sum, match) => sum + Math.max(0, foldedOpportunityCount(match) - 1), 0);
+    return { consultancy, lowFit, lostAgency, foldedCrawlerRows };
   }, [matches, filters]);
 
   function isIn(matchId: number): boolean { return !excluded.has(matchId); }
@@ -223,11 +226,14 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
         <div>
           <h2 className={styles.panelTitle}>Outreach bundles</h2>
           <p className={styles.panelSub}>
-            One high-fit bundle per company, soonest deadline first. Untick any tender you don&rsquo;t want,
+            One high-fit bundle per company, soonest deadline first. Untick any opportunity you don&rsquo;t want,
             compose a single email, copy it, send from your own account, then mark contacted.
           </p>
         </div>
-        <span className={styles.panelMeta}>{groups.length} {groups.length === 1 ? "company" : "companies"} · {shortlist.length} tenders</span>
+        <span className={styles.panelMeta}>
+          {groups.length} {groups.length === 1 ? "company" : "companies"} · {shortlist.length} opportunities
+          {hidden.foldedCrawlerRows > 0 ? ` · ${hidden.foldedCrawlerRows} crawler copies folded` : ""}
+        </span>
       </header>
 
       {/* Adjustable filters — these are the launch rules, tunable per the operator. */}
@@ -435,8 +441,18 @@ export default function OutreachTable({ matches, loading, busy, onSetStatus, onS
                             )}
                             <div className={styles.sessionSubtle}>
                               {[m.tender_agency, m.tender_sector, m.tender_country].filter(Boolean).join(" · ") || "—"}
-                              {Array.isArray(m.match_reasons) && m.match_reasons.length > 0 && ` · ${m.match_reasons.slice(0, 2).join("; ")}`}
                             </div>
+                            <div className={styles.sessionSubtle} style={{ marginTop: 3, fontSize: 11 }}>
+                              {foldedSourceLabel(m)}
+                              {m.tender_reference ? ` · ${m.tender_reference}` : ""}
+                            </div>
+                            {Array.isArray(m.match_reasons) && m.match_reasons.length > 0 && (
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
+                                {m.match_reasons.slice(0, 2).map((reason, index) => (
+                                  <span key={`${m.id}-reason-${index}`} className={`${styles.tag} ${styles.tagMute}`}>{reason}</span>
+                                ))}
+                              </div>
+                            )}
                             {m.lost_agency_before && (
                               <span
                                 className={`${styles.tag} ${styles.tagWarn}`}

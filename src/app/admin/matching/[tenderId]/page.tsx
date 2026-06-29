@@ -13,6 +13,7 @@ const ROUTED_SERVICES = [
 ] as const;
 
 const STATUSES = ["suggested", "contacted", "applied", "shortlisted", "won", "lost"] as const;
+const NETWORK_STATUSES = ["new", "seen", "contacted", "replied", "booked", "paid", "not_relevant", "dismissed", "won", "lost"] as const;
 const TIERS = ["T1", "T2", "REF"] as const;
 const UNGM_STATUSES = ["registered", "pending", "unregistered", "unknown"] as const;
 
@@ -39,6 +40,9 @@ interface TenderDetail {
   reference_id: string | null;
   status: string | null;
   has_broken_link: boolean | null;
+  copy_count: number | null;
+  source_names: string[] | null;
+  reference_ids: string[] | null;
 }
 
 interface Candidate {
@@ -61,6 +65,11 @@ interface Candidate {
   contact_phone: string | null;
   relationship_notes: string | null;
   already_matched: boolean;
+  fit_score: number;
+  fit_reasons: string[];
+  fit_caveats: string[];
+  assessment_count: number;
+  assessment_ids: number[];
 }
 
 interface Match {
@@ -79,10 +88,68 @@ interface Match {
   created_by_email: string | null;
 }
 
+interface NetworkProspect {
+  id: number;
+  tender_id: number;
+  network_company_id: number;
+  company_name: string;
+  website: string | null;
+  services_text: string | null;
+  countries: string[] | null;
+  sectors: string[] | null;
+  org_type: string | null;
+  profile_status: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  contact_linkedin: string | null;
+  ungm_status: string | null;
+  share_token: string | null;
+  score: number;
+  match_reasons: string[] | null;
+  structured_reasons: {
+    caveats?: string[];
+    confidence?: "high" | "medium" | "low";
+    matchedCapabilities?: string[];
+    matchedSectors?: string[];
+  } | null;
+  status: string;
+  first_seen_at: string;
+  last_scored_at: string;
+  updated_at: string;
+  duplicate_count: number;
+  duplicate_match_ids: number[] | null;
+}
+
+interface ExternalProspect {
+  id: number;
+  tender_id: number;
+  network_company_id: number | null;
+  name: string;
+  website: string | null;
+  country: string | null;
+  countries: string[] | null;
+  sectors: string[] | null;
+  org_type: string | null;
+  services_text: string | null;
+  score: number;
+  confidence: "high" | "medium" | "low";
+  fit_reasons: string[] | null;
+  evidence_urls: string[] | null;
+  search_queries: string[] | null;
+  provider: string;
+  status: string;
+  last_discovered_at: string;
+  updated_at: string;
+  duplicate_count: number;
+}
+
 interface DetailResponse {
   tender: TenderDetail;
   candidates: Candidate[];
   matches: Match[];
+  networkProspects: NetworkProspect[];
+  externalProspects: ExternalProspect[];
 }
 
 function authHeaders(): HeadersInit {
@@ -138,6 +205,9 @@ export default function AdminMatchingDetailPage() {
   const [openTagFor, setOpenTagFor] = useState<number | null>(null);
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
+  const [externalDiscovering, setExternalDiscovering] = useState(false);
+  const [externalQueries, setExternalQueries] = useState<string[]>([]);
 
   const load = useCallback(async (query: string) => {
     if (!Number.isInteger(tenderId) || tenderId <= 0) {
@@ -148,7 +218,7 @@ export default function AdminMatchingDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const u = new URLSearchParams({ limit: "150" });
+      const u = new URLSearchParams({ limit: "250" });
       if (query) u.set("q", query);
       const res = await fetch(`/api/admin/matching/tenders/${tenderId}?${u.toString()}`, { headers: authHeaders() });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -246,6 +316,94 @@ export default function AdminMatchingDetailPage() {
     }
   }
 
+  async function runNetworkDiscovery() {
+    setDiscovering(true);
+    setToast(null);
+    try {
+      const res = await fetch(`/api/admin/matching/tenders/${tenderId}/network-discovery`, {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ limit: 40 }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+      const run = body.run as { scanned?: number; inserted?: number; refreshed?: number; qualified?: number } | undefined;
+      const inserted = run?.inserted ?? 0;
+      const refreshed = run?.refreshed ?? 0;
+      const qualified = run?.qualified ?? inserted + refreshed;
+      setToast({
+        ok: true,
+        msg: `Found ${qualified} network prospects: ${inserted} new, ${refreshed} refreshed from ${run?.scanned ?? "the"} profiles.`,
+      });
+      await load(appliedQ);
+    } catch (err) {
+      setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to find network prospects" });
+    } finally {
+      setDiscovering(false);
+    }
+  }
+
+  async function patchNetworkProspectStatus(matchId: number, status: string) {
+    setSaving(true);
+    setToast(null);
+    try {
+      const res = await fetch(`/api/admin/network-companies/matches/${matchId}`, {
+        method: "PATCH",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ status }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+      setToast({ ok: true, msg: `Prospect moved to ${label(status)}.` });
+      await load(appliedQ);
+    } catch (err) {
+      setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to update prospect" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function runExternalDiscovery() {
+    setExternalDiscovering(true);
+    setExternalQueries([]);
+    setToast(null);
+    try {
+      const res = await fetch(`/api/admin/matching/tenders/${tenderId}/external-discovery`, {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ limit: 8 }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+      const run = body.run as {
+        mode?: "web_search" | "queries_only";
+        providerConfigured?: boolean;
+        inserted?: number;
+        refreshed?: number;
+        prospects?: unknown[];
+        queries?: string[];
+        error?: string;
+      } | undefined;
+      setExternalQueries(run?.queries ?? []);
+      if (run?.mode === "queries_only") {
+        setToast({
+          ok: false,
+          msg: "External search needs OPENAI_API_KEY. I generated the search queries below for now.",
+        });
+      } else {
+        setToast({
+          ok: true,
+          msg: `External search found ${run?.prospects?.length ?? 0} prospects: ${run?.inserted ?? 0} new, ${run?.refreshed ?? 0} refreshed.`,
+        });
+        await load(appliedQ);
+      }
+    } catch (err) {
+      setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to run external discovery" });
+    } finally {
+      setExternalDiscovering(false);
+    }
+  }
+
   if (error && !data) {
     return (
       <>
@@ -264,6 +422,10 @@ export default function AdminMatchingDetailPage() {
   }
 
   const t = data?.tender;
+  const networkProspects = data?.networkProspects ?? [];
+  const externalProspects = data?.externalProspects ?? [];
+  const loggedMatches = data?.matches ?? [];
+  const discoveredProspectCount = networkProspects.length + externalProspects.length;
 
   return (
     <>
@@ -298,6 +460,7 @@ export default function AdminMatchingDetailPage() {
               <p className={styles.panelSub}>
                 {t.opportunity_type ?? "RFP"} · {t.source_name ?? "—"}
                 {t.reference_id && ` · ref ${t.reference_id}`}
+                {(t.copy_count ?? 1) > 1 && ` · ${t.copy_count} folded copies`}
               </p>
             </div>
             {t.has_broken_link && <span className={`${styles.toast} ${styles.toastErr}`} style={{ margin: 0, padding: "4px 10px", fontSize: 11 }}>Broken link flagged</span>}
@@ -323,6 +486,12 @@ export default function AdminMatchingDetailPage() {
               experience: {label(t.experience_level)} ·
               language: {t.submission_language ?? "English"}
             </p>
+            {((t.source_names?.length ?? 0) > 1 || (t.reference_ids?.length ?? 0) > 1) && (
+              <p className={styles.sessionSubtle} style={{ marginTop: 8 }}>
+                <strong>Provenance:</strong> {(t.source_names ?? []).join(" · ") || "—"}
+                {(t.reference_ids?.length ?? 0) > 1 && ` · ${t.reference_ids?.length} references folded`}
+              </p>
+            )}
           </div>
         </section>
       )}
@@ -330,12 +499,163 @@ export default function AdminMatchingDetailPage() {
       <section className={styles.panel}>
         <header className={styles.panelHead}>
           <div>
-            <h2 className={styles.panelTitle}>Existing matches ({data?.matches.length ?? 0})</h2>
-            <p className={styles.panelSub}>Decisions already logged for this tender. Status updates land in the pipeline view.</p>
+            <h2 className={styles.panelTitle}>Prospect discovery ({discoveredProspectCount})</h2>
+            <p className={styles.panelSub}>Find companies for this tender from the Tenderpath network first, then expand to evidence-backed web discovery.</p>
+          </div>
+          <div className={styles.panelActions}>
+            <button
+              type="button"
+              className={styles.btnPrimary}
+              onClick={runNetworkDiscovery}
+              disabled={discovering || loading}
+            >
+              {discovering ? "Finding…" : "Find network prospects"}
+            </button>
+            <button
+              type="button"
+              className={styles.btnGhost}
+              onClick={runExternalDiscovery}
+              disabled={externalDiscovering || loading}
+            >
+              {externalDiscovering ? "Searching…" : "Search web"}
+            </button>
           </div>
         </header>
-        {(!data || data.matches.length === 0) ? (
-          <div className={styles.woEmpty}>No matches yet — log one below.</div>
+        <div style={{ padding: "14px 22px 18px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+          <div style={{ border: "1px solid var(--color-rule)", padding: "10px 12px" }}>
+            <div className={styles.mono} style={{ fontSize: 18, color: "var(--color-ink)", fontWeight: 600 }}>{networkProspects.length}</div>
+            <div className={styles.sessionSubtle}>network prospects saved</div>
+          </div>
+          <div style={{ border: "1px solid var(--color-rule)", padding: "10px 12px" }}>
+            <div className={styles.mono} style={{ fontSize: 18, color: "var(--color-ink)", fontWeight: 600 }}>{externalProspects.length}</div>
+            <div className={styles.sessionSubtle}>external discoveries saved</div>
+          </div>
+          <div style={{ border: "1px solid var(--color-rule)", padding: "10px 12px" }}>
+            <div className={styles.mono} style={{ fontSize: 18, color: "var(--color-ink)", fontWeight: 600 }}>{loggedMatches.length}</div>
+            <div className={styles.sessionSubtle}>manual decisions logged</div>
+          </div>
+        </div>
+        {loading ? (
+          <div className={styles.woEmpty}>Loading saved prospects...</div>
+        ) : discoveredProspectCount === 0 ? (
+          <div className={styles.woEmpty}>No saved prospects yet — run network discovery for this tender.</div>
+        ) : (
+          <div style={{ padding: "0 22px 22px", display: "grid", gap: 12 }}>
+            {networkProspects.length > 0 && (
+              <div style={{ display: "grid", gap: 8 }}>
+                <div className={styles.sessionSubtle} style={{ fontWeight: 600, color: "var(--color-ink)" }}>
+                  Saved network prospects
+                </div>
+                {networkProspects.slice(0, 4).map((p) => (
+                  <article
+                    key={`top-network-${p.id}`}
+                    style={{
+                      border: "1px solid var(--color-rule)",
+                      padding: 12,
+                      background: p.status === "new" ? "transparent" : "var(--color-bg-2, #fafafa)",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                      <div style={{ minWidth: 220, flex: "1 1 260px" }}>
+                        <div className={styles.cellName}>{p.company_name}</div>
+                        <div className={styles.sessionSubtle}>
+                          {p.website ?? "—"}
+                          {p.contact_email && ` · ${p.contact_email}`}
+                          {p.ungm_status && ` · UNGM ${label(p.ungm_status)}`}
+                        </div>
+                        <div className={styles.sessionSubtle} style={{ marginTop: 5 }}>
+                          <strong>Fit:</strong> {chipList(p.match_reasons, 3)}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
+                        <div style={{ textAlign: "right", minWidth: 58, paddingRight: 2 }}>
+                          <div className={styles.mono} style={{ color: "var(--color-ink)", fontWeight: 600 }}>{p.score}</div>
+                          <div className={styles.sessionSubtle}>{p.structured_reasons?.confidence ?? "fit"}</div>
+                        </div>
+                        <Link
+                          href={`/admin/network/${p.network_company_id}`}
+                          className={styles.btnGhost}
+                          style={{ padding: "5px 9px", fontSize: 11, textDecoration: "none" }}
+                        >
+                          Network
+                        </Link>
+                        {p.share_token && (
+                          <a
+                            href={`/n/${p.share_token}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={styles.btnGhost}
+                            style={{ padding: "5px 9px", fontSize: 11, textDecoration: "none" }}
+                          >
+                            Briefing
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+            {externalProspects.length > 0 && (
+              <div style={{ display: "grid", gap: 8 }}>
+                <div className={styles.sessionSubtle} style={{ fontWeight: 600, color: "var(--color-ink)" }}>
+                  Saved external discoveries
+                </div>
+                {externalProspects.slice(0, 4).map((p) => (
+                  <article
+                    key={`top-external-${p.id}`}
+                    style={{
+                      border: "1px solid var(--color-rule)",
+                      padding: 12,
+                      background: p.status === "suggested" ? "transparent" : "var(--color-bg-2, #fafafa)",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                      <div style={{ minWidth: 220, flex: "1 1 260px" }}>
+                        <div className={styles.cellName}>{p.name}</div>
+                        <div className={styles.sessionSubtle}>
+                          {p.website ?? "—"}
+                          {p.country && ` · ${p.country}`}
+                        </div>
+                        <div className={styles.sessionSubtle} style={{ marginTop: 5 }}>
+                          <strong>Fit:</strong> {chipList(p.fit_reasons, 3)}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
+                        <div style={{ textAlign: "right", minWidth: 58, paddingRight: 2 }}>
+                          <div className={styles.mono} style={{ color: "var(--color-ink)", fontWeight: 600 }}>{p.score}</div>
+                          <div className={styles.sessionSubtle}>{p.confidence}</div>
+                        </div>
+                        {p.website && (
+                          <a
+                            href={p.website}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={styles.btnGhost}
+                            style={{ padding: "5px 9px", fontSize: 11, textDecoration: "none" }}
+                          >
+                            Website
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
+      <section className={styles.panel}>
+        <header className={styles.panelHead}>
+          <div>
+            <h2 className={styles.panelTitle}>Logged assessment matches ({loggedMatches.length})</h2>
+            <p className={styles.panelSub}>Manual assessment-to-tender decisions. Use Prospect discovery above to create the company shortlist.</p>
+          </div>
+        </header>
+        {(!data || loggedMatches.length === 0) ? (
+          <div className={styles.woEmpty}>No manual matches logged yet — use the discovery panels to build the shortlist.</div>
         ) : (
           <div className={styles.tableWrap}>
             <table className={styles.dossierTable}>
@@ -351,7 +671,7 @@ export default function AdminMatchingDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.matches.map((m) => (
+                {loggedMatches.map((m) => (
                   <tr key={m.id}>
                     <td>
                       <div className={styles.cellName}>{m.vendor_company ?? `assessment #${m.assessment_id}`}</div>
@@ -390,8 +710,218 @@ export default function AdminMatchingDetailPage() {
       <section className={styles.panel}>
         <header className={styles.panelHead}>
           <div>
+            <h2 className={styles.panelTitle}>External discovery ({externalProspects.length})</h2>
+            <p className={styles.panelSub}>Web-search prospects outside the current Tenderpath network. Evidence links are required before a company appears here.</p>
+          </div>
+          <div className={styles.panelActions}>
+            <button
+              type="button"
+              className={styles.btnGhost}
+              onClick={runExternalDiscovery}
+              disabled={externalDiscovering || loading}
+            >
+              {externalDiscovering ? "Searching…" : "Search web"}
+            </button>
+          </div>
+        </header>
+
+        {externalQueries.length > 0 && (
+          <div style={{ padding: "12px 22px 0" }}>
+            <div className={styles.sessionSubtle} style={{ marginBottom: 8 }}>
+              Search queries prepared for this tender:
+            </div>
+            <div style={{ display: "grid", gap: 6 }}>
+              {externalQueries.map((query) => (
+                <div key={query} className={styles.mono} style={{ fontSize: 11, border: "1px solid var(--color-rule)", padding: "6px 8px" }}>
+                  {query}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {loading ? (
+          <div className={styles.woEmpty}>Loading external discoveries…</div>
+        ) : externalProspects.length === 0 ? (
+          <div className={styles.woEmpty}>No external prospects yet — run web search when the provider is configured.</div>
+        ) : (
+          <div style={{ padding: "8px 22px 22px", display: "grid", gap: 12 }}>
+            {externalProspects.map((p) => (
+              <article
+                key={p.id}
+                style={{
+                  border: "1px solid var(--color-rule)",
+                  padding: 14,
+                  background: p.status === "suggested" ? "transparent" : "var(--color-bg-2, #fafafa)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+                  <div>
+                    <div className={styles.cellName}>{p.name}</div>
+                    <div className={styles.sessionSubtle}>
+                      {p.website ?? "—"}
+                      {p.country && ` · ${p.country}`}
+                      {p.duplicate_count > 1 && ` · ${p.duplicate_count} folded discoveries`}
+                    </div>
+                    <div className={styles.sessionSubtle} style={{ marginTop: 4 }}>
+                      {label(p.org_type)} · {chipList(p.countries, 4)}
+                    </div>
+                    <div className={styles.sessionSubtle} style={{ marginTop: 4 }}>
+                      sectors: {chipList(p.sectors, 5)}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 6, flexShrink: 0 }}>
+                    <div style={{ textAlign: "right", minWidth: 70, paddingRight: 4 }}>
+                      <div className={styles.mono} style={{ color: "var(--color-ink)", fontWeight: 600 }}>{p.score}</div>
+                      <div className={styles.sessionSubtle}>{p.confidence}</div>
+                    </div>
+                    {p.website && (
+                      <a
+                        href={p.website}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={styles.btnGhost}
+                        style={{ padding: "5px 9px", fontSize: 11, textDecoration: "none" }}
+                      >
+                        Website
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                <div className={styles.sessionSubtle} style={{ marginTop: -2, marginBottom: 8 }}>
+                  <strong>Fit:</strong> {chipList(p.fit_reasons, 4)}
+                </div>
+
+                {p.services_text && (
+                  <div className={styles.sessionSubtle} style={{ lineHeight: 1.5, marginBottom: 8 }}>
+                    {p.services_text.length > 240 ? `${p.services_text.slice(0, 240)}…` : p.services_text}
+                  </div>
+                )}
+
+                {(p.evidence_urls?.length ?? 0) > 0 && (
+                  <div className={styles.sessionSubtle} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    <strong>Evidence:</strong>
+                    {p.evidence_urls?.slice(0, 3).map((url, index) => (
+                      <a key={`${p.id}-${url}`} href={url} target="_blank" rel="noreferrer" style={{ color: "var(--color-accent)" }}>
+                        source {index + 1}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className={styles.panel}>
+        <header className={styles.panelHead}>
+          <div>
+            <h2 className={styles.panelTitle}>Network prospects ({networkProspects.length})</h2>
+            <p className={styles.panelSub}>Companies from the Tenderpath network persisted against this tender with evidence-backed fit reasons.</p>
+          </div>
+          <div className={styles.panelActions}>
+            <button
+              type="button"
+              className={styles.btnPrimary}
+              onClick={runNetworkDiscovery}
+              disabled={discovering || loading}
+            >
+              {discovering ? "Finding…" : "Find prospects"}
+            </button>
+          </div>
+        </header>
+        {loading ? (
+          <div className={styles.woEmpty}>Loading network prospects…</div>
+        ) : networkProspects.length === 0 ? (
+          <div className={styles.woEmpty}>No network prospects yet — run discovery for this tender.</div>
+        ) : (
+          <div style={{ padding: "8px 22px 22px", display: "grid", gap: 12 }}>
+            {networkProspects.map((p) => (
+              <article
+                key={p.id}
+                style={{
+                  border: "1px solid var(--color-rule)",
+                  padding: 14,
+                  background: p.status === "new" ? "transparent" : "var(--color-bg-2, #fafafa)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+                  <div>
+                    <div className={styles.cellName}>{p.company_name}</div>
+                    <div className={styles.sessionSubtle}>
+                      {p.website ?? "—"}
+                      {p.contact_email && ` · ${p.contact_email}`}
+                      {p.contact_linkedin && !p.contact_email && " · LinkedIn contact"}
+                      {p.ungm_status && ` · UNGM ${label(p.ungm_status)}`}
+                      {p.duplicate_count > 1 && ` · ${p.duplicate_count} folded copies`}
+                    </div>
+                    <div className={styles.sessionSubtle} style={{ marginTop: 4 }}>
+                      {label(p.org_type)} · {chipList(p.countries, 4)}
+                    </div>
+                    <div className={styles.sessionSubtle} style={{ marginTop: 4 }}>
+                      sectors: {chipList(p.sectors, 5)}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 6, flexShrink: 0 }}>
+                    <div style={{ textAlign: "right", minWidth: 70, paddingRight: 4 }}>
+                      <div className={styles.mono} style={{ color: "var(--color-ink)", fontWeight: 600 }}>{p.score}</div>
+                      <div className={styles.sessionSubtle}>{p.structured_reasons?.confidence ?? "fit"}</div>
+                    </div>
+                    <Link
+                      href={`/admin/network/${p.network_company_id}`}
+                      className={styles.btnGhost}
+                      style={{ padding: "5px 9px", fontSize: 11, textDecoration: "none" }}
+                    >
+                      Network
+                    </Link>
+                    {p.share_token && (
+                      <a
+                        href={`/n/${p.share_token}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={styles.btnGhost}
+                        style={{ padding: "5px 9px", fontSize: 11, textDecoration: "none" }}
+                      >
+                        Briefing
+                      </a>
+                    )}
+                    <select
+                      value={p.status}
+                      onChange={(e) => patchNetworkProspectStatus(p.id, e.target.value)}
+                      disabled={saving}
+                      className={styles.adminSearchInput}
+                      style={{ padding: "5px 7px", fontSize: 11 }}
+                    >
+                      {NETWORK_STATUSES.map((s) => <option key={s} value={s}>{label(s)}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className={styles.sessionSubtle} style={{ marginTop: -2, marginBottom: 8 }}>
+                  <strong>Fit:</strong> {chipList(p.match_reasons, 4)}
+                  {(p.structured_reasons?.caveats?.length ?? 0) > 0 && (
+                    <span> · caveats: {chipList(p.structured_reasons?.caveats, 2)}</span>
+                  )}
+                </div>
+
+                {p.services_text && (
+                  <div className={styles.sessionSubtle} style={{ lineHeight: 1.5 }}>
+                    {p.services_text.length > 220 ? `${p.services_text.slice(0, 220)}…` : p.services_text}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className={styles.panel}>
+        <header className={styles.panelHead}>
+          <div>
             <h2 className={styles.panelTitle}>Candidate vendors</h2>
-            <p className={styles.panelSub}>Search assessments by company, sector, or description. Ordered by readiness score.</p>
+            <p className={styles.panelSub}>Search assessments by company, sector, or description. Ordered by tender-specific fit, with readiness as a tie-breaker.</p>
           </div>
           {data && <span className={styles.panelMeta}>{data.candidates.length} candidates</span>}
         </header>
@@ -446,6 +976,7 @@ export default function AdminMatchingDetailPage() {
                         {c.email ?? "—"}
                         {c.website && ` · ${c.website}`}
                         {c.readiness_score != null && ` · readiness ${c.readiness_score}`}
+                        {(c.assessment_count ?? 1) > 1 && ` · ${c.assessment_count} assessments folded`}
                       </div>
                       <div className={styles.sessionSubtle} style={{ marginTop: 4 }}>
                         {label(c.sector)} · {label(c.org_type)} · {chipList(c.countries, 4)}
@@ -462,6 +993,10 @@ export default function AdminMatchingDetailPage() {
                       )}
                     </div>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <div style={{ textAlign: "right", minWidth: 70, paddingRight: 4 }}>
+                        <div className={styles.mono} style={{ color: "var(--color-ink)", fontWeight: 600 }}>{c.fit_score}</div>
+                        <div className={styles.sessionSubtle}>fit</div>
+                      </div>
                       <button
                         type="button"
                         className={styles.btnGhost}
@@ -487,6 +1022,13 @@ export default function AdminMatchingDetailPage() {
                         {isMatched ? "Matched" : "Log match"}
                       </button>
                     </div>
+                  </div>
+
+                  <div className={styles.sessionSubtle} style={{ marginTop: -2, marginBottom: 8 }}>
+                    <strong>Fit:</strong> {chipList(c.fit_reasons, 4)}
+                    {c.fit_caveats.length > 0 && (
+                      <span> · caveats: {chipList(c.fit_caveats, 2)}</span>
+                    )}
                   </div>
 
                   {openTagFor === c.id && (
@@ -581,7 +1123,9 @@ function MatchForm({
 }) {
   const [routedService, setRoutedService] = useState<string>(ROUTED_SERVICES[0].value);
   const [status, setStatus] = useState<string>("suggested");
-  const [reasoning, setReasoning] = useState("");
+  const [reasoning, setReasoning] = useState(
+    (candidate.fit_reasons ?? []).filter((r) => r !== "needs manual review").join("; ")
+  );
   const [outcome, setOutcome] = useState("");
   const minLen = 10;
   const tooShort = reasoning.trim().length < minLen;

@@ -253,15 +253,11 @@ ALTER TABLE tenders ADD COLUMN IF NOT EXISTS submission_language TEXT;
 ALTER TABLE tenders ADD COLUMN IF NOT EXISTS estimated_value TEXT;
 
 -- Canonical "same opportunity" key (the read-side twin of dedupKey() in
--- src/lib/crawlers/types.ts): normalized title + agency + deadline. GENERATED +
--- STORED so Postgres maintains it on every write and collapseDuplicateTenders()
--- can fold cross-posted duplicates onto one survivor. deadline is DATE, so ::text
--- is YYYY-MM-DD and the whole expression is IMMUTABLE (required for generated).
-ALTER TABLE tenders ADD COLUMN IF NOT EXISTS dedup_key TEXT GENERATED ALWAYS AS (
-  LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(title, '')),  '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
-  LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(agency, '')), '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
-  COALESCE(deadline::text, '')
-) STORED;
+-- src/lib/crawlers/types.ts): normalized title + agency + deadline. This is a
+-- maintained text column, not GENERATED, because live deadline values are
+-- timestamptz and Postgres rejects timezone-sensitive casts in generated
+-- expressions. ensureTenderDedupSchema() backfills/refreshes values at runtime.
+ALTER TABLE tenders ADD COLUMN IF NOT EXISTS dedup_key TEXT;
 CREATE INDEX IF NOT EXISTS tenders_dedup_key_open_idx ON tenders (dedup_key) WHERE status = 'open';
 
 CREATE TABLE IF NOT EXISTS pipeline_items (
@@ -594,6 +590,37 @@ ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS ungm_status TEXT NOT NULL
 ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS share_token TEXT DEFAULT md5(random()::text || clock_timestamp()::text);
 UPDATE network_companies SET share_token = md5(random()::text || clock_timestamp()::text || id::text) WHERE share_token IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS network_companies_share_token_idx ON network_companies (share_token);
+
+CREATE TABLE IF NOT EXISTS network_external_prospects (
+  id SERIAL PRIMARY KEY,
+  tender_id INTEGER NOT NULL REFERENCES tenders(id) ON DELETE CASCADE,
+  network_company_id INTEGER REFERENCES network_companies(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  website TEXT,
+  country TEXT,
+  countries JSONB DEFAULT '[]'::jsonb,
+  sectors JSONB DEFAULT '[]'::jsonb,
+  org_type TEXT,
+  services_text TEXT,
+  score INTEGER NOT NULL DEFAULT 0,
+  confidence TEXT NOT NULL DEFAULT 'medium',
+  fit_reasons JSONB DEFAULT '[]'::jsonb,
+  evidence_urls JSONB DEFAULT '[]'::jsonb,
+  search_queries JSONB DEFAULT '[]'::jsonb,
+  provider TEXT NOT NULL DEFAULT 'openai_web_search',
+  status TEXT NOT NULL DEFAULT 'suggested',
+  dedup_key TEXT NOT NULL,
+  raw_payload JSONB DEFAULT '{}'::jsonb,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  last_discovered_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT network_external_prospects_unique UNIQUE (tender_id, dedup_key),
+  CONSTRAINT network_external_prospects_confidence_chk CHECK (confidence IN ('high','medium','low')),
+  CONSTRAINT network_external_prospects_status_chk CHECK (status IN ('suggested','reviewed','added_to_network','dismissed'))
+);
+CREATE INDEX IF NOT EXISTS network_external_prospects_tender_idx ON network_external_prospects (tender_id, status, score DESC);
+CREATE INDEX IF NOT EXISTS network_external_prospects_network_company_idx ON network_external_prospects (network_company_id) WHERE network_company_id IS NOT NULL;
 
 -- Bot (Telegram/WhatsApp) channel-agnostic session store. Replaces telegram_sessions.
 CREATE TABLE IF NOT EXISTS bot_sessions (

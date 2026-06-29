@@ -20,6 +20,9 @@ interface MatchingTender {
   created_at: string;
   updated_at: string | null;
   match_count: number;
+  copy_count: number;
+  source_names: string[];
+  reference_ids: string[];
 }
 
 interface MatchingTendersResponse {
@@ -70,6 +73,18 @@ function relativeDeadline(value: string | null): string {
   if (days === 0) return "today";
   if (days === 1) return "tomorrow";
   return `in ${days}d`;
+}
+
+function listPreview(values: string[], limit = 3): string {
+  const unique = [...new Set(values.filter(Boolean))];
+  if (!unique.length) return "—";
+  return unique.slice(0, limit).join(" · ") + (unique.length > limit ? ` · +${unique.length - limit}` : "");
+}
+
+function nextActionLabel(tender: MatchingTender): string {
+  if (tender.match_count > 0) return "Review routed match";
+  if ((tender.copy_count ?? 1) > 1) return "Route grouped opp";
+  return "Route vendor";
 }
 
 function getInitial(name: string, fallback = ""): string {
@@ -168,6 +183,14 @@ export default function AdminMatchingPage() {
     () => (data?.tenders ?? []).reduce((acc, t) => acc + t.match_count, 0),
     [data]
   );
+  const foldedRows = useMemo(
+    () => (data?.tenders ?? []).reduce((acc, t) => acc + Math.max(0, (t.copy_count ?? 1) - 1), 0),
+    [data]
+  );
+  const sourcesInView = useMemo(
+    () => new Set((data?.tenders ?? []).flatMap((t) => t.source_names ?? []).filter(Boolean)).size,
+    [data]
+  );
 
   // Preserve an arbitrary ?min_days=N from the URL by surfacing it as an option.
   const minDaysOptions = useMemo(
@@ -180,9 +203,9 @@ export default function AdminMatchingPage() {
       <header className={styles.pageHeader}>
         <div>
           <div className={styles.eyebrow}>05 — Matching</div>
-          <h1 className={styles.pageTitle}>Tender → vendor workbench</h1>
+          <h1 className={styles.pageTitle}>Opportunity routing queue</h1>
           <p className={styles.pageSub}>
-            Filter live tenders, open one, route it to a vendor with reasoning. Every decision captures as training data.
+            Work from unique opportunities, inspect source provenance, and route the best-fit vendor with reasoning.
           </p>
         </div>
         <div className={styles.pageActions}>
@@ -203,21 +226,22 @@ export default function AdminMatchingPage() {
       <section className={styles.heroRow}>
         <div className={styles.heroStat}>
           <div className={styles.heroStatLabel}>
-            {minDays === "0" || minDays === "" ? "Tenders shown · all active" : `Tenders shown · ${minDays}+ days`}
+            {minDays === "0" || minDays === "" ? "Unique opps · all active" : `Unique opps · ${minDays}+ days`}
           </div>
           <div className={styles.heroStatValue}>{data?.total ?? 0}</div>
         </div>
         <div className={styles.heroStat}>
-          <div className={styles.heroStatLabel}>Tenders with a match</div>
-          <div className={styles.heroStatValue}>{tendersWithMatches}</div>
+          <div className={styles.heroStatLabel}>Need first routing</div>
+          <div className={styles.heroStatValue}>{Math.max(0, (data?.total ?? 0) - tendersWithMatches)}</div>
         </div>
         <div className={styles.heroStat}>
-          <div className={styles.heroStatLabel}>Match decisions on view</div>
-          <div className={styles.heroStatValue}>{totalMatchRows}</div>
+          <div className={styles.heroStatLabel}>Folded crawler rows</div>
+          <div className={styles.heroStatValue}>{foldedRows}</div>
         </div>
         <div className={styles.heroStat}>
-          <div className={styles.heroStatLabel}>Agencies in scope</div>
-          <div className={styles.heroStatValue}>{(data?.filters.agencies ?? []).length}</div>
+          <div className={styles.heroStatLabel}>Sources in view</div>
+          <div className={styles.heroStatValue}>{sourcesInView}</div>
+          <div className={styles.heroStatMeta}>{totalMatchRows} logged decisions</div>
         </div>
       </section>
 
@@ -292,7 +316,7 @@ export default function AdminMatchingPage() {
         <header className={styles.panelHead}>
           <div>
             <h2 className={styles.panelTitle}>Open tenders</h2>
-            <p className={styles.panelSub}>Soonest deadline first. Broken-link tenders excluded. Showing tenders closing 10+ days out by default — set <em>Min days to deadline</em> to <em>All</em> to include closing-soon and past-deadline tenders.</p>
+            <p className={styles.panelSub}>Soonest deadline first. Cross-posted rows are folded into one opportunity with source and reference provenance.</p>
           </div>
           {data && (
             <span className={styles.panelMeta}>
@@ -311,10 +335,10 @@ export default function AdminMatchingPage() {
                 <tr>
                   <th>Title</th>
                   <th>Agency</th>
-                  <th>Country</th>
-                  <th>Sector</th>
+                  <th>Scope</th>
                   <th>Deadline</th>
-                  <th>Value</th>
+                  <th>Provenance</th>
+                  <th>Next action</th>
                   <th className={styles.num}>Matches</th>
                   <th></th>
                 </tr>
@@ -331,15 +355,32 @@ export default function AdminMatchingPage() {
                         <span className={styles.cellName}>{t.title}</span>
                       )}
                       {t.reference_id && <div className={styles.sessionSubtle}>{t.reference_id}</div>}
+                      {t.estimated_value && <div className={styles.sessionSubtle}>value {t.estimated_value}</div>}
                     </td>
                     <td>{t.agency || "—"}</td>
-                    <td>{t.country || "—"}</td>
-                    <td>{t.sector || "—"}</td>
+                    <td>
+                      <div>{t.country || "—"}</div>
+                      <div className={styles.sessionSubtle}>{t.sector || "sector unknown"}</div>
+                    </td>
                     <td>
                       <div className={styles.mono}>{fmtDate(t.deadline)}</div>
                       <div className={styles.sessionSubtle}>{relativeDeadline(t.deadline)}</div>
                     </td>
-                    <td>{t.estimated_value || "—"}</td>
+                    <td>
+                      <div className={styles.cellName}>
+                        {(t.copy_count ?? 1) > 1 ? `${t.copy_count} copies` : "1 copy"}
+                      </div>
+                      <div className={styles.sessionSubtle}>{listPreview(t.source_names)}</div>
+                      {t.reference_ids.length > 1 && (
+                        <div className={styles.sessionSubtle}>{t.reference_ids.length} refs folded</div>
+                      )}
+                    </td>
+                    <td>
+                      <span className={styles.cellName}>{nextActionLabel(t)}</span>
+                      <div className={styles.sessionSubtle}>
+                        {t.match_count > 0 ? "move status in pipeline" : "open candidate ranking"}
+                      </div>
+                    </td>
                     <td className={`${styles.num} ${t.match_count > 0 ? styles.posNum : styles.muteNum}`}>
                       {t.match_count}
                     </td>

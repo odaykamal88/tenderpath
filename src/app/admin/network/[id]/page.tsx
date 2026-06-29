@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import styles from "../../admin.module.css";
-import { briefingUrl, selectInsightfulGaps } from "@/lib/network/outreach";
+import { briefingUrl, foldedOpportunityCount, foldedSourceLabel, selectInsightfulGaps } from "@/lib/network/outreach";
 import type { Gap } from "@/lib/types";
 
 const STATUSES = ["new", "seen", "contacted", "replied", "booked", "paid", "not_relevant", "dismissed", "won", "lost"] as const;
@@ -70,8 +70,12 @@ interface Match {
   tender_deadline: string | null;
   tender_value: string | null;
   tender_source_url: string | null;
+  tender_source_name: string | null;
   tender_reference: string | null;
   tender_type: string | null;
+  duplicate_count?: number;
+  duplicate_match_ids?: number[];
+  source_names?: string[];
 }
 
 interface DetailResponse {
@@ -95,6 +99,12 @@ function fmtDate(value: string | null): string {
 function chips(values: string[] | null | undefined, limit = 8): string {
   if (!Array.isArray(values) || !values.length) return "—";
   return values.slice(0, limit).join(" · ") + (values.length > limit ? ` · +${values.length - limit}` : "");
+}
+
+function matchIdsFor(match: Match): number[] {
+  return Array.isArray(match.duplicate_match_ids) && match.duplicate_match_ids.length > 0
+    ? match.duplicate_match_ids
+    : [match.id];
 }
 
 export default function AdminNetworkCompanyPage() {
@@ -174,9 +184,11 @@ export default function AdminNetworkCompanyPage() {
   async function setMatchStatus(matchId: number, status: string, reason?: string) {
     // Optimistic + background — update the row in place so the page doesn't
     // reload/flash on every status change. Reconcile silently on failure.
+    const currentMatch = data?.matches.find((m) => m.id === matchId || matchIdsFor(m).includes(matchId));
+    const affectedIds = new Set(currentMatch ? matchIdsFor(currentMatch) : [matchId]);
     setData((d) => (d ? {
       ...d,
-      matches: d.matches.map((m) => (m.id === matchId
+      matches: d.matches.map((m) => (matchIdsFor(m).some((id) => affectedIds.has(id))
         ? { ...m, status, ...(reason !== undefined ? { dismiss_reason: reason || null } : {}) }
         : m)),
     } : d));
@@ -254,6 +266,7 @@ export default function AdminNetworkCompanyPage() {
   const allMatches = data?.matches ?? [];
   const dismissedCount = allMatches.filter((m) => m.status === "dismissed").length;
   const visibleMatches = showDismissed ? allMatches : allMatches.filter((m) => m.status !== "dismissed");
+  const foldedCrawlerRows = visibleMatches.reduce((sum, match) => sum + Math.max(0, foldedOpportunityCount(match) - 1), 0);
 
   return (
     <>
@@ -369,7 +382,10 @@ export default function AdminNetworkCompanyPage() {
         <header className={styles.panelHead}>
           <div>
             <h2 className={styles.panelTitle}>Matches ({visibleMatches.length})</h2>
-            <p className={styles.panelSub}>Open tenders this company fits, soonest deadline first. Fresh ones are flagged &lsquo;new&rsquo;.</p>
+            <p className={styles.panelSub}>
+              Open opportunities this company fits, soonest deadline first. Fresh ones are flagged &lsquo;new&rsquo;.
+              {foldedCrawlerRows > 0 ? ` ${foldedCrawlerRows} crawler copies are folded into these rows.` : ""}
+            </p>
           </div>
           {dismissedCount > 0 && (
             <label className={styles.sessionSubtle} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
@@ -407,8 +423,18 @@ export default function AdminNetworkCompanyPage() {
                       )}
                       <div className={styles.sessionSubtle}>
                         {[m.tender_agency, m.tender_sector].filter(Boolean).join(" · ") || "—"}
-                        {Array.isArray(m.match_reasons) && m.match_reasons.length > 0 && ` · ${m.match_reasons.slice(0, 2).join("; ")}`}
                       </div>
+                      <div className={styles.sessionSubtle} style={{ marginTop: 3, fontSize: 11 }}>
+                        {foldedSourceLabel(m)}
+                        {m.tender_reference ? ` · ${m.tender_reference}` : ""}
+                      </div>
+                      {Array.isArray(m.match_reasons) && m.match_reasons.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
+                          {m.match_reasons.slice(0, 2).map((reason, index) => (
+                            <span key={`${m.id}-reason-${index}`} className={`${styles.tag} ${styles.tagMute}`}>{reason}</span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td>{m.tender_country || "—"}</td>
                     <td className={styles.mono}>{fmtDate(m.tender_deadline)}</td>

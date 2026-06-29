@@ -47,8 +47,15 @@ export interface OutreachMatch {
   tender_deadline: string | null;
   tender_value: string | null;
   tender_source_url: string | null;
+  tender_source_name?: string | null;
   tender_reference: string | null;
   tender_type: string | null;
+  /** Raw crawler/match rows folded into this one opportunity row. */
+  duplicate_count?: number;
+  /** All network_company_matches ids for the folded duplicate opportunity. */
+  duplicate_match_ids?: number[];
+  /** Source names represented by the folded duplicate opportunity. */
+  source_names?: string[];
   // Per-company engagement context (same for every match of a company), plus a
   // per-row flag — operator judgement aids, never shown to the prospect. All
   // optional so callers/builders that don't hydrate them still typecheck.
@@ -204,6 +211,42 @@ export function meaningfulValue(raw: string | null): string | null {
   if (/^(n\/?a|tbd|unknown|none|null|0)$/i.test(s)) return null;
   if (/not\s*(specified|disclosed|available|provided)/i.test(s)) return null;
   return s;
+}
+
+function cleanStringArray(values: unknown): string[] {
+  return Array.isArray(values)
+    ? values.map((value) => String(value).trim()).filter(Boolean)
+    : [];
+}
+
+/** Number of raw crawler/match rows folded into this opportunity. */
+export function foldedOpportunityCount(
+  match: Pick<OutreachMatch, "duplicate_count" | "duplicate_match_ids">,
+): number {
+  const explicit = Number(match.duplicate_count ?? 0);
+  if (Number.isFinite(explicit) && explicit > 0) return Math.round(explicit);
+  const ids = Array.isArray(match.duplicate_match_ids) ? match.duplicate_match_ids.length : 0;
+  return Math.max(1, ids);
+}
+
+/** Stable list of source names represented by the folded opportunity row. */
+export function foldedSourceNames(
+  match: Pick<OutreachMatch, "source_names" | "tender_source_name">,
+): string[] {
+  const sources = cleanStringArray(match.source_names);
+  if (sources.length > 0) return sources;
+  return match.tender_source_name ? [match.tender_source_name] : [];
+}
+
+/** Compact provenance label for admin/operator surfaces. */
+export function foldedSourceLabel(
+  match: Pick<OutreachMatch, "duplicate_count" | "duplicate_match_ids" | "source_names" | "tender_source_name">,
+): string {
+  const count = foldedOpportunityCount(match);
+  const sources = foldedSourceNames(match);
+  if (count <= 1) return sources[0] ? `Source: ${sources[0]}` : "Single crawler row";
+  if (sources.length <= 1) return `${count} crawler copies folded`;
+  return `${count} crawler copies folded: ${sources.slice(0, 3).join(", ")}${sources.length > 3 ? ` +${sources.length - 3}` : ""}`;
 }
 
 // ── Boilerplate gaps we never surface to a cold prospect: administrative /
@@ -699,7 +742,7 @@ export function toOutreachCsv(matches: OutreachMatch[], signoff: string, opts: {
     "readiness", "channel", "company", "contact_name", "contact_email", "contact_linkedin",
     "tender", "agency", "sector", "country",
     "deadline", "days_to_deadline", "value", "fit_score",
-    "source_url", "reference", "status", "briefing_url", "draft_subject", "draft_body", "linkedin_note",
+    "source_url", "source_names", "folded_crawler_rows", "reference", "status", "briefing_url", "draft_subject", "draft_body", "linkedin_note",
   ];
 
   const rows = ordered.map((m) => {
@@ -709,7 +752,7 @@ export function toOutreachCsv(matches: OutreachMatch[], signoff: string, opts: {
       readiness(m), reachableChannel(m), m.company_name, m.contact_name ?? "", m.contact_email ?? "", m.contact_linkedin ?? "",
       m.tender_title, m.tender_agency ?? "", m.tender_sector ?? "", m.tender_country ?? "",
       m.tender_deadline ?? "", daysUntil(m.tender_deadline) ?? "", meaningfulValue(m.tender_value) ?? "", m.score,
-      m.tender_source_url ?? "", m.tender_reference ?? "", m.status, briefingUrl(m.share_token, opts.origin) ?? "", draft.subject, draft.body, li.note,
+      m.tender_source_url ?? "", foldedSourceNames(m).join(" | "), foldedOpportunityCount(m), m.tender_reference ?? "", m.status, briefingUrl(m.share_token, opts.origin) ?? "", draft.subject, draft.body, li.note,
     ].map(csvCell).join(",");
   });
 

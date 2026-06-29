@@ -5,7 +5,7 @@ import Link from "next/link";
 import styles from "../admin.module.css";
 import OutreachTable from "./OutreachTable";
 import ImportPanel from "./ImportPanel";
-import { type OutreachMatch, briefingUrl } from "@/lib/network/outreach";
+import { type OutreachMatch, briefingUrl, foldedOpportunityCount } from "@/lib/network/outreach";
 
 interface CompanyRow {
   id: number;
@@ -58,6 +58,16 @@ const EMPTY_FORM = {
   notes: "",
 };
 
+function matchIdsFor(match: OutreachMatch): number[] {
+  return Array.isArray(match.duplicate_match_ids) && match.duplicate_match_ids.length > 0
+    ? match.duplicate_match_ids
+    : [match.id];
+}
+
+function overlapsMatchIds(match: OutreachMatch, ids: Set<number>): boolean {
+  return matchIdsFor(match).some((id) => ids.has(id));
+}
+
 export default function AdminNetworkPage() {
   const [data, setData] = useState<ListResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,11 +102,14 @@ export default function AdminNetworkPage() {
 
   const stats = useMemo(() => {
     const companies = data?.companies ?? [];
+    const fresh = data?.fresh ?? [];
+    const foldedCrawlerRows = fresh.reduce((sum, match) => sum + Math.max(0, foldedOpportunityCount(match) - 1), 0);
     return {
       companies: companies.length,
       active: companies.filter((c) => c.is_active).length,
-      fresh: data?.fresh.length ?? 0,
+      fresh: fresh.length,
       withFresh: companies.filter((c) => c.fresh_count > 0).length,
+      foldedCrawlerRows,
     };
   }, [data]);
 
@@ -104,10 +117,11 @@ export default function AdminNetworkPage() {
     // Optimistic + background: the change applies in place and the PATCH fires
     // without reloading the page. A status change drops the match out of the
     // 'new' worklist immediately and decrements its company's fresh count.
-    const match = data?.fresh.find((m) => m.id === matchId);
+    const match = data?.fresh.find((m) => m.id === matchId || matchIdsFor(m).includes(matchId));
+    const affectedIds = new Set(match ? matchIdsFor(match) : [matchId]);
     setData((d) => (d ? {
       ...d,
-      fresh: d.fresh.filter((m) => m.id !== matchId),
+      fresh: d.fresh.filter((m) => !overlapsMatchIds(m, affectedIds)),
       companies: match
         ? d.companies.map((c) => (c.id === match.company_id ? { ...c, fresh_count: Math.max(0, c.fresh_count - 1) } : c))
         : d.companies,
@@ -136,12 +150,12 @@ export default function AdminNetworkPage() {
     const idSet = new Set(matchIds);
     // Optimistic: drop the whole bundle in place and decrement each company's
     // fresh count by how many of its matches we just moved off the worklist.
-    const affected = (data?.fresh ?? []).filter((m) => idSet.has(m.id));
+    const affected = (data?.fresh ?? []).filter((m) => overlapsMatchIds(m, idSet));
     const decByCompany = new Map<number, number>();
     for (const m of affected) decByCompany.set(m.company_id, (decByCompany.get(m.company_id) ?? 0) + 1);
     setData((d) => (d ? {
       ...d,
-      fresh: d.fresh.filter((m) => !idSet.has(m.id)),
+      fresh: d.fresh.filter((m) => !overlapsMatchIds(m, idSet)),
       companies: d.companies.map((c) => decByCompany.has(c.id)
         ? { ...c, fresh_count: Math.max(0, c.fresh_count - (decByCompany.get(c.id) ?? 0)) }
         : c),
@@ -238,7 +252,7 @@ export default function AdminNetworkPage() {
           <h1 className={styles.pageTitle}>Bizdev match radar</h1>
           <p className={styles.pageSub}>
             Companies from your network, auto-matched against live tenders every couple of days.
-            Fresh high-fit matches surface here for outreach — by default only those closing 10+ days
+            Fresh high-fit opportunities surface here for outreach — by default only those closing 10+ days
             out, so there&rsquo;s runway to reach out. Use <em>Min lead time</em> to widen or narrow that.
           </p>
         </div>
@@ -283,8 +297,9 @@ export default function AdminNetworkPage() {
           <div className={styles.heroStatValue}>{stats.active}</div>
         </div>
         <div className={styles.heroStat}>
-          <div className={styles.heroStatLabel}>Fresh matches</div>
+          <div className={styles.heroStatLabel}>Fresh opportunities</div>
           <div className={styles.heroStatValue}>{stats.fresh}</div>
+          <div className={styles.heroStatMeta}>{stats.foldedCrawlerRows} crawler copies folded</div>
         </div>
         <div className={styles.heroStat}>
           <div className={styles.heroStatLabel}>Companies with fresh</div>

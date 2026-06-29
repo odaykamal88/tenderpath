@@ -127,6 +127,8 @@ export async function initializeDatabase() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+  await sql`ALTER TABLE tenders ADD COLUMN IF NOT EXISTS dedup_key TEXT`;
+  await sql`CREATE INDEX IF NOT EXISTS tenders_dedup_key_open_idx ON tenders (dedup_key) WHERE status = 'open'`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS grants (

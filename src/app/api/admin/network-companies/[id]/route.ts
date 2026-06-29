@@ -47,19 +47,67 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   if (!companyRows.length) return NextResponse.json({ error: "Company not found" }, { status: 404 });
 
   const matches = await sql`
-    SELECT
-      m.id, m.tender_id, m.score, m.structured_reasons, m.match_reasons, m.status, m.dismiss_reason,
-      m.first_seen_at, m.last_scored_at, m.updated_at,
-      t.title AS tender_title, t.agency AS tender_agency, t.country AS tender_country,
-      t.sector AS tender_sector, t.deadline AS tender_deadline,
-      t.estimated_value AS tender_value, t.source_url AS tender_source_url,
-      t.reference_id AS tender_reference, t.opportunity_type AS tender_type
-    FROM network_company_matches m
-    JOIN tenders t ON t.id = m.tender_id
-    WHERE m.network_company_id = ${id}
-      AND t.status = 'open' AND COALESCE(t.has_broken_link, false) = false
-      AND t.deadline >= CURRENT_DATE
-    ORDER BY t.deadline ASC NULLS LAST, m.score DESC
+    WITH match_rows AS (
+      SELECT
+        m.id, m.tender_id, m.score, m.structured_reasons, m.match_reasons, m.status, m.dismiss_reason,
+        m.first_seen_at, m.last_scored_at, m.updated_at,
+        t.title AS tender_title, t.agency AS tender_agency, t.country AS tender_country,
+        t.sector AS tender_sector, t.deadline AS tender_deadline,
+        t.estimated_value AS tender_value, t.source_url AS tender_source_url,
+        t.source_name AS tender_source_name,
+        t.reference_id AS tender_reference, t.opportunity_type AS tender_type,
+        LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.title, '')),  '[^a-z0-9]+', ' ', 'g')), 120) AS title_key,
+        LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.agency, '')), '[^a-z0-9]+', ' ', 'g')), 120) AS agency_key,
+        t.deadline::date AS deadline_day
+      FROM network_company_matches m
+      JOIN tenders t ON t.id = m.tender_id
+      WHERE m.network_company_id = ${id}
+        AND t.status = 'open' AND COALESCE(t.has_broken_link, false) = false
+        AND t.deadline >= CURRENT_DATE
+    ),
+    opportunity_groups AS (
+      SELECT
+        title_key, agency_key, deadline_day,
+        COUNT(*)::int AS duplicate_count,
+        ARRAY_AGG(id ORDER BY score DESC, id DESC) AS duplicate_match_ids,
+        COALESCE(ARRAY_AGG(DISTINCT tender_source_name) FILTER (WHERE tender_source_name IS NOT NULL AND tender_source_name <> ''), '{}'::text[]) AS source_names
+      FROM match_rows
+      GROUP BY title_key, agency_key, deadline_day
+    ),
+    ranked AS (
+      SELECT
+        r.*,
+        g.duplicate_count,
+        g.duplicate_match_ids,
+        g.source_names,
+        ROW_NUMBER() OVER (
+          PARTITION BY r.title_key, r.agency_key, r.deadline_day
+          ORDER BY
+            CASE r.status
+              WHEN 'paid' THEN 100
+              WHEN 'booked' THEN 90
+              WHEN 'replied' THEN 80
+              WHEN 'contacted' THEN 70
+              WHEN 'won' THEN 60
+              WHEN 'lost' THEN 55
+              WHEN 'not_relevant' THEN 50
+              WHEN 'dismissed' THEN 45
+              WHEN 'seen' THEN 20
+              WHEN 'new' THEN 10
+              ELSE 0
+            END DESC,
+            r.score DESC,
+            r.id DESC
+        ) AS rn
+      FROM match_rows r
+      JOIN opportunity_groups g
+        ON g.title_key = r.title_key
+       AND g.agency_key = r.agency_key
+       AND g.deadline_day IS NOT DISTINCT FROM r.deadline_day
+    )
+    SELECT * FROM ranked
+    WHERE rn = 1
+    ORDER BY tender_deadline ASC NULLS LAST, score DESC
   `;
 
   return NextResponse.json({ company: companyRows[0], matches });

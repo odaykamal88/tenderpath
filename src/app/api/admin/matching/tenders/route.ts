@@ -23,10 +23,18 @@ type TenderRow = {
   created_at: string;
   updated_at: string | null;
   match_count: number | string | null;
+  group_match_count: number | string | null;
+  copy_count: number | string | null;
+  source_names: string[] | null;
+  reference_ids: string[] | null;
 };
 
 function toInt(v: number | string | null | undefined): number {
   return Number(v ?? 0);
+}
+
+function toStringArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.map((x) => String(x)).filter(Boolean) : [];
 }
 
 function parseList(v: string | null | undefined): string[] {
@@ -137,18 +145,55 @@ export async function GET(request: Request) {
           OR (t.deadline IS NOT NULL AND t.deadline >= CURRENT_DATE + (${minDays})::int)
         )
     ),
+    keyed AS (
+      SELECT
+        filtered.*,
+        LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(title, '')),  '[^a-z0-9]+', ' ', 'g')), 120) AS key_title,
+        CASE
+          WHEN LOWER(COALESCE(agency, '')) LIKE '%undp%' OR LOWER(COALESCE(agency, '')) LIKE '%united nations development programme%' THEN 'un development programme undp'
+          WHEN LOWER(COALESCE(agency, '')) LIKE '%unicef%' THEN 'un children fund unicef'
+          WHEN LOWER(COALESCE(agency, '')) LIKE '%unhcr%' OR LOWER(COALESCE(agency, '')) LIKE '%high commissioner for refugees%' THEN 'un refugee agency unhcr'
+          WHEN LOWER(COALESCE(agency, '')) LIKE '%unops%' THEN 'unops'
+          WHEN LOWER(COALESCE(agency, '')) LIKE '%unrwa%' THEN 'unrwa'
+          WHEN LOWER(COALESCE(agency, '')) LIKE '%world bank%' THEN 'world bank'
+          WHEN LOWER(COALESCE(agency, '')) LIKE '%asian development bank%' OR LOWER(COALESCE(agency, '')) = 'adb' THEN 'asian development bank adb'
+          WHEN LOWER(COALESCE(agency, '')) LIKE '%african development bank%' OR LOWER(COALESCE(agency, '')) = 'afdb' THEN 'african development bank afdb'
+          WHEN LOWER(COALESCE(agency, '')) LIKE '%ebrd%' OR LOWER(COALESCE(agency, '')) LIKE '%european bank for reconstruction%' THEN 'ebrd'
+          WHEN LOWER(COALESCE(agency, '')) LIKE '%isdb%' OR LOWER(COALESCE(agency, '')) LIKE '%islamic development bank%' THEN 'isdb'
+          WHEN LOWER(COALESCE(agency, '')) LIKE '%usaid%' THEN 'usaid'
+          WHEN LOWER(COALESCE(agency, '')) LIKE '%giz%' THEN 'giz'
+          WHEN LOWER(COALESCE(agency, '')) LIKE '%jica%' THEN 'jica'
+          ELSE LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(agency, '')), '[^a-z0-9]+', ' ', 'g')), 120)
+        END AS key_agency,
+        COALESCE(deadline::date::text, '') AS key_deadline
+      FROM filtered
+    ),
+    groups AS (
+      SELECT
+        key_title, key_agency, key_deadline,
+        COUNT(*)::int AS copy_count,
+        COALESCE(SUM(match_count), 0)::int AS group_match_count,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT source_name ORDER BY source_name), NULL) AS source_names,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT reference_id ORDER BY reference_id), NULL) AS reference_ids
+      FROM keyed
+      GROUP BY key_title, key_agency, key_deadline
+    ),
     deduped AS (
       SELECT DISTINCT ON (
-        LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(title, '')),  '[^a-z0-9]+', ' ', 'g')), 120),
-        LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(agency, '')), '[^a-z0-9]+', ' ', 'g')), 120),
-        deadline::date
-      ) *
-      FROM filtered
+        k.key_title, k.key_agency, k.key_deadline
+      )
+        k.id, k.title, k.agency, k.country, k.sector, k.deadline,
+        k.estimated_value, k.source_url, k.source_name, k.opportunity_type,
+        k.reference_id, k.created_at, k.updated_at, k.match_count,
+        g.group_match_count, g.copy_count, g.source_names, g.reference_ids
+      FROM keyed k
+      JOIN groups g
+        ON g.key_title = k.key_title
+       AND g.key_agency = k.key_agency
+       AND g.key_deadline = k.key_deadline
       ORDER BY
-        LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(title, '')),  '[^a-z0-9]+', ' ', 'g')), 120),
-        LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(agency, '')), '[^a-z0-9]+', ' ', 'g')), 120),
-        deadline::date,
-        match_count DESC, updated_at DESC NULLS LAST, id DESC
+        k.key_title, k.key_agency, k.key_deadline,
+        k.match_count DESC, k.updated_at DESC NULLS LAST, k.id DESC
     )
     SELECT * FROM deduped
     ORDER BY deadline ASC NULLS LAST, created_at DESC
@@ -171,7 +216,10 @@ export async function GET(request: Request) {
       reference_id: r.reference_id,
       created_at: r.created_at,
       updated_at: r.updated_at,
-      match_count: toInt(r.match_count),
+      match_count: toInt(r.group_match_count ?? r.match_count),
+      copy_count: Math.max(1, toInt(r.copy_count)),
+      source_names: toStringArray(r.source_names),
+      reference_ids: toStringArray(r.reference_ids),
     })),
     total: rows.length,
     filters: {
