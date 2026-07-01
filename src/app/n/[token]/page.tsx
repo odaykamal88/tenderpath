@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { loadProspectBriefing, type ProspectBriefing, type BriefingTender } from "@/lib/network/briefing";
+import { annotateProspectTender, type ProspectTenderSignals } from "@/lib/network/prospect-signals";
+import type { ContestabilityBand } from "@/lib/tenders/contestability";
 
 // Read-only, request-time render (DB-backed, deadlines are time-sensitive).
 export const dynamic = "force-dynamic";
@@ -69,13 +71,50 @@ function chip(text: string, bg: string, fg: string) {
   );
 }
 
+// Contestability chip colours. Orthogonal to fit — this reads the practical /
+// political layer, never the merit score. Conservative palette: Open reassures,
+// Constrained cautions, Mixed stays neutral (the honest default).
+const BAND_STYLE: Record<ContestabilityBand, { bg: string; fg: string; label: string }> = {
+  Open: { bg: "rgba(22,101,52,0.10)", fg: "#166534", label: "Open field" },
+  Mixed: { bg: "rgba(15,22,32,0.06)", fg: INK, label: "Mixed field" },
+  Constrained: { bg: "rgba(180,83,9,0.12)", fg: "#9a3412", label: "Constrained field" },
+};
+
+/** One honest, prospect-safe registration line — only when it's actionable. */
+function registrationNote(sig: ProspectTenderSignals): { text: string; caution: boolean } | null {
+  const c = sig.compliance;
+  if (c.registrationRisk === "very-tight") {
+    return { text: `Tight window — start ${c.portalName} registration now (${c.leadTimeLabel}).`, caution: true };
+  }
+  if (c.registrationRisk === "tight") {
+    return { text: `Leave time for ${c.portalName} registration (${c.leadTimeLabel}).`, caution: false };
+  }
+  if (c.isUngm) {
+    return { text: "Submitted via UNGM — a free UNGM Basic account is usually enough to bid.", caution: false };
+  }
+  return null;
+}
+
 function TenderCard({ t }: { t: BriefingTender }) {
   const dl = deadlinePhrase(t.deadline);
   const where = [t.agency, t.country, t.sector].filter(Boolean).join(" · ");
+  // Pure, no-side-effect annotation (same function the admin artifact uses). The
+  // prospect only ever sees the qualitative band, never the raw match score.
+  const sig = annotateProspectTender({
+    title: t.title,
+    agency: t.agency,
+    deadline: t.deadline,
+    isUngm: t.isUngm,
+    fit: { kind: "band", band: t.fitBand },
+  });
+  const band = BAND_STYLE[sig.contestability.band];
+  const reg = registrationNote(sig);
   return (
     <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, background: CARD, padding: "16px 18px" }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 6 }}>
         {t.isUngm && chip("via UNGM", "rgba(15,22,32,0.06)", INK)}
+        {chip(t.fitBand, "rgba(156,107,31,0.12)", "#7a5214")}
+        {chip(band.label, band.bg, band.fg)}
         <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 600, color: dl.urgent ? "#b3261e" : MUTED }}>{dl.text}</span>
       </div>
       <div style={{ fontSize: 16, fontWeight: 650, color: INK, lineHeight: 1.35 }}>
@@ -85,6 +124,15 @@ function TenderCard({ t }: { t: BriefingTender }) {
       </div>
       {where && <div style={{ fontSize: 13, color: MUTED, marginTop: 4 }}>{where}</div>}
       {t.value && <div style={{ fontSize: 13, color: INK, marginTop: 4 }}>{`Estimated value: ${t.value}`}</div>}
+
+      {/* Insider read — the augmentation value: a quick, honest take, not a full adjudication. */}
+      <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", gap: 5 }}>
+        <div style={{ fontSize: 13, fontWeight: 650, color: INK }}>{sig.verdict.headline}</div>
+        <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.5 }}>{sig.contestability.line}</div>
+        {reg && (
+          <div style={{ fontSize: 12.5, color: reg.caution ? "#9a3412" : MUTED, lineHeight: 1.5 }}>{reg.text}</div>
+        )}
+      </div>
     </div>
   );
 }
@@ -116,6 +164,12 @@ function Briefing({ b }: { b: ProspectBriefing }) {
               ? `Tenders worth checking (${b.tenders.length})`
               : "Live tenders"}
           </h2>
+          {b.tenders.length > 0 && (
+            <p style={{ fontSize: 13, color: MUTED, margin: "6px 0 0", lineHeight: 1.5 }}>
+              Each has a quick read: how well it fits, how open the field looks, and what to do about registration.
+              These are fast takes to help you triage — not a full bid assessment.
+            </p>
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
             {b.tenders.map((t) => <TenderCard key={t.id} t={t} />)}
           </div>

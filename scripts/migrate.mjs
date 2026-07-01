@@ -622,6 +622,40 @@ CREATE TABLE IF NOT EXISTS network_external_prospects (
 CREATE INDEX IF NOT EXISTS network_external_prospects_tender_idx ON network_external_prospects (tender_id, status, score DESC);
 CREATE INDEX IF NOT EXISTS network_external_prospects_network_company_idx ON network_external_prospects (network_company_id) WHERE network_company_id IS NOT NULL;
 
+-- Calibration corpus (P0.2): append-only labeled row per match/artifact/submission, owner-scoped to a customer OR a network prospect. Distinct from feedback_records (curated scoring inputs); this logs everything and never feeds the scoring engine. Self-heals at runtime via ensureCalibrationLogSchema.
+CREATE TABLE IF NOT EXISTS calibration_log (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  network_company_id INTEGER REFERENCES network_companies(id) ON DELETE CASCADE,
+  source TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  tender_id INTEGER REFERENCES tenders(id) ON DELETE SET NULL,
+  network_match_id INTEGER,
+  work_order_id INTEGER,
+  submission_order_id INTEGER,
+  agency TEXT,
+  tender_type TEXT,
+  value_band TEXT,
+  country TEXT,
+  system_output JSONB NOT NULL DEFAULT '{}'::jsonb,
+  vendor_action TEXT,
+  review_disqualifier_caught BOOLEAN,
+  founder_fit_reasoning TEXT,
+  outcome_state TEXT,
+  outcome_decided_at TIMESTAMPTZ,
+  outcome_notes TEXT,
+  dedup_key TEXT NOT NULL,
+  captured_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT calibration_log_owner_chk CHECK (user_id IS NOT NULL OR network_company_id IS NOT NULL),
+  CONSTRAINT calibration_log_dedup_unique UNIQUE (dedup_key)
+);
+CREATE INDEX IF NOT EXISTS calibration_log_user_idx ON calibration_log (user_id, captured_at DESC) WHERE user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS calibration_log_company_idx ON calibration_log (network_company_id, captured_at DESC) WHERE network_company_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS calibration_log_tender_idx ON calibration_log (tender_id) WHERE tender_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS calibration_log_outcome_idx ON calibration_log (outcome_state) WHERE outcome_state IS NOT NULL;
+CREATE INDEX IF NOT EXISTS calibration_log_source_idx ON calibration_log (source, event_type, captured_at DESC);
+
 -- Bot (Telegram/WhatsApp) channel-agnostic session store. Replaces telegram_sessions.
 CREATE TABLE IF NOT EXISTS bot_sessions (
   channel TEXT NOT NULL,

@@ -217,3 +217,28 @@ Also read product strategy when working on flow, monetization, or dashboard dire
 - Preserve workflow continuity from assessment → dashboard → service order → payment → fulfillment.
 - Prefer clarity, trust, and actionability over completeness or visual flourish.
 - Avoid generic SaaS patterns that do not map to procurement reality.
+
+## First-Revenue Sprint — Durable Constraints (2026-07-01)
+
+Source: `TenderPath-First-Revenue-Build-Sprint.md` + `tenderpath-sprint1-message-spine.md` (founder hand-off, 2026-07-01). These supersede the earlier 4-sprint GTM calendar. Founder is running outbound to ~20 matched-tender prospects; the whole sprint exists to make a single prospect go from **interested → paid + delivered + logged** with no un-repeatable manual workaround. Prices are pilot variables — let n=10 decide before restructuring, but do not leave anyone blocked for lack of a number.
+
+### SKUs (durable)
+- **Subscription = the retention anchor.** $27/mo: matching + bid/no-bid + **1 bundled EOI/mo**. $49/mo: adds contestability depth + more EOIs. **EOI is a subscription feature now, not a standalone fee.** The metric that matters is month-2 active (retention), not signup.
+- **Proposal review = the MOAT SKU (build first, cheapest to deliver).** Free shallow compliance-gap check (top-of-funnel wedge) → paid deep adjudication (rubric score + panel-weighting + contestability) at **~$150** for services RFP. Most-open price — treat as a pilot variable.
+- **Proposal drafting = the cash SKU (fast-follow, NOT P0).** RFQ/ITB **$250** · RFP **$400**. Services/RFP lane. Do not let drafting jump the queue ahead of review + subscription.
+
+### Non-negotiables (durable)
+- **Cross-tenant isolation before any customer data.** Customers compete for the same tenders — they are competitors. Every read of a customer object (match, draft, profile, work order, submission, proposal package) must verify it belongs to the caller. This is a hard gate: nothing customer-facing ships until it holds.
+- **Calibration logging on EVERY match/submission.** Un-logged submissions = permanently lost calibration data. Capture: tender metadata (agency · type EOI/RFQ/ITB/RFP · value band · country); system output (compliance flags · merit score · contestability band · bid/no-bid rec); vendor action (bid / didn't); review disqualifier-caught flag; founder fit-reasoning; outcome hook (shortlisted/won/lost/DQ — resolved later).
+- **Payment friction matches ticket size.** Low-ticket (subscription, ~$150 review) must be payable via card/USDT/Whish and must **never** require a wire. Wire is acceptable only for large agency/roster tickets.
+
+### Positioning (durable)
+- **Augmentation, never replacement.** No copy/UX may imply replacing in-house BD staff. Two ICP reader types: **principal-with-BD** AND **solo operator** — never assume a "team" exists. The phrase that holds both: "so your expert judgment goes where it counts."
+- **No-bid is a feature.** Reads must be willing to return a discouraging / Constrained result. The review SKU's headline value is a question, not a feature: *"Should we spend ~$15k + 60 hours preparing this bid?"* — the go/no-go, not the draft.
+- **Three procurement systems** — official (published tender + criteria) / practical (budgets shift, scope evolves, waivers) / political (relationships, incumbents, donor preference, cancellations). We model how procurement *behaves* to **inform**, never to facilitate anything improper.
+- **Contestability band (Open / Mixed / Constrained)** surfaces the practical + political layers. It is **orthogonal to the merit score — never blended in**. Thin evidence defaults to **Mixed**; never surface **Constrained** without basis (a false "this is captured" read on a clean tender is the one error that destroys insider trust).
+- **Evaluator-side calibration** — *how the panel scores* — explicitly NOT "your statistical odds from past awards" (that is BidNexus's inferred lane).
+
+### Public hero read (durable)
+- Returns a CONSERVATIVE taste only: scoring band + contestability band. No auth; rate-limited; full contestability detection stays gated behind signup.
+- Same thin-evidence→Mixed and never-Constrained-without-basis rules as above.

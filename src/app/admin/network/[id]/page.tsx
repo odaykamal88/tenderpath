@@ -164,6 +164,26 @@ export default function AdminNetworkCompanyPage() {
     }
   }
 
+  async function generateArtifact() {
+    setBusy(true);
+    setToast(null);
+    try {
+      const res = await fetch(`/api/admin/network-companies/${id}/artifact`, { method: "POST", headers: authHeaders() });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+      const count = body.artifact?.tenders?.length ?? 0;
+      const logged = body.artifact?.logged ?? 0;
+      setToast({
+        ok: true,
+        msg: `Artifact ready — ${count} opportunit${count === 1 ? "y" : "ies"}, ${logged} logged to calibration. The prospect sees the full read on the share link below.`,
+      });
+    } catch (err) {
+      setToast({ ok: false, msg: err instanceof Error ? err.message : "Artifact generation failed" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function deleteCompany() {
     if (typeof window !== "undefined" && !window.confirm(`Delete "${c?.name ?? "this company"}" and all its matches? This cannot be undone.`)) return;
     setBusy(true);
@@ -284,6 +304,7 @@ export default function AdminNetworkCompanyPage() {
           {c?.website && <a href={c.website} target="_blank" rel="noreferrer" className={styles.btnGhost}>Website ↗</a>}
           <button type="button" className={styles.btnGhost} onClick={() => setEditing((s) => !s)}>{editing ? "Close edit" : "Edit"}</button>
           <button type="button" className={styles.btnPrimary} onClick={rematch} disabled={busy}>{busy ? "Working…" : "Re-match now"}</button>
+          <button type="button" className={styles.btnGhost} onClick={generateArtifact} disabled={busy}>{busy ? "Working…" : "Generate & log artifact"}</button>
           <button type="button" className={styles.btnGhost} onClick={deleteCompany} disabled={busy} style={{ color: "var(--color-red)" }}>Delete</button>
         </div>
       </header>
