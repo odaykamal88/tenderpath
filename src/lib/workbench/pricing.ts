@@ -131,6 +131,14 @@ export const TRIAL_DAYS = 30;
  *  src/lib/bid-no-bid-usage.ts and surfaced in the Paste modal + sidebar hint. */
 export const BID_NO_BID_FREE_MONTHLY = 3;
 
+/** Bundled EOIs a subscriber gets per calendar month (P1.2 — "EOI is a
+ *  subscription feature, not a standalone fee"). One number for now: the founder
+ *  hand-off says NOT to restructure the $27/$49 relationship until n=10, so both
+ *  the monthly and annual cycles of the one subscription bundle the same count.
+ *  A future per-tier split is a one-line change here. Enforced in
+ *  src/lib/subscription/eoi-quota.ts. */
+export const SUB_BUNDLED_EOI_PER_MONTH = 1;
+
 /** The three features the Pro subscription unlocks (the rest of the dashboard is
  *  free). Used for copy + gating labels so the list stays single-sourced. */
 export const PRO_FEATURES = [

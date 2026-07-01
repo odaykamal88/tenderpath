@@ -409,6 +409,15 @@ CREATE TABLE IF NOT EXISTS bid_no_bid_usage (
 CREATE INDEX IF NOT EXISTS idx_bid_no_bid_usage_user_month
   ON bid_no_bid_usage (user_id, created_at);
 
+-- Bundled-EOI monthly quota (P1.2): one append-only row per subscriber EOI claimed. Self-heals via ensureEoiBundledUsageSchema. Same shape/pattern as bid_no_bid_usage.
+CREATE TABLE IF NOT EXISTS eoi_bundled_usage (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_eoi_bundled_usage_user_month
+  ON eoi_bundled_usage (user_id, created_at);
+
 CREATE TABLE IF NOT EXISTS weekly_digest_logs (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,

@@ -32,6 +32,7 @@ import {
   upsertPendingOrder,
 } from "@/lib/submissions/store";
 import { buildNudges } from "@/lib/submissions/nudges";
+import { canUseBundledEoi, recordBundledEoiUse } from "@/lib/subscription/eoi-quota";
 
 export const dynamic = "force-dynamic";
 
@@ -170,6 +171,29 @@ export async function POST(request: Request) {
         work_order_id: workOrderId,
         free: true,
       });
+    }
+
+    // Subscription bundled EOI (P1.2): a real subscriber's monthly EOI is a
+    // subscription feature, not a standalone fee. Fulfil it free via the SAME $0
+    // seam the beta path uses, and record the monthly use. Non-EOI formats and an
+    // exhausted quota fall through to the normal paid checkout below.
+    if (type === "EOI") {
+      const bundled = await canUseBundledEoi(user);
+      if (bundled.allowed) {
+        await sql`
+          UPDATE work_orders
+          SET payment_status = 'paid', amount_cents = 0, currency = 'usd'
+          WHERE id = ${workOrderId}
+        `;
+        const paidOrder = await markSubmissionOrderPaidByWorkOrder(workOrderId, 0, "usd");
+        const usage = await recordBundledEoiUse(user);
+        return NextResponse.json({
+          order: paidOrder ?? order,
+          work_order_id: workOrderId,
+          bundled: true,
+          bundled_eoi: usage,
+        });
+      }
     }
 
     const payParams = new URLSearchParams({
