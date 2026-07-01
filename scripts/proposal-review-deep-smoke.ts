@@ -8,7 +8,7 @@
  * exposure reflects double-weighting; a clean score clears.
  */
 
-import { buildReviewOutputFromScore } from "../src/lib/proposal-package/review-deep";
+import { buildReviewOutputFromScore, sanitizeRewrites } from "../src/lib/proposal-package/review-deep";
 import type { TenderRubric, ScoreResult, Disqualifier, SourceRef } from "../src/lib/proposal-package/scoring-engine";
 import type { CallRef, ApplicantRef, ComplianceContestability } from "../src/lib/proposal-package/review-types";
 
@@ -112,6 +112,24 @@ console.log("clean case — nothing triggered, decent scores");
   check("no BLOCK fixes when nothing triggered", !r.priority_fixes.some((f) => f.severity === "BLOCK"));
   check("open field + clears → go", r.go_no_go.lean === "go");
   check("revision carried (2)", r.revision === 2 && r.ref_tag.endsWith("-002"));
+}
+
+console.log("rewrites sanitizer");
+{
+  const validRanks = new Set([1, 2, 3]);
+  const raw = [
+    { section_id: "1.1", current_text: "old", suggested_text: "new drop-in text", addresses_fixes: [1, 99], rationale: "sharper" },
+    { section_id: "1.2", suggested_text: "", addresses_fixes: [2] }, // no text → dropped
+    { suggested_text: "an addition", addresses_fixes: [7] }, // invalid rank filtered; section_id defaulted
+    { suggested_text: "extra 1" },
+    { suggested_text: "extra 2" }, // beyond cap of 3 across valid ones
+  ];
+  const out = sanitizeRewrites(raw, validRanks);
+  check("drops rewrites without suggested_text", !out.some((r) => r.suggested_text === ""));
+  check("caps at 3", out.length <= 3);
+  check("filters addresses_fixes to valid ranks", out[0]?.addresses_fixes.every((n) => validRanks.has(n)) === true && out[0]?.addresses_fixes.includes(99) === false);
+  check("defaults missing section_id to 'draft'", out.some((r) => r.section_id === "draft"));
+  check("non-array input → []", sanitizeRewrites(null, validRanks).length === 0);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

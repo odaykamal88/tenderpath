@@ -46,6 +46,7 @@ import type {
   ComplianceContestability,
   EvaluationRubric,
   RubricSection,
+  Rewrite,
 } from "./review-types";
 
 const AGENT_VERSION = "review-deep-1";
@@ -348,6 +349,91 @@ Return ONLY JSON: { "sections": [ { "lotId": "...", "criterionId": "...", "conte
   }
 }
 
+const SONNET_MODEL = "claude-sonnet-4-6";
+
+/**
+ * PURE: validate + coerce raw LLM rewrites, dropping any without replacement text
+ * and any addresses_fixes that don't map to a real priority-fix rank. Caps at 3.
+ */
+export function sanitizeRewrites(raw: unknown, validRanks: Set<number>): Rewrite[] {
+  const arr = Array.isArray(raw) ? raw : [];
+  const out: Rewrite[] = [];
+  for (const item of arr) {
+    if (!item || typeof item !== "object") continue;
+    const r = item as Record<string, unknown>;
+    const suggested = typeof r.suggested_text === "string" ? r.suggested_text.trim() : "";
+    if (!suggested) continue; // no drop-in text → not a rewrite (never fabricate)
+    const addresses = Array.isArray(r.addresses_fixes)
+      ? r.addresses_fixes.map((n) => Number(n)).filter((n) => Number.isInteger(n) && validRanks.has(n))
+      : [];
+    out.push({
+      section_id: typeof r.section_id === "string" && r.section_id.trim() ? r.section_id.trim() : "draft",
+      current_text: typeof r.current_text === "string" ? r.current_text : "",
+      suggested_text: suggested,
+      addresses_fixes: addresses,
+      rationale: typeof r.rationale === "string" ? r.rationale : "",
+    });
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+/**
+ * Drop-in editorial for the highest-impact fixes (Sonnet — this is the paid
+ * tier's teeth: "drop-in over directional"). Grounds each rewrite in the
+ * applicant's own draft where the section exists. Degrades honestly to [] on
+ * missing key / parse failure — never fabricates editorial the model didn't
+ * produce.
+ */
+export async function generateRewrites(sections: DraftSection[], fixes: PriorityFix[]): Promise<Rewrite[]> {
+  const targets = fixes.slice(0, 3);
+  if (targets.length === 0) return [];
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return [];
+
+  const validRanks = new Set(targets.map((f) => f.rank));
+  const contentByCriterion = new Map(sections.map((s) => [s.criterionId, s.content]));
+  const fixBlocks = targets
+    .map((f) => {
+      const excerpt = f.addresses_criteria
+        .map((cid) => contentByCriterion.get(cid))
+        .filter(Boolean)
+        .join("\n")
+        .slice(0, 2000);
+      return `Fix #${f.rank} [${f.severity}] ${f.issue}\nAction: ${f.fix}\nRelevant draft excerpt:\n${excerpt || "(this criterion is not addressed in the draft — write a concise addition)"}`;
+    })
+    .join("\n\n---\n\n");
+
+  try {
+    const client = new Anthropic({ apiKey: key, maxRetries: 3, timeout: 90_000 });
+    const response = await client.messages.create({
+      model: SONNET_MODEL,
+      max_tokens: 3000,
+      temperature: 0.3,
+      messages: [
+        {
+          role: "user",
+          content: `You are a senior proposal editor. For the highest-impact fixes below, write DROP-IN replacement text
+the applicant can paste straight into their proposal. Provide the text itself — do not describe what good text would
+look like. Ground each rewrite in the applicant's own draft where the section exists; where it is absent, write a
+concise addition. Stay specific to this call; no generic "strategic alignment" filler.
+
+${fixBlocks}
+
+Return ONLY JSON: { "rewrites": [ { "section_id": "which part of the draft", "current_text": "quoted from the draft, or empty for an addition", "suggested_text": "the drop-in replacement text", "addresses_fixes": [fix rank numbers], "rationale": "one line on what changed and why" } ] }  (2-3 rewrites maximum).`,
+        },
+      ],
+    });
+    const text = response.content[0]?.type === "text" ? response.content[0].text : "";
+    const fenced = text.match(/```(?:json)?\s*\n([\s\S]*?)\n```/i);
+    const parsed = JSON.parse((fenced ? fenced[1] : text).trim()) as { rewrites?: unknown };
+    return sanitizeRewrites(parsed.rewrites, validRanks);
+  } catch (err) {
+    console.error("[proposal-review:rewrites_failed]", { error: err instanceof Error ? err.message : String(err) });
+    return [];
+  }
+}
+
 function guessMethodology(opportunityType: string | null | undefined): Methodology {
   const t = (opportunityType ?? "").toLowerCase();
   if (/\bitb\b|invitation to bid|\brfq\b|request for quotation|goods|supply/.test(t)) return "lowest_compliant";
@@ -411,7 +497,7 @@ export async function generateDeepReview(input: GenerateDeepReviewInput): Promis
     opportunityType: tender.opportunity_type,
   });
 
-  return buildReviewOutputFromScore({
+  const review = buildReviewOutputFromScore({
     rubric,
     score,
     call: {
@@ -431,4 +517,9 @@ export async function generateDeepReview(input: GenerateDeepReviewInput): Promis
     workOrderId: input.workOrderId ?? 0,
     revision: input.revision ?? 1,
   });
+
+  // Drop-in editorial for the top fixes (the paid tier's teeth). Best-effort:
+  // an empty rewrites list is honest, never a blocker.
+  review.rewrites = await generateRewrites(sections, review.priority_fixes);
+  return review;
 }
