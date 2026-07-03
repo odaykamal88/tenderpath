@@ -162,6 +162,18 @@ export default function Pricing() {
                 </div>
               ))}
             </div>
+            {/* Proof of output before paying — answers the "I've never seen your work"
+                objection. This card only renders on commerce-on surfaces (the landing
+                Pricing section is unmounted while COMMERCE_ENABLED is false), so the
+                sample page's prices stay in step with what's shown here. */}
+            <a
+              href="/samples/sample-proposals.html"
+              target="_blank"
+              rel="noopener"
+              style={{ display: "inline-block", alignSelf: "flex-start", marginTop: 16, fontFamily: LF.mono, fontSize: 10.5, letterSpacing: "0.1em", textTransform: "uppercase", color: LC.accent2, textDecoration: "none", borderBottom: "1px solid rgba(200,151,62,0.45)" }}
+            >
+              See a redacted sample of each format ↗
+            </a>
             {/* The first proposal submission is genuinely free for trial users:
                 the credit is granted on trial start and consumed at the first
                 proposal commission (src/lib/free-submission.ts + the proposals

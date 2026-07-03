@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- noindex while the product runs in free-during-beta (COMMERCE_ENABLED=false): this
+     page shows per-submission prices and is only linked from commerce-on surfaces.
+     Remove this line when commerce is enabled and the page should be discoverable. -->
+<meta name="robots" content="noindex">
+<title>TenderPath — Sample Drafts, All Four Formats</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  doc-page:not(:defined) { visibility: hidden; }
+  :root {
+    --ink: #0f1620; --ink2: #2b3543; --paper: #f6f3ec; --paper2: #ece6d5;
+    --rule: #d8d1bf; --rule-soft: #e4ddcb; --mute: #6b6557; --faint: #8c8676;
+    --gold: #9c6b1f; --gold2: #c8973e; --pos: #1f6b3d; --warn: #b3691a; --neg: #9c2a2a;
+    --display: "Fraunces", Georgia, serif;
+    --sans: "Inter", system-ui, sans-serif;
+    --mono: "JetBrains Mono", monospace;
+  }
+  body { font-family: var(--sans); color: var(--ink); }
+  h1, h2, h3 { font-family: var(--display); font-weight: 400; letter-spacing: -0.02em; }
+  .mono { font-family: var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
+
+  .eyebrow { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+  .kicker { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mute); }
+
+  /* format section header */
+  .fmt-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin: 44px 0 6px; break-after: avoid; }
+  .fmt-head h2 { font-size: 26px; margin: 0; }
+  .fmt-head .code { font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; color: var(--gold); }
+  .fmt-meta { display: flex; gap: 18px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mute); margin: 10px 0 18px; flex-wrap: wrap; }
+  .fmt-meta strong { color: var(--ink); font-weight: 500; }
+
+  /* the excerpt sheet — a document-within-the-document */
+  .excerpt { border: 1px solid var(--rule); background: #fdfcf9; padding: 34px 38px; margin: 14px 0 10px; box-shadow: 3px 3px 0 var(--paper2); break-inside: avoid; position: relative; }
+  .excerpt::before { content: "EXCERPT · PAGE 1 OF DRAFT"; position: absolute; top: -9px; right: 14px; background: var(--ink); color: var(--paper); font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.14em; padding: 3px 9px; }
+  .excerpt p { font-size: 12.5px; line-height: 1.7; color: var(--ink2); margin: 0 0 12px; }
+  .excerpt .doc-h { font-family: var(--display); font-size: 17px; color: var(--ink); margin: 0 0 4px; }
+  .excerpt .doc-sub { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mute); margin: 0 0 18px; }
+
+  /* redaction bar */
+  .rx { background: var(--ink); color: transparent; border-radius: 1px; padding: 0 2px; user-select: none; }
+
+  /* margin annotation */
+  .note { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0 0; break-inside: avoid; }
+  .note .pin { width: 7px; height: 7px; border-radius: 50%; background: var(--gold); margin-top: 4px; flex-shrink: 0; }
+  .note p { font-size: 11.5px; line-height: 1.55; color: var(--mute); margin: 0; }
+  .note p strong { color: var(--ink); font-weight: 600; }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  th { font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mute); text-align: left; font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--ink); }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--rule-soft); color: var(--ink2); vertical-align: top; }
+  td.num { font-family: var(--mono); font-size: 11px; text-align: right; white-space: nowrap; }
+  tr { break-inside: avoid; }
+
+  .verdict { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+  .v-pass { color: var(--pos); }
+  .v-dev { color: var(--warn); }
+
+  /* deliverables strip */
+  .deliv { display: flex; gap: 0; border: 1px solid var(--rule); margin: 0 0 6px; break-inside: avoid; }
+  .deliv > div { flex: 1; padding: 10px 14px; border-right: 1px solid var(--rule-soft); }
+  .deliv > div:last-child { border-right: 0; }
+  .deliv .dn { font-size: 11.5px; font-weight: 600; color: var(--ink); }
+  .deliv .df { font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; color: var(--faint); text-transform: uppercase; margin-top: 3px; }
+
+  .kills { background: var(--paper); border: 1px solid var(--rule); padding: 14px 18px; margin: 10px 0 0; break-inside: avoid; }
+  .kills .kt { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--neg); margin-bottom: 8px; }
+  .kills ul { margin: 0; padding: 0 0 0 16px; }
+  .kills li { font-size: 11.5px; line-height: 1.65; color: var(--ink2); }
+
+  .closing { background: var(--ink); color: var(--paper); padding: 30px 34px; margin-top: 48px; break-inside: avoid; }
+  .closing h2 { color: var(--paper); font-size: 24px; margin: 8px 0 10px; }
+  .closing p { font-size: 13px; line-height: 1.65; color: #cdc6b3; margin: 0 0 18px; max-width: 560px; }
+  .price-row { display: flex; border-top: 1px solid #26303d; }
+  .price-row > div { flex: 1; padding: 14px 4px 0; border-right: 1px solid #26303d; padding-right: 14px; }
+  .price-row > div + div { padding-left: 14px; }
+  .price-row > div:last-child { border-right: 0; }
+  .price-row .pc { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em; color: var(--gold2); }
+  .price-row .pp { font-family: var(--display); font-size: 22px; margin-top: 4px; }
+  .price-row .pt { font-size: 10.5px; color: #8a94a3; margin-top: 3px; line-height: 1.4; }
+</style>
+</head>
+<body>
+
+<doc-page size="letter" margin="0.7in">
+
+  <div slot="footer" style="display: flex; justify-content: space-between; font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); padding-top: 6px; border-top: 1px solid var(--rule-soft);">
+    <span>TenderPath · Sample work — illustrative</span>
+    <span>tenderpath.me</span>
+  </div>
+
+  <!-- ═══════════ COVER ═══════════ -->
+  <div style="border-bottom: 1px solid var(--ink); padding-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-end;">
+    <div>
+      <span style="font-family: var(--display); font-size: 20px;">TenderPath</span><span style="color: var(--gold); font-family: var(--display); font-size: 20px;"> ·</span>
+    </div>
+    <span class="kicker">Sample work · Before you order</span>
+  </div>
+
+  <h1 style="font-size: 40px; line-height: 1.05; margin: 34px 0 0; max-width: 560px;">This is what a draft looks like when it lands<span style="font-style: italic; color: var(--gold);"> — in under an hour.</span></h1>
+
+  <p style="font-size: 14px; line-height: 1.7; color: var(--ink2); max-width: 580px; margin: 20px 0 0;">
+    One excerpt from each of the four submission formats we draft. Everything below is
+    real working style — the structure, the compliance phrasing, the level of tailoring —
+    with names, figures, and references altered or <span class="rx">redacted like this</span> to
+    protect past clients. Your draft is built the same way, from your own intake and vault.
+  </p>
+
+  <div style="display: flex; gap: 26px; margin-top: 22px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; color: var(--faint); text-transform: uppercase;">
+    <span>Draft in &lt; 1 hr</span><span style="color: var(--rule);">·</span>
+    <span>Unlimited revisions</span><span style="color: var(--rule);">·</span>
+    <span>You approve before anything is submitted</span>
+  </div>
+
+  <!-- ═══════════ §1 EOI ═══════════ -->
+  <div class="fmt-head">
+    <h2><span class="code">§1 · EOI</span> &nbsp;Expression of Interest</h2>
+    <span class="kicker">$149 · Get shortlisted</span>
+  </div>
+  <div class="fmt-meta">
+    <span>Wins on <strong>credibility &amp; eligibility</strong></span>
+    <span>No pricing</span>
+    <span>Your input: <strong>~7 minutes</strong></span>
+  </div>
+
+  <div class="deliv">
+    <div><div class="dn">EOI cover letter</div><div class="df">DOCX + PDF</div></div>
+    <div><div class="dn">Capability statement, tailored</div><div class="df">PDF</div></div>
+    <div><div class="dn">Eligibility annex &amp; declarations</div><div class="df">PDF</div></div>
+  </div>
+
+  <div class="excerpt">
+    <p class="doc-h">Expression of Interest — Emergency Logistics &amp; Last-Mile Distribution Services</p>
+    <p class="doc-sub">Ref: <span class="rx">WFP/KEN/2026/EOI-0000</span> · Submitted via UNGM · <span class="rx">Redacted Company Ltd</span></p>
+    <p>
+      <span class="rx">Redacted Company Ltd</span> is a Kenyan logistics firm operating an owned fleet of
+      14 vehicles (3–28&nbsp;t) with live tracking compliant with <span class="rx">the agency's</span> commodity-movement
+      requirements, and 8,400&nbsp;m² of bonded warehousing in <span class="rx">Nairobi and Garissa</span>. Since 2023
+      we have completed last-mile distribution across the ASAL counties of Garissa, Wajir, Mandera,
+      Turkana and Marsabit — the precise operating geography of this programme — maintaining a
+      documented 96% on-time delivery rate through the 2025 long rains.
+    </p>
+    <p>
+      Of particular relevance to Lot&nbsp;2, our teams hold cold-chain handling experience gained on
+      health-sector solar installation contracts with <span class="rx">a UN agency</span> (2024,
+      USD&nbsp;<span class="rx">000,000</span>) and <span class="rx">an international NGO</span> (2023), both of
+      which are cited with reference contacts in Annex&nbsp;B. We confirm our eligibility declarations
+      in Annex&nbsp;C, including sanctions-list and conflict-of-interest attestations, signed by an
+      authorized signatory.
+    </p>
+  </div>
+
+  <div class="note"><span class="pin"></span><p><strong>What you gave us:</strong> two sentences of positioning angle and a counties list. <strong>What we did:</strong> expanded it into an evidence-led narrative, mirrored the tender's own geography and lot language, and pulled two references from your vault — because agencies shortlist on evidence, not adjectives.</p></div>
+  <div class="note"><span class="pin"></span><p><strong>Compliance phrasing:</strong> the declarations paragraph tracks the agency's exact annex names, so the screener finds everything where the checklist says it should be.</p></div>
+
+  <div class="kills">
+    <div class="kt">What kills EOIs — and what we gate before you pay</div>
+    <ul>
+      <li>Late submission · missing mandatory declarations · eligibility documents absent · wrong submission channel (this one goes through UNGM — we check your registration first).</li>
+    </ul>
+  </div>
+
+  <!-- ═══════════ §2 RFQ ═══════════ -->
+  <div class="fmt-head">
+    <h2><span class="code">§2 · RFQ</span> &nbsp;Request for Quotation</h2>
+    <span class="kicker">$199 · Quote it right</span>
+  </div>
+  <div class="fmt-meta">
+    <span>Wins on <strong>lowest compliant price</strong></span>
+    <span>Complete priced lines</span>
+    <span>Your input: <strong>~9 minutes</strong></span>
+  </div>
+
+  <div class="deliv">
+    <div><div class="dn">Quotation form (agency template)</div><div class="df">PDF</div></div>
+    <div><div class="dn">Priced line schedule</div><div class="df">XLSX + PDF</div></div>
+    <div><div class="dn">Specs compliance sheet</div><div class="df">PDF</div></div>
+  </div>
+
+  <div class="excerpt">
+    <p class="doc-h">Priced Line Schedule — Office Furniture &amp; Installation</p>
+    <p class="doc-sub">Ref: <span class="rx">FAO/SOM/RFQ-0000</span> · Currency: USD · Prices exclusive of VAT — UN tax exemption applies</p>
+    <table>
+      <thead><tr><th style="width: 30px;">#</th><th>Description</th><th>Spec</th><th class="num" style="text-align: right;">Qty</th><th class="num" style="text-align: right;">Unit price</th><th class="num" style="text-align: right;">Total</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Executive desk, 1600mm, lockable drawers</td><td>§2.1</td><td class="num">24 ea</td><td class="num rx">000.00</td><td class="num rx">0,000.00</td></tr>
+        <tr><td>2</td><td>Ergonomic task chair, adjustable lumbar</td><td>§2.2</td><td class="num">48 ea</td><td class="num rx">000.00</td><td class="num rx">0,000.00</td></tr>
+        <tr><td>3</td><td>4-drawer steel filing cabinet, lockable</td><td>§2.3</td><td class="num">18 ea</td><td class="num rx">000.00</td><td class="num rx">0,000.00</td></tr>
+        <tr><td>4</td><td>Meeting table, 8-seat, cable management</td><td>§2.4</td><td class="num">4 ea</td><td class="num rx">0,000.00</td><td class="num rx">0,000.00</td></tr>
+        <tr><td>5</td><td>Delivery, assembly &amp; installation — Mogadishu CO</td><td>§3</td><td class="num">1 lot</td><td class="num rx">0,000.00</td><td class="num rx">0,000.00</td></tr>
+        <tr><td colspan="5" style="text-align: right; font-weight: 600; color: var(--ink);">Total, DAP Mogadishu · every line priced · no omissions</td><td class="num rx" style="font-weight: 600;">00,000.00</td></tr>
+      </tbody>
+    </table>
+    <p style="margin: 14px 0 0; font-size: 11.5px;">
+      Quote validity: <strong>90 days</strong> (required minimum: 60) · Delivery: <strong>6 weeks from PO</strong> (ceiling: 8) ·
+      Incoterms: <strong>DAP Mogadishu</strong> as required · Warranty: <strong>24 months</strong> (minimum: 12) ·
+      Goods new, unused, most recent models — declared.
+    </p>
+  </div>
+
+  <div class="note"><span class="pin"></span><p><strong>What you gave us:</strong> unit prices only. <strong>What we did:</strong> totals, VAT treatment (excluded — UN agencies are tax-exempt; including it inflates your price against every competitor), Incoterms, validity, and the conformity declarations — each one set to the value that survives screening, with your numbers benchmarked against comparable awarded schedules.</p></div>
+
+  <div class="kills">
+    <div class="kt">What kills RFQs — and what we gate before you pay</div>
+    <ul>
+      <li>Missing unit prices (an incomplete quote is a dead quote) · validity shorter than required · wrong Incoterms · unsigned quotation form · VAT left in the price.</li>
+    </ul>
+  </div>
+
+  <!-- ═══════════ §3 ITB ═══════════ -->
+  <div class="fmt-head">
+    <h2><span class="code">§3 · ITB</span> &nbsp;Invitation to Bid</h2>
+    <span class="kicker">$299 · Zero elimination errors</span>
+  </div>
+  <div class="fmt-meta">
+    <span>Wins on <strong>pass/fail conformity, then lowest price</strong></span>
+    <span>Two sealed envelopes</span>
+    <span>Your input: <strong>~20 minutes</strong></span>
+  </div>
+
+  <div class="deliv">
+    <div><div class="dn">Technical bid — conformity response</div><div class="df">PDF</div></div>
+    <div><div class="dn">Financial bid — Bill of Quantities</div><div class="df">XLSX + PDF</div></div>
+    <div><div class="dn">Bid forms pack + bid-securing declaration</div><div class="df">PDF</div></div>
+  </div>
+
+  <div class="excerpt">
+    <p class="doc-h">Technical Conformity Response — Off-Grid Solar Systems, 12 Facilities</p>
+    <p class="doc-sub">Ref: <span class="rx">UNICEF/ITB-0000</span> · Technical envelope — contains no pricing</p>
+    <table>
+      <thead><tr><th style="width: 30px;">#</th><th>Requirement</th><th style="width: 90px;">Response</th><th>Substantiation</th></tr></thead>
+      <tbody>
+        <tr><td>2.1</td><td>Solar PV array ≥ 5 kWp per facility, Tier-1 modules</td><td class="verdict v-pass">Comply</td><td>5.4 kWp offered · Tier-1 datasheet, Annex T-3</td></tr>
+        <tr><td>2.2</td><td>Battery storage ≥ 20 kWh, LiFePO₄ chemistry</td><td class="verdict v-dev">Deviation — declared</td><td>NMC chemistry offered with equal cycle-life warranty (6,000 cycles); comparison table Annex T-4</td></tr>
+        <tr><td>2.3</td><td>Hybrid inverter, grid-tie capable, ≥ 8 kVA</td><td class="verdict v-pass">Comply</td><td>10 kVA offered · type certificate attached</td></tr>
+        <tr><td>2.6</td><td>Delivery: all sites within 16 weeks of contract</td><td class="verdict v-dev">Deviation — declared</td><td>18 weeks for 2 northern sites (road access, rainy season); phased plan Annex T-6</td></tr>
+        <tr><td>2.7</td><td>O&amp;M plan + spare parts for 24 months</td><td class="verdict v-pass">Comply</td><td>O&amp;M plan Annex T-7 · spares schedule included</td></tr>
+      </tbody>
+    </table>
+    <p style="margin: 14px 0 0; font-size: 11.5px;">
+      Site-visit certificate: <strong>attached</strong> (mandatory) · Bid validity: <strong>120 days</strong> as required ·
+      Bid security: <strong>bid-securing declaration</strong>, signed · Financial bid sealed separately — see Envelope B.
+    </p>
+  </div>
+
+  <div class="note"><span class="pin"></span><p><strong>The deviation phrasing is the product.</strong> An undeclared deviation voids the bid at inspection; a badly-declared one fails conformity. Rows 2.2 and 2.6 are written so the deviation is honest, substantiated, and survives evaluation — that sentence structure is what 34-point compliance gating buys you.</p></div>
+  <div class="note"><span class="pin"></span><p><strong>Envelope discipline:</strong> the technical response above contains zero pricing. Financial data leaking into the technical envelope is the classic self-inflicted ITB death — our pack keeps the two structurally separate.</p></div>
+
+  <div class="kills">
+    <div class="kt">What kills ITBs — and what we gate before you pay</div>
+    <ul>
+      <li>Unsigned bid form or missing bid security · financial info in the technical envelope · short validity · undeclared spec deviations · missed mandatory site visit.</li>
+    </ul>
+  </div>
+
+  <!-- ═══════════ §4 RFP ═══════════ -->
+  <div class="fmt-head">
+    <h2><span class="code">§4 · RFP</span> &nbsp;Request for Proposal</h2>
+    <span class="kicker">$349 · Win on substance</span>
+  </div>
+  <div class="fmt-meta">
+    <span>Wins on <strong>scored technical (70% threshold) + sealed financial</strong></span>
+    <span>Two envelopes</span>
+    <span>Your input: <strong>~20 minutes</strong></span>
+  </div>
+
+  <div class="deliv">
+    <div><div class="dn">Technical proposal — methodology, workplan, team</div><div class="df">DOCX + PDF</div></div>
+    <div><div class="dn">Financial proposal — sealed separately</div><div class="df">PDF</div></div>
+    <div><div class="dn">Forms, CVs &amp; declarations pack</div><div class="df">PDF</div></div>
+  </div>
+
+  <div class="excerpt">
+    <p class="doc-h">Technical Proposal — §3 Methodology &amp; Approach <span style="font-family: var(--mono); font-size: 10px; color: var(--gold); letter-spacing: 0.08em;">[criterion 1 · 30 pts]</span></p>
+    <p class="doc-sub">Ref: <span class="rx">UNDP/RFP-0000</span> · Climate Resilience Advisory · Technical envelope</p>
+    <p>
+      Our approach is community-led adaptation delivered in co-execution with county governments,
+      structured against the five TOR tasks. Task&nbsp;1 (vulnerability mapping) applies the
+      participatory CBA framework our team deployed on <span class="rx">a comparable UNDP Kenya
+      engagement (2024)</span>, producing ward-level indices the TOR's M&amp;E annex can consume
+      directly. Task&nbsp;2 embeds county officers in each field team — addressing the TOR's
+      sustainability criterion explicitly rather than by implication…
+    </p>
+    <p style="margin-bottom: 0;">
+      <strong style="font-size: 11px;">Workplan note</strong> <span style="font-family: var(--mono); font-size: 9.5px; color: var(--gold); letter-spacing: 0.06em;">[criterion 4 · 10 pts]</span> —
+      mobilization within 3 weeks of signature; field phases scheduled around the Oct–Nov rains,
+      with the critical path and dependencies in Annex&nbsp;W.
+    </p>
+  </div>
+
+  <div class="note"><span class="pin"></span><p><strong>Written against the matrix, point by point.</strong> Every section opens by answering the criterion it is scored under — evaluators award points with the matrix beside them, so the proposal is organized the way the points are. Your one-line angle becomes 8–10 pages mapped to the TOR tasks.</p></div>
+  <div class="note"><span class="pin"></span><p><strong>Team &amp; CVs is worth 25 points.</strong> If a key-expert CV is missing at intake we flag it before you pay — upload one, have us build it from the expert's background, or we nominate from our vetted associate pool.</p></div>
+
+  <div class="kills">
+    <div class="kt">What kills RFPs — and what we gate before you pay</div>
+    <ul>
+      <li>Financial data inside the technical envelope · scoring below the 70% technical threshold · key-expert CVs missing or unsigned · page and format limits breached.</li>
+    </ul>
+  </div>
+
+  <!-- ═══════════ CLOSING ═══════════ -->
+  <div class="closing">
+    <span class="eyebrow" style="color: var(--gold2);">How ordering works</span>
+    <h2>Pick your live tender. Answer a few minutes of questions. We draft.</h2>
+    <p>
+      Every order runs the same way: intake pulls from your vault and flags anything that would get
+      you eliminated <em>before</em> you pay · your draft lands in under an hour · you review in-app and
+      request unlimited revisions · nothing is submitted until you approve it. Win or lose, you keep
+      the documents.
+    </p>
+    <div class="price-row">
+      <div><div class="pc">EOI · $149</div><div class="pp">Get shortlisted</div><div class="pt">Capability narrative + eligibility. No pricing.</div></div>
+      <div><div class="pc">RFQ · $199</div><div class="pp">Quote it right</div><div class="pt">Complete priced lines + spec conformity.</div></div>
+      <div><div class="pc">ITB · $299</div><div class="pp">Zero errors</div><div class="pt">34-point compliance gate, two envelopes.</div></div>
+      <div><div class="pc">RFP · $349</div><div class="pp">Win on substance</div><div class="pt">Methodology built against the scoring matrix.</div></div>
+    </div>
+  </div>
+
+  <p style="font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); margin-top: 22px;">
+    Samples are illustrative composites drawn from our working templates. Client names, references, prices and tender identifiers are altered or redacted. We never fabricate third-party paper — official documents are requested from their issuers.
+  </p>
+
+</doc-page>
+
+<script src="doc-page.js"></script>
+</body>
+</html>

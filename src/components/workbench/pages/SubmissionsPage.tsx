@@ -320,7 +320,28 @@ export function SubmissionsPage() {
 
       {/* start a submission */}
       <div style={{ marginBottom: 38 }}>
-        <SectionHead title="Start a submission" hint={COMMERCE_ENABLED ? "Fixed fee · unlimited revisions · full-refund guarantee" : "Drafted by our team · unlimited revisions · no charge during the beta"} />
+        {COMMERCE_ENABLED ? (
+          <SectionHead
+            title="Start a submission"
+            action={
+              <div style={{ display: "flex", alignItems: "baseline", gap: 16, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                <span style={{ fontFamily: F.sans, fontSize: 12, color: C.mute }}>Fixed fee · unlimited revisions · full-refund guarantee</span>
+                {/* Proof of output before paying — the sample page carries per-submission
+                    prices, so it's only surfaced on commerce-on surfaces (hidden during the beta). */}
+                <a
+                  href="/samples/sample-proposals.html"
+                  target="_blank"
+                  rel="noopener"
+                  style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: C.accent, textDecoration: "none", borderBottom: `1px solid ${C.accent2}`, whiteSpace: "nowrap" }}
+                >
+                  See a sample draft ↗
+                </a>
+              </div>
+            }
+          />
+        ) : (
+          <SectionHead title="Start a submission" hint="Drafted by our team · unlimited revisions · no charge during the beta" />
+        )}
         {data?.access.freeSubmissionEligible && (
           <Card style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", marginBottom: 14, borderLeft: `3px solid ${C.pos}`, background: "#f3f8f4", flexWrap: "wrap" }}>
             <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: C.white, background: C.pos, padding: "3px 8px" }}>On us</span>
