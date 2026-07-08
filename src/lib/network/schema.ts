@@ -112,6 +112,52 @@ async function ensureNetworkMatchingColumnsOnce(): Promise<void> {
   await sql`UPDATE network_companies SET share_token = md5(random()::text || clock_timestamp()::text || id::text) WHERE share_token IS NULL`;
   await sql`CREATE UNIQUE INDEX IF NOT EXISTS network_companies_share_token_idx ON network_companies (share_token)`;
 
+  // --- CRM contact + pipeline fields ----------------------------------------
+  // The Network tab doubles as the founder's outbound CRM. These capture the
+  // person behind the company and where they sit in the outreach pipeline, so a
+  // bulk contact import (xlsx/csv) lands as workable CRM records — not just match
+  // profiles. All nullable / defaulted so existing rows and the matcher are
+  // unaffected.
+  await sql`ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS contact_title TEXT`;
+  await sql`ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS contact_email_status TEXT`;
+  await sql`ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS un_buyer TEXT`;
+  await sql`ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS city TEXT`;
+  await sql`ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS pipeline_stage TEXT NOT NULL DEFAULT 'lead'`;
+  // Idempotent CHECK for the pipeline vocabulary (advisory-lock guarded like the
+  // match-status constraint above, so concurrent boots don't race the ADD).
+  await sql`
+    DO $$
+    BEGIN
+      PERFORM pg_advisory_xact_lock(hashtext('tenderpath_network_pipeline_stage'));
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'network_companies'::regclass
+          AND conname = 'network_companies_pipeline_stage_chk'
+      ) THEN
+        ALTER TABLE network_companies
+          ADD CONSTRAINT network_companies_pipeline_stage_chk
+          CHECK (pipeline_stage IN ('lead','contacted','replied','meeting','proposal','won','lost'));
+      END IF;
+    END $$;
+  `;
+
+  // Lightweight per-company activity log — the CRM interaction trail (notes,
+  // calls, emails, meetings, LinkedIn touches, stage changes, imports). Kept
+  // separate from match statuses, which track a company↔tender pair, not the
+  // relationship timeline.
+  await sql`
+    CREATE TABLE IF NOT EXISTS network_company_activity (
+      id SERIAL PRIMARY KEY,
+      network_company_id INTEGER NOT NULL REFERENCES network_companies(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL DEFAULT 'note',
+      body TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      CONSTRAINT network_company_activity_kind_chk CHECK (kind IN ('note','call','email','meeting','linkedin','stage_change','import','other'))
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS network_company_activity_company_idx ON network_company_activity (network_company_id, created_at DESC)`;
+
   await sql`
     CREATE TABLE IF NOT EXISTS network_external_prospects (
       id SERIAL PRIMARY KEY,

@@ -39,14 +39,21 @@ export async function GET(request: Request) {
     sql`
       SELECT
         c.id, c.name, c.website, c.services_text, c.countries, c.sectors, c.org_type,
-        c.profile_status, c.profile_error, c.contact_name, c.contact_email, c.contact_phone,
-        c.notes, c.is_active, c.last_matched_at, c.created_at, c.updated_at,
+        c.profile_status, c.profile_error, c.contact_name, c.contact_title, c.contact_email,
+        c.contact_email_status, c.contact_linkedin, c.contact_phone, c.un_buyer, c.city,
+        c.notes, c.is_active, c.pipeline_stage, c.last_matched_at, c.created_at, c.updated_at,
         c.ai_analysis->>'detected_industry' AS detected_industry,
         c.ungm_status, c.share_token,
+        act.last_activity_at,
         COALESCE(mc.total, 0)::int AS match_count,
         COALESCE(mc.fresh, 0)::int AS fresh_count,
         COALESCE(mc.top_score, 0)::int AS top_score
       FROM network_companies c
+      LEFT JOIN (
+        SELECT network_company_id, MAX(created_at) AS last_activity_at
+        FROM network_company_activity
+        GROUP BY network_company_id
+      ) act ON act.network_company_id = c.id
       LEFT JOIN (
         SELECT
           network_company_id,
@@ -220,9 +227,13 @@ export async function POST(request: Request) {
   const sectors = toStringArray(b.sectors);
   const orgType = cleanStr(b.org_type, 100);
   const contactName = cleanStr(b.contact_name, 200);
+  const contactTitle = cleanStr(b.contact_title, 200);
   const contactEmail = cleanStr(b.contact_email, 320);
+  const contactEmailStatus = cleanStr(b.contact_email_status, 40);
   const contactPhone = cleanStr(b.contact_phone, 50);
   const contactLinkedin = cleanStr(b.contact_linkedin, 500);
+  const unBuyer = cleanStr(b.un_buyer, 300);
+  const city = cleanStr(b.city, 120);
   const notes = cleanStr(b.notes, 4000);
 
   if (!website && !servicesText) {
@@ -235,11 +246,13 @@ export async function POST(request: Request) {
   const inserted = await sql`
     INSERT INTO network_companies (
       name, website, services_text, countries, sectors, org_type,
-      contact_name, contact_email, contact_phone, contact_linkedin, notes, created_by, profile_status
+      contact_name, contact_title, contact_email, contact_email_status, contact_phone,
+      contact_linkedin, un_buyer, city, notes, created_by, profile_status
     ) VALUES (
       ${name}, ${website}, ${servicesText},
       ${JSON.stringify(countries)}::jsonb, ${JSON.stringify(sectors)}::jsonb, ${orgType},
-      ${contactName}, ${contactEmail}, ${contactPhone}, ${contactLinkedin}, ${notes},
+      ${contactName}, ${contactTitle}, ${contactEmail}, ${contactEmailStatus}, ${contactPhone},
+      ${contactLinkedin}, ${unBuyer}, ${city}, ${notes},
       ${guard.user?.id ?? null}, 'pending'
     )
     RETURNING id

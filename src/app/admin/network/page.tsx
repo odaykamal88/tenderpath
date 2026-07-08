@@ -13,13 +13,22 @@ interface CompanyRow {
   website: string | null;
   services_text: string | null;
   countries: string[] | null;
+  sectors: string[] | null;
   org_type: string | null;
   profile_status: string;
   profile_error: string | null;
   contact_name: string | null;
+  contact_title: string | null;
   contact_email: string | null;
+  contact_email_status: string | null;
+  contact_linkedin: string | null;
+  contact_phone: string | null;
+  un_buyer: string | null;
+  city: string | null;
   is_active: boolean;
+  pipeline_stage: string;
   last_matched_at: string | null;
+  last_activity_at: string | null;
   created_at: string;
   detected_industry: string | null;
   ungm_status: string | null;
@@ -28,6 +37,18 @@ interface CompanyRow {
   fresh_count: number;
   top_score: number;
 }
+
+const PIPELINE_STAGES = ["lead", "contacted", "replied", "meeting", "proposal", "won", "lost"] as const;
+type PipelineStage = (typeof PIPELINE_STAGES)[number];
+const STAGE_LABELS: Record<PipelineStage, string> = {
+  lead: "Lead",
+  contacted: "Contacted",
+  replied: "Replied",
+  meeting: "Meeting",
+  proposal: "Proposal",
+  won: "Won",
+  lost: "Lost",
+};
 
 interface ListResponse {
   companies: CompanyRow[];
@@ -82,6 +103,12 @@ export default function AdminNetworkPage() {
   // to 10 so the shortlist surfaces tenders with real runway to apply, not the
   // closing-tomorrow ones that crowd a soonest-deadline-first list. "0" = all.
   const [minDays, setMinDays] = useState("10");
+  // CRM list filters (client-side over the loaded companies).
+  const [search, setSearch] = useState("");
+  const [stageFilter, setStageFilter] = useState("all");
+  const [countryFilter, setCountryFilter] = useState("all");
+  const [freshOnly, setFreshOnly] = useState(false);
+  const [buildProgress, setBuildProgress] = useState<{ done: number; total: number } | null>(null);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
@@ -112,6 +139,35 @@ export default function AdminNetworkPage() {
       foldedCrawlerRows,
     };
   }, [data]);
+
+  const pendingCount = useMemo(
+    () => (data?.companies ?? []).filter((c) => c.is_active && c.profile_status !== "ready").length,
+    [data],
+  );
+
+  const countryOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of data?.companies ?? []) for (const co of c.countries ?? []) if (co.trim()) set.add(co.trim());
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [data]);
+
+  const filteredCompanies = useMemo(() => {
+    const companies = data?.companies ?? [];
+    const q = search.trim().toLowerCase();
+    return companies.filter((c) => {
+      if (stageFilter !== "all" && (c.pipeline_stage ?? "lead") !== stageFilter) return false;
+      if (countryFilter !== "all" && !(c.countries ?? []).some((co) => co.trim() === countryFilter)) return false;
+      if (freshOnly && c.fresh_count <= 0) return false;
+      if (q) {
+        const hay = [
+          c.name, c.contact_name, c.contact_title, c.contact_email, c.un_buyer, c.city,
+          c.detected_industry, (c.countries ?? []).join(" "), (c.sectors ?? []).join(" "),
+        ].filter(Boolean).join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [data, search, stageFilter, countryFilter, freshOnly]);
 
   async function setMatchStatus(matchId: number, status: string, reason?: string) {
     // Optimistic + background: the change applies in place and the PATCH fires
@@ -200,6 +256,54 @@ export default function AdminNetworkPage() {
     }
   }
 
+  // Freshly-imported contacts land as profile_status='pending' and are NOT picked
+  // up by the daily match cron (which only re-scores ready profiles). This builds
+  // their profile (crawl + AI) and runs an initial match, one at a time so we don't
+  // hammer targets. Reuses the per-company rematch endpoint.
+  async function buildPending() {
+    const pend = (data?.companies ?? []).filter((c) => c.is_active && c.profile_status !== "ready");
+    if (!pend.length || buildProgress) return;
+    setBuildProgress({ done: 0, total: pend.length });
+    setToast(null);
+    let ok = 0;
+    let failed = 0;
+    for (let i = 0; i < pend.length; i++) {
+      try {
+        const res = await fetch(`/api/admin/network-companies/${pend[i].id}/rematch`, { method: "POST", headers: authHeaders() });
+        if (res.ok) {
+          const b = await res.json().catch(() => ({}));
+          if (b.profile && b.profile.status !== "ready") failed++; else ok++;
+        } else failed++;
+      } catch { failed++; }
+      setBuildProgress({ done: i + 1, total: pend.length });
+    }
+    setBuildProgress(null);
+    setToast({ ok: failed === 0, msg: `Built ${ok} profile${ok === 1 ? "" : "s"}${failed ? `, ${failed} failed` : ""}.` });
+    await load({ silent: true });
+  }
+
+  async function setPipelineStage(companyId: number, stage: string) {
+    // Optimistic + background PATCH — the CRM table updates in place; reconcile on failure.
+    setData((d) => (d ? {
+      ...d,
+      companies: d.companies.map((c) => (c.id === companyId ? { ...c, pipeline_stage: stage } : c)),
+    } : d));
+    setToast(null);
+    try {
+      const res = await fetch(`/api/admin/network-companies/${companyId}`, {
+        method: "PATCH",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ pipeline_stage: stage }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+      setToast({ ok: true, msg: `Moved to ${STAGE_LABELS[stage as PipelineStage] ?? stage}.` });
+    } catch (err) {
+      setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to update stage" });
+      await load({ silent: true });
+    }
+  }
+
   async function submitCompany(e: FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) {
@@ -276,7 +380,7 @@ export default function AdminNetworkPage() {
             {showForm ? "Close" : "Add company"}
           </button>
           <button type="button" className={styles.btnGhost} onClick={() => setShowImport((s) => !s)}>
-            {showImport ? "Close import" : "Import CSV"}
+            {showImport ? "Close import" : "Import contacts"}
           </button>
           <button type="button" className={styles.btnGhost} onClick={() => load()} disabled={loading}>
             {loading ? "Loading…" : "Refresh"}
@@ -385,50 +489,134 @@ export default function AdminNetworkPage() {
       <section className={styles.panel}>
         <header className={styles.panelHead}>
           <div>
-            <h2 className={styles.panelTitle}>Companies</h2>
-            <p className={styles.panelSub}>Your bizdev database. Open one to see all its matches, edit it, or re-match on demand.</p>
+            <h2 className={styles.panelTitle}>Contacts</h2>
+            <p className={styles.panelSub}>Your outbound CRM. Search, filter by pipeline stage, move a contact along, or open one for the full timeline and matches.</p>
           </div>
-          {data && <span className={styles.panelMeta}>{data.companies.length} total</span>}
+          {data && (
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              {pendingCount > 0 && (
+                <button
+                  type="button"
+                  className={styles.btnGhost}
+                  onClick={buildPending}
+                  disabled={buildProgress !== null}
+                  title="Freshly imported contacts have no match profile yet. This crawls + profiles them and runs an initial match. Runs one at a time — keep this tab open."
+                  style={{ padding: "5px 11px", fontSize: 12 }}
+                >
+                  {buildProgress ? `Building ${buildProgress.done}/${buildProgress.total}…` : `Build & match pending (${pendingCount})`}
+                </button>
+              )}
+              <span className={styles.panelMeta}>
+                {filteredCompanies.length === data.companies.length
+                  ? `${data.companies.length} total`
+                  : `${filteredCompanies.length} of ${data.companies.length}`}
+              </span>
+            </div>
+          )}
         </header>
+
+        {data && data.companies.length > 0 && (
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 22px 4px" }}>
+            <input
+              className={styles.adminSearchInput}
+              placeholder="Search name, contact, email, UN buyer, sector…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search contacts"
+              style={{ flex: 1, minWidth: 220, padding: "6px 10px" }}
+            />
+            <label className={styles.sessionSubtle} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+              Stage
+              <select className={styles.adminSearchInput} value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} style={{ padding: "6px 8px" }}>
+                <option value="all">All</option>
+                {PIPELINE_STAGES.map((s) => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
+              </select>
+            </label>
+            <label className={styles.sessionSubtle} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+              Country
+              <select className={styles.adminSearchInput} value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} style={{ padding: "6px 8px", maxWidth: 160 }}>
+                <option value="all">All</option>
+                {countryOptions.map((co) => <option key={co} value={co}>{co}</option>)}
+              </select>
+            </label>
+            <label className={styles.sessionSubtle} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+              <input type="checkbox" checked={freshOnly} onChange={(e) => setFreshOnly(e.target.checked)} />
+              With fresh matches
+            </label>
+          </div>
+        )}
+
         {loading ? (
           <div className={styles.woEmpty}>Loading…</div>
         ) : !data || data.companies.length === 0 ? (
-          <div className={styles.woEmpty}>No companies yet — add one above.</div>
+          <div className={styles.woEmpty}>No contacts yet — <strong>Import contacts</strong> or <strong>Add company</strong> above.</div>
+        ) : filteredCompanies.length === 0 ? (
+          <div className={styles.woEmpty}>No contacts match those filters. <button type="button" className={styles.btnGhost} onClick={() => { setSearch(""); setStageFilter("all"); setCountryFilter("all"); setFreshOnly(false); }} style={{ padding: "4px 10px", fontSize: 12, marginLeft: 4 }}>Clear filters</button></div>
         ) : (
-          <div className={styles.tableWrap} style={{ maxHeight: "44vh", overflow: "auto" }}>
+          <div className={styles.tableWrap} style={{ maxHeight: "52vh", overflow: "auto" }}>
             <table className={styles.dossierTable}>
               <thead>
                 <tr>
-                  <th>Company</th>
-                  <th>Industry</th>
-                  <th>Profile</th>
-                  <th className={styles.num}>Matches</th>
+                  <th>Company / contact</th>
+                  <th>Reach</th>
+                  <th>Location</th>
+                  <th>Sector</th>
+                  <th>UN buyer</th>
+                  <th>Stage</th>
                   <th className={styles.num}>Fresh</th>
-                  <th>Last matched</th>
+                  <th>Last touch</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {data.companies.map((c) => (
+                {filteredCompanies.map((c) => (
                   <tr key={c.id} style={{ opacity: c.is_active ? 1 : 0.55 }}>
-                    <td>
+                    <td style={{ maxWidth: 260 }}>
                       <Link href={`/admin/network/${c.id}`} className={styles.tableLink}>{c.name}</Link>
-                      <div className={styles.sessionSubtle}>
-                        {c.website ?? "no website"}{c.is_active ? "" : " · paused"}
+                      <div className={styles.sessionSubtle} style={{ fontSize: 11 }}>
+                        {[c.contact_name, c.contact_title].filter(Boolean).join(" · ") || (c.website ?? "no website")}
+                        {c.is_active ? "" : " · paused"}
                         {(!c.countries || c.countries.length === 0) && (
-                          <span style={{ color: "var(--color-warn, #c8973e)" }}> · ⚠ no countries — add to improve matches</span>
+                          <span style={{ color: "var(--color-warn, #c8973e)" }}> · ⚠ no country</span>
                         )}
                       </div>
                     </td>
-                    <td>{c.detected_industry ?? "—"}</td>
-                    <td>
-                      <span className={`${styles.tag} ${c.profile_status === "ready" ? styles.tagPos : c.profile_status === "failed" ? styles.tagNeg : styles.tagMute}`}>
-                        {c.profile_status}
-                      </span>
+                    <td style={{ fontSize: 11 }}>
+                      {c.contact_email ? (
+                        <a className={styles.tableLink} href={`mailto:${c.contact_email}`}>{c.contact_email}</a>
+                      ) : <span className={styles.sessionSubtle}>no email</span>}
+                      <div style={{ display: "flex", gap: 6, marginTop: 3, alignItems: "center" }}>
+                        {c.contact_email_status && (
+                          <span className={`${styles.tag} ${c.contact_email_status.toLowerCase() === "verified" ? styles.tagPos : styles.tagMute}`} style={{ fontSize: 10 }}>
+                            {c.contact_email_status}
+                          </span>
+                        )}
+                        {c.contact_linkedin && (
+                          <a className={styles.tableLink} href={c.contact_linkedin} target="_blank" rel="noreferrer" style={{ fontSize: 11 }}>in ↗</a>
+                        )}
+                        {c.contact_phone && <span className={styles.sessionSubtle}>{c.contact_phone}</span>}
+                      </div>
                     </td>
-                    <td className={`${styles.num} ${c.match_count > 0 ? styles.posNum : styles.muteNum}`}>{c.match_count}</td>
-                    <td className={`${styles.num} ${c.fresh_count > 0 ? styles.posNum : styles.muteNum}`}>{c.fresh_count}</td>
-                    <td className={styles.sessionSubtle}>{fmtDate(c.last_matched_at)}</td>
+                    <td className={styles.sessionSubtle} style={{ fontSize: 12 }}>
+                      {[(c.countries ?? []).join(", "), c.city].filter(Boolean).join(" · ") || "—"}
+                    </td>
+                    <td className={styles.sessionSubtle} style={{ fontSize: 12, maxWidth: 160 }}>
+                      {c.detected_industry || (c.sectors ?? []).slice(0, 2).join(", ") || "—"}
+                    </td>
+                    <td className={styles.sessionSubtle} style={{ fontSize: 12, maxWidth: 120 }}>{c.un_buyer || "—"}</td>
+                    <td>
+                      <select
+                        value={(c.pipeline_stage ?? "lead")}
+                        onChange={(e) => setPipelineStage(c.id, e.target.value)}
+                        className={styles.adminSearchInput}
+                        aria-label={`Pipeline stage for ${c.name}`}
+                        style={{ padding: "4px 6px", fontSize: 11 }}
+                      >
+                        {PIPELINE_STAGES.map((s) => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
+                      </select>
+                    </td>
+                    <td className={`${styles.num} ${c.fresh_count > 0 ? styles.posNum : styles.muteNum}`} title={`${c.match_count} total matches`}>{c.fresh_count}</td>
+                    <td className={styles.sessionSubtle} style={{ fontSize: 11 }}>{fmtDate(c.last_activity_at ?? c.last_matched_at)}</td>
                     <td className={styles.num}>
                       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                         <Link href={`/admin/network/${c.id}`} className={styles.btnGhost} style={{ padding: "5px 9px", fontSize: 11 }}>Open</Link>

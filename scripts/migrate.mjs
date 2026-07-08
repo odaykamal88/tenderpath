@@ -599,6 +599,25 @@ ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS ungm_status TEXT NOT NULL
 ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS share_token TEXT DEFAULT md5(random()::text || clock_timestamp()::text);
 UPDATE network_companies SET share_token = md5(random()::text || clock_timestamp()::text || id::text) WHERE share_token IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS network_companies_share_token_idx ON network_companies (share_token);
+-- CRM contact + pipeline fields: the person behind the company and their outreach stage.
+ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS contact_title TEXT;
+ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS contact_email_status TEXT;
+ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS un_buyer TEXT;
+ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS city TEXT;
+ALTER TABLE network_companies ADD COLUMN IF NOT EXISTS pipeline_stage TEXT NOT NULL DEFAULT 'lead';
+ALTER TABLE network_companies DROP CONSTRAINT IF EXISTS network_companies_pipeline_stage_chk;
+ALTER TABLE network_companies ADD CONSTRAINT network_companies_pipeline_stage_chk CHECK (pipeline_stage IN ('lead','contacted','replied','meeting','proposal','won','lost'));
+-- Per-company activity log: the CRM interaction trail (notes/calls/emails/meetings/stage changes/imports).
+CREATE TABLE IF NOT EXISTS network_company_activity (
+  id SERIAL PRIMARY KEY,
+  network_company_id INTEGER NOT NULL REFERENCES network_companies(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL DEFAULT 'note',
+  body TEXT,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT network_company_activity_kind_chk CHECK (kind IN ('note','call','email','meeting','linkedin','stage_change','import','other'))
+);
+CREATE INDEX IF NOT EXISTS network_company_activity_company_idx ON network_company_activity (network_company_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS network_external_prospects (
   id SERIAL PRIMARY KEY,

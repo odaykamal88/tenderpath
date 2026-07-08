@@ -22,6 +22,39 @@ const STATUS_LABELS: Record<(typeof STATUSES)[number], string> = {
   lost: "lost",
 };
 
+const PIPELINE_STAGES = ["lead", "contacted", "replied", "meeting", "proposal", "won", "lost"] as const;
+type PipelineStage = (typeof PIPELINE_STAGES)[number];
+const STAGE_LABELS: Record<PipelineStage, string> = {
+  lead: "Lead", contacted: "Contacted", replied: "Replied", meeting: "Meeting", proposal: "Proposal", won: "Won", lost: "Lost",
+};
+function stageTagClass(stage: string, styles: Record<string, string>): string {
+  if (stage === "won") return styles.tagPos;
+  if (stage === "lost") return styles.tagNeg;
+  if (stage === "proposal" || stage === "meeting") return styles.tagNew;
+  if (stage === "replied" || stage === "contacted") return styles.tagWarn;
+  return styles.tagMute;
+}
+
+// Activity kinds the operator can log by hand (system kinds like 'stage_change'
+// and 'import' are shown but not offered in the composer).
+const LOGGABLE_KINDS = ["note", "call", "email", "meeting", "linkedin", "other"] as const;
+const KIND_LABELS: Record<string, string> = {
+  note: "Note", call: "Call", email: "Email", meeting: "Meeting", linkedin: "LinkedIn",
+  stage_change: "Stage", import: "Import", other: "Other",
+};
+
+interface Activity {
+  id: number;
+  kind: string;
+  body: string | null;
+  created_at: string;
+  author_email: string | null;
+}
+
+// Collision-free ids for optimistic (not-yet-persisted) activity rows. Negative
+// and strictly decreasing so they never clash with real serial ids or each other.
+let optimisticActivityId = -1;
+
 interface AIAnalysisLite {
   detected_industry?: string;
   summary?: string;
@@ -44,10 +77,16 @@ interface Company {
   profile_status: string;
   profile_error: string | null;
   contact_name: string | null;
+  contact_title: string | null;
   contact_email: string | null;
+  contact_email_status: string | null;
   contact_phone: string | null;
+  contact_linkedin: string | null;
+  un_buyer: string | null;
+  city: string | null;
   notes: string | null;
   is_active: boolean;
+  pipeline_stage: string;
   ungm_status: string | null;
   share_token: string | null;
   last_matched_at: string | null;
@@ -81,6 +120,7 @@ interface Match {
 interface DetailResponse {
   company: Company;
   matches: Match[];
+  activities: Activity[];
 }
 
 function authHeaders(): HeadersInit {
@@ -95,6 +135,12 @@ function fmtDate(value: string | null): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+function fmtDateTime(value: string | null): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 function chips(values: string[] | null | undefined, limit = 8): string {
   if (!Array.isArray(values) || !values.length) return "—";
@@ -121,6 +167,9 @@ export default function AdminNetworkCompanyPage() {
   const [reasonDraft, setReasonDraft] = useState("");
   const [showDismissed, setShowDismissed] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [actKind, setActKind] = useState("note");
+  const [actBody, setActBody] = useState("");
+  const [actSaving, setActSaving] = useState(false);
 
   const load = useCallback(async () => {
     if (!Number.isInteger(id) || id <= 0) {
@@ -249,6 +298,57 @@ export default function AdminNetworkCompanyPage() {
     }
   }
 
+  async function setStage(stage: string) {
+    const prev = data?.company?.pipeline_stage ?? "lead";
+    if (stage === prev) return;
+    setData((d) => (d && d.company ? { ...d, company: { ...d.company, pipeline_stage: stage } } : d));
+    setToast(null);
+    try {
+      const res = await fetch(`/api/admin/network-companies/${id}`, {
+        method: "PATCH",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ pipeline_stage: stage }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+      // Reflect the server-logged stage change in the timeline without a full reload.
+      setData((d) => (d ? {
+        ...d,
+        activities: [
+          { id: optimisticActivityId--, kind: "stage_change", body: `Stage: ${prev} → ${stage}`, created_at: new Date().toISOString(), author_email: null },
+          ...(d.activities ?? []),
+        ],
+      } : d));
+      setToast({ ok: true, msg: `Moved to ${STAGE_LABELS[stage as PipelineStage] ?? stage}.` });
+    } catch (err) {
+      setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to update stage" });
+      await load();
+    }
+  }
+
+  async function addActivity() {
+    const text = actBody.trim();
+    if (!text) return;
+    setActSaving(true);
+    setToast(null);
+    try {
+      const res = await fetch(`/api/admin/network-companies/${id}/activity`, {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ kind: actKind, body: text }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+      setData((d) => (d ? { ...d, activities: [body.activity as Activity, ...(d.activities ?? [])] } : d));
+      setActBody("");
+      setToast({ ok: true, msg: "Logged." });
+    } catch (err) {
+      setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to log activity" });
+    } finally {
+      setActSaving(false);
+    }
+  }
+
   async function copyBriefing() {
     const token = data?.company?.share_token;
     const href = token ? briefingUrl(token, typeof window !== "undefined" ? window.location.origin : undefined) : null;
@@ -284,6 +384,7 @@ export default function AdminNetworkCompanyPage() {
     ? briefingUrl(c.share_token, typeof window !== "undefined" ? window.location.origin : undefined)
     : null;
   const allMatches = data?.matches ?? [];
+  const activities = data?.activities ?? [];
   const dismissedCount = allMatches.filter((m) => m.status === "dismissed").length;
   const visibleMatches = showDismissed ? allMatches : allMatches.filter((m) => m.status !== "dismissed");
   const foldedCrawlerRows = visibleMatches.reduce((sum, match) => sum + Math.max(0, foldedOpportunityCount(match) - 1), 0);
@@ -316,6 +417,115 @@ export default function AdminNetworkCompanyPage() {
 
       {editing && c && (
         <EditForm company={c} onSaved={async (msg) => { setEditing(false); setToast({ ok: true, msg }); await load(); }} onError={(msg) => setToast({ ok: false, msg })} />
+      )}
+
+      {c && (
+        <section className={styles.panel}>
+          <header className={styles.panelHead}>
+            <div>
+              <h2 className={styles.panelTitle}>Relationship</h2>
+              <p className={styles.panelSub}>Contact details, pipeline stage, and the interaction history for this prospect.</p>
+            </div>
+            <span className={`${styles.tag} ${stageTagClass(c.pipeline_stage ?? "lead", styles)}`}>
+              {STAGE_LABELS[(c.pipeline_stage ?? "lead") as PipelineStage] ?? c.pipeline_stage}
+            </span>
+          </header>
+          <div style={{ padding: "12px 22px 22px", display: "grid", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+              <div>
+                <div className={styles.sessionSubtle} style={{ fontSize: 11 }}>Contact</div>
+                <div style={{ fontSize: 13 }}>{[c.contact_name, c.contact_title].filter(Boolean).join(" · ") || "—"}</div>
+              </div>
+              <div>
+                <div className={styles.sessionSubtle} style={{ fontSize: 11 }}>Email</div>
+                <div style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  {c.contact_email ? <a className={styles.tableLink} href={`mailto:${c.contact_email}`}>{c.contact_email}</a> : "—"}
+                  {c.contact_email_status && (
+                    <span className={`${styles.tag} ${c.contact_email_status.toLowerCase() === "verified" ? styles.tagPos : styles.tagMute}`} style={{ fontSize: 10 }}>
+                      {c.contact_email_status}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className={styles.sessionSubtle} style={{ fontSize: 11 }}>LinkedIn</div>
+                <div style={{ fontSize: 13 }}>
+                  {c.contact_linkedin ? <a className={styles.tableLink} href={c.contact_linkedin} target="_blank" rel="noreferrer">View profile ↗</a> : "—"}
+                </div>
+              </div>
+              <div>
+                <div className={styles.sessionSubtle} style={{ fontSize: 11 }}>Phone</div>
+                <div style={{ fontSize: 13 }}>{c.contact_phone || "—"}</div>
+              </div>
+              <div>
+                <div className={styles.sessionSubtle} style={{ fontSize: 11 }}>City</div>
+                <div style={{ fontSize: 13 }}>{c.city || "—"}</div>
+              </div>
+              <div>
+                <div className={styles.sessionSubtle} style={{ fontSize: 11 }}>UN buyer (awarded)</div>
+                <div style={{ fontSize: 13 }}>{c.un_buyer || "—"}</div>
+              </div>
+            </div>
+
+            <label style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 260 }}>
+              <span className={styles.sessionSubtle}>Pipeline stage</span>
+              <select
+                className={styles.adminSearchInput}
+                value={c.pipeline_stage ?? "lead"}
+                onChange={(e) => setStage(e.target.value)}
+                disabled={busy}
+                style={{ padding: "6px 8px" }}
+              >
+                {PIPELINE_STAGES.map((s) => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
+              </select>
+            </label>
+
+            <div style={{ display: "grid", gap: 8 }}>
+              <span className={styles.sessionSubtle}>Log an interaction</span>
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+                <select
+                  className={styles.adminSearchInput}
+                  value={actKind}
+                  onChange={(e) => setActKind(e.target.value)}
+                  aria-label="Interaction type"
+                  style={{ padding: "6px 8px", fontSize: 12 }}
+                >
+                  {LOGGABLE_KINDS.map((k) => <option key={k} value={k}>{KIND_LABELS[k]}</option>)}
+                </select>
+                <textarea
+                  className={styles.adminSearchInput}
+                  value={actBody}
+                  onChange={(e) => setActBody(e.target.value)}
+                  aria-label="Interaction note"
+                  placeholder="What happened? (e.g. Sent intro email with sample briefing link)"
+                  rows={2}
+                  style={{ flex: 1, minWidth: 240, padding: 8, fontFamily: "inherit", fontSize: 12 }}
+                />
+                <button type="button" className={styles.btnPrimary} onClick={addActivity} disabled={actSaving || !actBody.trim()} style={{ padding: "6px 12px", fontSize: 12 }}>
+                  {actSaving ? "Logging…" : "Log"}
+                </button>
+              </div>
+            </div>
+
+            {activities.length > 0 ? (
+              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflow: "auto" }}>
+                {activities.map((a) => (
+                  <li key={a.id} style={{ display: "flex", gap: 10, alignItems: "baseline", borderTop: "1px solid var(--admin-border, rgba(255,255,255,0.06))", paddingTop: 8 }}>
+                    <span className={`${styles.tag} ${styles.tagMute}`} style={{ fontSize: 10, flexShrink: 0 }}>{KIND_LABELS[a.kind] ?? a.kind}</span>
+                    <div style={{ flex: 1 }}>
+                      {a.body && <div style={{ fontSize: 13, lineHeight: 1.5 }}>{a.body}</div>}
+                      <div className={styles.sessionSubtle} style={{ fontSize: 11 }}>
+                        {fmtDateTime(a.created_at)}{a.author_email ? ` · ${a.author_email}` : ""}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className={styles.sessionSubtle}>No activity logged yet. Imports, stage changes, and your notes will show here.</span>
+            )}
+          </div>
+        </section>
       )}
 
       {c && (
@@ -525,8 +735,13 @@ function EditForm({
   const [services, setServices] = useState(company.services_text ?? "");
   const [countries, setCountries] = useState((company.countries ?? []).join(", "));
   const [contactName, setContactName] = useState(company.contact_name ?? "");
+  const [contactTitle, setContactTitle] = useState(company.contact_title ?? "");
   const [contactEmail, setContactEmail] = useState(company.contact_email ?? "");
+  const [contactEmailStatus, setContactEmailStatus] = useState(company.contact_email_status ?? "");
   const [contactPhone, setContactPhone] = useState(company.contact_phone ?? "");
+  const [contactLinkedin, setContactLinkedin] = useState(company.contact_linkedin ?? "");
+  const [city, setCity] = useState(company.city ?? "");
+  const [unBuyer, setUnBuyer] = useState(company.un_buyer ?? "");
   const [notes, setNotes] = useState(company.notes ?? "");
   const [isActive, setIsActive] = useState(company.is_active);
   const [saving, setSaving] = useState(false);
@@ -543,8 +758,13 @@ function EditForm({
           services_text: services || null,
           countries,
           contact_name: contactName || null,
+          contact_title: contactTitle || null,
           contact_email: contactEmail || null,
+          contact_email_status: contactEmailStatus || null,
           contact_phone: contactPhone || null,
+          contact_linkedin: contactLinkedin || null,
+          city: city || null,
+          un_buyer: unBuyer || null,
           notes: notes || null,
           is_active: isActive,
         }),
@@ -573,9 +793,14 @@ function EditForm({
           <input className={styles.adminSearchInput} placeholder="Company name" value={name} onChange={(e) => setName(e.target.value)} />
           <input className={styles.adminSearchInput} placeholder="Website" value={website} onChange={(e) => setWebsite(e.target.value)} />
           <input className={styles.adminSearchInput} placeholder="Countries (comma-separated)" value={countries} onChange={(e) => setCountries(e.target.value)} />
+          <input className={styles.adminSearchInput} placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} />
           <input className={styles.adminSearchInput} placeholder="Contact name" value={contactName} onChange={(e) => setContactName(e.target.value)} />
+          <input className={styles.adminSearchInput} placeholder="Contact title / role" value={contactTitle} onChange={(e) => setContactTitle(e.target.value)} />
           <input className={styles.adminSearchInput} placeholder="Contact email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
+          <input className={styles.adminSearchInput} placeholder="Email status (e.g. verified)" value={contactEmailStatus} onChange={(e) => setContactEmailStatus(e.target.value)} />
           <input className={styles.adminSearchInput} placeholder="Contact phone" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
+          <input className={styles.adminSearchInput} placeholder="LinkedIn URL" value={contactLinkedin} onChange={(e) => setContactLinkedin(e.target.value)} />
+          <input className={styles.adminSearchInput} placeholder="UN buyer (awarded)" value={unBuyer} onChange={(e) => setUnBuyer(e.target.value)} />
         </div>
         <textarea className={styles.adminSearchInput} placeholder="Services / what they do" value={services} onChange={(e) => setServices(e.target.value)} rows={3} style={{ width: "100%", padding: 8, fontFamily: "inherit" }} />
         <textarea className={styles.adminSearchInput} placeholder="Private notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} style={{ width: "100%", padding: 8, fontFamily: "inherit" }} />

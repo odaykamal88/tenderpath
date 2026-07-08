@@ -39,7 +39,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     SELECT
       id, name, website, services_text, countries, sectors, org_type,
       ai_analysis, crawled_data, profile_status, profile_error,
-      contact_name, contact_email, contact_phone, notes, is_active,
+      contact_name, contact_title, contact_email, contact_email_status, contact_phone,
+      contact_linkedin, un_buyer, city, notes, is_active, pipeline_stage,
       ungm_status, share_token,
       last_matched_at, created_at, updated_at
     FROM network_companies WHERE id = ${id} LIMIT 1
@@ -110,7 +111,16 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     ORDER BY tender_deadline ASC NULLS LAST, score DESC
   `;
 
-  return NextResponse.json({ company: companyRows[0], matches });
+  const activities = await sql`
+    SELECT a.id, a.kind, a.body, a.created_at, u.email AS author_email
+    FROM network_company_activity a
+    LEFT JOIN users u ON u.id = a.created_by
+    WHERE a.network_company_id = ${id}
+    ORDER BY a.created_at DESC, a.id DESC
+    LIMIT 200
+  `;
+
+  return NextResponse.json({ company: companyRows[0], matches, activities });
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -142,8 +152,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const sectors = has("sectors") ? toStringArray(b.sectors) : ((existing.sectors as string[]) ?? []);
   const orgType = has("org_type") ? cleanStr(b.org_type, 100) : (existing.org_type as string | null);
   const contactName = has("contact_name") ? cleanStr(b.contact_name, 200) : (existing.contact_name as string | null);
+  const contactTitle = has("contact_title") ? cleanStr(b.contact_title, 200) : (existing.contact_title as string | null);
   const contactEmail = has("contact_email") ? cleanStr(b.contact_email, 320) : (existing.contact_email as string | null);
+  const contactEmailStatus = has("contact_email_status") ? cleanStr(b.contact_email_status, 40) : (existing.contact_email_status as string | null);
   const contactPhone = has("contact_phone") ? cleanStr(b.contact_phone, 50) : (existing.contact_phone as string | null);
+  const contactLinkedin = has("contact_linkedin") ? cleanStr(b.contact_linkedin, 500) : (existing.contact_linkedin as string | null);
+  const unBuyer = has("un_buyer") ? cleanStr(b.un_buyer, 300) : (existing.un_buyer as string | null);
+  const city = has("city") ? cleanStr(b.city, 120) : (existing.city as string | null);
   const notes = has("notes") ? cleanStr(b.notes, 4000) : (existing.notes as string | null);
   const isActive = has("is_active") ? Boolean(b.is_active) : Boolean(existing.is_active);
   // Operator-recorded UNGM status. Validated against the allowlist; anything else
@@ -152,16 +167,32 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const ungmStatus = has("ungm_status") && UNGM_STATUSES.includes(String(b.ungm_status))
     ? String(b.ungm_status)
     : ((existing.ungm_status as string | null) ?? "unknown");
+  // Company-level CRM pipeline stage. Same allowlist-or-keep-existing discipline.
+  const PIPELINE_STAGES = ["lead", "contacted", "replied", "meeting", "proposal", "won", "lost"];
+  const prevStage = (existing.pipeline_stage as string | null) ?? "lead";
+  const pipelineStage = has("pipeline_stage") && PIPELINE_STAGES.includes(String(b.pipeline_stage))
+    ? String(b.pipeline_stage)
+    : prevStage;
 
   await sql`
     UPDATE network_companies SET
       name = ${name}, website = ${website}, services_text = ${servicesText},
       countries = ${JSON.stringify(countries)}::jsonb, sectors = ${JSON.stringify(sectors)}::jsonb,
-      org_type = ${orgType}, contact_name = ${contactName}, contact_email = ${contactEmail},
-      contact_phone = ${contactPhone}, notes = ${notes}, is_active = ${isActive},
-      ungm_status = ${ungmStatus}, updated_at = NOW()
+      org_type = ${orgType}, contact_name = ${contactName}, contact_title = ${contactTitle},
+      contact_email = ${contactEmail}, contact_email_status = ${contactEmailStatus},
+      contact_phone = ${contactPhone}, contact_linkedin = ${contactLinkedin},
+      un_buyer = ${unBuyer}, city = ${city}, notes = ${notes}, is_active = ${isActive},
+      ungm_status = ${ungmStatus}, pipeline_stage = ${pipelineStage}, updated_at = NOW()
     WHERE id = ${id}
   `;
+
+  // Log a pipeline move to the activity trail so the CRM timeline shows it.
+  if (pipelineStage !== prevStage) {
+    await sql`
+      INSERT INTO network_company_activity (network_company_id, kind, body, created_by)
+      VALUES (${id}, 'stage_change', ${`Stage: ${prevStage} → ${pipelineStage}`}, ${guard.user?.id ?? null})
+    `;
+  }
 
   // Re-crawl/re-analyze only when the inputs that shape the profile changed;
   // re-match when the profile changed or the country scope changed.
@@ -186,7 +217,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     SELECT
       id, name, website, services_text, countries, sectors, org_type,
       ai_analysis, crawled_data, profile_status, profile_error,
-      contact_name, contact_email, contact_phone, notes, is_active,
+      contact_name, contact_title, contact_email, contact_email_status, contact_phone,
+      contact_linkedin, un_buyer, city, notes, is_active, pipeline_stage,
       ungm_status, share_token,
       last_matched_at, created_at, updated_at
     FROM network_companies WHERE id = ${id} LIMIT 1
