@@ -13,6 +13,8 @@ import {
 } from "@/lib/proposal-package/rate-limit";
 import { enqueueProposalGeneration, reapStaleGenerating } from "@/lib/proposal-package/queue";
 import { extractSupplementaryDocRefs } from "@/lib/proposal-package/legacy-bridge";
+import { withOwnerArtifactUrl } from "@/lib/proposal-package/public-artifact";
+import { authenticatedArtifactUrl } from "@/lib/vault/storage";
 
 // Sprint 6b dispatch flag — mirrors the one in /api/proposals/generate.
 // Default v2 (new scoring engine); env PROPOSAL_ENGINE=v1 reverts.
@@ -128,7 +130,11 @@ async function ensureOwnedProposalOrder(
   const rows = await sql`
     SELECT id, user_id, email, payment_status, plan, service_slug, intake
     FROM work_orders
-    WHERE id = ${numericId} AND (user_id = ${guard.user!.id} OR email = ${guard.user!.email})
+    WHERE id = ${numericId}
+      AND (
+        user_id = ${guard.user!.id}
+        OR (user_id IS NULL AND email IS NOT NULL AND LOWER(email) = LOWER(${guard.user!.email}))
+      )
     LIMIT 1
   ` as unknown as Array<WorkOrderRow>;
 
@@ -205,7 +211,7 @@ export async function GET(
   }
   return NextResponse.json({
     exists: true,
-    package: stripSkuSalesFields(pkg),
+    package: withOwnerArtifactUrl(stripSkuSalesFields(pkg), result.order.id),
     payment_status: result.order.payment_status,
     // PROPOSAL_MAX_ATTEMPTS is Infinity; JSON.stringify renders it as null,
     // which is the same signal the UI uses to suppress the counter.
@@ -374,7 +380,7 @@ export async function POST(
     ok: true,
     skipped: generation.skippedReason ?? null,
     package_id: generation.packageId,
-    zip_url: generation.zipUrl,
+    zip_url: generation.zipUrl ? authenticatedArtifactUrl(result.order.id) : null,
     attempts: generation.attempts,
     remaining_regenerations: null,
   });

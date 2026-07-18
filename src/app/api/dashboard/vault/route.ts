@@ -4,6 +4,8 @@ import { requireDashboardAccess } from "@/lib/access";
 import { linkExtractionToVaultDocument } from "@/lib/documents/extract";
 import { applyAutoTagsForVaultDocument } from "@/lib/applicant-evidence/ingest";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { ensureCustomerPrivacySchema } from "@/lib/privacy/schema";
+import { storedBlobAccess } from "@/lib/vault/storage";
 
 // Kept the original (narrow) form values. Sprint 10's canonical taxonomy
 // in EVIDENCE_TYPES is broader; the auto-tagger upgrades "other" uploads
@@ -15,14 +17,15 @@ const isType = (v: unknown): v is DocType =>
 
 function publicDocument(row: Record<string, unknown>) {
   return {
-    ...row,
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    expiry_date: row.expiry_date,
+    created_at: row.created_at,
+    tags: row.tags,
     download_url: `/api/dashboard/vault/${row.id}/download`,
     file_url: `/api/dashboard/vault/${row.id}/download`,
   };
-}
-
-function isAllowedStoredFileUrl(value: string): boolean {
-  return /^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\//i.test(value);
 }
 
 async function fileUrlForUploadId(userId: number, uploadId: unknown): Promise<string | null> {
@@ -39,9 +42,21 @@ async function fileUrlForUploadId(userId: number, uploadId: unknown): Promise<st
   return rows[0]?.file_url ?? null;
 }
 
+async function ownedExtractedFileUrl(userId: number, value: unknown): Promise<string | null> {
+  if (typeof value !== "string" || !value) return null;
+  const rows = await sql`
+    SELECT file_url
+    FROM document_extractions
+    WHERE user_id = ${userId} AND file_url = ${value}
+    LIMIT 1
+  ` as unknown as Array<{ file_url: string }>;
+  return rows[0]?.file_url ?? null;
+}
+
 export async function GET(request: Request) {
   const guard = await requireDashboardAccess(request);
   if (!guard.authorized) return guard.response!;
+  await ensureCustomerPrivacySchema();
 
   const rows = await sql`
     SELECT id, name, type, expiry_date, file_url, created_at, tags
@@ -56,6 +71,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const guard = await requireDashboardAccess(request);
   if (!guard.authorized) return guard.response!;
+  await ensureCustomerPrivacySchema();
 
   const limited = enforceRateLimit(request, {
     namespace: "vault-save",
@@ -74,19 +90,42 @@ export async function POST(request: Request) {
   if (!isType(type)) {
     return NextResponse.json({ error: "invalid type" }, { status: 400 });
   }
-  const resolvedFileUrl = typeof file_url === "string"
-    ? file_url
-    : await fileUrlForUploadId(guard.user!.id, upload_id);
+  const resolvedFileUrl = upload_id != null
+    ? await fileUrlForUploadId(guard.user!.id, upload_id)
+    : await ownedExtractedFileUrl(guard.user!.id, file_url);
+  const storageAccess = resolvedFileUrl ? storedBlobAccess(resolvedFileUrl) : "invalid";
 
-  if (!resolvedFileUrl || !isAllowedStoredFileUrl(resolvedFileUrl)) {
+  if (!resolvedFileUrl || !["private", "legacy_public"].includes(storageAccess)) {
     return NextResponse.json({ error: "valid file_url required" }, { status: 400 });
   }
 
+  const receiptRows = storageAccess === "private"
+    ? await sql`
+        SELECT blob_pathname
+        FROM vault_upload_receipts
+        WHERE user_id = ${guard.user!.id} AND blob_url = ${resolvedFileUrl}
+        LIMIT 1
+      ` as unknown as Array<{ blob_pathname: string }>
+    : [];
+  const blobPathname = receiptRows[0]?.blob_pathname ?? null;
+
   const rows = await sql`
-    INSERT INTO vault_documents (user_id, name, type, expiry_date, file_url)
-    VALUES (${guard.user!.id}, ${name}, ${type}, ${expiry_date}, ${resolvedFileUrl})
+    INSERT INTO vault_documents (
+      user_id, name, type, expiry_date, file_url, storage_access, blob_pathname
+    ) VALUES (
+      ${guard.user!.id}, ${name}, ${type}, ${expiry_date}, ${resolvedFileUrl},
+      ${storageAccess}, ${blobPathname}
+    )
     RETURNING *
   `;
+
+  if (storageAccess === "private") {
+    await sql`
+      UPDATE vault_upload_receipts
+      SET claimed_at = COALESCE(claimed_at, NOW())
+      WHERE user_id = ${guard.user!.id} AND blob_url = ${resolvedFileUrl}
+    `;
+  }
 
   await linkExtractionToVaultDocument({
     userId: guard.user!.id,

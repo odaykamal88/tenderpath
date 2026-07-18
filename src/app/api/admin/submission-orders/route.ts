@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/subscription-guard";
 import { listOrdersForAdmin } from "@/lib/submissions/store";
+import { ensureCustomerPrivacySchema } from "@/lib/privacy/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export async function GET(request: Request) {
   const guard = await requireAdmin(request);
   if (!guard.authorized) return guard.response!;
   try {
+    await ensureCustomerPrivacySchema();
     const orders = await listOrdersForAdmin();
     const counts: Record<string, number> = {
       all: orders.length,

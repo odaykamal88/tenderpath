@@ -29,7 +29,10 @@ interface WorkOrder {
   generation_status: string | null;
   package_error_message: string | null;
   package_pdf_url: string | null;
+  package_has_artifact: boolean;
   package_created_at: string | null;
+  has_content_access: boolean;
+  content_access_expires_at: string | null;
   qa_status: string | null;
   created_at: string;
   updated_at: string;
@@ -318,6 +321,11 @@ export default function WorkOrdersPage() {
                         {o.email ?? o.user_email ?? "—"}
                       </div>
                       <div className={styles.woColMeta}>
+                        {o.has_content_access
+                          ? `Customer content unlocked until ${fmtDate(o.content_access_expires_at)}`
+                          : "Customer content locked"}
+                      </div>
+                      <div className={styles.woColMeta}>
                         Ordered {fmtDate(o.created_at)}
                         {o.service_slug && <> · {label(o.service_slug)}</>}
                       </div>
@@ -387,8 +395,11 @@ export default function WorkOrdersPage() {
                         className={styles.woNotes}
                         rows={3}
                         defaultValue={o.fulfillment_notes ?? ""}
+                        disabled={!o.has_content_access}
                         onBlur={(e) => updateOrder(o.id, { fulfillment_notes: e.target.value })}
-                        placeholder="Delivery link, missing docs, blockers…"
+                        placeholder={o.has_content_access
+                          ? "Delivery link, missing docs, blockers…"
+                          : "Customer must grant temporary access to edit content"}
                       />
                     </div>
                   </div>

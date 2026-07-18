@@ -1,0 +1,18 @@
+# Local analysis and customer/prospect exports must never enter deployment
+# source bundles. Keep this list explicit even when files are untracked.
+audit/
+outputs/
+
+# Local tooling state and generated build/test output.
+.git/
+.next/
+node_modules/
+coverage/
+.cache/
+.tmp.*/
+*.tsbuildinfo
+
+# Local secrets are excluded independently of Vercel project environment vars.
+.env
+.env.*
+!.env.example

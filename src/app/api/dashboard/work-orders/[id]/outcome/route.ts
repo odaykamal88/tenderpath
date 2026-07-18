@@ -59,7 +59,11 @@ async function ensureOwnedProposalOrder(
   const rows = (await sql`
     SELECT id, user_id, email, tender_title, agency, plan, service_slug
     FROM work_orders
-    WHERE id = ${numericId} AND (user_id = ${guard.user!.id} OR email = ${guard.user!.email})
+    WHERE id = ${numericId}
+      AND (
+        user_id = ${guard.user!.id}
+        OR (user_id IS NULL AND email IS NOT NULL AND LOWER(email) = LOWER(${guard.user!.email}))
+      )
     LIMIT 1
   `) as unknown as Array<ProposalOrderRow & { plan: string; service_slug: string | null }>;
 

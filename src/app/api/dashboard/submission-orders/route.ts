@@ -163,7 +163,7 @@ export async function POST(request: Request) {
       await sql`
         UPDATE work_orders
         SET payment_status = 'paid', amount_cents = 0, currency = 'usd'
-        WHERE id = ${workOrderId}
+        WHERE id = ${workOrderId} AND user_id = ${user.id}
       `;
       const paidOrder = await markSubmissionOrderPaidByWorkOrder(workOrderId, 0, "usd");
       return NextResponse.json({
@@ -183,7 +183,7 @@ export async function POST(request: Request) {
         await sql`
           UPDATE work_orders
           SET payment_status = 'paid', amount_cents = 0, currency = 'usd'
-          WHERE id = ${workOrderId}
+          WHERE id = ${workOrderId} AND user_id = ${user.id}
         `;
         const paidOrder = await markSubmissionOrderPaidByWorkOrder(workOrderId, 0, "usd");
         const usage = await recordBundledEoiUse(user);

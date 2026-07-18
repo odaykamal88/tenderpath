@@ -790,9 +790,9 @@ Verification:
 - `npm run build` completed successfully on Next `16.2.6`,
 - `npm run validation:paid-services -- --skip-live-matching --limit=3 --out=outputs/paid-services-validation/sprint0-static-post-dependency-patch.json`.
 
-Residual note:
+Residual note (resolved in the Sprint 0 confidentiality release):
 
-- Local shell is Node `v24.14.1`, while the app declares `22.x`; npm warns during install, but the production engine target remains Node 22.
+- The app and Vercel project now both target Node `24.x`, matching the local release runtime.
 
 ## Sprint 0 Progress: First-Wave Match Guardrails And Roster Validation
 

@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
 import { generateDeepReview, type DeepReviewTender } from "@/lib/proposal-package/review-deep";
 import { recordCalibrationEvent, valueBand } from "@/lib/calibration/store";
+import { activeSupportAccess, recordSupportAccessEvent } from "@/lib/privacy/support-access";
 
 // Admin-fulfilled deep proposal review (P1.1 paid tier). Reachable in the beta
 // while the self-serve ~$150 checkout is P0.4-gated: an operator runs the deep
@@ -28,6 +29,7 @@ export async function POST(request: Request) {
     tenderAgency?: unknown;
     solicitationText?: unknown;
     userId?: unknown;
+    workOrderId?: unknown;
     revision?: unknown;
   };
   try {
@@ -43,6 +45,7 @@ export async function POST(request: Request) {
 
   const solicitationText = typeof body.solicitationText === "string" ? body.solicitationText.trim() : "";
   const forUserId = Number.isInteger(Number(body.userId)) && Number(body.userId) > 0 ? Number(body.userId) : null;
+  const workOrderId = Number.isInteger(Number(body.workOrderId)) && Number(body.workOrderId) > 0 ? Number(body.workOrderId) : null;
   const revision = Number.isInteger(Number(body.revision)) && Number(body.revision) > 0 ? Number(body.revision) : 1;
 
   // Resolve the call.
@@ -89,6 +92,44 @@ export async function POST(request: Request) {
   let organisation: string | null = null;
   let orgType: string | null = null;
   if (forUserId) {
+    if (!workOrderId) {
+      return NextResponse.json(
+        { error: "A customer-owned workOrderId is required for a customer review." },
+        { status: 400 },
+      );
+    }
+    const workOrderRows = await sql`
+      SELECT id
+      FROM work_orders
+      WHERE id = ${workOrderId} AND user_id = ${forUserId}
+      LIMIT 1
+    `;
+    if (!workOrderRows.length) {
+      return NextResponse.json({ error: "Customer work order not found." }, { status: 404 });
+    }
+    const access = await activeSupportAccess(forUserId, workOrderId);
+    if (!access) {
+      await recordSupportAccessEvent({
+        ownerUserId: forUserId,
+        workOrderId,
+        actorUserId: guard.user!.id,
+        eventType: "access_denied",
+        purpose: "No active customer grant",
+        metadata: { route: "proposal_review_deep" },
+      });
+      return NextResponse.json(
+        { error: "Customer content is locked.", code: "CUSTOMER_CONTENT_LOCKED" },
+        { status: 403 },
+      );
+    }
+    await recordSupportAccessEvent({
+      ownerUserId: forUserId,
+      workOrderId,
+      actorUserId: guard.user!.id,
+      eventType: "content_read",
+      purpose: access.purpose,
+      metadata: { route: "proposal_review_deep" },
+    });
     const u = await sql`SELECT business_name, name, org_type FROM users WHERE id = ${forUserId} LIMIT 1`;
     if (u[0]) {
       organisation = (u[0].business_name as string | null) ?? (u[0].name as string | null) ?? null;

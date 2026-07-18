@@ -313,15 +313,40 @@ export async function listOrdersForUser(userId: number): Promise<SubmissionOrder
 export interface AdminOrderRow extends SubmissionOrder {
   userEmail: string | null;
   userBusiness: string | null;
+  hasContentAccess: boolean;
+  contentAccessExpiresAt: string | null;
+  contentLoaded: boolean;
 }
 
-/** Ops queue — paid orders only ("NEW INTAKES: paid — drafting not started"). */
+/**
+ * Ops queue metadata only. Intake, evidence, blockers, Q&A, revisions and
+ * deliverables are deliberately omitted; an admin must use the detail route,
+ * which verifies a live customer grant and records the read.
+ */
 export async function listOrdersForAdmin(): Promise<AdminOrderRow[]> {
   await ensureSubmissionsSchema();
   const rows = await sql`
-    SELECT so.*, u.email AS user_email, u.business_name AS user_business
+    SELECT
+      so.id, so.ref, so.user_id, so.work_order_id, so.type, so.price_cents,
+      so.currency, so.tender, so.agency, so.source, so.portal, so.tender_id,
+      so.pipeline_item_id, so.due, so.value, so.fit, so.stage, so.pct, so.round,
+      so.stage_note, so.sla_mins, so.completeness, so.paid_at, so.created_at,
+      so.updated_at,
+      u.email AS user_email,
+      u.business_name AS user_business,
+      grant_row.expires_at AS content_access_expires_at
     FROM submission_orders so
     LEFT JOIN users u ON u.id = so.user_id
+    LEFT JOIN LATERAL (
+      SELECT expires_at
+      FROM customer_access_grants
+      WHERE owner_user_id = so.user_id
+        AND work_order_id = so.work_order_id
+        AND revoked_at IS NULL
+        AND expires_at > NOW()
+      ORDER BY granted_at DESC
+      LIMIT 1
+    ) grant_row ON TRUE
     WHERE so.paid_at IS NOT NULL
     ORDER BY (so.stage = 'submitted') ASC, so.paid_at DESC
     LIMIT 200
@@ -330,7 +355,34 @@ export async function listOrdersForAdmin(): Promise<AdminOrderRow[]> {
     ...rowToOrder(r),
     userEmail: (r.user_email as string | null) ?? null,
     userBusiness: (r.user_business as string | null) ?? null,
+    hasContentAccess: Boolean(r.content_access_expires_at),
+    contentAccessExpiresAt: iso(r.content_access_expires_at),
+    contentLoaded: false,
   }));
+}
+
+export async function getAdminOrderAccessContext(orderId: number): Promise<{
+  ownerUserId: number;
+  workOrderId: number | null;
+} | null> {
+  await ensureSubmissionsSchema();
+  const rows = await sql`
+    SELECT user_id, work_order_id
+    FROM submission_orders
+    WHERE id = ${orderId}
+    LIMIT 1
+  `;
+  if (!rows.length) return null;
+  return {
+    ownerUserId: Number(rows[0].user_id),
+    workOrderId: rows[0].work_order_id == null ? null : Number(rows[0].work_order_id),
+  };
+}
+
+export async function getOrderForAdmin(orderId: number): Promise<SubmissionOrder | null> {
+  await ensureSubmissionsSchema();
+  const rows = await sql`SELECT * FROM submission_orders WHERE id = ${orderId} LIMIT 1`;
+  return rows.length ? rowToOrder(rows[0]) : null;
 }
 
 /* ── Guarded transitions ───────────────────────────────────────────────── */

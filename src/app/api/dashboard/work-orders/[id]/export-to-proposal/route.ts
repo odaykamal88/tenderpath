@@ -110,7 +110,10 @@ export async function POST(
     SELECT id, user_id, email, plan, service_slug, pipeline_item_id, tender_title, agency, tender_url, intake, payment_status
     FROM work_orders
     WHERE id = ${numericId}
-      AND (user_id = ${guard.user!.id} OR email = ${guard.user!.email})
+      AND (
+        user_id = ${guard.user!.id}
+        OR (user_id IS NULL AND email IS NOT NULL AND LOWER(email) = LOWER(${guard.user!.email}))
+      )
     LIMIT 1
   `) as unknown as SourceWorkOrder[];
 

@@ -9,6 +9,7 @@ import { SectionHead } from "../ui";
 import { useMedia } from "../useMedia";
 import { CompanyProfileTab } from "../account/CompanyProfileTab";
 import { TeamTab } from "../account/TeamTab";
+import { PrivacyTab } from "../account/PrivacyTab";
 
 // Invite-only beta: pricing/payment is hidden, so the Subscription and Billing
 // tabs are omitted (SubscriptionTab/BillingTab remain in the repo — restore them
@@ -16,6 +17,7 @@ import { TeamTab } from "../account/TeamTab";
 const TABS = [
   { id: "profile", label: "Company profile" },
   { id: "team", label: "Profile & team" },
+  { id: "privacy", label: "Privacy & access" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -56,6 +58,7 @@ export function AccountPage() {
         <div style={{ minWidth: 0 }}>
           {tab === "profile" && <CompanyProfileTab />}
           {tab === "team" && <TeamTab />}
+          {tab === "privacy" && <PrivacyTab />}
         </div>
       </div>
     </div>

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireDashboardAccess } from "@/lib/access";
 import { extractDocumentText, persistDocumentExtraction } from "@/lib/documents/extract";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { sql } from "@/lib/db";
+import { ensureCustomerPrivacySchema } from "@/lib/privacy/schema";
+import { privateBlobConfigured, putPrivateBlob } from "@/lib/vault/storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -29,6 +32,7 @@ export async function POST(req: NextRequest) {
 
   let stage = "parse_form";
   try {
+    await ensureCustomerPrivacySchema();
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
 
@@ -73,16 +77,27 @@ export async function POST(req: NextRequest) {
 
     stage = "blob_upload";
     let fileUrl: string;
+    let blobPathname: string;
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { put } = require("@vercel/blob");
-      const blob = await put(blobPathFor(guard.user!.id, file.name), bytes, {
-        access: "public",
+      const blob = await putPrivateBlob(blobPathFor(guard.user!.id, file.name), bytes, {
         addRandomSuffix: true,
         contentType: file.type,
       });
       fileUrl = blob.url;
+      blobPathname = blob.pathname;
+      await sql`
+        INSERT INTO vault_upload_receipts (
+          user_id, blob_url, blob_pathname, content_type
+        ) VALUES (
+          ${guard.user!.id}, ${blob.url}, ${blob.pathname}, ${file.type}
+        )
+        ON CONFLICT (blob_url) DO UPDATE SET
+          blob_pathname = EXCLUDED.blob_pathname,
+          content_type = EXCLUDED.content_type,
+          expires_at = NOW() + INTERVAL '24 hours'
+        WHERE vault_upload_receipts.user_id = EXCLUDED.user_id
+      `;
     } catch (blobErr) {
       console.error("[vault:upload:blob_failed]", {
         userId: guard.user!.id,
@@ -90,7 +105,7 @@ export async function POST(req: NextRequest) {
         fileSize: file.size,
         errorName: blobErr instanceof Error ? blobErr.name : "unknown",
         errorMessage: blobErr instanceof Error ? blobErr.message : String(blobErr),
-        hasBlobToken: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+        hasPrivateBlobToken: privateBlobConfigured(),
       });
       return NextResponse.json(
         { error: "Document storage is unavailable. Please try again shortly.", code: "BLOB_UPLOAD_FAILED" },
@@ -118,7 +133,8 @@ export async function POST(req: NextRequest) {
       upload_id: persisted.id,
       name: file.name,
       extraction: persisted,
-      storedVia: "blob",
+      storedVia: "private_blob",
+      blobPathname,
     });
   } catch (err) {
     console.error("[vault:upload:failed]", {

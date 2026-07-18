@@ -4,6 +4,8 @@ import { extractDocumentText, persistDocumentExtraction } from "@/lib/documents/
 import { classifyDocument, classToTag, tenderTitleTag } from "@/lib/documents/classify";
 import { sql } from "@/lib/db";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { ensureCustomerPrivacySchema } from "@/lib/privacy/schema";
+import { getPrivateBlob, storedBlobAccess } from "@/lib/vault/storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 45;
@@ -41,6 +43,7 @@ export async function POST(req: NextRequest) {
   try {
     const guard = await requireDashboardAccess(req);
     if (!guard.authorized) return guard.response!;
+    await ensureCustomerPrivacySchema();
 
     const limited = enforceRateLimit(req, {
       namespace: "vault-extract",
@@ -78,31 +81,52 @@ export async function POST(req: NextRequest) {
     // Only accept URLs from our own Vercel Blob storage. Prevents someone from
     // pointing this endpoint at an arbitrary external resource and forcing the
     // function to download large blobs / SSRF target.
-    if (!/^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\//.test(url)) {
+    if (storedBlobAccess(url) !== "private") {
       console.warn("[vault:extract:unsafe_url]", {
         userId: guard.user!.id,
         urlPrefix: url.slice(0, 60),
       });
-      return NextResponse.json({ error: "URL must be a Vercel Blob URL" }, { status: 400 });
+      return NextResponse.json({ error: "URL must be a private Vercel Blob URL" }, { status: 400 });
     }
 
     let stage = "fetch_blob";
     try {
-      stage = "fetch_blob";
-      const blobRes = await fetch(url, { signal: AbortSignal.timeout(20_000) });
-      if (!blobRes.ok) {
-        console.warn("[vault:extract:fetch_blob_failed]", {
+      stage = "verify_upload_owner";
+      const receiptRows = await sql`
+        SELECT blob_pathname
+        FROM vault_upload_receipts
+        WHERE user_id = ${guard.user!.id}
+          AND blob_url = ${url}
+          AND expires_at > NOW()
+        LIMIT 1
+      ` as unknown as Array<{ blob_pathname: string }>;
+      const receipt = receiptRows[0];
+      if (!receipt) {
+        console.warn("[vault:extract:upload_receipt_missing]", {
           userId: guard.user!.id,
-          status: blobRes.status,
+          urlPrefix: url.slice(0, 80),
         });
         return NextResponse.json(
-          { error: `Could not fetch the uploaded file (${blobRes.status})` },
+          { error: "Upload ownership is still being confirmed. Retry shortly.", code: "UPLOAD_NOT_READY" },
+          { status: 409 },
+        );
+      }
+
+      stage = "fetch_blob";
+      const blobRes = await getPrivateBlob(url);
+      if (!blobRes || blobRes.statusCode !== 200 || !blobRes.stream) {
+        console.warn("[vault:extract:fetch_blob_failed]", {
+          userId: guard.user!.id,
+          status: blobRes?.statusCode ?? null,
+        });
+        return NextResponse.json(
+          { error: `Could not fetch the uploaded file (${blobRes?.statusCode ?? "not found"})` },
           { status: 502 },
         );
       }
-      const buffer = Buffer.from(await blobRes.arrayBuffer());
+      const buffer = Buffer.from(await new Response(blobRes.stream).arrayBuffer());
       const effectiveMime =
-        mimeType || blobRes.headers.get("content-type") || "application/octet-stream";
+        mimeType || blobRes.blob.contentType || "application/octet-stream";
 
       stage = "extract_text";
       const extraction = await extractDocumentText({
@@ -142,13 +166,17 @@ export async function POST(req: NextRequest) {
         );
         await sql`
           UPDATE vault_documents
-          SET tags = ${merged}::text[]
+          SET tags = ${merged}::text[], storage_access = 'private', blob_pathname = ${receipt.blob_pathname}
           WHERE id = ${vaultDocumentId}
         `;
       } else {
         const inserted = (await sql`
-          INSERT INTO vault_documents (user_id, name, type, file_url, tags)
-          VALUES (${guard.user!.id}, ${name}, 'other', ${url}, ${initialTags}::text[])
+          INSERT INTO vault_documents (
+            user_id, name, type, file_url, tags, storage_access, blob_pathname
+          ) VALUES (
+            ${guard.user!.id}, ${name}, 'other', ${url}, ${initialTags}::text[],
+            'private', ${receipt.blob_pathname}
+          )
           RETURNING id
         `) as unknown as Array<{ id: number }>;
         vaultDocumentId = inserted[0].id;
@@ -167,6 +195,11 @@ export async function POST(req: NextRequest) {
         mimeType: effectiveMime,
         result: extraction,
       });
+      await sql`
+        UPDATE vault_upload_receipts
+        SET claimed_at = COALESCE(claimed_at, NOW())
+        WHERE user_id = ${guard.user!.id} AND blob_url = ${url}
+      `;
 
       // Haiku classification — fire-and-forget shape: we do await it so
       // the response carries the class, but classify never throws (it

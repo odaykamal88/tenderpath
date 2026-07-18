@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { put } from "@vercel/blob";
+import { privateBlobConfigured, putPrivateBlob } from "@/lib/vault/storage";
 
 export interface BundleFile {
   filename: string;
@@ -18,7 +18,7 @@ export interface BundleUploadResult {
 
 /**
  * Build a ZIP archive containing the provided deliverable files and upload it
- * to public Vercel Blob storage under the given pathname. Returns null URLs
+ * to private Vercel Blob storage under the given pathname. Returns null URLs
  * if Blob isn't configured — the caller decides whether to surface or fail.
  */
 export async function bundleAndUpload(
@@ -31,16 +31,13 @@ export async function bundleAndUpload(
   }
   const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) {
+  if (!privateBlobConfigured()) {
     console.warn("[proposal-package:blob_token_missing]", { pathname });
-    return { url: null, pathname: null, error: "blob_token_missing" };
+    return { url: null, pathname: null, error: "private_blob_token_missing" };
   }
   try {
-    const result = await put(pathname, zipBuffer, {
-      access: "public",
+    const result = await putPrivateBlob(pathname, zipBuffer, {
       contentType: "application/zip",
-      token,
       addRandomSuffix: false,
       allowOverwrite: true,
     });
@@ -53,8 +50,6 @@ export async function bundleAndUpload(
     console.error("[proposal-package:blob_upload_failed]", {
       pathname,
       bufferBytes: zipBuffer.length,
-      tokenPrefix: token.slice(0, 14),
-      tokenLength: token.length,
       errorName: e?.name ?? null,
       errorCode: e?.code ?? null,
       errorStatus: e?.status ?? null,

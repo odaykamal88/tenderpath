@@ -3,6 +3,9 @@ import type { HandleUploadBody } from "@vercel/blob/client";
 import { handleUpload } from "@vercel/blob/client";
 import { getUserFromRequest, verifyToken } from "@/lib/auth";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { sql } from "@/lib/db";
+import { ensureCustomerPrivacySchema } from "@/lib/privacy/schema";
+import { privateBlobToken } from "@/lib/vault/storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -43,10 +46,12 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    await ensureCustomerPrivacySchema();
     const requestUser = await getUserFromRequest(req);
     const result = await handleUpload({
       body,
       request: req,
+      token: privateBlobToken(),
       onBeforeGenerateToken: async (pathname, clientPayload) => {
         if (!isAllowedClientPath(pathname)) {
           console.warn("[vault:upload-token:bad_path]", { pathname });
@@ -94,13 +99,27 @@ export async function POST(req: NextRequest) {
         };
       },
       onUploadCompleted: async ({ blob, tokenPayload }) => {
-        // Webhook from Vercel Blob (production only). Extraction is done via
-        // the explicit /api/dashboard/vault/extract endpoint that the client
-        // calls after upload returns — keeping this a no-op so a webhook
-        // failure can never roll the upload back.
+        const payload = JSON.parse(tokenPayload ?? "{}") as { userId?: number };
+        const userId = Number(payload.userId);
+        if (!Number.isInteger(userId) || userId <= 0) {
+          console.error("[vault:upload-token:webhook_owner_missing]", { pathname: blob.pathname });
+          throw new Error("Upload owner missing from verified token payload");
+        }
+        await sql`
+          INSERT INTO vault_upload_receipts (
+            user_id, blob_url, blob_pathname, content_type
+          ) VALUES (
+            ${userId}, ${blob.url}, ${blob.pathname}, ${blob.contentType}
+          )
+          ON CONFLICT (blob_url) DO UPDATE SET
+            blob_pathname = EXCLUDED.blob_pathname,
+            content_type = EXCLUDED.content_type,
+            expires_at = NOW() + INTERVAL '24 hours'
+          WHERE vault_upload_receipts.user_id = EXCLUDED.user_id
+        `;
         console.info("[vault:upload-token:webhook_completed]", {
           pathname: blob.pathname,
-          tokenPayload,
+          userId,
         });
       },
     });

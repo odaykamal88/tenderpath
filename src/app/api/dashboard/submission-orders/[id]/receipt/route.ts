@@ -34,7 +34,10 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     if (order.workOrderId) {
       try {
         const rows = await sql`
-          SELECT stripe_session_id FROM work_orders WHERE id = ${order.workOrderId} LIMIT 1
+          SELECT stripe_session_id
+          FROM work_orders
+          WHERE id = ${order.workOrderId} AND user_id = ${guard.user!.id}
+          LIMIT 1
         `;
         sessionId = (rows[0]?.stripe_session_id as string | null) ?? null;
         if (sessionId && !sessionId.startsWith("free-submission:") && process.env.STRIPE_SECRET_KEY) {

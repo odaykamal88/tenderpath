@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
 import { generateBidNoBid, BID_PLAN, MAX_ATTEMPTS } from "@/lib/bid-no-bid/generate";
+import { withOwnerArtifactUrl } from "@/lib/proposal-package/public-artifact";
+import { authenticatedArtifactUrl } from "@/lib/vault/storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -43,7 +45,11 @@ async function ensureOwnedWorkOrder(
   const rows = await sql`
     SELECT id, user_id, email, payment_status, plan, service_slug
     FROM work_orders
-    WHERE id = ${numericId} AND (user_id = ${guard.user!.id} OR email = ${guard.user!.email})
+    WHERE id = ${numericId}
+      AND (
+        user_id = ${guard.user!.id}
+        OR (user_id IS NULL AND email IS NOT NULL AND LOWER(email) = LOWER(${guard.user!.email}))
+      )
     LIMIT 1
   ` as unknown as Array<WorkOrderRow>;
 
@@ -86,7 +92,7 @@ export async function GET(
   }
   return NextResponse.json({
     exists: true,
-    package: pkg,
+    package: withOwnerArtifactUrl(pkg, result.order.id),
     payment_status: result.order.payment_status,
     max_attempts: MAX_ATTEMPTS,
     remaining_regenerations: Math.max(0, MAX_ATTEMPTS - (pkg.generation_attempts ?? 1)),
@@ -137,7 +143,7 @@ export async function POST(
     ok: true,
     skipped: generation.skippedReason ?? null,
     package_id: generation.packageId,
-    pdf_url: generation.pdfUrl,
+    pdf_url: generation.pdfUrl ? authenticatedArtifactUrl(result.order.id) : null,
     attempts: generation.attempts,
     remaining_regenerations: Math.max(0, MAX_ATTEMPTS - generation.attempts),
   });

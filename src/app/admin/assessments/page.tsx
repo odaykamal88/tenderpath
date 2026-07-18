@@ -66,6 +66,7 @@ interface AssessmentSessionDetail {
     dev_themes: string[];
     include_consultancies: boolean | null;
     counts: { tenders: number; grants: number; gaps: number; pipeline_items: number };
+    content_locked: boolean;
     crawled_data?: { finalUrl?: string | null; renderMethod?: string | null; isThinContent?: boolean | null; content?: string | null } | null;
     ai_analysis?: { summary?: string; services?: string[]; capabilities?: string[]; strengths?: string[] } | null;
   };
@@ -469,6 +470,13 @@ function AssessmentDetailPanel({ detail, onClose }: { detail: AssessmentSessionD
         <span className={styles.sourceAgency}>org {label(a.org_type)}</span>
         <span className={styles.sourceAgency}>tier {label(a.recommended_tier)}</span>
       </div>
+
+      {a.content_locked && (
+        <div className={styles.signal} style={{ maxWidth: 900, marginBottom: 16 }}>
+          Customer assessment narrative, extracted website content, match details, and readiness gaps are locked.
+          This view exposes operational metadata only.
+        </div>
+      )}
 
       {a.ai_analysis?.summary && (
         <p className={styles.signal} style={{ maxWidth: 900, marginBottom: 16 }}>{a.ai_analysis.summary}</p>

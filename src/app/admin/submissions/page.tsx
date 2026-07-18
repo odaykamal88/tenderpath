@@ -16,6 +16,9 @@ import { buildRequestLetters, chaseDue } from "@/lib/submissions/request-letters
 interface AdminOrder extends SubmissionOrder {
   userEmail: string | null;
   userBusiness: string | null;
+  hasContentAccess: boolean;
+  contentAccessExpiresAt: string | null;
+  contentLoaded: boolean;
 }
 
 interface QueuePayload {
@@ -56,6 +59,12 @@ function shortDate(d: string | null): string {
   if (!d) return "—";
   const x = new Date(d);
   return Number.isNaN(x.getTime()) ? "—" : x.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function dateTime(value: string | null): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
 }
 
 /** SLA chip for paid orders still in production-entry stages. `now` comes from
@@ -278,11 +287,13 @@ function OrderCard({
   busy,
   now,
   act,
+  loadContent,
 }: {
   order: AdminOrder;
   busy: boolean;
   now: number;
   act: (id: number, body: Record<string, unknown>) => void;
+  loadContent: (id: number) => void;
 }) {
   const [noteText, setNoteText] = useState("");
   const [amdOpen, setAmdOpen] = useState(false);
@@ -354,6 +365,26 @@ function OrderCard({
           </div>
         </header>
 
+        {!order.contentLoaded ? (
+          <div style={{ border: "1px solid var(--color-rule)", background: "var(--color-paper-2)", padding: "16px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 18 }}>
+            <div>
+              <div className={styles.eyebrow}>Customer content locked</div>
+              <div className={styles.mute} style={{ fontSize: 12.5, marginTop: 5, maxWidth: 720, lineHeight: 1.55 }}>
+                The queue exposes order metadata only. {order.hasContentAccess
+                  ? `The customer granted access until ${dateTime(order.contentAccessExpiresAt)}; open it to record this read in the access log.`
+                  : "Ask the customer to grant temporary access in Account → Privacy & access before viewing intake, evidence, Q&A or revision notes."}
+              </div>
+            </div>
+            <button
+              type="button"
+              style={order.hasContentAccess ? btnStyle : btnGhostStyle}
+              disabled={busy || !order.hasContentAccess}
+              onClick={() => loadContent(order.id)}
+            >
+              {busy ? "Opening…" : order.hasContentAccess ? "Open granted content" : "Awaiting customer"}
+            </button>
+          </div>
+        ) : (
         <div className={styles.woGrid}>
           <div>
             <div className={styles.eyebrow} style={{ marginBottom: 6 }}>Intake summary</div>
@@ -483,6 +514,7 @@ function OrderCard({
             </div>
           </div>
         </div>
+        )}
       </div>
     </article>
   );
@@ -510,12 +542,61 @@ export default function AdminSubmissionsPage() {
     try {
       const res = await fetch("/api/admin/submission-orders", { headers: authHeaders(), cache: "no-store" });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      setData(await res.json());
+      const next = await res.json() as QueuePayload;
+      setData((previous) => {
+        if (!previous) return next;
+        const previousById = new Map(previous.orders.map((order) => [order.id, order]));
+        return {
+          ...next,
+          orders: next.orders.map((order) => {
+            const prior = previousById.get(order.id);
+            if (!prior?.contentLoaded || !order.hasContentAccess) return order;
+            return {
+              ...prior,
+              ...order,
+              blockers: prior.blockers,
+              intake: prior.intake,
+              intakeFields: prior.intakeFields,
+              deliverables: prior.deliverables,
+              events: prior.events,
+              revisionNotes: prior.revisionNotes,
+              amendments: prior.amendments,
+              qna: prior.qna,
+              outcome: prior.outcome,
+              shepherd: prior.shepherd,
+              contentLoaded: true,
+            };
+          }),
+        };
+      });
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load the queue");
     } finally {
       if (!silent) setLoading(false);
+    }
+  }, []);
+
+  const loadContent = useCallback(async (id: number) => {
+    setBusyId(id);
+    try {
+      const response = await fetch(`/api/admin/submission-orders/${id}`, {
+        headers: authHeaders(),
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.error ?? `${response.status} ${response.statusText}`);
+      setData((previous) => previous ? {
+        ...previous,
+        orders: previous.orders.map((order) => order.id === id
+          ? { ...order, ...payload.order, contentLoaded: true }
+          : order),
+      } : previous);
+      setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not open customer content");
+    } finally {
+      setBusyId(null);
     }
   }, []);
 
@@ -626,7 +707,7 @@ export default function AdminSubmissionsPage() {
       ) : (
         <section className={styles.woList}>
           {orders.map((o) => (
-            <OrderCard key={o.id} order={o} busy={busyId === o.id} now={now} act={act} />
+            <OrderCard key={o.id} order={o} busy={busyId === o.id} now={now} act={act} loadContent={loadContent} />
           ))}
         </section>
       )}

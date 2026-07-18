@@ -3,13 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": "22.x"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "migrate:private-blobs": "tsx scripts/migrate-private-blobs.ts",
+    "security:private-blob": "tsx scripts/private-blob-live-smoke.ts",
+    "security:sprint0-db": "tsx scripts/sprint0-production-db-check.ts",
+    "security:sprint0": "tsx scripts/sprint0-security-smoke.ts",
     "validation:paid-services": "tsx scripts/paid-services-validation.ts --panel=data/validation/paid-services-panel.csv",
     "validate:paid-services": "tsx scripts/paid-services-validation.ts --panel=data/validation/paid-services-panel.csv"
   },

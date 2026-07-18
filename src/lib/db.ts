@@ -398,6 +398,7 @@ export async function initializeDatabase() {
   await sql`ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS generation_status TEXT DEFAULT 'pending'`;
   await sql`ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS generation_attempts INTEGER DEFAULT 1`;
   await sql`ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS error_message TEXT`;
+  await sql`ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS artifact_access TEXT NOT NULL DEFAULT 'legacy_public'`;
   // Sprint 9: persist the extracted TenderRequirements (with capability_match)
   // so subsequent runs and the dashboard can read what we parsed from the
   // uploaded TOR/RFP without re-running extraction.

@@ -6,6 +6,7 @@ import type {
   RosterOutput,
   TenderRequirements,
 } from "./types";
+import { ensureCustomerPrivacySchema } from "@/lib/privacy/schema";
 
 export interface UpsertArgs {
   workOrderId: number;
@@ -41,6 +42,7 @@ export interface UpsertArgs {
 }
 
 export async function upsertPackage(args: UpsertArgs): Promise<number> {
+  await ensureCustomerPrivacySchema();
   const outputJson = JSON.stringify(args.output);
   const intakeJson = JSON.stringify(args.intake);
   const requirementsJson = args.parsedRequirements ? JSON.stringify(args.parsedRequirements) : null;
@@ -54,6 +56,7 @@ export async function upsertPackage(args: UpsertArgs): Promise<number> {
         output = ${outputJson}::jsonb,
         pdf_url = COALESCE(${args.pdfUrl}, pdf_url),
         pdf_pathname = COALESCE(${args.pdfPathname}, pdf_pathname),
+        artifact_access = CASE WHEN ${args.pdfUrl} IS NOT NULL THEN 'private' ELSE artifact_access END,
         generation_status = ${generationStatus},
         generation_attempts = ${args.attempts},
         error_message = ${errorMessage},
@@ -84,13 +87,14 @@ export async function upsertPackage(args: UpsertArgs): Promise<number> {
       tender_title, agency, tender_url, intake,
       stripe_session_id, output, pdf_url, pdf_pathname,
       generation_status, generation_attempts, error_message,
-      parsed_requirements, gate_state, updated_at
+      parsed_requirements, gate_state, artifact_access, updated_at
     ) VALUES (
       ${args.userId}, ${args.workOrderId}, ${args.pipelineItemId}, ${args.plan},
       ${args.tenderTitle}, ${args.agency}, ${args.tenderUrl}, ${intakeJson}::jsonb,
       ${args.stripeSessionId}, ${outputJson}::jsonb, ${args.pdfUrl}, ${args.pdfPathname},
       ${generationStatus}, ${args.attempts}, ${errorMessage},
-      ${requirementsJson}::jsonb, ${gateJson}::jsonb, NOW()
+      ${requirementsJson}::jsonb, ${gateJson}::jsonb,
+      ${args.pdfUrl ? "private" : "legacy_public"}, NOW()
     )
     RETURNING id
   ` as unknown as Array<{ id: number }>;
@@ -107,6 +111,7 @@ export interface FailureArgs {
 }
 
 export async function markFailure(args: FailureArgs): Promise<void> {
+  await ensureCustomerPrivacySchema();
   if (args.existingPackageId != null) {
     await sql`
       UPDATE proposal_packages SET

@@ -1,4 +1,3 @@
-import { put } from "@vercel/blob";
 import { sql } from "@/lib/db";
 import { sendBidNoBidReadyEmail } from "@/lib/email/sendBidNoBidNotification";
 import { formatServiceContextForPrompt } from "@/lib/service-context";
@@ -18,6 +17,8 @@ import {
   type BidNoBidDocument,
 } from "./documents";
 import { gradeAnalysis } from "./self-grade";
+import { privateBlobConfigured, putPrivateBlob } from "@/lib/vault/storage";
+import { ensureCustomerPrivacySchema } from "@/lib/privacy/schema";
 
 export const BID_PLAN = "bid-no-bid";
 export const MAX_ATTEMPTS = 3; // 1 automatic + 2 user regenerations
@@ -233,17 +234,14 @@ async function uploadPdf(
   workOrderId: number,
   pdfBuffer: Buffer,
 ): Promise<{ url: string | null; pathname: string | null; error: string | null }> {
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) {
+  if (!privateBlobConfigured()) {
     console.warn("[bid-no-bid:blob_token_missing]", { workOrderId });
-    return { url: null, pathname: null, error: "blob_token_missing" };
+    return { url: null, pathname: null, error: "private_blob_token_missing" };
   }
   const pathname = `bid-no-bid/${workOrderId}-${Date.now()}.pdf`;
   try {
-    const result = await put(pathname, pdfBuffer, {
-      access: "public",
+    const result = await putPrivateBlob(pathname, pdfBuffer, {
       contentType: "application/pdf",
-      token,
       addRandomSuffix: false,
       allowOverwrite: true,
     });
@@ -261,8 +259,6 @@ async function uploadPdf(
       workOrderId,
       pathname,
       bufferBytes: pdfBuffer.length,
-      tokenPrefix: token.slice(0, 14),
-      tokenLength: token.length,
       errorName: e?.name ?? null,
       errorCode: e?.code ?? null,
       errorStatus: e?.status ?? null,
@@ -463,8 +459,10 @@ export async function generateBidNoBid({
           agency: pipelineItem?.tender_agency ?? order.agency,
           recommendation: output.recommendation,
           winProbabilityBand: output.win_probability_band,
-          pdfUrl,
-          pdfBuffer: pdfUrl ? null : pdfBuffer,
+          // Private Blob URLs are never emailed. Attach the generated memo;
+          // dashboard downloads go through the owner-authorized route.
+          pdfUrl: null,
+          pdfBuffer,
         });
       } catch (err) {
         console.error("[bid-no-bid:email_failed]", {
@@ -531,6 +529,7 @@ interface UpsertArgs {
 }
 
 async function upsertPackage(args: UpsertArgs): Promise<number> {
+  await ensureCustomerPrivacySchema();
   const outputJson = JSON.stringify(args.output);
   const intakeJson = JSON.stringify(args.intake);
   // When blob failed, preserve the diagnostic instead of clearing error_message.
@@ -541,6 +540,7 @@ async function upsertPackage(args: UpsertArgs): Promise<number> {
         output = ${outputJson}::jsonb,
         pdf_url = COALESCE(${args.pdfUrl}, pdf_url),
         pdf_pathname = COALESCE(${args.pdfPathname}, pdf_pathname),
+        artifact_access = CASE WHEN ${args.pdfUrl} IS NOT NULL THEN 'private' ELSE artifact_access END,
         generation_status = 'ready',
         generation_attempts = ${args.attempts},
         error_message = ${errorMessage},
@@ -562,12 +562,12 @@ async function upsertPackage(args: UpsertArgs): Promise<number> {
       user_id, work_order_id, pipeline_item_id, plan,
       tender_title, agency, tender_url, intake,
       stripe_session_id, output, pdf_url, pdf_pathname,
-      generation_status, generation_attempts, error_message
+      generation_status, generation_attempts, error_message, artifact_access
     ) VALUES (
       ${args.userId}, ${args.workOrderId}, ${args.pipelineItemId}, ${BID_PLAN},
       ${args.tenderTitle}, ${args.agency}, ${args.tenderUrl}, ${intakeJson}::jsonb,
       ${args.stripeSessionId}, ${outputJson}::jsonb, ${args.pdfUrl}, ${args.pdfPathname},
-      'ready', ${args.attempts}, ${errorMessage}
+      'ready', ${args.attempts}, ${errorMessage}, ${args.pdfUrl ? "private" : "legacy_public"}
     )
     RETURNING id
   ` as unknown as Array<{ id: number }>;
@@ -583,6 +583,7 @@ interface FailureArgs {
 }
 
 async function markFailure(args: FailureArgs): Promise<void> {
+  await ensureCustomerPrivacySchema();
   if (args.existingPackageId != null) {
     await sql`
       UPDATE proposal_packages SET

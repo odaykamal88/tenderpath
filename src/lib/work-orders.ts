@@ -121,9 +121,13 @@ export async function createWorkOrderFromCheckout(
           updated_at = NOW()
         WHERE id = ${workOrderId}
           AND (
-            user_id IS NULL
-            OR user_id = ${userId}
-            OR (email IS NOT NULL AND LOWER(email) = LOWER(${email}))
+            user_id = ${userId}
+            OR (
+              user_id IS NULL
+              AND email IS NOT NULL
+              AND ${email}::text IS NOT NULL
+              AND LOWER(email) = LOWER(${email})
+            )
           )
         RETURNING *
         )
@@ -152,6 +156,7 @@ export async function createWorkOrderFromCheckout(
           ${pipelineItemId}, ${tenderTitle}, ${agency}
         )
         ON CONFLICT (stripe_session_id) DO UPDATE SET
+          user_id = COALESCE(work_orders.user_id, EXCLUDED.user_id),
           payment_status = EXCLUDED.payment_status,
           amount_cents = COALESCE(EXCLUDED.amount_cents, work_orders.amount_cents),
           currency = COALESCE(EXCLUDED.currency, work_orders.currency),
@@ -160,6 +165,13 @@ export async function createWorkOrderFromCheckout(
           tender_title = COALESCE(EXCLUDED.tender_title, work_orders.tender_title),
           agency = COALESCE(EXCLUDED.agency, work_orders.agency),
           updated_at = NOW()
+        WHERE work_orders.user_id = EXCLUDED.user_id
+          OR (
+            work_orders.user_id IS NULL
+            AND work_orders.email IS NOT NULL
+            AND EXCLUDED.email IS NOT NULL
+            AND LOWER(work_orders.email) = LOWER(EXCLUDED.email)
+          )
         RETURNING *
         )
         SELECT upserted.*, previous.payment_status AS previous_payment_status
@@ -168,10 +180,10 @@ export async function createWorkOrderFromCheckout(
       `;
 
   const order = rows[0];
-  if (!order && workOrderId) {
+  if (!order) {
     console.error("[tp:work_order:checkout_ownership_mismatch]", {
       sessionId: session.id,
-      workOrderId,
+      workOrderId: workOrderId ?? null,
       userId,
       plan,
     });

@@ -4,6 +4,8 @@ import { sql } from "@/lib/db";
 import { generateRosterFastTrack } from "@/lib/proposal-package/generate-roster";
 import { ROSTER_PLAN, MAX_ATTEMPTS } from "@/lib/proposal-package/types";
 import { AGENCY_PACKAGES, findAgencyPackage } from "@/lib/proposal-package/roster-packages";
+import { withOwnerArtifactUrl } from "@/lib/proposal-package/public-artifact";
+import { authenticatedArtifactUrl } from "@/lib/vault/storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -49,7 +51,11 @@ async function ensureOwnedRosterOrder(
   const rows = await sql`
     SELECT id, user_id, email, status, payment_status, plan, service_slug, intake, agency
     FROM work_orders
-    WHERE id = ${numericId} AND (user_id = ${guard.user!.id} OR email = ${guard.user!.email})
+    WHERE id = ${numericId}
+      AND (
+        user_id = ${guard.user!.id}
+        OR (user_id IS NULL AND email IS NOT NULL AND LOWER(email) = LOWER(${guard.user!.email}))
+      )
     LIMIT 1
   ` as unknown as Array<WorkOrderRow>;
 
@@ -88,7 +94,7 @@ export async function GET(
 
   return NextResponse.json({
     exists: !!pkg,
-    package: pkg ?? null,
+    package: pkg ? withOwnerArtifactUrl(pkg, result.order.id) : null,
     payment_status: result.order.payment_status,
     work_order_status: result.order.status,
     max_attempts: MAX_ATTEMPTS,
@@ -166,7 +172,7 @@ export async function POST(
     ok: true,
     skipped: generation.skippedReason ?? null,
     package_id: generation.packageId,
-    zip_url: generation.zipUrl,
+    zip_url: generation.zipUrl ? authenticatedArtifactUrl(result.order.id) : null,
     agency: generation.agency ? { slug: generation.agency.slug, label: generation.agency.label } : null,
     attempts: generation.attempts,
     remaining_regenerations: Math.max(0, MAX_ATTEMPTS - generation.attempts),

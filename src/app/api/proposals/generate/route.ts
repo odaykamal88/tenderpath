@@ -12,6 +12,7 @@ import {
   rateLimitedResponseBody,
 } from "@/lib/proposal-package/rate-limit";
 import { enqueueProposalGeneration, reapStaleGenerating } from "@/lib/proposal-package/queue";
+import { withOwnerArtifactUrl } from "@/lib/proposal-package/public-artifact";
 
 // Sprint 11 (revised for Hobby) — see /api/dashboard/work-orders/[id]/proposal-package
 // for the canonical comment. Route writes the row as 'pending', schedules
@@ -108,7 +109,7 @@ export async function GET(request: Request) {
 
   const pkg = await latestPackage(user.id, workOrderId);
   if (!pkg) return NextResponse.json({ exists: false }, { status: 404 });
-  return NextResponse.json({ exists: true, package: pkg });
+  return NextResponse.json({ exists: true, package: withOwnerArtifactUrl(pkg, workOrderId) });
 }
 
 async function loadWorkOrderForUser(userId: number, email: string | null, workOrderId: number): Promise<WorkOrderForGeneration | null> {
@@ -116,7 +117,10 @@ async function loadWorkOrderForUser(userId: number, email: string | null, workOr
     SELECT id, plan, service_slug, payment_status, stripe_session_id
     FROM work_orders
     WHERE id = ${workOrderId}
-      AND (user_id = ${userId} OR email = ${email})
+      AND (
+        user_id = ${userId}
+        OR (user_id IS NULL AND email IS NOT NULL AND LOWER(email) = LOWER(${email}))
+      )
     LIMIT 1
   ` as unknown as WorkOrderForGeneration[];
   return rows[0] ?? null;
@@ -305,5 +309,5 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ package: pkg });
+  return NextResponse.json({ package: withOwnerArtifactUrl(pkg, order.id) });
 }

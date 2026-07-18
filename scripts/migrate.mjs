@@ -189,6 +189,8 @@ CREATE TABLE IF NOT EXISTS vault_documents (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}';
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS storage_access TEXT NOT NULL DEFAULT 'legacy_public';
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS blob_pathname TEXT;
 CREATE INDEX IF NOT EXISTS vault_documents_tags_gin ON vault_documents USING GIN (tags);
 CREATE INDEX IF NOT EXISTS vault_documents_user_type ON vault_documents (user_id, type);
 
@@ -374,6 +376,7 @@ ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS generation_attempts INTEG
 ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS error_message TEXT;
 ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS parsed_requirements JSONB;
 ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS gate_state JSONB;
+ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS artifact_access TEXT NOT NULL DEFAULT 'legacy_public';
 ALTER TABLE proposal_packages ALTER COLUMN user_id DROP NOT NULL;
 ALTER TABLE proposal_packages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 CREATE INDEX IF NOT EXISTS proposal_packages_work_order_plan ON proposal_packages (work_order_id, plan, created_at DESC);
@@ -755,6 +758,63 @@ CREATE INDEX IF NOT EXISTS submission_orders_user_idx ON submission_orders (user
 CREATE INDEX IF NOT EXISTS submission_orders_stage_idx ON submission_orders (stage, updated_at DESC);
 CREATE INDEX IF NOT EXISTS submission_orders_wo_idx ON submission_orders (work_order_id);
 
+-- Sprint 0 confidentiality boundary. Client-upload receipts bind a private
+-- blob to its authenticated owner before extraction. Human access is scoped
+-- to one paid work order, expires automatically, and leaves an append-only
+-- event trail.
+CREATE TABLE IF NOT EXISTS vault_upload_receipts (
+  id BIGSERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  blob_url TEXT NOT NULL UNIQUE,
+  blob_pathname TEXT NOT NULL,
+  content_type TEXT,
+  claimed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '24 hours')
+);
+CREATE INDEX IF NOT EXISTS vault_upload_receipts_owner_idx
+  ON vault_upload_receipts (user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS customer_access_grants (
+  id BIGSERIAL PRIMARY KEY,
+  owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  work_order_id INTEGER NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+  purpose TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ,
+  granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS customer_access_grants_active_idx
+  ON customer_access_grants (owner_user_id, work_order_id, expires_at DESC)
+  WHERE revoked_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS customer_access_events (
+  id BIGSERIAL PRIMARY KEY,
+  owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  work_order_id INTEGER NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+  actor_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  event_type TEXT NOT NULL,
+  purpose TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS customer_access_events_owner_idx
+  ON customer_access_events (owner_user_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS customer_access_events_work_order_idx
+  ON customer_access_events (work_order_id, occurred_at DESC);
+
+CREATE TABLE IF NOT EXISTS private_blob_migrations (
+  id BIGSERIAL PRIMARY KEY,
+  object_kind TEXT NOT NULL,
+  source_row_id INTEGER NOT NULL,
+  source_url TEXT NOT NULL UNIQUE,
+  destination_url TEXT NOT NULL,
+  destination_pathname TEXT NOT NULL,
+  migrated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  source_deleted_at TIMESTAMPTZ
+);
+
 -- Server-side wizard autosave: one draft per user x format.
 CREATE TABLE IF NOT EXISTS submission_drafts (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -774,18 +834,16 @@ CREATE TABLE IF NOT EXISTS waitlist_signups (
 
 async function migrate() {
   console.log("Running migration...");
-  // neon() doesn't support multi-statement, split by `;`. Strip leading
-  // `-- comment` lines and leading blank lines before the CREATE/ALTER check,
-  // otherwise a single SQL comment placed before a statement causes the
-  // statement to be silently filtered out (lost a Sprint 9 migration this way).
-  const stripLeadingComments = (s) => {
-    let out = s.trim();
-    while (/^(--[^\n]*\n|\s*\n)/.test(out)) out = out.replace(/^(--[^\n]*\n|\s*\n)/, "").trim();
-    return out;
-  };
-  const statements = tables
+  // neon() doesn't support multi-statement queries. Remove full-line comments
+  // before splitting so a semicolon in prose cannot swallow the following
+  // CREATE/ALTER statement, then execute only the additive schema operations.
+  const uncommentedTables = tables
+    .split("\n")
+    .filter((line) => !/^\s*--/.test(line))
+    .join("\n");
+  const statements = uncommentedTables
     .split(/;/)
-    .map(stripLeadingComments)
+    .map((statement) => statement.trim())
     .filter((s) => /^(CREATE|ALTER)\b/.test(s));
 
   for (const stmt of statements) {

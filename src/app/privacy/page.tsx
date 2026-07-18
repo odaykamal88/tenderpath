@@ -19,7 +19,7 @@ export default function PrivacyPage() {
     <LegalShell
       title="Privacy Policy"
       subtitle="This policy explains what personal data TenderPath collects, why, and how it is handled."
-      lastUpdated="April 2025"
+      lastUpdated="18 July 2026"
     >
       <div className="rounded-lg bg-gray-50 border border-gray-200 px-5 py-4 text-sm text-gray-700">
         TenderPath is operated by <strong>Tenderpath Limited</strong>, 49 Street 105 Hadayek El Maadi,
@@ -34,13 +34,14 @@ export default function PrivacyPage() {
           <li><strong>Assessment data:</strong> company name, company website URL, business description, sector selections, and operating countries — entered during the free assessment wizard.</li>
           <li><strong>Assessment results:</strong> AI-generated company profile, readiness scores, matched tenders, and capability extractions — stored against your account.</li>
           <li><strong>Tender feedback:</strong> your saved, not-relevant, in-progress, or applied status on individual tenders.</li>
-          <li><strong>Vault documents:</strong> files you upload to the document vault (PDFs, Word documents, spreadsheets, images — up to 10 MB per file).</li>
+          <li><strong>Tender and vault documents:</strong> solicitation files, corrigenda, Q&amp;A, proposal evidence, PDFs, Word documents, spreadsheets, and images you choose to upload (up to 50 MB per file on supported upload surfaces).</li>
+          <li><strong>Service-order content:</strong> tender requirements, intake answers, drafts, reviews, generated deliverables, revision notes, and submission progress associated with a service you request.</li>
           <li><strong>Billing data:</strong> subscription and payment records. Payments are processed by card through Stripe; card details are handled entirely by Stripe and are never stored on TenderPath servers.</li>
           <li><strong>Authentication tokens:</strong> short-lived magic-link tokens (expire after 30 minutes) and a session token stored in an httpOnly cookie (<code>tp_session</code>).</li>
           <li><strong>Server logs:</strong> standard web server logs including IP addresses and request metadata, retained for operational and security purposes.</li>
         </ul>
         <p className="text-sm text-gray-500">
-          We do not collect payment card numbers, government ID, or any special-category personal data.
+          We do not collect payment card numbers. TenderPath does not ask for government ID or special-category personal data during signup; do not upload such material unless it is genuinely required for the procurement workflow and you are authorized to provide it.
         </p>
       </Section>
 
@@ -50,6 +51,9 @@ export default function PrivacyPage() {
           <li>Sending transactional emails (magic-link sign-in, assessment reports, weekly tender digests).</li>
           <li>Processing payments and managing subscriptions.</li>
           <li>Storing your vault documents for retrieval during your active account period.</li>
+          <li>Extracting and analysing documents, generating requested tender deliverables, and checking them against solicitation requirements.</li>
+          <li>Operating and quality-controlling tender matching using business-profile and opportunity metadata, including staff curation where needed.</li>
+          <li>Providing human fulfillment or troubleshooting for uploaded files, drafts, and other service-order content only when you grant temporary access to the relevant order.</li>
           <li>Improving crawler coverage and matching quality in aggregate (non-identifiable).</li>
           <li>Responding to your support requests.</li>
         </ul>
@@ -77,6 +81,8 @@ export default function PrivacyPage() {
               ["Resend", "Transactional email delivery (magic links, reports, digests)"],
               ["Stripe", "Card payment processing and subscription management"],
               ["Cloudflare", "Browser rendering for company website crawling (assessment stage)"],
+              ["Anthropic", "AI-assisted assessment, tender analysis, document extraction, proposal drafting, and review where the feature uses Anthropic models"],
+              ["OpenAI", "AI-assisted answers, discovery, and selected analysis features where the feature uses OpenAI models"],
               ["Google Fonts", "Web font delivery (Inter, Playfair Display)"],
             ].map(([svc, purpose]) => (
               <tr key={svc}>
@@ -136,8 +142,12 @@ export default function PrivacyPage() {
       <Section heading="7. Security">
         <p className="text-sm">
           Authentication tokens are short-lived. The session cookie is httpOnly and scoped to TenderPath&apos;s
-          domain. Vault documents are stored in access-controlled cloud storage. We do not store payment
-          card data.
+          domain. New customer documents and generated artifacts are stored in private object storage and
+          delivered through owner-authenticated TenderPath routes. Staff-facing queues expose operational
+          metadata by default; content access for human fulfillment or support requires a customer-controlled,
+          time-limited grant for the relevant work order and is recorded in an access log. We do not store payment
+          card data. This is an access-control model, not zero-knowledge encryption: TenderPath systems and the
+          processors named above must handle content when you request analysis or generation.
         </p>
       </Section>
 

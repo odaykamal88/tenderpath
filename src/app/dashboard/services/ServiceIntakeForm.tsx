@@ -242,7 +242,7 @@ export default function ServiceIntakeForm({
       const blobPath = `vault-upload/${crypto.randomUUID()}${ext}`;
       const blob = (await Promise.race([
         upload(blobPath, file, {
-          access: "public",
+          access: "private",
           handleUploadUrl: "/api/dashboard/vault/upload-token",
           onUploadProgress: ({ loaded, total, percentage }) => {
             lastProgressAt = Date.now();
@@ -277,24 +277,25 @@ export default function ServiceIntakeForm({
 
       onStage("extracting");
       console.info("[upload:client:extract_start]");
-      const extractRes = await fetch("/api/dashboard/vault/extract", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          url: blob.url,
-          name: file.name,
-          mimeType: file.type,
-          // tenderTitle + purpose tell the server how to tag the vault row
-          // so future bid-no-bid runs on the same tender can pre-load every
-          // doc the user has attached to it.
-          tenderTitle: tenderTitle ?? null,
-          purpose,
-        }),
-        // Server side maxDuration is 45 s; give the network a small headroom
-        // on top of that so a genuinely slow function still surfaces a real
-        // response rather than a client-side abort masquerading as a hang.
-        signal: AbortSignal.timeout(60_000),
+      const extractBody = JSON.stringify({
+        url: blob.url,
+        name: file.name,
+        mimeType: file.type,
+        tenderTitle: tenderTitle ?? null,
+        purpose,
       });
+      let extractRes: Response | null = null;
+      for (let attempt = 1; attempt <= 5; attempt += 1) {
+        extractRes = await fetch("/api/dashboard/vault/extract", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: extractBody,
+          signal: AbortSignal.timeout(60_000),
+        });
+        if (extractRes.status !== 409 || attempt === 5) break;
+        await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+      }
+      if (!extractRes) throw new Error("Document extraction did not start");
       const rawExtract = await extractRes.text();
       let extractData: {
         url?: string;
