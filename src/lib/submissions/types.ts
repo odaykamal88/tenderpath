@@ -10,6 +10,7 @@
  * change appends to `events[]` — both sides read the same log. */
 
 import type { SubmissionCode } from "@/lib/workbench/pricing";
+import type { TenderPackState } from "@/lib/tender-workspace/types";
 
 export type { SubmissionCode };
 
@@ -228,13 +229,21 @@ export interface WizardDraftState {
     title: string;
     agency?: string | null;
     source?: string | null;
+    sourceUrl?: string | null;
     portal?: string | null;
+    portalKey?: string | null;
+    /** True when the notice-specific channel replaces registry guidance. */
+    portalOverride?: boolean;
+    portalUrl?: string | null;
+    portalGuideUrl?: string | null;
     due?: string | null;
     value?: string | null;
     fit?: number | null;
     tenderId?: number | null;
     pipelineItemId?: number | null;
   } | null;
+  /** Private solicitation set carried from source import / guided upload. */
+  tenderPack?: TenderPackState;
   fields: Record<string, string>;
   lines: PricedLine[];
   currency: string;
@@ -247,6 +256,7 @@ export interface WizardDraftState {
 
 export const EMPTY_DRAFT: WizardDraftState = {
   tender: null,
+  tenderPack: { status: "not_started", documents: [] },
   fields: {},
   lines: [],
   currency: "USD",

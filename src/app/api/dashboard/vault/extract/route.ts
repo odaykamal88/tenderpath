@@ -6,6 +6,7 @@ import { sql } from "@/lib/db";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { ensureCustomerPrivacySchema } from "@/lib/privacy/schema";
 import { getPrivateBlob, storedBlobAccess } from "@/lib/vault/storage";
+import { TENDER_DOCUMENT_ROLES, type TenderDocumentRole } from "@/lib/tender-workspace/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 45;
@@ -57,6 +58,8 @@ export async function POST(req: NextRequest) {
     let name: string;
     let mimeType: string;
     let tenderTitle: string | null;
+    let tenderId: number | null;
+    let tenderRole: TenderDocumentRole | null;
     let purpose: "tender_main" | "supporting" | "other";
     try {
       const body = await req.json();
@@ -67,6 +70,11 @@ export async function POST(req: NextRequest) {
         typeof body.tenderTitle === "string" && body.tenderTitle.trim().length > 0
           ? body.tenderTitle.trim()
           : null;
+      const parsedTenderId = Number(body.tenderId);
+      tenderId = Number.isInteger(parsedTenderId) && parsedTenderId > 0 ? parsedTenderId : null;
+      tenderRole = TENDER_DOCUMENT_ROLES.includes(body.tenderRole as TenderDocumentRole)
+        ? (body.tenderRole as TenderDocumentRole)
+        : null;
       const rawPurpose = String(body.purpose ?? "supporting");
       purpose =
         rawPurpose === "tender_main" || rawPurpose === "supporting"
@@ -143,7 +151,13 @@ export async function POST(req: NextRequest) {
       const purposeTag =
         purpose === "tender_main" ? "bid-no-bid-tender" : "bid-no-bid-supporting";
       const titleTag = tenderTitleTag(tenderTitle);
-      const initialTags = [purposeTag, titleTag].filter(Boolean) as string[];
+      const initialTags = [
+        purposeTag,
+        titleTag,
+        tenderId ? `tender-pack:${tenderId}` : null,
+        tenderId ? "tender-pack:user-upload" : null,
+        tenderRole ? `tender-role:${tenderRole}` : null,
+      ].filter(Boolean) as string[];
 
       const existing = (await sql`
         SELECT id FROM vault_documents
@@ -232,6 +246,7 @@ export async function POST(req: NextRequest) {
         purpose: purposeTag,
         tenderTitleTag: titleTag || null,
         docClass,
+        tenderRole,
         extraction: persisted,
       });
     } catch (err) {

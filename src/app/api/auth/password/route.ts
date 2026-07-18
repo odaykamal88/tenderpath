@@ -7,7 +7,7 @@ import {
   DEMO_EMAIL,
   resolveOrMintForSignin,
   setDemoSessionCookie,
-  wipeDemoWorkOrders,
+  wipeDemoCustomerWorkspace,
   wipeOtherDemoAssessments,
 } from "@/lib/assessment/demo-session";
 
@@ -128,20 +128,34 @@ export async function POST(request: Request) {
 
         const { sessionId, carriedFromCookie } = resolveOrMintForSignin(request);
         demoSessionForResponse = sessionId;
-        const { wiped } = await wipeOtherDemoAssessments(sessionId);
+        const assessmentReset = await wipeOtherDemoAssessments(sessionId);
         // PR-J (2026-05-23): also wipe the demo user's work_orders and
         // proposal_packages on every sign-in. The user reported seeing
         // accumulated bid-no-bid / proposal orders from prior demo
         // sessions on the Work Orders page — those should clear like
         // assessments do. Other emails are unaffected (wipe is scoped to
         // the demo email).
-        const wipedOrders = await wipeDemoWorkOrders();
+        const wipedOrders = await wipeDemoCustomerWorkspace();
+        if (assessmentReset.failed || wipedOrders.failed) {
+          console.error("[auth:password:demo_reset_incomplete]", {
+            assessmentResetFailed: assessmentReset.failed,
+            workspaceResetFailed: wipedOrders.failed,
+          });
+          return NextResponse.json(
+            { error: "The demo workspace is still resetting. Please try again shortly." },
+            { status: 503 },
+          );
+        }
         console.log("[auth:password:demo_reset]", {
           sessionId,
           carriedFromCookie,
-          assessments_wiped: wiped,
+          assessments_wiped: assessmentReset.wiped,
           work_orders_wiped: wipedOrders.orders,
           proposal_packages_wiped: wipedOrders.packages,
+          submission_orders_wiped: wipedOrders.submissionOrders,
+          submission_drafts_wiped: wipedOrders.drafts,
+          vault_documents_wiped: wipedOrders.vaultDocuments,
+          upload_receipts_wiped: wipedOrders.uploadReceipts,
         });
 
         await sql`
@@ -152,7 +166,10 @@ export async function POST(request: Request) {
         console.error("[auth:password:demo_reset_failed]", {
           error: err instanceof Error ? err.message : String(err),
         });
-        // Fall through — sign-in itself proceeds.
+        return NextResponse.json(
+          { error: "The demo workspace is still resetting. Please try again shortly." },
+          { status: 503 },
+        );
       }
     }
 

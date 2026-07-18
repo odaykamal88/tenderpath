@@ -10,6 +10,7 @@ import type {
   WizardDraftState,
 } from "@/lib/submissions/types";
 import type { SubmissionNudge } from "@/lib/submissions/nudges";
+import type { TenderPackState } from "@/lib/tender-workspace/types";
 
 export function authHeaders(extra?: Record<string, string>): HeadersInit {
   const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
@@ -75,6 +76,13 @@ export function saveDraft(type: SubmissionCode, draft: WizardDraftState): Promis
   return request(`/api/dashboard/submission-drafts/${type}`, {
     method: "PUT",
     body: JSON.stringify({ draft }),
+  });
+}
+
+export function importTenderPack(tenderId: number): Promise<TenderPackState & { sourceUrl?: string }> {
+  return request("/api/dashboard/tender-pack/import", {
+    method: "POST",
+    body: JSON.stringify({ tenderId }),
   });
 }
 

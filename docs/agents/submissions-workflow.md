@@ -36,6 +36,23 @@ sees ops events labeled "TenderPath".
 Smoke: `npx tsx scripts/submissions-smoke.ts` (audit gate, stage guards,
 docContent, nudges — run it after touching any of the above).
 
+## Guided tender workspace (Sprint 1)
+
+The wizard's first step also owns the private solicitation set. A recognized
+matched EOI/RFQ/ITB/RFP deep-links with `?start=<format>&match=<id>`, carries
+the official source and verified agency portal into the draft, and stores a
+sanitized `tenderPack` manifest beside `tenderContext` in
+`submission_orders.intake_fields`.
+
+Public files are imported by `POST /api/dashboard/tender-pack/import`; portal-
+gated files use the existing direct private upload flow. Both paths produce
+owner-only vault rows and authenticated download URLs. Autosave and order
+creation rebuild the manifest from `vault_documents.user_id = caller`; never
+trust a client-supplied vault id, file URL, filename, or extraction status.
+
+See `docs/agents/sprint-1-guided-tender-workspace.md` for caps, portal sources,
+failure behavior, early-adopter ranking, and the preview acceptance walk.
+
 ## Payment seam (work-order-first, like every other paid service)
 
 1. Wizard "Pay $X & start drafting" → `POST /api/dashboard/submission-orders`

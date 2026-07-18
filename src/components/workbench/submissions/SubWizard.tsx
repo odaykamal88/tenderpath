@@ -23,6 +23,7 @@ import { CheckoutCard, type CheckoutContext } from "@/components/checkout/Checko
 import type { WbMatch } from "@/lib/workbench/types";
 import type { DocResolution, SubmissionCode, WizardDraftState } from "@/lib/submissions/types";
 import { EMPTY_DRAFT } from "@/lib/submissions/types";
+import { resolveSubmissionPortal } from "@/lib/tenders/submission-portals";
 import { flowFor, FLOW_GUARANTEE, type FlowBlock, type FlowStep, type SubmissionFlow } from "@/lib/submissions/flows";
 import { docSpec } from "@/lib/submissions/docs-catalog";
 import { auditDraft, PAY_GATE_PCT, type AuditResult } from "@/lib/submissions/audit";
@@ -46,6 +47,7 @@ import {
   matchVaultDoc,
   PickRefsBlock,
 } from "./wizardBlocks";
+import { TenderPackPanel } from "./TenderPackPanel";
 
 const RAIL_BREAK = "(max-width: 1279px)";
 const MOBILE = "(max-width: 1023px)";
@@ -57,11 +59,17 @@ interface SubWizardProps {
 }
 
 function tenderFromMatch(m: WbMatch): NonNullable<WizardDraftState["tender"]> {
+  const portal = resolveSubmissionPortal(m.agency);
   return {
     title: m.title,
     agency: m.agency || null,
     source: m.source || null,
-    portal: null,
+    sourceUrl: m.sourceUrl || null,
+    portal: portal.portalName,
+    portalKey: portal.key,
+    portalOverride: false,
+    portalUrl: portal.signInUrl || portal.registrationUrl,
+    portalGuideUrl: portal.guideUrl || null,
     due: m.deadline,
     value: m.value || null,
     fit: m.fit || null,
@@ -145,8 +153,8 @@ function TenderStep({
   return (
     <div>
       <p style={{ fontFamily: F.sans, fontSize: 13.5, color: C.ink2, lineHeight: 1.6, margin: "0 0 18px", maxWidth: 560 }}>
-        {flow.blurb} Pick the tender this {flow.code} responds to — requirements, deadlines and forms are
-        pulled straight from its notice.
+        {flow.blurb} Pick the tender this {flow.code} responds to — its source, deadline, supplier portal,
+        and available documents stay with you through the workflow.
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {matches.slice(0, 10).map((m) => {
@@ -154,7 +162,10 @@ function TenderStep({
           return (
             <button
               key={m.id}
-              onClick={() => { patch({ tender: tenderFromMatch(m) }); setManual(false); }}
+              onClick={() => {
+                patch({ tender: tenderFromMatch(m), tenderPack: { status: "not_started", documents: [] } });
+                setManual(false);
+              }}
               style={{ textAlign: "left", cursor: "pointer", background: C.white, border: `1px solid ${on ? C.ink : C.rule}`, boxShadow: on ? `inset 0 0 0 1px ${C.ink}` : "none", padding: "16px 18px", display: "flex", gap: 14, alignItems: "center" }}
             >
               <span style={{ width: 16, height: 16, borderRadius: 999, border: `1.5px solid ${on ? C.ink : C.rule}`, background: on ? C.ink : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -184,7 +195,23 @@ function TenderStep({
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
                 <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 600, color: C.ink, marginBottom: 6 }}>Issuing agency</div>
-                <input value={t?.agency ?? ""} placeholder="e.g. UNICEF Kenya Country Office" onChange={(e) => setT({ agency: e.target.value })} style={inputStyle} />
+                <input
+                  value={t?.agency ?? ""}
+                  placeholder="e.g. UNICEF Kenya Country Office"
+                  onChange={(e) => {
+                    const agency = e.target.value;
+                    const portal = resolveSubmissionPortal(agency);
+                    setT({
+                      agency,
+                      portal: portal.portalName,
+                      portalKey: portal.key,
+                      portalOverride: false,
+                      portalUrl: portal.signInUrl || portal.registrationUrl,
+                      portalGuideUrl: portal.guideUrl || null,
+                    });
+                  }}
+                  style={inputStyle}
+                />
               </div>
               <div>
                 <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 600, color: C.ink, marginBottom: 6 }}>Deadline</div>
@@ -192,12 +219,28 @@ function TenderStep({
               </div>
             </div>
             <div>
+              <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 600, color: C.ink, marginBottom: 6 }}>Official notice URL</div>
+              <input value={t?.sourceUrl ?? ""} placeholder="https://…" onChange={(e) => setT({ sourceUrl: e.target.value || null })} style={inputStyle} />
+            </div>
+            <div>
               <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 600, color: C.ink, marginBottom: 6 }}>Submission portal / channel</div>
-              <input value={t?.portal ?? ""} placeholder="e.g. UNGM e-submission · email in the notice" onChange={(e) => setT({ portal: e.target.value || null })} style={inputStyle} />
+              <input
+                value={t?.portal ?? ""}
+                placeholder="e.g. UNGM e-submission · email in the notice"
+                onChange={(e) => setT({ portal: e.target.value || null, portalOverride: true })}
+                style={inputStyle}
+              />
             </div>
           </div>
         )}
       </div>
+      {t?.title && (
+        <TenderPackPanel
+          tender={t}
+          pack={draft.tenderPack ?? { status: "not_started", documents: [] }}
+          onChange={(tenderPack) => patch({ tenderPack })}
+        />
+      )}
       <div style={{ marginTop: 14, padding: "13px 16px", border: `1px dashed ${C.rule}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <span style={{ fontFamily: F.sans, fontSize: 12.5, color: C.mute }}>
           Responding to something else? Paste the notice and we&apos;ll parse the requirements.
@@ -246,6 +289,12 @@ function ReviewStep({
     ["Format", `${flow.code} — ${flow.name}`],
     ["Tender", tender?.title || "— pick one in step 1"],
     ["Agency · portal", tender ? [tender.agency, tender.portal].filter(Boolean).join(" · ") || "—" : "—"],
+    [
+      "Tender pack",
+      draft.tenderPack?.documents.length
+        ? `${draft.tenderPack.documents.length} private document${draft.tenderPack.documents.length === 1 ? "" : "s"} · ${draft.tenderPack.status}`
+        : "No documents attached — confirm the portal pack before drafting",
+    ],
     ["Deadline", tender?.due ? `${shortDate(tender.due)} (${deadlineLabel(tender.due)})` : "—"],
     ["Intake completeness", `${a.pct}% · ${a.need - a.have} item(s) open`],
     [
@@ -381,6 +430,7 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
   const [draft, setDraft] = useState<WizardDraftState>({ ...EMPTY_DRAFT });
   const [hydrated, setHydrated] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const [vaultDocs, setVaultDocs] = useState<VaultDocRow[]>([]);
   const [prefills, setPrefills] = useState<Record<string, string>>({});
@@ -403,8 +453,36 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
         loadProfilePrefill(),
       ]);
       if (!live) return;
-      const merged: WizardDraftState = { ...EMPTY_DRAFT, ...stored };
-      if (!merged.tender?.title && seedMatch) merged.tender = tenderFromMatch(seedMatch);
+      let merged: WizardDraftState = { ...EMPTY_DRAFT, ...stored };
+      if (seedMatch) {
+        const sameTender = seedMatch.tenderId != null
+          ? merged.tender?.tenderId === seedMatch.tenderId
+          : merged.tender?.title === seedMatch.title;
+        if (!sameTender) {
+          // An explicit match deep-link starts that opportunity cleanly. A
+          // per-format draft for another tender must not leak answers or files
+          // into this one.
+          merged = {
+            ...EMPTY_DRAFT,
+            tender: tenderFromMatch(seedMatch),
+            tenderPack: { status: "not_started", documents: [] },
+          };
+        } else if (!merged.tender?.title) {
+          merged.tender = tenderFromMatch(seedMatch);
+        }
+      }
+      if (!merged.tenderPack) merged.tenderPack = { status: "not_started", documents: [] };
+      if (merged.tender?.title && !merged.tender.portalOverride) {
+        const portal = resolveSubmissionPortal(merged.tender.agency);
+        merged.tender = {
+          ...merged.tender,
+          portal: portal.isFallback ? (merged.tender.portal || portal.portalName) : portal.portalName,
+          portalKey: portal.key,
+          portalOverride: false,
+          portalUrl: portal.signInUrl || portal.registrationUrl,
+          portalGuideUrl: portal.guideUrl || null,
+        };
+      }
       const pmap = profilePrefillMap(flow, pf);
       for (const [k, v] of Object.entries(pmap)) {
         if (merged.fields[k] == null) merged.fields = { ...merged.fields, [k]: v };
@@ -426,6 +504,7 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
   const patch = useCallback((p: Partial<WizardDraftState>) => {
     setDraft((d) => ({ ...d, ...p }));
     setSaved(false);
+    setSaveError(null);
   }, []);
 
   // Debounced server autosave — the per-type draft, resumed on reopen.
@@ -434,8 +513,17 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       saveDraft(type, { ...draft, step })
-        .then(() => setSaved(true))
-        .catch(() => {});
+        .then(() => {
+          setSaved(true);
+          setSaveError(null);
+        })
+        .catch((error) => {
+          console.error("[tp:submissions:autosave_failed]", {
+            type,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          setSaveError("Draft not saved — edit any field to retry");
+        });
     }, 900);
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -558,6 +646,11 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
         {saved && (
           <span style={{ fontFamily: F.mono, fontSize: 8.5, letterSpacing: "0.1em", textTransform: "uppercase", color: C.pos, flexShrink: 0 }}>
             ✓ draft saved
+          </span>
+        )}
+        {saveError && (
+          <span role="alert" style={{ fontFamily: F.mono, fontSize: 8.5, letterSpacing: "0.08em", textTransform: "uppercase", color: C.neg, flexShrink: 0 }}>
+            {saveError}
           </span>
         )}
         <button

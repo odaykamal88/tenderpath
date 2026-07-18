@@ -99,6 +99,81 @@ const QUANTUM: SubmissionPortal = {
   note: "Quantum is a shared Oracle Cloud portal across UNDP and its partner agencies (UNFPA, UN Women, UNCDF, UNV). Respond to the specific negotiation referenced on the notice.",
 };
 
+const UNICEF_UNGM: SubmissionPortal = {
+  key: "unicef-ungm",
+  portalName: "UNGM electronic submission",
+  servedBy: ["UNICEF", "United Nations Children's Fund"],
+  registrationUrl: UNGM_URL,
+  signInUrl: UNGM_URL,
+  guideUrl: "https://help.ungm.org/hc/en-us/articles/360012897740-How-to-submit-a-bid",
+  leadTimeBusinessDays: [0, 3],
+  leadTimeLabel: "usually same day for Basic registration; allow longer if the notice requires a higher level",
+  alsoRegisterUngm: true,
+  steps: [
+    "Register or sign in on UNGM and make sure your supplier profile is complete.",
+    "Open the UNICEF notice and download every solicitation file, amendment, and clarification.",
+    "Use the notice's electronic-submission instructions to prepare the required response envelopes and attachments.",
+    "Submit in UNGM before cutoff and keep the electronic acknowledgement or reference number.",
+  ],
+  note: "UNICEF notices commonly use UNGM electronic submission, but the specific notice is authoritative. If it names another channel, follow that channel instead.",
+};
+
+const UNOPS_ESOURCING: SubmissionPortal = {
+  key: "unops-esourcing",
+  portalName: "UNOPS eSourcing",
+  servedBy: ["UNOPS", "United Nations Office for Project Services"],
+  registrationUrl: UNGM_URL,
+  signInUrl: "https://esourcing.unops.org",
+  guideUrl: "https://esourcing.unops.org/Scripts/App/Help/Guides/UNOPS_eSourcing_Vendor%20Guide_EN.pdf",
+  leadTimeBusinessDays: [0, 3],
+  leadTimeLabel: "allow up to several business days to register, activate, and complete the response",
+  alsoRegisterUngm: true,
+  steps: [
+    "Create or confirm your UNGM vendor account — UNOPS eSourcing uses it as the supplier identity layer.",
+    "Open UNOPS eSourcing and locate the event referenced by the official notice.",
+    "Download the complete solicitation set, including amendments and Q&A, before preparing the response.",
+    "Complete every required response field, upload the requested files, submit, and retain the acknowledgement.",
+  ],
+  note: "UNOPS opportunities are advertised through UNGM and managed in UNOPS eSourcing. The event notice remains authoritative for deadlines and response requirements.",
+};
+
+const WHO_INTEND: SubmissionPortal = {
+  key: "who-intend",
+  portalName: "WHO In-Tend supplier portal",
+  servedBy: ["WHO", "World Health Organization"],
+  registrationUrl: "https://ungm.in-tend.co.uk/who/aspx/Home",
+  signInUrl: "https://ungm.in-tend.co.uk/who/aspx/Home",
+  guideUrl: "https://www.who.int/about/accountability/procurement/become-a-supplier",
+  leadTimeBusinessDays: [1, 5],
+  leadTimeLabel: "allow several business days to register, activate, and confirm access",
+  alsoRegisterUngm: true,
+  steps: [
+    "Register your organisation in the WHO In-Tend supplier portal and activate the account.",
+    "Open the tender event and download the full document set, including later clarifications or amendments.",
+    "Prepare the response in the exact envelopes and formats required by the event.",
+    "Submit through In-Tend before cutoff and keep the portal acknowledgement.",
+  ],
+  note: "WHO publishes opportunities on UNGM, while suppliers register and respond through the WHO In-Tend portal when the notice directs them there.",
+};
+
+const WFP_SMARTSOURCING: SubmissionPortal = {
+  key: "wfp-smartsourcing",
+  portalName: "WFP SmartSourcing (Coupa)",
+  servedBy: ["WFP", "World Food Programme", "World Food Program"],
+  registrationUrl: "https://www.wfp.org/do-business-with-wfp",
+  guideUrl: "https://www.wfp.org/do-business-with-wfp",
+  leadTimeBusinessDays: [1, 7],
+  leadTimeLabel: "varies during the SmartSourcing migration — start registration early",
+  alsoRegisterUngm: true,
+  steps: [
+    "Confirm the submission channel named on the WFP notice; WFP is migrating sourcing activity to SmartSourcing based on Coupa.",
+    "Follow the notice or WFP invitation to register and activate the correct supplier account.",
+    "Download every event document and check for amendments before finalising the response.",
+    "Submit in the named system before cutoff and retain the acknowledgement.",
+  ],
+  note: "WFP is migrating to SmartSourcing (Coupa), so we do not assume every notice uses the same sign-in route. Follow the specific event invitation or notice.",
+};
+
 const FALLBACK: SubmissionPortal = {
   key: "generic",
   portalName: "UNGM + the buying agency's own portal",
@@ -119,7 +194,14 @@ const FALLBACK: SubmissionPortal = {
 };
 
 /** All verified, agency-specific portals (excludes the fallback). */
-export const VERIFIED_PORTALS: SubmissionPortal[] = [UNHCR, QUANTUM];
+export const VERIFIED_PORTALS: SubmissionPortal[] = [
+  UNHCR,
+  QUANTUM,
+  UNICEF_UNGM,
+  UNOPS_ESOURCING,
+  WHO_INTEND,
+  WFP_SMARTSOURCING,
+];
 
 /**
  * Resolve the supplier portal a bidder must register on, keyed off the buying
@@ -132,6 +214,22 @@ export function resolveSubmissionPortal(
   if (!hay.trim()) return FALLBACK;
 
   if (/\bunhcr\b/.test(hay) || hay.includes("refugee")) return UNHCR;
+
+  if (/\bunicef\b/.test(hay) || hay.includes("children's fund") || hay.includes("childrens fund")) {
+    return UNICEF_UNGM;
+  }
+
+  if (/\bunops\b/.test(hay) || hay.includes("office for project services")) {
+    return UNOPS_ESOURCING;
+  }
+
+  if (/\bwho\b/.test(hay) || hay.includes("world health organization") || hay.includes("world health organisation")) {
+    return WHO_INTEND;
+  }
+
+  if (/\bwfp\b/.test(hay) || hay.includes("world food programme") || hay.includes("world food program")) {
+    return WFP_SMARTSOURCING;
+  }
 
   if (
     /\b(undp|unfpa|uncdf|unv)\b/.test(hay) ||

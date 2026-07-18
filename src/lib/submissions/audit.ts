@@ -211,6 +211,7 @@ export function buildDeliverables(flow: SubmissionFlow): SubmissionDeliverable[]
  *  from these, so the preview is the order's own intake, never invented. */
 export function buildIntakeFields(draft: WizardDraftState): IntakeFields {
   return {
+    tenderContext: draft.tender ?? null,
     fields: draft.fields,
     lines: draft.lines,
     currency: draft.currency,
@@ -218,5 +219,6 @@ export function buildIntakeFields(draft: WizardDraftState): IntakeFields {
     declarations: draft.declarations,
     refs: draft.refs,
     docs: draft.docs,
+    tenderPack: draft.tenderPack ?? { status: "not_started", documents: [] },
   };
 }

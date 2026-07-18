@@ -8,6 +8,7 @@ import { isSubmissionCode } from "@/lib/workbench/pricing";
 import type { SubmissionCode, WizardDraftState } from "@/lib/submissions/types";
 import { EMPTY_DRAFT } from "@/lib/submissions/types";
 import { clearDraft, getDraft, putDraft } from "@/lib/submissions/store";
+import { sanitizeTenderPackForUser, TenderPackOwnershipError } from "@/lib/tender-workspace/ownership";
 
 export const dynamic = "force-dynamic";
 
@@ -44,9 +45,14 @@ export async function PUT(request: Request, ctx: { params: Promise<{ type: strin
   try {
     const body = (await request.json()) as { draft?: Partial<WizardDraftState> };
     const draft: WizardDraftState = { ...EMPTY_DRAFT, ...(body.draft ?? {}) };
+    draft.tenderPack = await sanitizeTenderPackForUser(guard.user!.id, draft.tenderPack);
     await putDraft(guard.user!.id, type, draft);
     return NextResponse.json({ ok: true });
   } catch (err) {
+    if (err instanceof TenderPackOwnershipError) {
+      console.warn("[tp:submissions:draft_pack_forbidden]", { userId: guard.user!.id, type });
+      return NextResponse.json({ error: err.message }, { status: 403 });
+    }
     console.error("[tp:submissions:draft_put_failed]", {
       userId: guard.user!.id,
       type,
@@ -65,7 +71,12 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ type: st
   try {
     await clearDraft(guard.user!.id, type);
     return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[tp:submissions:draft_delete_failed]", {
+      userId: guard.user!.id,
+      type,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return NextResponse.json({ error: "Could not clear the saved draft." }, { status: 500 });
   }
 }

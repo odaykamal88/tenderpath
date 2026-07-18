@@ -33,6 +33,7 @@ import {
 } from "@/lib/submissions/store";
 import { buildNudges } from "@/lib/submissions/nudges";
 import { canUseBundledEoi, recordBundledEoiUse } from "@/lib/subscription/eoi-quota";
+import { sanitizeTenderPackForUser, TenderPackOwnershipError } from "@/lib/tender-workspace/ownership";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +73,7 @@ export async function POST(request: Request) {
     const type = typeRaw as SubmissionCode;
     const flow = flowFor(type);
     const draft: WizardDraftState = { ...EMPTY_DRAFT, ...(body.draft ?? {}) };
+    draft.tenderPack = await sanitizeTenderPackForUser(user.id, draft.tenderPack);
 
     // Authoritative server-side gate (SPEC §3): tender chosen ∧ no open
     // blockers ∧ completeness ≥ 80%. We won't draft a submission we know will
@@ -95,7 +97,13 @@ export async function POST(request: Request) {
 
     // Persist the draft snapshot (it survives the /pay round-trip; cleared on
     // payment), then the pending order itself.
-    await putDraft(user.id, type, { ...draft } as WizardDraftState).catch(() => {});
+    await putDraft(user.id, type, { ...draft } as WizardDraftState).catch((error) => {
+      console.error("[tp:submissions:precommission_draft_save_failed]", {
+        userId: user.id,
+        type,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
 
     const tender = draft.tender!;
     const order = await upsertPendingOrder({
@@ -212,6 +220,10 @@ export async function POST(request: Request) {
       pay_url: `/pay?${payParams.toString()}`,
     });
   } catch (err) {
+    if (err instanceof TenderPackOwnershipError) {
+      console.warn("[tp:submissions:pack_forbidden]", { userId: user.id, type: typeForLog });
+      return NextResponse.json({ error: err.message }, { status: 403 });
+    }
     console.error("[tp:submissions:commission_failed]", {
       userId: user.id,
       type: typeForLog,

@@ -12,6 +12,7 @@ import { bucketMeta } from "../buckets";
 import { useMedia } from "../useMedia";
 import { useWorkbench } from "../WorkbenchProvider";
 import type { BucketKey, WbMatch } from "@/lib/workbench/types";
+import { submissionCodeForOpportunity } from "@/lib/submissions/format";
 
 function nextStep(m: WbMatch): { step: string; detail: string; route: string } {
   let detail: string;
@@ -20,11 +21,12 @@ function nextStep(m: WbMatch): { step: string; detail: string; route: string } {
   else if (m.roster) detail = "UN agency opportunity — verify roster / LTA registration first.";
   else detail = "Review the match evidence before investing proposal time.";
 
+  const submissionCode = submissionCodeForOpportunity(m.type, m.title);
   let step: string;
   let route: string;
-  if (m.fit >= 75) {
-    step = "Start a proposal package";
-    route = "proposals";
+  if (submissionCode) {
+    step = "Prepare in TenderPath";
+    route = `/dashboard/proposals?start=${submissionCode}&match=${m.id}`;
   } else if (m.roster) {
     step = "Check roster / LTA path";
     route = "proposals";

@@ -1,5 +1,6 @@
 import type { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { deleteStoredBlob, storedBlobAccess } from "@/lib/vault/storage";
 
 // Single source of truth — keep this aligned with scripts/create-demo-user.mjs
 // and the credentials hint on /login. Tests + ops scripts read it from here.
@@ -82,10 +83,9 @@ export function resolveOrMintForSignin(request: Request): {
   return { sessionId: mintDemoSessionId(), carriedFromCookie: false };
 }
 
-// Wipe every demo-email work order + its proposal_packages. Called from
-// /api/auth/password on demo sign-in so the Work Orders page on the next
-// demo session starts empty — same "clean slate" guarantee the assessment
-// wipe gives the demo experience.
+// Wipe every customer-owned object in the shared demo workspace. The public
+// demo login is a tenant boundary: a new visitor must never inherit another
+// visitor's draft, submission order, or private vault file.
 //
 // Unlike assessments, work_orders never go through an anonymous handoff —
 // every demo work order was created by a previously signed-in demo session.
@@ -96,12 +96,108 @@ export function resolveOrMintForSignin(request: Request): {
 // already exists) to avoid orphan rows. Then work_orders.
 //
 // Errors are best-effort — sign-in itself proceeds even if the wipe fails.
-export async function wipeDemoWorkOrders(): Promise<{
+export async function wipeDemoCustomerWorkspace(): Promise<{
   packages: number;
   orders: number;
+  submissionOrders: number;
+  drafts: number;
+  vaultDocuments: number;
+  uploadReceipts: number;
+  failed: boolean;
 }> {
   let packages = 0;
   let orders = 0;
+  let submissionOrders = 0;
+  let drafts = 0;
+  let vaultDocuments = 0;
+  let uploadReceipts = 0;
+  let failed = false;
+
+  const demoUserClause = sql`SELECT id FROM users WHERE lower(email) = ${DEMO_EMAIL}`;
+
+  // Delete bytes before metadata. If storage cleanup fails, fail closed and
+  // leave the row reachable for an operator retry instead of signing the next
+  // visitor into a workspace that still exposes the previous visitor's file.
+  try {
+    const rows = (await sql`
+      SELECT file_url AS url FROM vault_documents
+      WHERE user_id IN (${demoUserClause})
+      UNION
+      SELECT blob_url AS url FROM vault_upload_receipts
+      WHERE user_id IN (${demoUserClause})
+    `) as unknown as Array<{ url: string }>;
+    for (const row of rows) {
+      await deleteStoredBlob(row.url, storedBlobAccess(row.url));
+    }
+  } catch (err) {
+    console.error("[demo:wipe:private_storage_delete_failed]", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return {
+      packages,
+      orders,
+      submissionOrders,
+      drafts,
+      vaultDocuments,
+      uploadReceipts,
+      failed: true,
+    };
+  }
+
+  try {
+    const extractionRows = await sql`
+      DELETE FROM document_extractions
+      WHERE user_id IN (${demoUserClause})
+      RETURNING id
+    `;
+    void extractionRows;
+    const receiptRows = await sql`
+      DELETE FROM vault_upload_receipts
+      WHERE user_id IN (${demoUserClause})
+      RETURNING id
+    `;
+    uploadReceipts = receiptRows.length;
+    const vaultRows = await sql`
+      DELETE FROM vault_documents
+      WHERE user_id IN (${demoUserClause})
+      RETURNING id
+    `;
+    vaultDocuments = vaultRows.length;
+  } catch (err) {
+    failed = true;
+    console.error("[demo:wipe:vault_metadata_delete_failed]", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  try {
+    const draftRows = await sql`
+      DELETE FROM submission_drafts
+      WHERE user_id IN (${demoUserClause})
+      RETURNING user_id
+    `;
+    drafts = draftRows.length;
+  } catch (err) {
+    failed = true;
+    console.error("[demo:wipe:submission_drafts_delete_failed]", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  try {
+    const submissionRows = await sql`
+      DELETE FROM submission_orders
+      WHERE user_id IN (${demoUserClause})
+      RETURNING id
+    `;
+    submissionOrders = submissionRows.length;
+  } catch (err) {
+    failed = true;
+    console.error("[demo:wipe:submission_orders_delete_failed]", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   try {
     const pkgRows = await sql`
       DELETE FROM proposal_packages
@@ -110,6 +206,7 @@ export async function wipeDemoWorkOrders(): Promise<{
     `;
     packages = pkgRows.length;
   } catch (err) {
+    failed = true;
     console.warn("[demo:wipe:packages_delete_failed]", {
       error: err instanceof Error ? err.message : String(err),
     });
@@ -123,11 +220,20 @@ export async function wipeDemoWorkOrders(): Promise<{
     `;
     orders = orderRows.length;
   } catch (err) {
+    failed = true;
     console.error("[demo:wipe:orders_delete_failed]", {
       error: err instanceof Error ? err.message : String(err),
     });
   }
-  return { packages, orders };
+  return {
+    packages,
+    orders,
+    submissionOrders,
+    drafts,
+    vaultDocuments,
+    uploadReceipts,
+    failed,
+  };
 }
 
 // Wipe every demo-email assessment whose demo_session_id does NOT match the
@@ -140,7 +246,7 @@ export async function wipeDemoWorkOrders(): Promise<{
 // but harmless and keeps the queue table tidy.
 export async function wipeOtherDemoAssessments(
   currentSessionId: string,
-): Promise<{ wiped: number }> {
+): Promise<{ wiped: number; failed: boolean }> {
   try {
     await sql`
       DELETE FROM email_queue
@@ -162,12 +268,12 @@ export async function wipeOtherDemoAssessments(
         AND demo_session_id IS DISTINCT FROM ${currentSessionId}
       RETURNING id
     `;
-    return { wiped: rows.length };
+    return { wiped: rows.length, failed: false };
   } catch (err) {
     console.error("[demo:wipe:assessment_delete_failed]", {
       currentSessionId,
       error: err instanceof Error ? err.message : String(err),
     });
-    return { wiped: 0 };
+    return { wiped: 0, failed: true };
   }
 }
