@@ -214,9 +214,9 @@ function fallbackTitle(value: string): string {
   if (/bid security|bid-securing/.test(lower)) return "Provide the required bid security";
   if (/validity/.test(lower)) return "Meet the published offer-validity period";
   if (/eligib|qualification/.test(lower)) return "Confirm the published eligibility requirement";
-  if (/\bforms?\b|annex|document|certificate/.test(lower)) return "Return the required form or document";
   if (/price|financial|currency|tax|vat|quotation|boq|bill of quantit/.test(lower)) return "Follow the published financial requirement";
   if (/technical|specification|methodology|personnel|evaluation|score|criterion|packaging|diameter|dimension|material|capacity|performance|quality|standard/.test(lower)) return "Address the published technical requirement";
+  if (/\bforms?\b|annex|document|certificate/.test(lower)) return "Return the required form or document";
   if (/submit|portal|email|envelope|upload/.test(lower)) return "Follow the published submission instruction";
   return "Verify the published compliance requirement";
 }
@@ -242,7 +242,7 @@ function conservativeFallback(documents: RequirementDocument[]): TenderRequireme
       if (evidence.length < 35 || evidence.length > 700) continue;
       const lower = evidence.toLowerCase();
       const directive = /\bmust\b|\bshall\b|mandatory|required|failure to|will be rejected|shall be rejected|disqualif|not be accepted|deadline|closing date|closing time/.test(lower);
-      const procurementTopic = /submit|submission|proposal|bid|offer|tender|document|form|annex|certificate|signature|eligib|qualification|technical|specification|financial|price|currency|security|validity|portal|email|envelope|evaluation|score|criterion/.test(lower);
+      const procurementTopic = /submit|submission|proposal|bid|offer|tender|document|\bforms?\b|annex|certificate|signature|eligib|qualification|technical|specification|financial|price|currency|security|validity|portal|email|envelope|evaluation|score|criterion|packaging|diameter|dimension|material|capacity|performance|quality|standard|deliver(?:y| the goods)|lead time/.test(lower);
       if (!directive || !procurementTopic) continue;
       const comparable = evidenceComparable(evidence);
       const dedupeKey = comparable.slice(0, 180);
