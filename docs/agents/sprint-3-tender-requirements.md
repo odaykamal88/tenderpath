@@ -35,6 +35,10 @@ live notice and TenderPath's existing paid-intake gate remains authoritative.
   AI processor. Portal credentials, sessions, cookies, and MFA data are never
   part of the request.
 - The expensive generation route is rate-limited and has stable error logs.
+- If the configured AI processor is unavailable or returns no source-verifiable
+  items, TenderPath falls back to a conservative directive scan. The fallback
+  uses exact excerpts, returns a `partial` map, and says so in the UI instead of
+  failing the workflow.
 
 ### Evidence and authority
 

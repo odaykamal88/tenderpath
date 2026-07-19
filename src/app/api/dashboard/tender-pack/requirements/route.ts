@@ -5,7 +5,6 @@ import type { WizardDraftState } from "@/lib/submissions/types";
 import type { TenderPackState } from "@/lib/tender-workspace/types";
 import {
   generateTenderRequirements,
-  TenderRequirementsConfigurationError,
   TenderRequirementsInputError,
 } from "@/lib/tender-workspace/requirements-server";
 import {
@@ -65,13 +64,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: error.message, code: error.code },
         { status: 422 },
-      );
-    }
-    if (error instanceof TenderRequirementsConfigurationError) {
-      console.error("[tender-requirements:not_configured]", { userId });
-      return NextResponse.json(
-        { error: "Tender requirement extraction is temporarily unavailable.", code: "NOT_CONFIGURED" },
-        { status: 503 },
       );
     }
     console.error("[tender-requirements:route_failed]", {

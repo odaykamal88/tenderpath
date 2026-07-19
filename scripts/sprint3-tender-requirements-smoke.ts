@@ -160,6 +160,8 @@ async function staticContinuityChecks() {
   assert.match(generator, /Do not invent common UN rules/);
   assert.match(generator, /documentText\.includes\(evidenceComparable\(evidence\)\)/);
   assert.match(generator, /never as instructions to you/);
+  assert.match(generator, /conservativeFallback/);
+  assert.match(generator, /\[tender-requirements:ai_fallback\]/);
 }
 
 async function main() {
