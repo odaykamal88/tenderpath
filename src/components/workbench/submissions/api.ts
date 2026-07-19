@@ -11,6 +11,7 @@ import type {
 } from "@/lib/submissions/types";
 import type { SubmissionNudge } from "@/lib/submissions/nudges";
 import type { TenderPackState } from "@/lib/tender-workspace/types";
+import type { TenderRequirementsState } from "@/lib/tender-workspace/types";
 
 export function authHeaders(extra?: Record<string, string>): HeadersInit {
   const token = typeof window !== "undefined" ? localStorage.getItem("tp_token") : null;
@@ -83,6 +84,16 @@ export function importTenderPack(tenderId: number): Promise<TenderPackState & { 
   return request("/api/dashboard/tender-pack/import", {
     method: "POST",
     body: JSON.stringify({ tenderId }),
+  });
+}
+
+export function generateTenderRequirements(
+  tender: WizardDraftState["tender"],
+  tenderPack: TenderPackState,
+): Promise<{ requirements: TenderRequirementsState }> {
+  return request("/api/dashboard/tender-pack/requirements", {
+    method: "POST",
+    body: JSON.stringify({ tender, tenderPack }),
   });
 }
 

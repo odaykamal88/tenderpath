@@ -34,6 +34,7 @@ import {
 import { buildNudges } from "@/lib/submissions/nudges";
 import { canUseBundledEoi, recordBundledEoiUse } from "@/lib/subscription/eoi-quota";
 import { normalizePortalCompanion } from "@/lib/tender-workspace/companion";
+import { normalizeTenderRequirements } from "@/lib/tender-workspace/requirements";
 import { sanitizeTenderPackForUser, TenderPackOwnershipError } from "@/lib/tender-workspace/ownership";
 
 export const dynamic = "force-dynamic";
@@ -76,6 +77,7 @@ export async function POST(request: Request) {
     const draft: WizardDraftState = { ...EMPTY_DRAFT, ...(body.draft ?? {}) };
     draft.tenderPack = await sanitizeTenderPackForUser(user.id, draft.tenderPack);
     draft.portalCompanion = normalizePortalCompanion(draft.portalCompanion);
+    draft.tenderRequirements = normalizeTenderRequirements(draft.tenderRequirements, draft.tenderPack);
 
     // Authoritative server-side gate (SPEC §3): tender chosen ∧ no open
     // blockers ∧ completeness ≥ 80%. We won't draft a submission we know will

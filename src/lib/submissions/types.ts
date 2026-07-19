@@ -12,8 +12,10 @@
 import type { SubmissionCode } from "@/lib/workbench/pricing";
 import {
   EMPTY_PORTAL_COMPANION,
+  EMPTY_TENDER_REQUIREMENTS,
   type PortalCompanionState,
   type TenderPackState,
+  type TenderRequirementsState,
 } from "@/lib/tender-workspace/types";
 
 export type { SubmissionCode };
@@ -250,6 +252,8 @@ export interface WizardDraftState {
   tenderPack?: TenderPackState;
   /** User-confirmed, non-credential portal hand-off state. */
   portalCompanion?: PortalCompanionState;
+  /** Evidence-backed requirements extracted from the current private pack. */
+  tenderRequirements?: TenderRequirementsState;
   fields: Record<string, string>;
   lines: PricedLine[];
   currency: string;
@@ -264,6 +268,7 @@ export const EMPTY_DRAFT: WizardDraftState = {
   tender: null,
   tenderPack: { status: "not_started", documents: [] },
   portalCompanion: { ...EMPTY_PORTAL_COMPANION },
+  tenderRequirements: { ...EMPTY_TENDER_REQUIREMENTS },
   fields: {},
   lines: [],
   currency: "USD",

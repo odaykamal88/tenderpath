@@ -67,6 +67,22 @@ allows it, with a direct official-link fallback. No iframe, credential custody,
 session replay, signing, or submission authority is introduced. See
 `docs/agents/sprint-2-portal-companion.md` for the contract and acceptance walk.
 
+## Evidence-backed tender requirements (Sprint 3)
+
+Once readable tender files exist, the account user can explicitly build a
+tender-specific compliance map. The authenticated generation route rebuilds
+the owner-scoped manifest, reads amendments and Q&A before the base documents,
+and returns administrative, technical, financial, and submission requirements
+with source excerpts and concrete actions.
+
+`WizardDraftState.tenderRequirements` persists supplier statuses and notes.
+Its pack fingerprint makes the map visibly stale when files or document roles
+change; same-pack regeneration preserves progress, changed-pack regeneration
+does not. Draft and order routes normalize the bounded state again, and the
+order snapshot carries it under `intake_fields.tenderRequirements`. The map is
+advisory in Sprint 3 and does not change the existing 80% payment gate. See
+`docs/agents/sprint-3-tender-requirements.md`.
+
 ## Payment seam (work-order-first, like every other paid service)
 
 1. Wizard "Pay $X & start drafting" → `POST /api/dashboard/submission-orders`

@@ -24,7 +24,11 @@ import type { WbMatch } from "@/lib/workbench/types";
 import type { DocResolution, SubmissionCode, WizardDraftState } from "@/lib/submissions/types";
 import { EMPTY_DRAFT } from "@/lib/submissions/types";
 import { buildPortalCompanionView } from "@/lib/tender-workspace/companion";
-import { EMPTY_PORTAL_COMPANION } from "@/lib/tender-workspace/types";
+import { buildTenderRequirementsView } from "@/lib/tender-workspace/requirements";
+import {
+  EMPTY_PORTAL_COMPANION,
+  EMPTY_TENDER_REQUIREMENTS,
+} from "@/lib/tender-workspace/types";
 import { resolveSubmissionPortal } from "@/lib/tenders/submission-portals";
 import { flowFor, FLOW_GUARANTEE, type FlowBlock, type FlowStep, type SubmissionFlow } from "@/lib/submissions/flows";
 import { docSpec } from "@/lib/submissions/docs-catalog";
@@ -50,6 +54,7 @@ import {
   PickRefsBlock,
 } from "./wizardBlocks";
 import { TenderPackPanel } from "./TenderPackPanel";
+import { TenderRequirementsPanel } from "./TenderRequirementsPanel";
 
 const RAIL_BREAK = "(max-width: 1279px)";
 const MOBILE = "(max-width: 1023px)";
@@ -169,6 +174,7 @@ function TenderStep({
                   tender: tenderFromMatch(m),
                   tenderPack: { status: "not_started", documents: [] },
                   portalCompanion: { ...EMPTY_PORTAL_COMPANION },
+                  tenderRequirements: { ...EMPTY_TENDER_REQUIREMENTS },
                 });
                 setManual(false);
               }}
@@ -196,7 +202,15 @@ function TenderStep({
               <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 600, color: C.ink, marginBottom: 6 }}>
                 Tender title <span style={{ color: C.neg }}>*</span>
               </div>
-              <input value={t?.title ?? ""} placeholder="Exactly as the notice names it" onChange={(e) => setT({ title: e.target.value })} style={inputStyle} />
+              <input
+                value={t?.title ?? ""}
+                placeholder="Exactly as the notice names it"
+                onChange={(e) => patch({
+                  tender: { ...(t ?? { title: "" }), title: e.target.value },
+                  tenderRequirements: { ...EMPTY_TENDER_REQUIREMENTS },
+                })}
+                style={inputStyle}
+              />
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
@@ -219,6 +233,7 @@ function TenderStep({
                         portalGuideUrl: portal.guideUrl || null,
                       },
                       portalCompanion: { ...EMPTY_PORTAL_COMPANION },
+                      tenderRequirements: { ...EMPTY_TENDER_REQUIREMENTS },
                     });
                   }}
                   style={inputStyle}
@@ -231,7 +246,17 @@ function TenderStep({
             </div>
             <div>
               <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 600, color: C.ink, marginBottom: 6 }}>Official notice URL</div>
-                <input type="url" inputMode="url" value={t?.sourceUrl ?? ""} placeholder="https://…" onChange={(e) => setT({ sourceUrl: e.target.value || null })} style={inputStyle} />
+              <input
+                type="url"
+                inputMode="url"
+                value={t?.sourceUrl ?? ""}
+                placeholder="https://…"
+                onChange={(e) => patch({
+                  tender: { ...(t ?? { title: "" }), sourceUrl: e.target.value || null },
+                  tenderRequirements: { ...EMPTY_TENDER_REQUIREMENTS },
+                })}
+                style={inputStyle}
+              />
             </div>
             <div>
               <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 600, color: C.ink, marginBottom: 6 }}>Submission portal / channel</div>
@@ -271,6 +296,14 @@ function TenderStep({
           companion={draft.portalCompanion ?? EMPTY_PORTAL_COMPANION}
           onChange={(tenderPack) => patch({ tenderPack })}
           onCompanionChange={(portalCompanion) => patch({ portalCompanion })}
+        />
+      )}
+      {t?.title && (
+        <TenderRequirementsPanel
+          tender={t}
+          pack={draft.tenderPack ?? { status: "not_started", documents: [] }}
+          requirements={draft.tenderRequirements ?? EMPTY_TENDER_REQUIREMENTS}
+          onChange={(tenderRequirements) => patch({ tenderRequirements })}
         />
       )}
       <div style={{ marginTop: 14, padding: "13px 16px", border: `1px dashed ${C.rule}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -322,6 +355,10 @@ function ReviewStep({
     draft.tenderPack,
     draft.portalCompanion,
   );
+  const requirementsReadiness = buildTenderRequirementsView(
+    draft.tenderPack,
+    draft.tenderRequirements,
+  );
   const rows: [string, string][] = [
     ["Format", `${flow.code} — ${flow.name}`],
     ["Tender", tender?.title || "— pick one in step 1"],
@@ -335,6 +372,12 @@ function ReviewStep({
     [
       "Portal hand-off",
       `${portalReadiness.complete}/${portalReadiness.total} checks · ${portalReadiness.nextAction.title}`,
+    ],
+    [
+      "Tender requirements",
+      requirementsReadiness.total
+        ? `${requirementsReadiness.complete}/${requirementsReadiness.total} accounted for · ${requirementsReadiness.openBlocks} open blocker${requirementsReadiness.openBlocks === 1 ? "" : "s"}${requirementsReadiness.isStale ? " · refresh required" : ""}`
+        : "Compliance map not built yet — review the tender-specific requirements before submission",
     ],
     ["Deadline", tender?.due ? `${shortDate(tender.due)} (${deadlineLabel(tender.due)})` : "—"],
     ["Intake completeness", `${a.pct}% · ${a.need - a.have} item(s) open`],
@@ -508,6 +551,7 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
             tender: tenderFromMatch(seedMatch),
             tenderPack: { status: "not_started", documents: [] },
             portalCompanion: { ...EMPTY_PORTAL_COMPANION },
+            tenderRequirements: { ...EMPTY_TENDER_REQUIREMENTS },
           };
         } else if (!merged.tender?.title) {
           merged.tender = tenderFromMatch(seedMatch);
@@ -515,6 +559,7 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
       }
       if (!merged.tenderPack) merged.tenderPack = { status: "not_started", documents: [] };
       if (!merged.portalCompanion) merged.portalCompanion = { ...EMPTY_PORTAL_COMPANION };
+      if (!merged.tenderRequirements) merged.tenderRequirements = { ...EMPTY_TENDER_REQUIREMENTS };
       if (merged.tender?.title && !merged.tender.portalOverride) {
         const portal = resolveSubmissionPortal(merged.tender.agency);
         merged.tender = {

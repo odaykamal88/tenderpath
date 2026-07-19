@@ -69,3 +69,72 @@ export const EMPTY_PORTAL_COMPANION: PortalCompanionState = {
   portalOpenedAt: null,
   updatedAt: null,
 };
+
+export const TENDER_REQUIREMENT_CATEGORIES = [
+  "administrative",
+  "technical",
+  "financial",
+  "submission",
+] as const;
+
+export type TenderRequirementCategory = (typeof TENDER_REQUIREMENT_CATEGORIES)[number];
+
+export const TENDER_REQUIREMENT_SEVERITIES = ["BLOCK", "HIGH", "MED", "LOW"] as const;
+export type TenderRequirementSeverity = (typeof TENDER_REQUIREMENT_SEVERITIES)[number];
+
+export const TENDER_REQUIREMENT_STATUSES = [
+  "open",
+  "ready",
+  "needs_review",
+  "not_applicable",
+] as const;
+export type TenderRequirementStatus = (typeof TENDER_REQUIREMENT_STATUSES)[number];
+
+export const TENDER_REQUIREMENT_CONFIDENCE = ["high", "medium", "low"] as const;
+export type TenderRequirementConfidence = (typeof TENDER_REQUIREMENT_CONFIDENCE)[number];
+
+export interface TenderRequirementItem {
+  id: string;
+  category: TenderRequirementCategory;
+  severity: TenderRequirementSeverity;
+  title: string;
+  action: string;
+  /** Short excerpt from the source document, never an invented rationale. */
+  evidence: string;
+  sourceDocumentId: number;
+  sourceDocumentName: string;
+  sourceSection?: string | null;
+  confidence: TenderRequirementConfidence;
+  status: TenderRequirementStatus;
+  ownerNote?: string | null;
+}
+
+export type TenderRequirementGenerationStatus =
+  | "not_started"
+  | "ready"
+  | "partial"
+  | "failed";
+
+/**
+ * Evidence-backed compliance map derived from the owner-scoped tender pack.
+ * `packFingerprint` lets the UI mark the map stale as soon as documents or
+ * document roles change; stale results are preserved for auditability but are
+ * never presented as current.
+ */
+export interface TenderRequirementsState {
+  generationStatus: TenderRequirementGenerationStatus;
+  packFingerprint: string | null;
+  generatedAt?: string | null;
+  updatedAt?: string | null;
+  items: TenderRequirementItem[];
+  note?: string | null;
+}
+
+export const EMPTY_TENDER_REQUIREMENTS: TenderRequirementsState = {
+  generationStatus: "not_started",
+  packFingerprint: null,
+  generatedAt: null,
+  updatedAt: null,
+  items: [],
+  note: null,
+};

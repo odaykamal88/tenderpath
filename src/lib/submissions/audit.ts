@@ -221,5 +221,10 @@ export function buildIntakeFields(draft: WizardDraftState): IntakeFields {
     docs: draft.docs,
     tenderPack: draft.tenderPack ?? { status: "not_started", documents: [] },
     portalCompanion: draft.portalCompanion ?? { confirmed: [] },
+    tenderRequirements: draft.tenderRequirements ?? {
+      generationStatus: "not_started",
+      packFingerprint: null,
+      items: [],
+    },
   };
 }
