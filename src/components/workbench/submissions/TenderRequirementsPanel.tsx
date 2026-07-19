@@ -103,7 +103,8 @@ export function TenderRequirementsPanel({
           kind={view.total ? "ghost" : "primary"}
           size="sm"
           onClick={() => void buildMap()}
-          style={{ opacity: generating || !readableDocuments ? 0.55 : 1, pointerEvents: generating || !readableDocuments ? "none" : "auto" }}
+          disabled={generating || !readableDocuments}
+          style={{ opacity: generating || !readableDocuments ? 0.55 : 1 }}
         >
           {generating ? "Reading tender pack…" : view.total ? "Refresh compliance map" : "Build compliance map"}
         </Btn>
