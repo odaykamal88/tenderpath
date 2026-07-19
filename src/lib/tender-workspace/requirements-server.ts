@@ -200,7 +200,8 @@ function fallbackCategory(value: string): TenderRequirementsState["items"][numbe
   const lower = value.toLowerCase();
   if (/price|financial|currency|tax|vat|security|validity|payment|quotation|boq|bill of quantit/.test(lower)) return "financial";
   if (/submit|submission|deadline|portal|email|envelope|upload|time zone|closing date|closing time/.test(lower)) return "submission";
-  if (/technical|specification|experience|qualification|methodology|personnel|expert|evaluation|score|criterion|lot/.test(lower)) return "technical";
+  if (/technical|specification|experience|qualification|methodology|personnel|expert|evaluation|score|criterion|lot|packaging|diameter|dimension|material|capacity|performance|quality|standard|deliver(?:y| the goods)|lead time/.test(lower)) return "technical";
+  if (/\b\d+(?:\.\d+)?\s*(?:mm|cm|m|kg|tonnes?|litres?|hours?|days?|months?)\b/.test(lower)) return "technical";
   return "administrative";
 }
 
@@ -208,13 +209,14 @@ function fallbackTitle(value: string): string {
   const lower = value.toLowerCase();
   if (/technical.{0,80}financial|financial.{0,80}technical/.test(lower) && /separate|envelope/.test(lower)) return "Separate technical and financial submissions";
   if (/deadline|closing date|closing time|no later than/.test(lower)) return "Meet the published submission deadline";
-  if (/sign|signature|signed/.test(lower)) return "Complete the required signatures";
+  if (/deliver(?:y| the goods)|lead time/.test(lower)) return "Meet the published delivery schedule";
+  if (/\b(?:must|shall|required to)\s+(?:be\s+)?signed?\b|\bsignature\s+(?:is|are)\s+required|\bsigned\s+(?:form|proposal|bid)\b/.test(lower)) return "Complete the required signatures";
   if (/bid security|bid-securing/.test(lower)) return "Provide the required bid security";
   if (/validity/.test(lower)) return "Meet the published offer-validity period";
   if (/eligib|qualification/.test(lower)) return "Confirm the published eligibility requirement";
-  if (/form|annex|document|certificate/.test(lower)) return "Return the required form or document";
+  if (/\bforms?\b|annex|document|certificate/.test(lower)) return "Return the required form or document";
   if (/price|financial|currency|tax|vat|quotation|boq|bill of quantit/.test(lower)) return "Follow the published financial requirement";
-  if (/technical|specification|methodology|personnel|evaluation|score|criterion/.test(lower)) return "Address the published technical requirement";
+  if (/technical|specification|methodology|personnel|evaluation|score|criterion|packaging|diameter|dimension|material|capacity|performance|quality|standard/.test(lower)) return "Address the published technical requirement";
   if (/submit|portal|email|envelope|upload/.test(lower)) return "Follow the published submission instruction";
   return "Verify the published compliance requirement";
 }

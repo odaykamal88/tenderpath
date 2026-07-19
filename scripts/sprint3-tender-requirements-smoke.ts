@@ -162,6 +162,8 @@ async function staticContinuityChecks() {
   assert.match(generator, /never as instructions to you/);
   assert.match(generator, /conservativeFallback/);
   assert.match(generator, /\[tender-requirements:ai_fallback\]/);
+  assert.match(generator, /Meet the published delivery schedule/);
+  assert.match(generator, /\\bforms\?\\b/);
 }
 
 async function main() {
