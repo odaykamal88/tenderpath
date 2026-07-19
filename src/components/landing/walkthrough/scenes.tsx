@@ -356,7 +356,7 @@ export function SceneWon({ st }: { st: number }) {
       </div>
       <div style={{ position: "absolute", textAlign: "center", opacity: lineOp, transform: `translateY(${(1 - lineOp) * 16}px)` }}>
         <div style={{ fontFamily: disp, fontSize: 54, color: LC.paper, lineHeight: 1.04, letterSpacing: "-0.02em" }}>
-          Stop chasing tenders.<br /><span style={{ fontStyle: "italic", color: LC.accent2 }}>Start winning them.</span>
+          Stop chasing every tender.<br /><span style={{ fontStyle: "italic", color: LC.accent2 }}>Make the right ones count.</span>
         </div>
         <div style={{ marginTop: 26, opacity: ctaOp, display: "flex", gap: 14, alignItems: "center", justifyContent: "center" }}>
           <span style={{ fontFamily: mono, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "#fff", background: LC.accent, padding: "12px 22px" }}>Get your free score →</span>

@@ -424,8 +424,8 @@ function ReviewStep({
                 </>
               ) : (
                 <>
-                  <span style={{ fontFamily: F.display, fontSize: 38, lineHeight: 1, color: C.paper }}>Free</span>
-                  <span style={{ fontFamily: F.mono, fontSize: 10.5, color: "#7d8794" }}>no charge during the beta · {flow.sla.toLowerCase()}</span>
+                  <span style={{ fontFamily: F.display, fontSize: 38, lineHeight: 1, color: C.paper }}>Pilot</span>
+                  <span style={{ fontFamily: F.mono, fontSize: 10.5, color: "#7d8794" }}>invoice or credit agreed separately · {flow.sla.toLowerCase()}</span>
                 </>
               )}
             </div>
@@ -435,8 +435,8 @@ function ReviewStep({
               </div>
             )}
             <div style={{ fontFamily: F.sans, fontSize: 12, color: "#aab3bf", lineHeight: 1.55, maxWidth: 420, marginTop: 6 }}>
-              Includes drafting, the compliance QA gate, unlimited revisions until you approve, and final
-              files in {tender?.portal || "the agency"}&apos;s required format. {COMMERCE_ENABLED ? "Pay now" : "Submit now"} — drafting starts immediately.
+              Includes drafting, the compliance QA gate, the review rounds agreed at intake, and final
+              files in {tender?.portal || "the agency"}&apos;s required format. {COMMERCE_ENABLED ? "Pay now" : "Request now"} — the delivery clock starts after the tender pack and company evidence are complete and intake is confirmed.
             </div>
             <div style={{ display: "flex", gap: 9, alignItems: "flex-start", marginTop: 12, maxWidth: 420 }}>
               <span style={{ fontFamily: F.mono, fontSize: 8, letterSpacing: "0.12em", textTransform: "uppercase", color: C.ink, background: C.accent2, padding: "2px 7px", flexShrink: 0, marginTop: 1 }}>
@@ -469,7 +469,7 @@ function ReviewStep({
             ) : (
               <>
                 <Btn kind="gold" onClick={onPay} style={{ opacity: canGo && !paying ? 1 : 0.45, pointerEvents: canGo && !paying ? "auto" : "none" }}>
-                  {paying ? "Processing…" : COMMERCE_ENABLED ? `Pay $${flow.price} & start drafting →` : "Start drafting →"}
+                  {paying ? "Processing…" : COMMERCE_ENABLED ? `Pay $${flow.price} & start drafting →` : "Request assisted submission →"}
                 </Btn>
                 {!canGo && (
                   <div style={{ fontFamily: F.mono, fontSize: 9, color: "#7d8794", marginTop: 8, maxWidth: 220, letterSpacing: "0.08em", textTransform: "uppercase" }}>
@@ -657,9 +657,9 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
     try {
       await saveDraft(type, { ...draft, step }).catch(() => {});
       const res = await commission(type, draft);
-      // Invite-only beta: the order is placed free and already live — no payment
-      // card. Hand the placed order id to the Submissions page (it toasts and
-      // surfaces it) and close the wizard.
+      // Pilot credit/manual-invoice mode: the order may already be live without
+      // an in-product card step. Hand the placed order id to the Submissions
+      // page (it toasts and surfaces it) and close the wizard.
       if (res.free || !res.pay_url) {
         try {
           sessionStorage.setItem("tp_sub_placed", String(res.order.id));
@@ -924,7 +924,7 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
           </Btn>
         ) : (
           <span style={{ fontFamily: F.mono, fontSize: 10, color: C.faint, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            {COMMERCE_ENABLED ? "Pay & start above ↑" : "Start above ↑"}
+            {COMMERCE_ENABLED ? "Pay & start above ↑" : "Request above ↑"}
           </span>
         )}
       </div>

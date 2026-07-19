@@ -224,6 +224,8 @@ export default function AdminMatchingDetailPage() {
   const [externalDiscovering, setExternalDiscovering] = useState(false);
   const [externalQueries, setExternalQueries] = useState<string[]>([]);
   const [runBrief, setRunBrief] = useState<ProcurementBrief | null>(null);
+  // Which web-discovered prospect is currently being promoted into the CRM.
+  const [addingProspect, setAddingProspect] = useState<number | null>(null);
 
   const load = useCallback(async (query: string) => {
     if (!Number.isInteger(tenderId) || tenderId <= 0) {
@@ -356,6 +358,40 @@ export default function AdminMatchingDetailPage() {
       setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to find network prospects" });
     } finally {
       setDiscovering(false);
+    }
+  }
+
+  // Promote a web-discovered prospect into the CRM (network_companies). Creates
+  // the contact, profiles it, links the prospect back, and lands it in Network +
+  // Sales CRM. Optimistically flips the card to "In network" on success.
+  async function addProspectToNetwork(prospectId: number) {
+    setAddingProspect(prospectId);
+    setToast(null);
+    try {
+      const res = await fetch(`/api/admin/network-companies/from-prospect`, {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ prospect_id: prospectId }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+      const companyId = Number(body.company_id);
+      setData((d) => (d ? {
+        ...d,
+        externalProspects: d.externalProspects.map((p) =>
+          p.id === prospectId ? { ...p, network_company_id: companyId, status: "added_to_network" } : p),
+      } : d));
+      const profileStatus = body.profile?.status;
+      setToast({
+        ok: true,
+        msg: profileStatus && profileStatus !== "ready"
+          ? `Added to CRM, but profile build failed (${body.profile?.error ?? "unknown"}). Open it in Network to retry.`
+          : `Added to CRM — now in Network + Sales CRM.`,
+      });
+    } catch (err) {
+      setToast({ ok: false, msg: err instanceof Error ? err.message : "Failed to add prospect to CRM" });
+    } finally {
+      setAddingProspect(null);
     }
   }
 
@@ -800,14 +836,25 @@ export default function AdminMatchingDetailPage() {
                       <div className={styles.mono} style={{ color: "var(--color-ink)", fontWeight: 600 }}>{p.score}</div>
                       <div className={styles.sessionSubtle}>{p.confidence}</div>
                     </div>
-                    {p.network_company_id && (
+                    {p.network_company_id ? (
                       <Link
                         href={`/admin/network/${p.network_company_id}`}
                         className={styles.btnGhost}
                         style={{ padding: "5px 9px", fontSize: 11, textDecoration: "none" }}
                       >
-                        In network
+                        In network ↗
                       </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        className={styles.btnPrimary}
+                        onClick={() => addProspectToNetwork(p.id)}
+                        disabled={addingProspect !== null}
+                        title="Create a CRM contact from this company, profile it, and match it — lands in Network + Sales CRM."
+                        style={{ padding: "5px 9px", fontSize: 11 }}
+                      >
+                        {addingProspect === p.id ? "Adding…" : "Add to CRM"}
+                      </button>
                     )}
                     {p.website && (
                       <a

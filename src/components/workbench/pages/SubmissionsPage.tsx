@@ -143,9 +143,9 @@ function TypeCard({ flow, onStart }: { flow: SubmissionFlow; onStart: () => void
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "13px 18px", borderTop: `1px solid ${C.ruleSoft}` }}>
         <div>
-          <span style={{ fontFamily: F.display, fontSize: 22, color: C.ink }}>{COMMERCE_ENABLED ? `$${flow.price}` : "Free"}</span>
+          <span style={{ fontFamily: F.display, fontSize: 22, color: C.ink }}>{COMMERCE_ENABLED ? `$${flow.price}` : "Pilot"}</span>
           <div style={{ fontFamily: F.mono, fontSize: 9, color: C.mute, marginTop: 1, letterSpacing: "0.04em" }}>
-            {COMMERCE_ENABLED ? flow.sla.toUpperCase() : `${flow.sla.toUpperCase()} · BETA`}
+            {flow.sla.toUpperCase()}
           </div>
         </div>
         <Btn kind="primary" size="sm" onClick={onStart}>Start →</Btn>
@@ -189,6 +189,7 @@ export function SubmissionsPage() {
     const matchId = params.get("match");
     const orderId = params.get("order");
     const placed = params.get("placed");
+    const assisted = params.get("assisted") === "1";
     let dirty = false;
     if (start && isSubmissionCode(start)) {
       setWizardType(start as SubmissionCode);
@@ -207,6 +208,19 @@ export function SubmissionsPage() {
       sessionStorage.setItem("tp_sub_seed_match", matchId);
       dirty = true;
     }
+    if (assisted) {
+      const storedSeed = sessionStorage.getItem("tp_sub_assisted_seed");
+      sessionStorage.removeItem("tp_sub_assisted_seed");
+      if (storedSeed) {
+        try {
+          const parsed = JSON.parse(storedSeed) as WbMatch;
+          if (parsed && typeof parsed.title === "string" && parsed.title.trim()) setWizardSeed(parsed);
+        } catch (error) {
+          console.warn("[tp:submissions:assisted_seed_invalid]", error);
+        }
+      }
+      dirty = true;
+    }
     if (dirty) window.history.replaceState({}, "", window.location.pathname);
   }, []);
 
@@ -217,7 +231,7 @@ export function SubmissionsPage() {
     const o = orders.find((x) => String(x.id) === placed);
     if (o) {
       sessionStorage.removeItem("tp_sub_placed");
-      showToast(`Order placed — ${o.type} ${o.ref}. Drafting starts now · ${o.slaMins}-minute SLA.`);
+      showToast(`Order placed — ${o.type} ${o.ref}. Delivery is due within one business day after complete intake.`);
     }
   }, [orders, showToast]);
 
@@ -313,7 +327,7 @@ export function SubmissionsPage() {
           </div>
         ) : (
           <div style={{ border: `1px dashed ${C.rule}`, padding: "26px 22px", textAlign: "center", fontFamily: F.sans, fontSize: 13, color: C.mute }}>
-            Nothing in flight. Start a submission below — drafts land in under an hour.
+            Nothing in flight. Start below — the first-10 delivery target is within one business day after complete intake.
           </div>
         )}
       </div>
@@ -325,7 +339,7 @@ export function SubmissionsPage() {
             title="Start a submission"
             action={
               <div style={{ display: "flex", alignItems: "baseline", gap: 16, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                <span style={{ fontFamily: F.sans, fontSize: 12, color: C.mute }}>Fixed fee · unlimited revisions · full-refund guarantee</span>
+                <span style={{ fontFamily: F.sans, fontSize: 12, color: C.mute }}>Fixed fee · agreed review rounds · service-recovery guarantee</span>
                 {/* Proof of output before paying — the sample page carries per-submission
                     prices, so it's only surfaced on commerce-on surfaces (hidden during the beta). */}
                 <a
@@ -340,13 +354,13 @@ export function SubmissionsPage() {
             }
           />
         ) : (
-          <SectionHead title="Start a submission" hint="Drafted by our team · unlimited revisions · no charge during the beta" />
+          <SectionHead title="Start a submission" hint="Founder-assisted pilot · review rounds confirmed at intake · delivery within one business day after complete intake" />
         )}
         {data?.access.freeSubmissionEligible && (
           <Card style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", marginBottom: 14, borderLeft: `3px solid ${C.pos}`, background: "#f3f8f4", flexWrap: "wrap" }}>
             <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: C.white, background: C.pos, padding: "3px 8px" }}>On us</span>
             <span style={{ fontFamily: F.sans, fontSize: 13, color: C.ink, flex: 1, minWidth: 220 }}>
-              <strong style={{ fontWeight: 600 }}>Your first proposal submission is free</strong> while you&apos;re on trial — the credit is applied automatically at checkout, any format below.
+              <strong style={{ fontWeight: 600 }}>Your first proposal submission is free</strong> on your invited pilot account — one founder-issued credit, applied automatically to any format below.
             </span>
           </Card>
         )}

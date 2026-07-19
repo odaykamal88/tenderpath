@@ -26,8 +26,8 @@ export default function SocialProof({ liveTenderCount }: { liveTenderCount: numb
   const stats: Array<[string, string]> = [
     firstStat,
     ["30+", "UN agencies + EU & donor feeds"],
-    ["< 1 min", "to a bid/no-bid verdict"],
-    ["< 1 hr", "to a submission-ready proposal"],
+    ["Fast", "evidence-based bid/no-bid read"],
+    ["< 1 day", "after complete pilot intake"],
   ];
 
   return (

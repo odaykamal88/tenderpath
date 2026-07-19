@@ -91,10 +91,25 @@ export function generateTenderRequirements(
   tender: WizardDraftState["tender"],
   tenderPack: TenderPackState,
 ): Promise<{ requirements: TenderRequirementsState }> {
-  return request("/api/dashboard/tender-pack/requirements", {
-    method: "POST",
-    body: JSON.stringify({ tender, tenderPack }),
-  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 55_000);
+  return request<{ requirements: TenderRequirementsState }>(
+    "/api/dashboard/tender-pack/requirements",
+    {
+      method: "POST",
+      body: JSON.stringify({ tender, tenderPack }),
+      signal: controller.signal,
+    },
+  ).catch((error: unknown) => {
+    if (controller.signal.aborted) {
+      throw new ApiError(
+        504,
+        "The automated read took too long. Your private files are safe—continue the intake and TenderPath will validate the compliance map during the assisted review.",
+        "REQUIREMENTS_TIMEOUT",
+      );
+    }
+    throw error;
+  }).finally(() => window.clearTimeout(timeout));
 }
 
 export interface VaultDocRow {

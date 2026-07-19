@@ -65,6 +65,7 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
   const [decided, setDecided] = useState<"bid" | "pass" | null>(null);
   const [analysis, setAnalysis] = useState<PasteVerdict | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [assistedFallback, setAssistedFallback] = useState<{ caseRef: string | null } | null>(null);
   /** Set when the free monthly bid/no-bid allowance is exhausted (402 from the
    *  cap) — drives the "capped" subscribe panel. */
   const [capUsage, setCapUsage] = useState<{ used: number; limit: number; remaining: number } | null>(null);
@@ -128,13 +129,13 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
       return;
     }
     if (file && !text.trim()) {
-      // File extraction is a paid add-on, paused during the invite-only beta —
-      // keep the user in the free flow instead of routing to a pricing page.
-      setAnalysisError("Paste the tender text or a link for an instant verdict — PDF / Word extraction is coming soon.");
+      setAnalysisError("Continue to the guided workspace to upload this tender pack privately and complete the assisted review.");
+      setAssistedFallback({ caseRef: null });
       return;
     }
     // Free-text / URL — run the real quick verdict (consumes a credit on success).
     setAnalysisError(null);
+    setAssistedFallback(null);
     setStage("analysing");
     const t = text.trim();
     const isUrl = /^https?:\/\/\S+$/i.test(t);
@@ -145,13 +146,14 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
         body: JSON.stringify(isUrl ? { url: t } : { text: t }),
       });
       if (!res.ok) {
-        const b = (await res.json().catch(() => ({}))) as { code?: string; error?: string; usage?: { used: number; limit: number; remaining: number } };
+        const b = (await res.json().catch(() => ({}))) as { code?: string; case_ref?: string; error?: string; usage?: { used: number; limit: number; remaining: number } };
         if (res.status === 402 && b.code === "BID_NO_BID_LIMIT") {
           setCapUsage(b.usage ?? null);
           setStage("capped");
           return;
         }
         setAnalysisError(b.error ?? "Couldn't analyse this tender. Please try again.");
+        if (b.code === "ANALYSIS_UNAVAILABLE") setAssistedFallback({ caseRef: b.case_ref ?? null });
         setStage("input");
         return;
       }
@@ -159,7 +161,8 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
       setAnalysis(v);
       setStage("verdict");
     } catch {
-      setAnalysisError("Couldn't reach the analysis service. Please try again.");
+      setAnalysisError("We couldn't reach the automated analysis service. Your tender can still continue through assisted review.");
+      setAssistedFallback({ caseRef: null });
       setStage("input");
     }
   };
@@ -194,11 +197,10 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
   const bidTitle = seed?.title ?? analysis?.tender.title ?? "Pasted tender";
   const subType = submissionType(detectSubmissionType(seed?.type ?? analysis?.tender.title));
 
-  // The honest math (SPEC §6). Effort by format; odds modeled from fit + open
-  // gaps; +4 pts only when a real received debrief exists (lessons applied).
+  // The honest math (SPEC §6). Effort by format plus the visible qualification
+  // gaps. This is a workload estimate and qualification aid, never an award
+  // probability.
   const effortDays = { EOI: 1.5, RFQ: 2, ITB: 5, RFP: 6 }[subType.code] ?? 6;
-  const debriefBonus = history?.lessonsApplied ? 4 : 0;
-  const odds = Math.max(4, Math.min(40, Math.round((fit - 28) / 2) - openGaps.length * 3 + debriefBonus));
   // Field-size norms by format — a statement about the format, not this tender.
   const typicalField = { EOI: "10–20 typical", RFQ: "8–15 typical", ITB: "6–12 typical", RFP: "5–10 typical" }[subType.code] ?? "5–12 typical";
   // The best alternative an open match offers (no-bid verdicts must name one).
@@ -206,6 +208,39 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
   const bestAlt = data.matches
     .filter((m) => m.id !== seedKey && m.fit > 0 && (!m.deadline || daysUntil(m.deadline) == null || (daysUntil(m.deadline) ?? 0) >= 0))
     .reduce<WbMatch | null>((best, m) => (best == null || m.fit > best.fit ? m : best), null);
+
+  const openGuidedSubmission = (fallbackReason: string | null) => {
+    const trimmed = text.trim();
+    const sourceUrl = /^https?:\/\/\S+$/i.test(trimmed) ? trimmed : seed?.sourceUrl ?? null;
+    const firstLine = trimmed.split("\n").map((line) => line.trim()).find(Boolean);
+    const assistedSeed: WbMatch = {
+      id: seed?.id ?? -Date.now(),
+      tenderId: seed?.tenderId ?? null,
+      code: seed?.code ?? "SUPPLIED",
+      title: seed?.title ?? analysis?.tender.title ?? firstLine?.slice(0, 180) ?? "Supplier-provided tender",
+      agency: seed?.agency ?? analysis?.tender.agency ?? "",
+      type: seed?.type ?? subType.code,
+      source: seed?.source ?? "Supplier-provided notice",
+      deadline: seed?.deadline ?? null,
+      value: seed?.value ?? "",
+      fit: analysis?.fit ?? seed?.fit ?? 0,
+      bucket: seed?.bucket ?? "watchlist",
+      why: analysis?.summary ?? seed?.why ?? fallbackReason ?? "Supplier decided to proceed to the guided submission workspace.",
+      sectors: seed?.sectors ?? [],
+      roster: seed?.roster ?? false,
+      caveat: fallbackReason,
+      sourceUrl,
+    };
+    try {
+      sessionStorage.setItem("tp_sub_assisted_seed", JSON.stringify(assistedSeed));
+    } catch (error) {
+      console.warn("[workbench:paste:assisted_seed_failed]", error);
+    }
+    onClose();
+    go(`/dashboard/proposals?start=${subType.code}&assisted=1`);
+  };
+
+  const continueAssisted = () => openGuidedSubmission("Automated first read was unavailable; assisted review required.");
 
   const onBid = () => {
     setDecided("bid");
@@ -270,7 +305,7 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
                 ? "We've pre-filled this from your matched tender. Analyse it against your file for an instant bid / no-bid call — we only ask for what we don't already have."
                 : seed
                   ? "We've pre-filled this tender. We'll read it, check it against your file, and give you a bid / no-bid call."
-                  : "Drop a tender link or paste the notice text — we'll read it, check it against your file, and give you an instant bid / no-bid call. Upload a PDF/Word doc and we'll run the full paid analysis."}
+                  : "Drop a tender link or paste the notice text for a fast bid / no-bid read. For a PDF or Word pack, continue to the guided workspace to upload it privately and check every requirement."}
             </p>
             {!data.access.bidNoBid.unlimited && (
               <div style={{ marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", borderLeft: `2px solid ${C.accent}`, background: "#faf6ec", padding: "9px 12px" }}>
@@ -285,7 +320,17 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
               </div>
             )}
             {analysisError && (
-              <div style={{ marginBottom: 14, borderLeft: `2px solid ${C.neg}`, background: "#fbeceb", padding: "9px 12px", fontFamily: F.sans, fontSize: 12.5, color: C.neg }}>{analysisError}</div>
+              <div role="alert" style={{ marginBottom: 14, borderLeft: `2px solid ${assistedFallback ? C.warn : C.neg}`, background: assistedFallback ? "#faf6ec" : "#fbeceb", padding: "11px 12px", fontFamily: F.sans, fontSize: 12.5, color: assistedFallback ? C.ink2 : C.neg }}>
+                <div>{analysisError}</div>
+                {assistedFallback && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginTop: 9 }}>
+                    <span style={{ fontFamily: F.mono, fontSize: 9.5, color: C.mute }}>
+                      {assistedFallback.caseRef ? `Case ${assistedFallback.caseRef}` : "Your tender details will carry forward"}
+                    </span>
+                    <Btn kind="primary" size="sm" onClick={continueAssisted}>Continue with assisted review →</Btn>
+                  </div>
+                )}
+              </div>
             )}
             <textarea
               value={text}
@@ -319,7 +364,7 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
               <div style={{ display: "flex", gap: 10 }}>
                 <Btn kind="ghost" size="sm" onClick={onClose}>Cancel</Btn>
                 <Btn kind="gold" size="sm" onClick={analyse} disabled={!inputReady}>
-                  {file && !text.trim() ? "Run full analysis →" : "Analyse tender →"}
+                  {file && !text.trim() ? "Continue with tender pack →" : "Analyse tender →"}
                 </Btn>
               </div>
             </div>
@@ -385,7 +430,7 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
                       ? `Strong alignment on sector and track record. ${openGaps.length === 0 ? "Every eligibility item you'd typically need is covered." : `${openGaps.length} open gap${openGaps.length === 1 ? "" : "s"} to close before the deadline.`} We need ${asks.length} inputs from you to complete the picture.`
                       : verdict === "caution"
                         ? "Adjacent fit. Winnable with the right partner or once gaps close, but weigh the effort against your stronger matches — the math below is the real decision."
-                        : `The numbers say walk away: low alignment, ${openGaps.length} open gap${openGaps.length === 1 ? "" : "s"}, and a field that likely includes incumbents. Passing costs nothing — bidding costs ≈${effortDays} person-days at long odds. We'd rather you spend them where you can win.`}
+                        : `The evidence says walk away: low alignment, ${openGaps.length} open gap${openGaps.length === 1 ? "" : "s"}, and a field that likely includes incumbents. Passing costs nothing — bidding costs ≈${effortDays} person-days without enough evidence to justify the work. Spend them on a stronger pursuit.`}
                 </p>
               </div>
             </div>
@@ -397,7 +442,7 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
                 {([
                   ["Effort to bid", `≈ ${effortDays} person-days`],
                   ["Likely field", `${typicalField} for ${subType.code}s`],
-                  ["Modeled win odds", `~${odds}%`],
+                  ["Open gaps", `${openGaps.length} to resolve`],
                   ["Call", verdict === "bid" ? "Worth the days" : verdict === "caution" ? "Marginal" : "Walk away"],
                 ] as [string, string][]).map(([k, v]) => (
                   <div key={k}>
@@ -408,8 +453,8 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
               </div>
               <div style={{ fontFamily: F.sans, fontSize: 11.5, color: C.mute, lineHeight: 1.55, marginTop: 12, borderTop: `1px dashed ${C.ruleSoft}`, paddingTop: 10 }}>
                 {history && history.wins + history.losses > 0
-                  ? `Calibrated on your record — ${history.wins} win${history.wins === 1 ? "" : "s"}, ${history.losses} loss${history.losses === 1 ? "" : "es"}${history.lessonsApplied ? " · debrief lessons applied, +4 pts to your modeled odds" : ""}. Odds are modeled from fit and open gaps and calibrate as outcomes land.`
-                  : "No win/loss record on file yet — odds are modeled from fit and open gaps only, and calibrate as your submission outcomes land."}
+                  ? `Recorded outcomes: ${history.wins} win${history.wins === 1 ? "" : "s"}, ${history.losses} loss${history.losses === 1 ? "" : "es"}${history.lessonsApplied ? " · received debrief lessons are applied to future checks" : ""}. This read qualifies the pursuit; it is not an award probability.`
+                  : "No outcome record is on file yet. This read qualifies the pursuit from accessible tender and company evidence; it is not an award probability."}
               </div>
               {verdict !== "bid" && bestAlt && (
                 <div style={{ fontFamily: F.sans, fontSize: 12, color: C.ink2, lineHeight: 1.55, marginTop: 8 }}>
@@ -496,6 +541,9 @@ export function PasteModal({ seed, onClose }: { seed: WbMatch | null; onClose: (
                     documents in the Vault so you&apos;re submission-ready before the deadline.
                   </p>
                   <div style={{ display: "flex", gap: 12, marginTop: 18, flexWrap: "wrap" }}>
+                    <Btn kind="gold" size="sm" onClick={() => openGuidedSubmission(null)}>
+                      Open guided submission →
+                    </Btn>
                     <Btn kind="ghost" size="sm" onClick={() => { onClose(); go("matches"); }} style={{ color: C.paper, borderColor: "#3a4654" }}>
                       Go to pipeline →
                     </Btn>

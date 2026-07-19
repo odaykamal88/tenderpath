@@ -19,6 +19,7 @@ function findModulesRoot(start: string): string {
   return start;
 }
 const turboRoot = findModulesRoot(projectRoot);
+const pdfJsRuntimeFiles = ["./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"];
 
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -65,6 +66,11 @@ const nextConfig: NextConfig = {
     "/api/cron/grants": ["./data/mena-grants/**/*"],
     "/api/cron/crawl": ["./data/developmentaid/**/*"],
     "/api/admin/sync-tenders": ["./data/developmentaid/**/*"],
+    "/api/dashboard/paste-analyze": pdfJsRuntimeFiles,
+    "/api/dashboard/services/fetch-criteria": pdfJsRuntimeFiles,
+    "/api/dashboard/tender-pack/import": pdfJsRuntimeFiles,
+    "/api/dashboard/vault/extract": pdfJsRuntimeFiles,
+    "/api/dashboard/vault/upload": pdfJsRuntimeFiles,
   },
   turbopack: {
     root: turboRoot,

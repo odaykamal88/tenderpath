@@ -5,9 +5,9 @@ import { useMedia } from "@/components/workbench/useMedia";
 
 const STEPS: Array<[string, IcName, string, string]> = [
   ["01", "target", "Assess & match", "Take the readiness assessment once. We score you and surface every live tender you actually fit — ranked, refreshed daily."],
-  ["02", "paste", "Paste & decide", "Drop any tender. Get an instant bid/no-bid verdict with a fit score and the exact compliance checklist it demands."],
+  ["02", "paste", "Paste & decide", "Drop any tender. Get an evidence-based bid/no-bid read, with the fit reasons and compliance gaps behind it."],
   ["03", "compass", "Close the gaps", "The Navigator walks you through each gap — UNGM, certifications, financials — hand-held, pre-filled, step by step."],
-  ["04", "doc", "Submit & win", "Turn the brief into a submission-ready, compliance-mapped proposal in under an hour."],
+  ["04", "doc", "Review & submit", "Turn the brief into a compliance-mapped submission pack. You approve, sign, and submit through the official channel."],
 ];
 
 export default function HowItWorks() {
@@ -23,7 +23,7 @@ export default function HowItWorks() {
             <SectionTag n="03" label="How it works" />
           </div>
           <h2 style={{ fontFamily: LF.display, fontSize: mobile ? 28 : 44, fontWeight: 400, letterSpacing: "-0.02em", color: LC.ink, margin: "16px 0 0", lineHeight: 1.06 }}>
-            Four steps to a winning bid.
+            Four steps to a controlled submission.
           </h2>
         </div>
         <div

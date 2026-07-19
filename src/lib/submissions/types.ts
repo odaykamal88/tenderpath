@@ -10,6 +10,7 @@
  * change appends to `events[]` — both sides read the same log. */
 
 import type { SubmissionCode } from "@/lib/workbench/pricing";
+import type { DeliverableDoc } from "./doc-content";
 import {
   EMPTY_PORTAL_COMPANION,
   EMPTY_TENDER_REQUIREMENTS,
@@ -59,6 +60,20 @@ export interface SubmissionEvent {
   label: string;
   /** Client sees ops events labeled "TenderPath". */
   by: "client" | "ops";
+}
+
+/** Immutable client-review snapshot. A new version is sealed each time ops
+ * releases QA → review, so a revision never silently overwrites the pack the
+ * client previously reviewed. */
+export interface SubmissionArtifactVersion {
+  /** Human revision number: the first QA release is 1. */
+  revision: number;
+  generatedAt: string;
+  /** Client notes that prompted this version; null on the first release. */
+  basedOnRevisionNotes: string | null;
+  /** Snapshot used by spreadsheet exports as well as the rendered documents. */
+  intakeFields: IntakeFields;
+  documents: DeliverableDoc[];
 }
 
 export interface SubmissionAmendment {
@@ -180,7 +195,8 @@ export interface SubmissionOrder {
   stage: SubmissionStage;
   /** Drafting progress 0–100 (ops-set; release to review forces 100). */
   pct: number;
-  /** Revision rounds consumed — unlimited allowed. */
+  /** Revision rounds consumed. The agreed allowance is set during intake; the
+   * workflow preserves every released version regardless of the allowance. */
   round: number;
   /** One-line human status, shown verbatim to the client. */
   stageNote: string | null;
@@ -194,6 +210,8 @@ export interface SubmissionOrder {
   intakeFields: IntakeFields;
   deliverables: SubmissionDeliverable[];
   events: SubmissionEvent[];
+  /** Immutable QA releases, oldest first. */
+  artifactVersions: SubmissionArtifactVersion[];
   /** Latest client change request (review → revisions). */
   revisionNotes: string | null;
   amendments: SubmissionAmendment[];

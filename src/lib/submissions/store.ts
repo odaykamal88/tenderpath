@@ -18,11 +18,13 @@ import type {
   SubmissionCode,
   SubmissionDeliverable,
   SubmissionEvent,
+  SubmissionArtifactVersion,
   SubmissionOrder,
   SubmissionStage,
   WizardDraftState,
 } from "./types";
 import { EMPTY_DRAFT } from "./types";
+import { docContent } from "./doc-content";
 import { canTransition, DEFAULT_STAGE_NOTE, OPS_ACTIONS } from "./stages";
 import { shepherdSteps } from "./flows";
 
@@ -61,6 +63,7 @@ export async function ensureSubmissionsSchema(): Promise<void> {
           intake_fields JSONB NOT NULL DEFAULT '{}'::jsonb,
           deliverables JSONB NOT NULL DEFAULT '[]'::jsonb,
           events JSONB NOT NULL DEFAULT '[]'::jsonb,
+          artifact_versions JSONB NOT NULL DEFAULT '[]'::jsonb,
           revision_notes TEXT,
           amendments JSONB NOT NULL DEFAULT '[]'::jsonb,
           qna JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -71,6 +74,7 @@ export async function ensureSubmissionsSchema(): Promise<void> {
           updated_at TIMESTAMPTZ DEFAULT NOW()
         )
       `;
+      await sql`ALTER TABLE submission_orders ADD COLUMN IF NOT EXISTS artifact_versions JSONB NOT NULL DEFAULT '[]'::jsonb`;
       await sql`CREATE INDEX IF NOT EXISTS submission_orders_user_idx ON submission_orders (user_id, updated_at DESC)`;
       await sql`CREATE INDEX IF NOT EXISTS submission_orders_stage_idx ON submission_orders (stage, updated_at DESC)`;
       await sql`CREATE INDEX IF NOT EXISTS submission_orders_wo_idx ON submission_orders (work_order_id)`;
@@ -140,6 +144,7 @@ export function rowToOrder(row: Record<string, any>): SubmissionOrder {
     intakeFields: row.intake_fields && typeof row.intake_fields === "object" ? row.intake_fields : {},
     deliverables: asArray<SubmissionDeliverable>(row.deliverables),
     events: asArray<SubmissionEvent>(row.events),
+    artifactVersions: asArray<SubmissionArtifactVersion>(row.artifact_versions),
     revisionNotes: row.revision_notes ?? null,
     amendments: asArray(row.amendments),
     qna: asArray(row.qna),
@@ -180,6 +185,7 @@ export interface PendingOrderInput {
   value: string | null;
   fit: number | null;
   completeness: number;
+  slaMins: number;
   blockers: SubmissionBlocker[];
   intake: [string, string][];
   intakeFields: Record<string, unknown>;
@@ -213,6 +219,7 @@ export async function upsertPendingOrder(input: PendingOrderInput): Promise<Subm
           tender_id = ${input.tenderId}, pipeline_item_id = ${input.pipelineItemId},
           due = ${input.due}, value = ${input.value}, fit = ${input.fit},
           completeness = ${input.completeness},
+          sla_mins = ${input.slaMins},
           blockers = ${blockers}::jsonb,
           intake = ${intake}::jsonb,
           intake_fields = ${intakeFields}::jsonb,
@@ -232,12 +239,12 @@ export async function upsertPendingOrder(input: PendingOrderInput): Promise<Subm
     INSERT INTO submission_orders (
       user_id, type, price_cents, tender, agency, source, portal,
       tender_id, pipeline_item_id, due, value, fit,
-      stage, completeness, blockers, intake, intake_fields, deliverables, events
+      stage, completeness, sla_mins, blockers, intake, intake_fields, deliverables, events
     ) VALUES (
       ${input.userId}, ${input.type}, ${input.priceCents}, ${input.tender}, ${input.agency},
       ${input.source}, ${input.portal}, ${input.tenderId}, ${input.pipelineItemId},
       ${input.due}, ${input.value}, ${input.fit},
-      'intake', ${input.completeness}, ${blockers}::jsonb, ${intake}::jsonb,
+      'intake', ${input.completeness}, ${input.slaMins}, ${blockers}::jsonb, ${intake}::jsonb,
       ${intakeFields}::jsonb, ${deliverables}::jsonb, ${intakeEvent}::jsonb
     )
     RETURNING *
@@ -418,6 +425,7 @@ async function transition(
     deliverables?: SubmissionDeliverable[] | null;
     shepherd?: Record<string, unknown> | null;
     outcome?: Record<string, unknown> | null;
+    artifactVersions?: SubmissionArtifactVersion[] | null;
   },
   eventLabel: string,
 ): Promise<SubmissionOrder> {
@@ -435,6 +443,7 @@ async function transition(
         deliverables = COALESCE(${patch.deliverables ? JSON.stringify(patch.deliverables) : null}::jsonb, deliverables),
         shepherd = COALESCE(${patch.shepherd ? JSON.stringify(patch.shepherd) : null}::jsonb, shepherd),
         outcome = COALESCE(${patch.outcome ? JSON.stringify(patch.outcome) : null}::jsonb, outcome),
+        artifact_versions = COALESCE(${patch.artifactVersions ? JSON.stringify(patch.artifactVersions) : null}::jsonb, artifact_versions),
         updated_at = NOW()
     WHERE id = ${orderId} AND stage = ${from}
     RETURNING *
@@ -599,12 +608,49 @@ export async function applyAdminAction(
       const pct = action.to === "review" || action.to === "qa" ? 100 : action.to === "drafting" ? Math.max(order.pct, 8) : undefined;
       const isQARelease = order.stage === "qa";
       const stageNote = action.to === "review" ? "Draft pack ready for your review" : opsAction.note;
+      let artifactVersions: SubmissionArtifactVersion[] | null = null;
+      if (action.to === "review") {
+        const userRows = await sql`
+          SELECT email, name, business_name
+          FROM users
+          WHERE id = ${order.userId}
+          LIMIT 1
+        `;
+        const user = userRows[0] ?? {};
+        const generatedAt = new Date().toISOString();
+        const revision = order.round + 1;
+        const releasedOrder: SubmissionOrder = {
+          ...order,
+          stage: "review",
+          pct: 100,
+          stageNote,
+          updatedAt: generatedAt,
+        };
+        const version: SubmissionArtifactVersion = {
+          revision,
+          generatedAt,
+          basedOnRevisionNotes: order.revisionNotes,
+          intakeFields: structuredClone(order.intakeFields),
+          documents: docContent(releasedOrder, {
+            name:
+              (user.business_name as string | null)?.trim()
+              || (user.name as string | null)?.trim()
+              || (user.email as string | null)?.trim()
+              || "Customer company",
+            signatory:
+              (user.name as string | null)?.trim()
+              || (user.email as string | null)?.trim()
+              || "Authorized representative",
+          }),
+        };
+        artifactVersions = [...order.artifactVersions, version];
+      }
       return transition(
         orderId,
         "ops",
         order.stage,
         action.to,
-        { pct, deliverables, stageNote },
+        { pct, deliverables, stageNote, artifactVersions },
         `${opsAction.note}${isQARelease ? " (34-point checklist)" : ""}`,
       );
     }

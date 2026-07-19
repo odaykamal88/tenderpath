@@ -16,7 +16,7 @@ import { track } from "@/lib/telemetry/funnel";
 import { isSubmissionCode } from "@/lib/workbench/pricing";
 import type { SubmissionCode, WizardDraftState } from "@/lib/submissions/types";
 import { EMPTY_DRAFT } from "@/lib/submissions/types";
-import { flowFor } from "@/lib/submissions/flows";
+import { flowFor, PILOT_SLA_MINS } from "@/lib/submissions/flows";
 import {
   auditDraft,
   buildDeliverables,
@@ -25,6 +25,7 @@ import {
   PAY_GATE_PCT,
 } from "@/lib/submissions/audit";
 import {
+  getOrderByWorkOrder,
   linkWorkOrder,
   listOrdersForUser,
   markSubmissionOrderPaidByWorkOrder,
@@ -33,9 +34,11 @@ import {
 } from "@/lib/submissions/store";
 import { buildNudges } from "@/lib/submissions/nudges";
 import { canUseBundledEoi, recordBundledEoiUse } from "@/lib/subscription/eoi-quota";
+import { consumeFreeSubmissionForProposal } from "@/lib/free-submission";
 import { normalizePortalCompanion } from "@/lib/tender-workspace/companion";
 import { normalizeTenderRequirements } from "@/lib/tender-workspace/requirements";
 import { sanitizeTenderPackForUser, TenderPackOwnershipError } from "@/lib/tender-workspace/ownership";
+import { recordCalibrationEvent, valueBand } from "@/lib/calibration/store";
 
 export const dynamic = "force-dynamic";
 
@@ -124,6 +127,7 @@ export async function POST(request: Request) {
       value: tender.value ?? null,
       fit: tender.fit ?? null,
       completeness: audit.pct,
+      slaMins: PILOT_SLA_MINS,
       // Carried-in flags wear their state note (prototype buildOrder copy).
       blockers: audit.blockers.map((b) => ({
         ...b,
@@ -166,18 +170,78 @@ export async function POST(request: Request) {
       { userId: user.id },
     );
 
-    // Invite-only beta: commerce is paused, so submissions are free for invited
-    // users. Mark the order paid for $0 right here — the same seam the Stripe
-    // webhook uses after a real payment — so it enters the ops drafting queue
-    // immediately, with no /pay hop and no charge. Flip COMMERCE_ENABLED to
-    // restore the paid checkout path below.
+    const recordSubmissionCalibration = async (vendorAction: "bid" | "pending") => {
+      const tenderMetadata = order.tenderId
+        ? await sql`
+            SELECT country
+            FROM tenders
+            WHERE id = ${order.tenderId}
+            LIMIT 1
+          `
+        : [];
+      await recordCalibrationEvent({
+        userId: user.id,
+        source: "submission",
+        eventType: "match",
+        tenderId: order.tenderId,
+        workOrderId,
+        submissionOrderId: order.id,
+        agency: order.agency,
+        tenderType: type,
+        valueBand: valueBand(order.value),
+        country: (tenderMetadata[0]?.country as string | null | undefined) ?? null,
+        systemOutput: {
+          compliance: {
+            completeness: audit.pct,
+            flags: order.blockers.map((blocker) => ({ id: blocker.id, severity: blocker.sev, state: blocker.state })),
+            portal: order.portal,
+            requirementsStatus: draft.tenderRequirements?.generationStatus ?? "not_started",
+          },
+          merit: { fitScore: order.fit },
+          contestability: { band: "Mixed", basis: [], thinEvidence: true },
+          verdict: { recommendation: vendorAction === "bid" ? "bid_initiated" : "payment_pending" },
+          outcomeHook: { state: "pending" },
+        },
+        vendorAction,
+        reviewDisqualifierCaught: null,
+        founderFitReasoning: null,
+        dedupKey: `submission:${user.id}:${order.id}`,
+      });
+    };
+
+    // Invite-only beta: each founder-approved account gets exactly one assisted
+    // submission credit. Redeem it through the same atomic ledger and checkout
+    // fulfillment seam as production payments; never grant unlimited $0 orders.
     if (!COMMERCE_ENABLED) {
-      await sql`
-        UPDATE work_orders
-        SET payment_status = 'paid', amount_cents = 0, currency = 'usd'
-        WHERE id = ${workOrderId} AND user_id = ${user.id}
-      `;
-      const paidOrder = await markSubmissionOrderPaidByWorkOrder(workOrderId, 0, "usd");
+      const credit = await consumeFreeSubmissionForProposal({
+        user,
+        workOrderId,
+        pipelineItemId: order.pipelineItemId,
+        tenderTitle: order.tender,
+        agency: order.agency,
+        successRedirect: `/dashboard/proposals?placed=${order.id}&free=1`,
+      });
+      if (!credit.applied) {
+        if (credit.reason === "fulfillment_failed") {
+          return NextResponse.json(
+            {
+              error: `We couldn't apply the submission credit. Your credit is still available. Contact info@tenderpath.me with case TP-CREDIT-${order.id}.`,
+              code: "PILOT_CREDIT_FULFILLMENT_FAILED",
+              case_ref: `TP-CREDIT-${order.id}`,
+            },
+            { status: 502 },
+          );
+        }
+        return NextResponse.json(
+          {
+            error: "Your founder-issued submission credit has already been used. Contact info@tenderpath.me to start another submission.",
+            code: "PILOT_CREDIT_USED",
+          },
+          { status: 409 },
+        );
+      }
+      const paidOrder = await getOrderByWorkOrder(workOrderId);
+      await recordSubmissionCalibration("bid");
       return NextResponse.json({
         order: paidOrder ?? order,
         work_order_id: workOrderId,
@@ -199,6 +263,7 @@ export async function POST(request: Request) {
         `;
         const paidOrder = await markSubmissionOrderPaidByWorkOrder(workOrderId, 0, "usd");
         const usage = await recordBundledEoiUse(user);
+        await recordSubmissionCalibration("bid");
         return NextResponse.json({
           order: paidOrder ?? order,
           work_order_id: workOrderId,
@@ -218,6 +283,7 @@ export async function POST(request: Request) {
     if (order.agency) payParams.set("agency", order.agency.slice(0, 120));
     if (order.pipelineItemId) payParams.set("pipeline_item_id", String(order.pipelineItemId));
 
+    await recordSubmissionCalibration("pending");
     return NextResponse.json({
       order,
       work_order_id: workOrderId,

@@ -19,6 +19,7 @@ const NAV = [
   { href: "/admin/submissions",  label: "Submissions",   hint: "03b" },
   { href: "/admin/matching",     label: "Matching",      hint: "04" },
   { href: "/admin/network",      label: "Network",       hint: "05" },
+  { href: "/admin/crm",          label: "Sales CRM",     hint: "05b" },
   { href: "/admin/feedback",     label: "Feedback",      hint: "06" },
   { href: "/admin/proposal-health", label: "Health",     hint: "07" },
   { href: "/admin/grant-health", label: "Grant Health",  hint: "08" },

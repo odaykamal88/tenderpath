@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { defaultEmailMeta } from "@/lib/email/defaults";
 import { isEmailSuppressed } from "@/lib/email/suppression";
+import { recordEmailDelivery } from "@/lib/email/delivery-log";
 
 interface WorkOrderNotification {
   id: number;
@@ -59,6 +60,9 @@ export async function sendWorkOrderPaidNotifications(order: WorkOrderNotificatio
       workOrderId: order.id,
       reason: "RESEND_API_KEY missing",
     });
+    if (order.email) {
+      await recordEmailDelivery({ messageKey: `tp-work-order-${order.id}-customer-paid`, email: order.email, kind: "work_order_paid_customer", status: "skipped", error: "RESEND_API_KEY missing", metadata: { workOrderId: order.id } });
+    }
     return;
   }
 
@@ -74,11 +78,14 @@ export async function sendWorkOrderPaidNotifications(order: WorkOrderNotificatio
   ].filter(Boolean).join("\n");
 
   const userEmail = order.email;
+  const failures: string[] = [];
   if (userEmail) {
+    const messageKey = `tp-work-order-${order.id}-customer-paid`;
     if (await isEmailSuppressed(userEmail)) {
       console.log("[tp:work_order_email:skipped_unsubscribed]", { workOrderId: order.id, email: userEmail });
+      await recordEmailDelivery({ messageKey, email: userEmail, kind: "work_order_paid_customer", status: "skipped", error: "recipient suppressed", metadata: { workOrderId: order.id } });
     } else {
-      await resend.emails.send({
+      const { data, error } = await resend.emails.send({
         from,
         to: userEmail,
         subject: `TenderPath received your ${plan} order`,
@@ -90,8 +97,15 @@ export async function sendWorkOrderPaidNotifications(order: WorkOrderNotificatio
           "The TenderPath team will review the intake and follow up with the next step.",
           `${appUrl}/dashboard/services`,
         ].join("\n"),
+        tags: [{ name: "kind", value: "work-order-paid" }],
         ...defaultEmailMeta(userEmail),
-      });
+      }, { idempotencyKey: messageKey });
+      if (error) {
+        failures.push(`customer: ${error.message}`);
+        await recordEmailDelivery({ messageKey, email: userEmail, kind: "work_order_paid_customer", status: "failed", error: error.message, metadata: { workOrderId: order.id } });
+      } else {
+        await recordEmailDelivery({ messageKey, email: userEmail, kind: "work_order_paid_customer", status: "sent", providerMessageId: data?.id ?? null, metadata: { workOrderId: order.id } });
+      }
     }
   }
 
@@ -113,7 +127,8 @@ export async function sendWorkOrderPaidNotifications(order: WorkOrderNotificatio
       ].filter(Boolean).join("\n")
     : "";
 
-  await resend.emails.send({
+  const opsMessageKey = `tp-work-order-${order.id}-ops-paid`;
+  const { data: opsData, error: opsError } = await resend.emails.send({
     from,
     to: opsEmail,
     subject: `${subjectPrefix}New paid work order #${order.id}: ${plan}`,
@@ -126,8 +141,16 @@ export async function sendWorkOrderPaidNotifications(order: WorkOrderNotificatio
       holdBlock,
       `${appUrl}/admin/work-orders`,
     ].filter(Boolean).join("\n"),
+    tags: [{ name: "kind", value: "work-order-ops" }],
     ...defaultEmailMeta(),
-  });
+  }, { idempotencyKey: opsMessageKey });
+  if (opsError) {
+    failures.push(`ops: ${opsError.message}`);
+    await recordEmailDelivery({ messageKey: opsMessageKey, email: opsEmail, kind: "work_order_paid_ops", status: "failed", error: opsError.message, metadata: { workOrderId: order.id } });
+  } else {
+    await recordEmailDelivery({ messageKey: opsMessageKey, email: opsEmail, kind: "work_order_paid_ops", status: "sent", providerMessageId: opsData?.id ?? null, metadata: { workOrderId: order.id } });
+  }
+  if (failures.length) throw new Error(failures.join("; "));
 }
 
 export async function sendWorkOrderStatusNotification(order: WorkOrderStatusNotification): Promise<void> {

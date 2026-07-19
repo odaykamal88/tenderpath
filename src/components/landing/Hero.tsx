@@ -80,9 +80,9 @@ export default function Hero({ viewer }: { viewer: LandingViewer }) {
             maxWidth: 920,
           }}
         >
-          Stop chasing tenders.
+          Stop chasing every tender.
           <br />
-          <span style={{ fontStyle: "italic", color: LC.accent }}>Start winning them.</span>
+          <span style={{ fontStyle: "italic", color: LC.accent }}>Make the right ones count.</span>
         </h1>
 
         <p
@@ -95,7 +95,7 @@ export default function Hero({ viewer }: { viewer: LandingViewer }) {
             maxWidth: 600,
           }}
         >
-          Paste any UN or donor tender and TenderPath tells you—instantly—whether to bid, exactly what compliance you&rsquo;re missing, and then helps you close every gap and submit a winning proposal.
+          Paste any UN or donor tender to see whether it deserves your effort, what could disqualify you, and exactly what to fix before you submit.
         </p>
 
         <div style={{ marginTop: 34 }}>

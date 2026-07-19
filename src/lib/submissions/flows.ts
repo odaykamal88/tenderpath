@@ -60,7 +60,7 @@ export type FlowBlock =
   | {
       kind: "criteria";
       id: string;
-      items: { id: string; crit: string; pts: number; fieldLabel: string; help?: string; preFrom?: FlowField["preFrom"] }[];
+      items: { id: string; crit: string; pts?: number; fieldLabel: string; help?: string; preFrom?: FlowField["preFrom"] }[];
     }
   | {
       kind: "docs";
@@ -110,8 +110,13 @@ export interface SubmissionFlow {
   steps: FlowStep[];
 }
 
+/** Founder-operated first-10 delivery window. The clock starts only after the
+ * tender pack and company evidence are complete and intake is confirmed. */
+export const PILOT_SLA_MINS = 24 * 60;
+export const PILOT_SLA_LABEL = "Within 1 business day";
+
 export const FLOW_GUARANTEE =
-  "Draft late, or rejected for a compliance error we made? Full refund — no questions.";
+  "Late after confirmed intake, or rejected for a compliance error TenderPath introduced? Full service-fee refund. Supplier omissions, buyer changes, portal outages, late supplier submission, and award outcome are excluded.";
 
 const UNGM_BLOCKER = (why: string): FlowBlocker => ({
   id: "ungm",
@@ -126,9 +131,9 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
     code: "EOI",
     name: "Expression of Interest",
     price: 149,
-    sla: "Draft in under 1 hour",
+    sla: PILOT_SLA_LABEL,
     complexity: "Light",
-    tagline: "Get shortlisted",
+    tagline: "Present the capability clearly",
     blurb:
       "A capability-led response that positions you for the shortlist. No pricing — this is about credibility and eligibility.",
     deliverables: [
@@ -224,11 +229,11 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
     code: "RFQ",
     name: "Request for Quotation",
     price: 199,
-    sla: "Draft in under 1 hour",
+    sla: PILOT_SLA_LABEL,
     complexity: "Price-driven",
     tagline: "Quote it right",
     blurb:
-      "Lowest-priced, technically compliant offer wins. We make sure the quote is complete, the specs match, and nothing voids your offer.",
+      "RFQs are usually price-led after technical compliance. We follow the notice's exact evaluation method and guard against preventable omissions.",
     deliverables: [
       { name: "Quotation form (agency template)", fmt: "PDF", envelope: "financial" },
       { name: "Priced line schedule", fmt: "XLSX + PDF", envelope: "financial" },
@@ -257,37 +262,39 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
               {
                 k: "validity",
                 label: "Quote validity",
-                type: "select",
-                options: ["60 days (required minimum)", "90 days", "120 days"],
-                pre: "90 days",
-                help: "Most UN RFQs require 60 days minimum. Shorter than the notice asks = automatic rejection.",
+                type: "text",
+                required: true,
+                placeholder: "e.g. 60 days — copy from the RFQ",
+                help: "Use the exact period in the live RFQ or amendment; TenderPath does not assume one.",
               },
               {
                 k: "delivery",
                 label: "Delivery lead time",
                 type: "text",
                 required: true,
-                pre: "6 weeks from PO",
+                placeholder: "e.g. 6 weeks from purchase order",
                 help: "From purchase order to delivery at the named destination — match the notice's ceiling.",
               },
               {
                 k: "incoterms",
                 label: "Incoterms",
-                type: "select",
-                options: [
-                  "DAP — Delivered at Place (most UN RFQs)",
-                  "DDP — Delivered Duty Paid",
-                  "CIP — Carriage & Insurance Paid",
-                  "EXW — rarely accepted",
-                ],
-                pre: "DAP — Delivered at Place (most UN RFQs)",
+                type: "text",
+                required: true,
+                placeholder: "e.g. DAP, named destination — copy from the RFQ",
                 help: "Match the Incoterms the notice names. Quoting EXW when DAP is required voids the offer.",
+              },
+              {
+                k: "tax",
+                label: "Tax / VAT treatment",
+                type: "text",
+                required: true,
+                placeholder: "Copy the treatment required by the RFQ template",
               },
               {
                 k: "warranty",
                 label: "Warranty offered",
                 type: "text",
-                pre: "24 months on all items",
+                placeholder: "Copy or exceed the published minimum",
                 help: "Match or exceed the notice's minimum.",
               },
             ],
@@ -309,8 +316,8 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
                 k: "specs",
                 label: "Specification conformity",
                 type: "select",
+                required: true,
                 options: ["Fully compliant with all specs", "Compliant with declared deviations"],
-                pre: "Fully compliant with all specs",
               },
               {
                 k: "deviations",
@@ -341,10 +348,10 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
             kind: "declarations",
             id: "decl",
             items: [
-              "Prices are exclusive of VAT and indirect taxes — UN agencies are tax-exempt",
-              "Prices quoted are firm and not subject to escalation within validity",
-              "Goods are new, unused, and of most recent models",
-              "We accept the agency's General Terms & Conditions for goods",
+              "Tax / VAT treatment matches the live RFQ template",
+              "Price-firmness or escalation terms match the live RFQ",
+              "Goods condition and model-year statements match the published specification",
+              "Agency terms and any declared exceptions have been reviewed against the RFQ",
             ],
           },
         ],
@@ -358,11 +365,11 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
     code: "ITB",
     name: "Invitation to Bid",
     price: 299,
-    sla: "Draft in under 1 hour",
+    sla: PILOT_SLA_LABEL,
     complexity: "Compliance-heavy",
-    tagline: "Zero elimination errors",
+    tagline: "Control elimination risks",
     blurb:
-      "Formal sealed bidding. Pass/fail conformity first, then lowest price wins. One missed form and the bid is dead — we run a 34-point compliance gate.",
+      "Formal bidding often starts with pass/fail conformity before price evaluation. We follow the ITB's published method and run a 34-point compliance gate.",
     deliverables: [
       { name: "Technical bid — conformity response", fmt: "PDF", envelope: "technical" },
       { name: "Financial bid — Bill of Quantities", fmt: "XLSX + PDF", envelope: "financial" },
@@ -419,18 +426,18 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
               {
                 k: "validity",
                 label: "Bid validity",
-                type: "select",
-                options: ["90 days", "120 days", "150 days"],
-                pre: "120 days",
-                help: "ITBs commonly require 90–120 days. Match or exceed the notice.",
+                type: "text",
+                required: true,
+                placeholder: "e.g. 120 days — copy from the ITB",
+                help: "Use the exact period in the live ITB or amendment; TenderPath does not assume one.",
               },
               {
                 k: "security",
                 label: "Bid security",
-                type: "select",
-                options: ["Bid-securing declaration", "Bank guarantee 2%"],
-                pre: "Bid-securing declaration",
-                help: "Many agencies accept a signed declaration in lieu of a bank guarantee.",
+                type: "text",
+                required: true,
+                placeholder: "e.g. signed bid-securing declaration or exact guarantee requirement",
+                help: "Copy the exact instrument and amount from the ITB; do not substitute one security form for another.",
               },
             ],
           },
@@ -457,7 +464,7 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
             id: "decl",
             items: [
               "Bid form signed by an authorized signatory (we prepare for signature)",
-              "Bid-securing declaration accepted — we forfeit eligibility if we withdraw",
+              "Bid-security instrument or declaration matches the live ITB",
               "No alteration to the agency's bid forms",
               "Joint venture: not applicable / agreement attached",
             ],
@@ -473,11 +480,11 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
     code: "RFP",
     name: "Request for Proposal",
     price: 349,
-    sla: "Draft in under 1 hour",
+    sla: PILOT_SLA_LABEL,
     complexity: "Strategy-heavy",
-    tagline: "Win on substance",
+    tagline: "Compete on substance",
     blurb:
-      "Two-envelope, best-value selection — typically 70% technical, 30% financial. We build the methodology against the scoring matrix, point by point.",
+      "Best-value selection often separates technical and financial responses. We map the methodology to the criteria and weights actually published in the notice.",
     deliverables: [
       { name: "Technical proposal (methodology, workplan, team)", fmt: "DOCX + PDF", envelope: "technical" },
       { name: "Financial proposal — sealed separately", fmt: "PDF", envelope: "financial" },
@@ -485,7 +492,7 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
     ],
     eliminators: [
       "Financial data inside the technical envelope",
-      "Below the 70% technical threshold",
+      "Missing the published technical threshold, where the notice sets one",
       "Key expert CVs missing or unsigned",
       "Page/format limits breached",
     ],
@@ -496,7 +503,7 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
         title: "Technical strategy",
         est: "~10 min",
         intro:
-          "The evaluation matrix, decoded. Your input here drives the methodology we write against each criterion.",
+          "Build the response evidence here. During assisted review, we map it to the tender's published evaluation matrix—never generic weights.",
         blocks: [
           {
             kind: "criteria",
@@ -505,28 +512,24 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
               {
                 id: "k1",
                 crit: "Methodology & approach",
-                pts: 30,
                 fieldLabel: "Your angle",
                 preFrom: "profile_description",
-                help: "We expand this into 8–10 pages mapped to the TOR tasks.",
+                help: "We map this to the TOR tasks and published criteria during assisted review.",
               },
               {
                 id: "k2",
                 crit: "Team composition & CVs",
-                pts: 25,
                 fieldLabel: "Proposed team",
                 help: "Names or roles you'd assign — every named expert needs a CV in the pack.",
               },
               {
                 id: "k3",
                 crit: "Comparable experience",
-                pts: 15,
                 fieldLabel: "References to cite",
               },
               {
                 id: "k4",
                 crit: "Workplan & timeline",
-                pts: 10,
                 fieldLabel: "Delivery constraints",
                 help: "Mobilization, seasonal windows, anything that shapes the timeline.",
               },
@@ -536,14 +539,8 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
             kind: "docs",
             id: "experts",
             docs: ["cv3"],
-            required: ["cv3"],
-            label: "Key experts",
-            blocker: {
-              id: "cv3",
-              sev: "medium",
-              label: "Third key-expert CV missing — Team & CVs is a scored criterion",
-              fix: "Upload one, have us build it from the expert's background, or leave it to us — we nominate from our vetted associate pool.",
-            },
+            required: [],
+            label: "Additional key-expert evidence",
           },
         ],
       },
@@ -586,6 +583,14 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
                 options: ["Milestone-based (recommended)", "Monthly invoicing", "Deliverable-based"],
                 pre: "Milestone-based (recommended)",
               },
+              {
+                k: "validity",
+                label: "Published proposal validity",
+                type: "text",
+                required: true,
+                placeholder: "e.g. 180 days — copy from the notice",
+                help: "Use the exact period in the live solicitation or amendment; TenderPath does not assume one.",
+              },
             ],
           },
         ],
@@ -601,14 +606,8 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
             kind: "docs",
             id: "financials",
             docs: ["fin"],
-            required: ["fin"],
+            required: [],
             label: "Financial capacity",
-            blocker: {
-              id: "fin",
-              sev: "high",
-              label: "Audited financials (last 3 years) — commonly mandatory for contracts over $250K",
-              fix: "Upload all three, have us draft the auditor request and chase it, or acknowledge — we note statements to follow (risky but sometimes accepted).",
-            },
           },
           {
             kind: "pickrefs",
@@ -621,8 +620,8 @@ export const FLOWS: Record<SubmissionCode, SubmissionFlow> = {
             kind: "declarations",
             id: "decl",
             items: [
-              "Technical and financial proposals will be submitted as separate sealed envelopes",
-              "Proposal validity: 120 days",
+              "I confirmed the notice's technical / financial file-separation rule",
+              "I confirmed the proposal-validity period against the live notice or amendment",
               "No conflict of interest; full beneficial-ownership disclosure",
             ],
           },

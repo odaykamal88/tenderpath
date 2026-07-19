@@ -22,6 +22,7 @@ import { evaluateAccess } from "@/lib/access";
 import { createWorkOrderFromCheckout } from "@/lib/work-orders";
 import { ensurePaymentIntegritySchema } from "@/lib/payment-integrity";
 import { PROPOSAL_PLAN } from "@/lib/proposal-package/types";
+import { COMMERCE_ENABLED } from "@/lib/commerce";
 
 let ensurePromise: Promise<void> | null = null;
 
@@ -49,7 +50,9 @@ export interface FreeSubmissionStatus {
 /** The free credit applies only to the proposal-draft submission product. */
 export const FREE_SUBMISSION_PLAN = PROPOSAL_PLAN; // "proposal-draft"
 
-/** Eligibility = trial user who hasn't consumed the credit yet. */
+/** Eligibility = an unused credit on an invited pilot account, or an unused
+ * credit on a trial account once commerce is enabled. Public registration is
+ * closed during the pilot, so account access is the founder-issued grant. */
 export async function getFreeSubmissionStatus(user: User): Promise<FreeSubmissionStatus> {
   try {
     await ensureFreeSubmissionSchema();
@@ -61,7 +64,7 @@ export async function getFreeSubmissionStatus(user: User): Promise<FreeSubmissio
     `;
     const usedAtRaw = rows[0]?.free_submission_used_at as string | Date | null | undefined;
     const usedAt = usedAtRaw ? new Date(usedAtRaw).toISOString() : null;
-    const eligible = !usedAt && evaluateAccess(user).isTrialing;
+    const eligible = !usedAt && (!COMMERCE_ENABLED || evaluateAccess(user).isTrialing);
     return { eligible, usedAt };
   } catch (err) {
     // Fail closed: on any error the user simply pays normally — never a free
@@ -89,6 +92,7 @@ export interface ConsumeFreeSubmissionInput {
 
 export interface ConsumeFreeSubmissionResult {
   applied: boolean;
+  reason?: "not_eligible" | "already_used" | "fulfillment_failed";
   /** Where to send the user once the free proposal is fulfilling. Relative. */
   redirectUrl?: string;
 }
@@ -107,10 +111,11 @@ export async function consumeFreeSubmissionForProposal(
 ): Promise<ConsumeFreeSubmissionResult> {
   const { user, workOrderId } = input;
 
-  // Re-check eligibility server-side (never trust the caller). Non-trial users
-  // never reach the atomic claim.
-  if (!evaluateAccess(user).isTrialing) {
-    return { applied: false };
+  // Re-check eligibility server-side (never trust the caller). During the
+  // invite-only pilot, having an account is itself the founder-issued grant;
+  // once commerce is live, only trial users receive this welcome credit.
+  if (COMMERCE_ENABLED && !evaluateAccess(user).isTrialing) {
+    return { applied: false, reason: "not_eligible" };
   }
 
   await ensureFreeSubmissionSchema();
@@ -126,7 +131,7 @@ export async function consumeFreeSubmissionForProposal(
   `;
   if (!claimed.length) {
     // Already redeemed (or a concurrent request won the race).
-    return { applied: false };
+    return { applied: false, reason: "already_used" };
   }
 
   try {
@@ -155,15 +160,21 @@ export async function consumeFreeSubmissionForProposal(
       },
     } as unknown as Stripe.Checkout.Session;
 
-    await createWorkOrderFromCheckout(syntheticSession, user.id);
-
     // Record a $0 line in purchase history so the work-orders/billing views
     // show the redemption rather than a mysterious unpaid-but-fulfilled order.
+    // Write it before fulfillment: if fulfillment fails we can delete this
+    // exact synthetic row and safely return the customer's credit. The partial
+    // unique-index predicate must be repeated on ON CONFLICT for Postgres to
+    // recognize purchase_logs_stripe_session_id_unique.
     await sql`
       INSERT INTO purchase_logs (plan, stripe_session_id, stripe_customer_id, user_id, amount_cents, currency)
       VALUES (${FREE_SUBMISSION_PLAN}, ${`free-submission:wo:${workOrderId}`}, NULL, ${user.id}, 0, 'usd')
-      ON CONFLICT (stripe_session_id) DO NOTHING
+      ON CONFLICT (stripe_session_id)
+        WHERE stripe_session_id IS NOT NULL AND stripe_session_id <> ''
+      DO NOTHING
     `;
+
+    await createWorkOrderFromCheckout(syntheticSession, user.id);
 
     console.info("[tp:free_submission:redeemed]", { userId: user.id, workOrderId });
     return {
@@ -172,6 +183,12 @@ export async function consumeFreeSubmissionForProposal(
     };
   } catch (err) {
     // Roll the claim back so the user keeps their credit and can pay or retry.
+    await sql`
+      DELETE FROM purchase_logs
+      WHERE stripe_session_id = ${`free-submission:wo:${workOrderId}`}
+        AND user_id = ${user.id}
+        AND amount_cents = 0
+    `.catch(() => {});
     await sql`
       UPDATE users
       SET free_submission_used_at = NULL,
@@ -184,6 +201,6 @@ export async function consumeFreeSubmissionForProposal(
       workOrderId,
       error: err instanceof Error ? err.message : String(err),
     });
-    return { applied: false };
+    return { applied: false, reason: "fulfillment_failed" };
   }
 }

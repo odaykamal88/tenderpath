@@ -119,9 +119,10 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
           return;
         }
         const body = (await res.json()) as WorkbenchData;
-        // A still-computing / failed assessment has no renderable Workbench —
-        // bounce to the standalone status view the assessment route owns.
-        if (body.assessmentStatus === "computing" || body.assessmentStatus === "failed") {
+        // A still-computing assessment belongs on its status view. A failed
+        // assessment intentionally remains in Workbench so the customer can
+        // retry without losing access to submissions or their private vault.
+        if (body.assessmentStatus === "computing") {
           if (body.reportId) {
             router.replace(`/assessment/${body.reportId}`);
             return;

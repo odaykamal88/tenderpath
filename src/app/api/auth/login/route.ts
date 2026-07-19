@@ -3,6 +3,9 @@ import { Resend } from "resend";
 import { sql } from "@/lib/db";
 import { generateMagicToken } from "@/lib/auth";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { createHash } from "node:crypto";
+import { recordEmailDelivery } from "@/lib/email/delivery-log";
+import { defaultEmailMeta } from "@/lib/email/defaults";
 
 function envValue(key: string): string | null {
   const value = process.env[key]?.trim();
@@ -58,10 +61,11 @@ export async function POST(request: Request) {
   const appUrl = envValue("NEXT_PUBLIC_APP_URL") ?? "https://www.tenderpath.me";
   const fromEmail = envValue("RESEND_FROM_EMAIL") ?? "TenderPath <no-reply@tenderpath.me>";
   const magicLink = `${appUrl}/login?token=${magicToken}`;
+  const messageKey = `tp-auth-login-${createHash("sha256").update(magicToken).digest("hex").slice(0, 24)}`;
 
   if (resendKey) {
     const resend = new Resend(resendKey);
-    const { error: emailError } = await resend.emails.send({
+    const { data, error: emailError } = await resend.emails.send({
       from: fromEmail,
       to: normalizedEmail,
       subject: "Your TenderPath sign-in link",
@@ -75,19 +79,26 @@ export async function POST(request: Request) {
   </div>
 </body></html>`,
       text: `Sign in to TenderPath\n\nClick here to sign in (link expires in 30 minutes):\n${magicLink}\n\nIf you didn't request this, you can safely ignore this email.`,
-    });
+      tags: [{ name: "kind", value: "auth-login" }],
+      ...defaultEmailMeta(normalizedEmail),
+    }, { idempotencyKey: messageKey });
 
     if (emailError) {
-      console.error("Magic link email failed:", emailError);
+      await recordEmailDelivery({ messageKey, email: normalizedEmail, kind: "auth_login", status: "failed", error: emailError.message });
+      console.error("[tp:auth:login_magic_link_failed]", { error: emailError.message });
       if (!isDev) {
         return NextResponse.json(
           { error: "Could not send magic link email. Please contact support." },
           { status: 502 }
         );
       }
+    } else {
+      await recordEmailDelivery({ messageKey, email: normalizedEmail, kind: "auth_login", status: "sent", providerMessageId: data?.id ?? null });
+      console.info("[tp:auth:login_magic_link_sent]", { userId: users[0].id, messageId: data?.id ?? null });
     }
   } else if (!isDev) {
-    console.warn("RESEND_API_KEY not set — magic link email not sent");
+    await recordEmailDelivery({ messageKey, email: normalizedEmail, kind: "auth_login", status: "skipped", error: "RESEND_API_KEY missing" });
+    console.warn("[tp:auth:login_magic_link_skipped]", { reason: "RESEND_API_KEY missing" });
     return NextResponse.json(
       { error: "Magic link email is not configured. Please contact support." },
       { status: 503 }

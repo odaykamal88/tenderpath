@@ -198,10 +198,10 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
       {
         b: "kv",
         rows: [
-          ["Quote validity", f("validity", "90 days")],
-          ["Delivery", f("delivery", "as quoted")],
-          ["Incoterms", f("incoterms", "as required by the notice")],
-          ["VAT", "Excluded — agency is tax-exempt"],
+          ["Quote validity", f("validity", "Confirm against the solicitation")],
+          ["Delivery", f("delivery", "Confirm against the solicitation")],
+          ["Incoterms", f("incoterms", "Confirm against the solicitation")],
+          ["Tax / VAT", f("tax", "Confirm against the solicitation")],
           ...(f("warranty") ? ([["Warranty", f("warranty")]] as [string, string][]) : []),
         ],
       },
@@ -215,8 +215,8 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
     const schedule = dv(1);
     schedule.blocks = [
       { b: "h1", text: "Priced Line Schedule" },
-      linesTable(`Total · ${it.currency} · excl. VAT`),
-      { b: "note", text: "Cross-checked against the RFQ schedule — every line priced, no omissions (incomplete quotes are auto-rejected)." },
+      linesTable(`Total · ${it.currency} · ${f("tax", "tax treatment per RFQ")}`),
+      { b: "note", text: "TenderPath founder QA cross-checks every priced line against the live RFQ schedule before the assisted pack is marked ready." },
     ];
 
     const compliance = dv(2);
@@ -232,10 +232,10 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
       {
         b: "list",
         items: [
-          "Prices are firm for the validity period and exclusive of VAT and indirect taxes.",
-          "Goods are new, unused, and of the most recent models.",
-          "We accept the agency's General Terms & Conditions for goods.",
-          "Warranty as stated in the attached warranty statement.",
+          `Quote validity: ${f("validity", "confirm against the solicitation")}.`,
+          `Tax / VAT treatment: ${f("tax", "confirm against the solicitation")}.`,
+          `Technical conformity: ${f("specs", "confirm against the published specification")}.`,
+          ...(f("warranty") ? [`Warranty offered: ${f("warranty")}.`] : []),
         ],
       },
       sig,
@@ -261,10 +261,10 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
         b: "kv",
         rows: [
           ["Site visit", f("sitevisit", "—")],
-          ["Bid validity", f("validity", "120 days")],
+          ["Bid validity", f("validity", "Confirm against the solicitation")],
         ],
       },
-      { b: "note", text: "No pricing appears anywhere in this envelope — verified at QA. Cross-contamination is the #1 ITB elimination error." },
+      { b: "note", text: "Founder QA must confirm that no pricing appears in this envelope before delivery; technical / financial cross-contamination can cause rejection." },
     ];
 
     const boq = dv(1);
@@ -274,8 +274,8 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
       {
         b: "kv",
         rows: [
-          ["Bid security", f("security", "Bid-securing declaration")],
-          ["Validity", f("validity", "120 days")],
+          ["Bid security", f("security", "Confirm against the solicitation")],
+          ["Validity", f("validity", "Confirm against the solicitation")],
         ],
       },
     ];
@@ -288,7 +288,7 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
         b: "list",
         items: [
           "Bid submission form — ready for authorized signature",
-          "Bid-securing declaration — ready for signature",
+          "Bid-security instrument or declaration — as confirmed at intake",
           "Manufacturer authorization — as obtained from supplier",
           "Eligibility documents — attached from your vault",
         ],
@@ -304,7 +304,6 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
     .flatMap((s) => s.blocks ?? [])
     .flatMap((b) => (b.kind === "criteria" ? b.items : []));
   const pts = (id: string) => criteria.find((k) => k.id === id)?.pts;
-  const totalPts = criteria.reduce((s, k) => s + k.pts, 0);
   const technical = dv(0);
   technical.blocks = [
     { b: "h1", text: "Technical Proposal" },
@@ -317,7 +316,7 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
     { b: "h2", text: `2 · Methodology & approach${pts("k1") ? ` — ${pts("k1")} pts` : ""}` },
     {
       b: "p",
-      text: `${stripDot(f("k1", "Methodology drafted from your intake"))}. Each TOR task is addressed in sequence in the sections that follow, mapped one-to-one against the evaluation matrix so no scored criterion goes unanswered.`,
+      text: `${stripDot(f("k1", "Methodology drafted from your intake"))}. During assisted review, each section is mapped to the published TOR tasks and evaluation criteria before delivery.`,
     },
     { b: "h2", text: `3 · Team composition${pts("k2") ? ` — ${pts("k2")} pts` : ""}` },
     {
@@ -334,7 +333,7 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
       b: "p",
       text: f("k4", "Mobilization within weeks of signature; field phases scheduled around seasonal access constraints; deliverables front-loaded against the payment milestones."),
     },
-    { b: "note", text: `Drafted against the ${totalPts}-point technical matrix. Threshold: 70%. Every scored criterion has a dedicated, findable section.` },
+    { b: "note", text: "Response framework prepared from the intake. Before delivery, TenderPath maps every section to the published evaluation criteria and weights; no generic threshold is assumed." },
   ];
 
   const financial = dv(1);
@@ -347,7 +346,7 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
         ["Basis", f("days", "—")],
         ["Reimbursables", f("reimb", "—")],
         ["Payment terms", f("terms", "Milestone-based")],
-        ["Validity", "120 days"],
+        ["Validity", f("validity", "Confirm against the solicitation")],
       ],
     },
     {

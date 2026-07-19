@@ -34,8 +34,9 @@ export default function TermsPage() {
           procurement opportunities, assess their readiness, and prepare for tender processes.
           The platform includes a free readiness assessment and a free dashboard (the Workbench) —
           a matched tender feed, full tender database, weekly digest, Telegram alerts, and bid/no-bid
-          verdicts. TenderPath is currently invite-only and free to use while we&apos;re in beta; we&apos;ll
-          always show prices clearly before introducing any paid feature.
+          verdicts. TenderPath is currently invite-only. Core assessment and Workbench access may be
+          free, while assisted reviews and submission packages may carry a separately confirmed fee.
+          We will always show or confirm the price and scope before a paid service begins.
         </p>
         <p className="text-sm font-medium text-gray-800 bg-gray-50 rounded-lg px-4 py-3">
           All outputs — including assessments, sector classifications, readiness scores, tender
@@ -71,33 +72,37 @@ export default function TermsPage() {
         </ul>
       </Section>
 
-      <Section heading="5. Access during the beta">
+      <Section heading="5. Pilot access">
         <p className="text-sm">
           The company assessment and the dashboard (the Workbench) are free to use. TenderPath is
           currently <strong>invite-only</strong> — you can request an invite from our homepage, and we
-          onboard new teams in small batches. No payment or card is required to use the platform during
-          the beta. You can stop using your account at any time, and you can reach us whenever you like
+          onboard new customers in small batches. Some assisted reviews and submission services are paid;
+          their scope, price, delivery window, and included review rounds are shown in the product or
+          confirmed with you in writing before the service begins. You can stop using your account at any time, and you can reach us whenever you like
           at <a href="mailto:info@tenderpath.me" className="underline">info@tenderpath.me</a>.
         </p>
       </Section>
 
       <Section heading="6. Paid features and billing">
         <p className="text-sm">
-          TenderPath is free during the invite-only beta. We may introduce optional paid features
-          later — for example, additional workflow or proposal-drafting tools. If and when we do,
-          we&apos;ll show the price and terms clearly before you buy anything, and update this section
-          to match.
+          Optional paid services include deep proposal review and assisted submission packages. During
+          the founder-assisted pilot, payment may be recorded through a separately agreed invoice or
+          pilot credit while self-serve checkout is unavailable. We will show or confirm the price,
+          deliverables, delivery window, and review rounds before you accept a paid service.
         </p>
         <p className="text-sm">
-          Any payments would be processed securely by{" "}
+          Card payments, when offered, are processed securely by{" "}
           <a href="https://stripe.com/legal" target="_blank" rel="noreferrer" className="underline">Stripe</a>.
           Card details are handled entirely by Stripe and are never stored on TenderPath servers.
         </p>
         <p id="refunds" className="text-sm">
-          <strong>Refunds.</strong> If you ever pay for something and we don&apos;t deliver what was
-          promised, email us at{" "}
-          <a href="mailto:info@tenderpath.me" className="underline">info@tenderpath.me</a> and we&apos;ll
-          make it right — including a full refund where that&apos;s the fair outcome.
+          <strong>Service recovery.</strong> If a committed draft is delivered after its confirmed
+          delivery window, or a submission is rejected because of a compliance error introduced by
+          TenderPath, we will refund the affected service fee in full. This does not cover missing or
+          inaccurate supplier information, an agency change received after the agreed document cutoff,
+          supplier-portal outages, a late supplier-controlled submission, or the buyer&apos;s award decision.
+          Email <a href="mailto:info@tenderpath.me" className="underline">info@tenderpath.me</a> with the
+          work-order reference so we can investigate and make it right.
         </p>
       </Section>
 
@@ -132,6 +137,11 @@ export default function TermsPage() {
           that the service will be uninterrupted, error-free, or that tender data will be
           complete, accurate, or current at all times. Tender listings are sourced from third-party
           procurement portals and may reflect delays or inaccuracies in those sources.
+        </p>
+        <p className="text-sm">
+          TenderPath does not guarantee that you will be shortlisted or awarded a contract. Fit scores,
+          contestability signals, bid/no-bid recommendations, and reviews help you decide and prepare;
+          they are not statistical win probabilities or promises about an agency&apos;s decision.
         </p>
       </Section>
 

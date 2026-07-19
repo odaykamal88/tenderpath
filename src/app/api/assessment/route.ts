@@ -13,6 +13,10 @@ import {
   mintDemoSessionId,
   setDemoSessionCookie,
 } from "@/lib/assessment/demo-session";
+import {
+  PUBLIC_ASSESSMENT_ERROR,
+  PUBLIC_ASSESSMENT_ERROR_CODE,
+} from "@/lib/assessment/public-errors";
 
 export async function POST(request: Request) {
   // Gate behind authentication
@@ -111,9 +115,14 @@ export async function POST(request: Request) {
     if (mintedFreshCookie && demoSessionId) setDemoSessionCookie(response, demoSessionId);
     return response;
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Assessment failed";
-    console.error("Assessment error:", err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[tp:assessment:authenticated_failed]", {
+      userId: authResult.user?.id ?? null,
+      errorName: err instanceof Error ? err.name : "unknown",
+      errorMessage: err instanceof Error ? err.message : String(err),
+    });
+    return NextResponse.json(
+      { error: PUBLIC_ASSESSMENT_ERROR, code: PUBLIC_ASSESSMENT_ERROR_CODE },
+      { status: 500 },
+    );
   }
 }

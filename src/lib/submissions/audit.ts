@@ -171,7 +171,7 @@ export function buildIntakeSummary(flow: SubmissionFlow, draft: WizardDraftState
     const tot = linesTotal(draft);
     out.push(
       ["Quote total", tot ? `${draft.currency} ${money(tot)}` : "pending"],
-      ["Validity", f("validity") || "90 days"],
+      ["Validity", f("validity") || "not confirmed"],
       ["Delivery", f("delivery") || "—"],
     );
     if (f("incoterms")) out.push(["Incoterms", f("incoterms")]);
@@ -182,8 +182,8 @@ export function buildIntakeSummary(flow: SubmissionFlow, draft: WizardDraftState
     const devs = draft.conformity.filter((r) => r.response === "deviate").length;
     out.push(
       ["Conformity", `${draft.conformity.length - devs} comply · ${devs} declared deviation(s)`],
-      ["Bid validity", f("validity") || "120 days"],
-      ["Security", f("security") || "Bid-securing declaration"],
+      ["Bid validity", f("validity") || "not confirmed"],
+      ["Security", f("security") || "not confirmed"],
     );
     const tot = linesTotal(draft);
     if (tot) out.push(["BoQ total", `${draft.currency} ${money(tot)} across ${draft.lines.length} line items`]);

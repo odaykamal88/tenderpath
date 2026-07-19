@@ -57,6 +57,7 @@ export interface PortalCompanionView {
 }
 
 const CORE_ROLES = new Set(["solicitation", "tor", "guidelines"]);
+const LATEST_AUTHORITY_ROLES = new Set(["amendment", "qa"]);
 
 export function safeExternalHttpUrl(value: string | null | undefined): string | null {
   if (!value || value.length > 2_048) return null;
@@ -91,7 +92,11 @@ export function normalizePortalCompanion(
   };
 }
 
-function nextAction(items: PortalChecklistItem[], hasOnlinePortal: boolean): PortalNextAction {
+function nextAction(
+  items: PortalChecklistItem[],
+  hasOnlinePortal: boolean,
+  evidence: { unreadableCore: boolean; unreadableLatest: number },
+): PortalNextAction {
   const missing = items.find((item) => !item.complete)?.id;
   switch (missing) {
     case "official_notice":
@@ -125,14 +130,18 @@ function nextAction(items: PortalChecklistItem[], hasOnlinePortal: boolean): Por
     case "core_document":
       return {
         kind: "role",
-        title: "Identify the core solicitation",
-        detail: "Label at least one file as Solicitation, Terms of reference, or Guidelines so the drafting workflow reads the right authority.",
+        title: evidence.unreadableCore ? "Make the core solicitation readable" : "Identify the core solicitation",
+        detail: evidence.unreadableCore
+          ? "A core file is saved but its text could not be read. Upload a readable copy before relying on the compliance map."
+          : "Label at least one file as Solicitation, Terms of reference, or Guidelines so the drafting workflow reads the right authority.",
       };
     case "latest_documents":
       return {
         kind: "confirm_latest",
-        title: "Check for amendments and Q&A",
-        detail: "Re-open the event, check its clarification or amendment area, and upload anything newer before confirming this check.",
+        title: evidence.unreadableLatest > 0 ? "Make the amendment and Q&A readable" : "Check for amendments and Q&A",
+        detail: evidence.unreadableLatest > 0
+          ? `${evidence.unreadableLatest} saved authority file${evidence.unreadableLatest === 1 ? " is" : "s are"} unreadable. Upload a readable copy before confirming the pack is current.`
+          : "Re-open the event, check its clarification or amendment area, and upload anything newer before confirming this check.",
       };
     case "deadline_channel":
       return {
@@ -169,7 +178,13 @@ export function buildPortalCompanionView(
       ? tender.portal?.trim()
       : !portal.isFallback,
   );
-  const hasCoreDocument = documents.some((document) => CORE_ROLES.has(document.role));
+  const coreDocuments = documents.filter((document) => CORE_ROLES.has(document.role));
+  const hasCoreDocument = coreDocuments.some((document) => document.extractionStatus === "extracted");
+  const unreadableCore = coreDocuments.length > 0 && !hasCoreDocument;
+  const unreadableLatest = documents.filter((document) => (
+    LATEST_AUTHORITY_ROLES.has(document.role) && document.extractionStatus !== "extracted"
+  )).length;
+  const readableDocuments = documents.filter((document) => document.extractionStatus === "extracted").length;
 
   const items: PortalChecklistItem[] = [
     {
@@ -181,7 +196,9 @@ export function buildPortalCompanionView(
     {
       id: "submission_route",
       label: "Submission route identified",
-      detail: portal.isFallback ? "Confirm the notice-specific channel." : portal.portalName,
+      detail: tender?.portalOverride
+        ? tender.portal?.trim() || "Notice-specific channel confirmed."
+        : portal.isFallback ? "Confirm the notice-specific channel." : portal.portalName,
       complete: routeReady,
     },
     {
@@ -194,7 +211,9 @@ export function buildPortalCompanionView(
     {
       id: "private_pack",
       label: "Tender pack saved privately",
-      detail: documents.length ? `${documents.length} owner-only file${documents.length === 1 ? "" : "s"}.` : "No tender files saved yet.",
+      detail: documents.length
+        ? `${readableDocuments}/${documents.length} owner-only file${documents.length === 1 ? "" : "s"} readable.`
+        : "No tender files saved yet.",
       complete: documents.length > 0,
     },
     {
@@ -207,7 +226,7 @@ export function buildPortalCompanionView(
       id: "latest_documents",
       label: "Amendments and Q&A checked",
       detail: "You checked the live event for anything newer.",
-      complete: confirmed.has("latest_documents"),
+      complete: confirmed.has("latest_documents") && unreadableLatest === 0,
       confirmationId: "latest_documents",
     },
     {
@@ -224,7 +243,7 @@ export function buildPortalCompanionView(
     complete,
     total: items.length,
     pct: Math.round((complete / items.length) * 100),
-    nextAction: nextAction(items, hasOnlinePortal),
+    nextAction: nextAction(items, hasOnlinePortal, { unreadableCore, unreadableLatest }),
     firstTimeRisk: tender?.portalOverride ? "none" : timing.firstTimeRisk,
     daysUntilDeadline: timing.daysUntilDeadline,
   };

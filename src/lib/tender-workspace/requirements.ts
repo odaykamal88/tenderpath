@@ -174,6 +174,10 @@ export function buildTenderRequirementsView(
     && ["ready", "partial"].includes(state.generationStatus),
   );
   const isStale = Boolean(state.items.length && !isCurrent);
+  const unreadableAuthority = (pack?.documents ?? []).find((document) => (
+    ["solicitation", "tor", "guidelines", "amendment", "qa"].includes(document.role)
+    && document.extractionStatus !== "extracted"
+  ));
   const unexplainedNotApplicable = state.items.find(
     (item) => item.status === "not_applicable" && !item.ownerNote?.trim(),
   );
@@ -192,7 +196,9 @@ export function buildTenderRequirementsView(
     ?? state.items.find((item) => item.status === "open");
 
   let nextAction = "Build the tender-specific compliance map";
-  if (isStale) nextAction = "Refresh the map against the current tender pack";
+  if (unreadableAuthority) {
+    nextAction = `Upload a readable copy of “${unreadableAuthority.name}” before relying on this map`;
+  } else if (isStale) nextAction = "Refresh the map against the current tender pack";
   else if (unexplainedNotApplicable && next?.id === unexplainedNotApplicable.id) {
     nextAction = `Add a reason for marking “${unexplainedNotApplicable.title}” not applicable`;
   } else if (next) nextAction = next.action;

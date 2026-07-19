@@ -259,8 +259,8 @@ export default function Features() {
             flip
             id="f-proposal"
             tag="Proposals"
-            title="A submission-ready proposal in under an hour."
-            body="Turn the brief into a full EOI, RFQ, RFP or ITB response — mapped to the tender's scoring matrix, compliance-checked, ready to submit."
+            title="A submission-ready proposal, without preventable surprises."
+            body="Turn the brief into a full EOI, RFQ, RFP or ITB response — mapped to the tender's scoring matrix, compliance-checked, and ready for your approval."
             points={["EOI · RFQ · ITB · RFP, matrix-mapped", "Compliance-mapped, evaluator-ready", "Built from your file and the scoring matrix"]}
             visual={<VProposal />}
           />

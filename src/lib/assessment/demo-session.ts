@@ -103,6 +103,7 @@ export async function wipeDemoCustomerWorkspace(): Promise<{
   drafts: number;
   vaultDocuments: number;
   uploadReceipts: number;
+  profilesReset: number;
   failed: boolean;
 }> {
   let packages = 0;
@@ -111,6 +112,7 @@ export async function wipeDemoCustomerWorkspace(): Promise<{
   let drafts = 0;
   let vaultDocuments = 0;
   let uploadReceipts = 0;
+  let profilesReset = 0;
   let failed = false;
 
   const demoUserClause = sql`SELECT id FROM users WHERE lower(email) = ${DEMO_EMAIL}`;
@@ -140,6 +142,7 @@ export async function wipeDemoCustomerWorkspace(): Promise<{
       drafts,
       vaultDocuments,
       uploadReceipts,
+      profilesReset,
       failed: true,
     };
   }
@@ -166,6 +169,32 @@ export async function wipeDemoCustomerWorkspace(): Promise<{
   } catch (err) {
     failed = true;
     console.error("[demo:wipe:vault_metadata_delete_failed]", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // The shared demo account is also a customer-data boundary. Reset the
+  // previous visitor's company profile; the active visitor's preserved
+  // assessment will repopulate it during the normal dashboard hand-off.
+  try {
+    const profileRows = await sql`
+      UPDATE users
+      SET business_name = NULL,
+          website = NULL,
+          sector = NULL,
+          country_focus = '[]'::jsonb,
+          org_type = NULL,
+          profile_description = NULL,
+          profile_source = 'unset',
+          mined_profile_facts = '{}'::jsonb,
+          updated_at = NOW()
+      WHERE lower(email) = ${DEMO_EMAIL}
+      RETURNING id
+    `;
+    profilesReset = profileRows.length;
+  } catch (err) {
+    failed = true;
+    console.error("[demo:wipe:profile_reset_failed]", {
       error: err instanceof Error ? err.message : String(err),
     });
   }
@@ -232,6 +261,7 @@ export async function wipeDemoCustomerWorkspace(): Promise<{
     drafts,
     vaultDocuments,
     uploadReceipts,
+    profilesReset,
     failed,
   };
 }

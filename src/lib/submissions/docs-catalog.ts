@@ -188,7 +188,7 @@ export const DOCS_CATALOG: Record<string, DocSpec> = {
   },
   cv3: {
     id: "cv3",
-    label: "Third key-expert CV",
+    label: "Additional key-expert CV",
     gen: {
       mode: "draft",
       cta: "Build the CV for me",

@@ -156,6 +156,7 @@ export async function POST(request: Request) {
           submission_drafts_wiped: wipedOrders.drafts,
           vault_documents_wiped: wipedOrders.vaultDocuments,
           upload_receipts_wiped: wipedOrders.uploadReceipts,
+          profiles_reset: wipedOrders.profilesReset,
         });
 
         await sql`

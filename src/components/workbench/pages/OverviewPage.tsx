@@ -13,19 +13,29 @@ import { useWorkbench } from "../WorkbenchProvider";
 import { FunnelBeacon } from "@/components/telemetry/FunnelBeacon";
 import type { WbAction } from "@/lib/workbench/types";
 
-function EmptyOverview() {
+function EmptyOverview({ failed, onPaste }: { failed: boolean; onPaste: () => void }) {
+  const eyebrow = failed ? "Overview · Assessment needs a retry" : "Overview · No assessment yet";
+  const title = failed ? "Your workspace is safe. Start with the tender." : "Start with the tender in front of you.";
+  const body = failed
+    ? "The assessment did not finish, but it does not block your tender. Paste the notice now, then retry the company assessment when you're ready."
+    : "Paste the official notice for a bid/no-bid read and guided submission workspace. Add the five-minute company assessment afterwards to improve the evidence behind your matches.";
   return (
     <div>
-      <Eyebrow color={C.faint} style={{ marginBottom: 12 }}>Overview · No assessment yet</Eyebrow>
+      <Eyebrow color={failed ? C.warn : C.faint} style={{ marginBottom: 12 }}>{eyebrow}</Eyebrow>
       <h1 style={{ fontFamily: F.display, fontSize: 40, fontWeight: 400, letterSpacing: "-0.02em", color: C.ink, lineHeight: 1.05, margin: "0 0 14px" }}>
-        Run your first assessment.
+        {title}
       </h1>
       <p style={{ fontFamily: F.sans, fontSize: 15, lineHeight: 1.6, color: C.ink2, maxWidth: 560, margin: "0 0 26px" }}>
-        Your Workbench fills in once you complete an assessment — a readiness score across five dimensions, gap analysis with the Navigator, matched tenders, and your next best action. It takes about five minutes.
+        {body}
       </p>
-      <Link href="/assessment" style={{ display: "inline-flex", alignItems: "center", background: C.ink, color: C.paper, padding: "13px 22px", textDecoration: "none", fontFamily: F.mono, fontSize: 11.5, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-        Start assessment →
-      </Link>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <button onClick={onPaste} style={{ display: "inline-flex", alignItems: "center", background: C.ink, color: C.paper, border: 0, padding: "13px 22px", cursor: "pointer", fontFamily: F.mono, fontSize: 11.5, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+          Paste a tender →
+        </button>
+        <Link href="/assessment" style={{ display: "inline-flex", alignItems: "center", color: C.ink, padding: "12px 4px", textDecoration: "none", borderBottom: `1px solid ${C.ink}`, fontFamily: F.mono, fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          {failed ? "Retry assessment" : "Build my company file"}
+        </Link>
+      </div>
     </div>
   );
 }
@@ -34,7 +44,7 @@ export function OverviewPage() {
   const { data, liveScore, sessionGain, go, runAction, openNavigator, openPaste, isClosed } = useWorkbench();
   const mobile = useMedia("(max-width: 1023px)");
 
-  if (!data.hasAssessment) return <EmptyOverview />;
+  if (!data.hasAssessment) return <EmptyOverview failed={data.assessmentStatus === "failed"} onPaste={() => openPaste()} />;
 
   const { readiness, pipeline, matches, gaps, submissions, nextMove } = data;
   const urgent = matches.filter((m) => isSoon(m.deadline));

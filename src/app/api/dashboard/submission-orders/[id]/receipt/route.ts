@@ -85,7 +85,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   <div class="mono">TenderPath · Receipt</div>
   <h1>Submission order ${esc(order.ref)}</h1>
   <table>
-    <tr><td>Service</td><td>${esc(order.type)} — ${esc(flow.name)} · drafting, compliance QA, unlimited revisions, final pack</td></tr>
+    <tr><td>Service</td><td>${esc(order.type)} — ${esc(flow.name)} · drafting, compliance QA, agreed review rounds, final pack</td></tr>
     <tr><td>Opportunity</td><td>${esc(order.tender)}${order.agency ? ` · ${esc(order.agency)}` : ""}</td></tr>
     <tr><td>Order placed</td><td>${esc(paidDate)}</td></tr>
     <tr><td>Payment</td><td>${stripeReceiptUrl ? "Card (Stripe)" : isFree ? "First-submission credit" : "Recorded on your TenderPath account"}</td></tr>

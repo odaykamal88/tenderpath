@@ -5,7 +5,7 @@ import { useMedia } from "@/components/workbench/useMedia";
 
 const ITEMS: Array<[string, string, string]> = [
   ["20–40 hrs", "wasted per wrong bid", "Teams pour weeks into proposals they were never eligible to win — wrong tier, wrong geography, missing a single certificate."],
-  ["1 in 9", "is the typical win rate", "Most opportunities are noise. Without a fast, honest bid/no-bid call, you chase everything and win almost nothing."],
+  ["Every weak bid", "steals from a stronger one", "Without a fast, honest bid/no-bid call, teams spend scarce proposal time on opportunities with weak evidence or hard eligibility gaps."],
   ["1 missing doc", "= automatic rejection", "A lapsed registration or an absent audited statement gets you screened out before an evaluator reads a word."],
 ];
 
@@ -27,7 +27,7 @@ export default function Problem() {
             lineHeight: 1.06,
           }}
         >
-          The tender exists. The funding is real. So why is winning so brutal?
+          The tender exists. The funding is real. So why is bidding so wasteful?
         </h2>
         <div
           style={{

@@ -39,6 +39,19 @@ export interface PasteVerdict {
   asks: string[];
 }
 
+function unavailableResponse(status: 502 | 503, reason: string) {
+  const caseRef = `BNB-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  console.warn("[paste-analyze:assisted_fallback]", { caseRef, reason, status });
+  return NextResponse.json(
+    {
+      code: "ANALYSIS_UNAVAILABLE",
+      case_ref: caseRef,
+      error: "The automated read is temporarily unavailable. Your tender can still continue through the guided assisted-review workspace.",
+    },
+    { status },
+  );
+}
+
 export async function POST(req: NextRequest) {
   const guard = await requireAuth(req);
   if (!guard.authorized) return guard.response!;
@@ -148,7 +161,7 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     console.warn("[paste-analyze:no_api_key]");
-    return NextResponse.json({ error: "Analysis service is not configured." }, { status: 503 });
+    return unavailableResponse(503, "missing_api_key");
   }
   const prompt = `You are a procurement bid/no-bid triage analyst. Decide whether the applicant should bid on this tender. Be grounded — use only what the tender and profile state; never invent requirements.
 
@@ -188,7 +201,7 @@ Return ONLY a JSON object (no prose, no markdown fence) with this exact shape:
       .join("\n");
   } catch (err) {
     console.error("[paste-analyze:llm_failed]", { userId: guard.user!.id, err: err instanceof Error ? err.message : String(err) });
-    return NextResponse.json({ error: "Couldn't analyse this tender right now. Please try again." }, { status: 502 });
+    return unavailableResponse(502, "provider_call_failed");
   }
 
   // 4. Parse defensively.
@@ -211,6 +224,6 @@ Return ONLY a JSON object (no prose, no markdown fence) with this exact shape:
     return NextResponse.json({ ...verdict, usage: usageAfter });
   } catch {
     console.error("[paste-analyze:parse_failed]", { userId: guard.user!.id, rawPrefix: raw.slice(0, 200) });
-    return NextResponse.json({ error: "Couldn't read the analysis. Please try again." }, { status: 502 });
+    return unavailableResponse(502, "provider_response_unreadable");
   }
 }

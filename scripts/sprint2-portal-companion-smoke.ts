@@ -71,6 +71,10 @@ function fallbackChecks() {
     { confirmed: ["portal_access"] },
   );
   assert.equal(manualEmail.items.find((item) => item.id === "submission_route")?.complete, true);
+  assert.equal(
+    manualEmail.items.find((item) => item.id === "submission_route")?.detail,
+    "Email address named in the notice",
+  );
 
   const unsafeNotice = buildPortalCompanionView(
     { ...whoTender, sourceUrl: "javascript:alert(1)" },

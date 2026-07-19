@@ -14,6 +14,7 @@
 import { Resend } from "resend";
 import { sql } from "@/lib/db";
 import { defaultEmailMeta } from "@/lib/email/defaults";
+import { recordEmailDelivery } from "@/lib/email/delivery-log";
 import { isEmailSuppressed } from "@/lib/email/suppression";
 import { telegramAdapter } from "@/lib/bot/channels/telegram";
 import type { SubmissionOrder } from "./types";
@@ -44,25 +45,32 @@ function escapeHtml(s: string): string {
 export async function sendSubmissionReviewReadyEmail(
   order: SubmissionOrder,
   userEmail: string | null,
-): Promise<void> {
+): Promise<{ status: "sent" | "failed" | "skipped"; messageId?: string; reason?: string }> {
+  const revision = order.artifactVersions.at(-1)?.revision ?? order.round + 1;
+  const messageKey = `tp-sub-review-${order.id}-r${revision}`;
   const resendKey = envValue("RESEND_API_KEY");
   if (!resendKey || !userEmail) {
+    const reason = !resendKey ? "RESEND_API_KEY missing" : "no user email";
     console.warn("[tp:submissions:review_email_skipped]", {
       orderId: order.id,
-      reason: !resendKey ? "RESEND_API_KEY missing" : "no user email",
+      reason,
     });
-    return;
+    if (userEmail) {
+      await recordEmailDelivery({ messageKey, email: userEmail, kind: "submission_review_ready", status: "skipped", error: reason, metadata: { orderId: order.id, revision } });
+    }
+    return { status: "skipped", reason };
   }
   if (await isEmailSuppressed(userEmail)) {
     console.log("[tp:submissions:review_email_skipped_unsubscribed]", { orderId: order.id });
-    return;
+    await recordEmailDelivery({ messageKey, email: userEmail, kind: "submission_review_ready", status: "skipped", error: "recipient suppressed", metadata: { orderId: order.id, revision } });
+    return { status: "skipped", reason: "recipient suppressed" };
   }
   const from = envValue("RESEND_FROM_EMAIL") ?? "TenderPath <no-reply@tenderpath.me>";
   const resend = new Resend(resendKey);
   const due = order.due
     ? new Date(order.due).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
     : null;
-  await resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from,
     to: userEmail,
     subject: `Your ${order.type} draft is ready for review — ${order.ref}`,
@@ -70,16 +78,27 @@ export async function sendSubmissionReviewReadyEmail(
       `The draft pack for "${order.tender}" passed our QA gate and is waiting for your review.`,
       "",
       `Read every document in the reader — especially names, figures and the financial section.`,
-      `Approve, or request changes (unlimited revisions until you approve).`,
+      `Approve, or request changes within the review rounds agreed at intake.`,
       due ? `Deadline: ${due}, in the agency's local time zone.` : null,
       "",
       `Open it: ${appUrl()}/dashboard/proposals?order=${order.id}`,
     ]
       .filter((l) => l !== null)
       .join("\n"),
+    tags: [
+      { name: "kind", value: "submission-review" },
+      { name: "order", value: String(order.id) },
+    ],
     ...defaultEmailMeta(userEmail),
-  });
-  console.info("[tp:submissions:review_email_sent]", { orderId: order.id, ref: order.ref });
+  }, { idempotencyKey: messageKey });
+  if (error) {
+    await recordEmailDelivery({ messageKey, email: userEmail, kind: "submission_review_ready", status: "failed", error: error.message, metadata: { orderId: order.id, revision } });
+    console.error("[tp:submissions:review_email_failed]", { orderId: order.id, ref: order.ref, error: error.message });
+    return { status: "failed", reason: error.message };
+  }
+  await recordEmailDelivery({ messageKey, email: userEmail, kind: "submission_review_ready", status: "sent", providerMessageId: data?.id ?? null, metadata: { orderId: order.id, revision } });
+  console.info("[tp:submissions:review_email_sent]", { orderId: order.id, ref: order.ref, messageId: data?.id ?? null });
+  return { status: "sent", ...(data?.id ? { messageId: data.id } : {}) };
 }
 
 /* ── 2 + 3 · Daily deadline pass (called from /api/cron/bot-nudges) ─────── */
@@ -215,13 +234,24 @@ export async function sendSubmissionDeadlineNudges(opts?: { dryRun?: boolean }):
         skipped++;
         continue;
       }
-      await resend.emails.send({
+      const dateBucket = new Date().toISOString().slice(0, 10);
+      const messageKey = `tp-sub-nudge-${c.order.id}-${c.kind}-${dateBucket}`;
+      const { data, error } = await resend.emails.send({
         from,
         to: c.email,
         subject,
         text: body,
+        tags: [
+          { name: "kind", value: "submission-nudge" },
+          { name: "order", value: String(c.order.id) },
+        ],
         ...defaultEmailMeta(c.email),
-      });
+      }, { idempotencyKey: messageKey });
+      if (error) {
+        await recordEmailDelivery({ messageKey, email: c.email, kind: `submission_${c.kind}_nudge`, status: "failed", error: error.message, metadata: { orderId: c.order.id, daysLeft: c.daysLeft } });
+        throw new Error(error.message);
+      }
+      await recordEmailDelivery({ messageKey, email: c.email, kind: `submission_${c.kind}_nudge`, status: "sent", providerMessageId: data?.id ?? null, metadata: { orderId: c.order.id, daysLeft: c.daysLeft } });
       emailSent++;
     } catch (err) {
       failed++;

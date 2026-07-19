@@ -83,19 +83,42 @@ order snapshot carries it under `intake_fields.tenderRequirements`. The map is
 advisory in Sprint 3 and does not change the existing 80% payment gate. See
 `docs/agents/sprint-3-tender-requirements.md`.
 
+## Production trust gate (Sprint 4)
+
+The two-ICP A–Z fixtures are now a release gate: customer-safe assessment
+errors, recoverable failed assessments, notice-authoritative submission routes,
+reliable authenticated small-file uploads, truthful pack readiness, traced
+PDF.js runtime files, and shared-demo profile reset. See
+`docs/agents/sprint-4-production-trust-gate.md`.
+
+## Workflow continuity (Sprint 5 — planned)
+
+Named/resumable drafts, mobile wizard structure, unreadable-file replacement,
+and browser-rendering health are grouped as one continuity sprint. See
+`docs/agents/sprint-5-workflow-continuity.md`.
+
+## Consultancy tenancy (Sprint 6 — planned)
+
+Adviser accounts require an explicit client/legal-entity boundary across every
+customer object before multi-client UI ships. Per-client envelope encryption is
+a separate security architecture step, not a UI promise. See
+`docs/agents/sprint-6-consultancy-tenancy.md`.
+
 ## Payment seam (work-order-first, like every other paid service)
 
 1. Wizard "Pay $X & start drafting" → `POST /api/dashboard/submission-orders`
    re-audits server-side, upserts the **unpaid** `submission_orders` row + a
    billing `work_orders` row (plan `proposal-draft`, service_slug
-   `submission-<type>`), returns a `/pay?…&submission_order_id=` hand-off.
+   `submission-<type>`). In the invite-only pilot it atomically redeems the
+   account's single founder-issued credit and starts fulfillment immediately;
+   once commerce is enabled it returns a `/pay?…&submission_order_id=` hand-off.
 2. `/pay` (untouched payment surface: card / USDT / wire / **free first-
    submission credit**) → `/api/pay/checkout` verifies submission-order
    ownership, **skips the LLM fulfillment gate** (the wizard gate is the gate),
    prices per type via the dormant `STRIPE_PRICE_SUBMISSION_*` envs (falls back
    to the package price until they exist), return_url →
    `/dashboard/proposals?placed=<id>`.
-3. Webhook → `createWorkOrderFromCheckout` finds the linked submission order →
+3. Credit fulfillment or webhook → `createWorkOrderFromCheckout` finds the linked submission order →
    `markSubmissionOrderPaidByWorkOrder` (sets `paid_at` = SLA clock start,
    appends the order-placed event, clears the wizard draft, sends the
    order-received email) and **returns before any LLM auto-fulfillment**.
@@ -106,13 +129,16 @@ prototype's inline card, to keep all payment paths on the proven surface.
 ## Copy rules (load-bearing — do not soften)
 
 - Verb is **"start" / "pay & start drafting"** — never "commission".
-- Guarantee at the pay button (and now in `/terms#refunds` — a binding
-  promise): "Draft late, or rejected for a compliance error we made? Full
-  refund — no questions."
+- Service recovery next to the start decision: a late committed draft, or a
+  submission rejected because of a compliance error introduced by TenderPath,
+  receives a full service-fee refund. Supplier omissions, agency changes after
+  cutoff, portal outages, late supplier submission, and award outcome are
+  excluded.
 - We draft, **the user signs and submits** — the shepherd guides, never claims
   we filed.
 - Never fabricate third-party paper; "request and chase" language only.
-- VAT-exemption, agency-local-time-zone, and envelope-separation warnings stay.
+- Tax treatment must come from the notice or user confirmation; agency-local-
+  time-zone and envelope-separation warnings stay.
 - Exports are **one ZIP per envelope, never a merged document**.
 - Losses are data: debrief lessons end with what changed in the system.
 
@@ -121,15 +147,18 @@ prototype's inline card, to keep all payment paths on the proven surface.
 | Contract | Status |
 |---|---|
 | 1 · Payment | **Live** (through the existing checkout seam; per-type prices dormant until the 6 Stripe envs exist) |
-| 2 · Doc pipeline | **Reader + PDF/XLSX/DOCX/ZIP exports live**: `renderSubmissionDeliverablePdf` (pdfDocs.tsx), real XLSX for "XLSX + PDF" deliverables (exceljs), real DOCX for "DOCX + PDF" ones (`src/lib/submissions/docx.ts`, `docx` package) — all from the SAME block model the reader shows. Gating per the prototype: per-deliverable download from review on (multi-format docs arrive as a small ZIP); envelope ZIPs final/submitted only. Ops prose enrichment is future work |
+| 2 · Doc pipeline | **Versioned reader + PDF/XLSX/DOCX/ZIP exports live**: every qa→review release seals an immutable `artifact_versions[]` snapshot. Revision N+1 appends without overwriting N; the reader and versioned download route select the same snapshot. `renderSubmissionDeliverablePdf` (shared pdfDocs.tsx primitives), real XLSX for "XLSX + PDF" deliverables (exceljs), and real DOCX for "DOCX + PDF" ones (`src/lib/submissions/docx.ts`, `docx` package) all use that snapshot. Per-deliverable download is available from review on; envelope ZIPs are final/submitted only. Ops prose enrichment is future work |
 | 3 · Third-party request engine | **Letters + chase-due live, sending manual**: `src/lib/submissions/request-letters.ts` drafts the auditor/supplier/bank/client letter (addressed to the wizard's ask contact) — ops copies it from the queue card and sends from the ops mailbox; a red "chase due" chip appears when a `requested` blocker is >48h old (epoch = paid_at). Auto-send + arrival webhook are future work |
 | 4 · Inbound agency mail | **Endpoint built, DORMANT**: `POST /api/inbound/agency-mail` (in PUBLIC_PATHS; 503 until `INBOUND_MAIL_SECRET` is set) maps `tp-####@…` → order, appends an UNANSWERED `qna[]` entry + event + ops email — ops posts the answer/impact (we never auto-claim a verdict). Provisioning needs in.tenderpath.me MX + a provider that verifies DKIM/SPF and forwards with the shared secret. The drawer's paste-forward path stays; the address is still not shown in the UI until provisioned |
 | 5 · Amendment watcher | **Live for linked tenders**: `watchSubmissionAmendments()` runs on the daily bot-nudges cron (08:30 UTC, after the 06:00 crawl) — a moved source deadline becomes an `amendments[]` entry + due update + client event + an ops email demanding the draft re-base. Hand-entered notices (no tender_id) stay manual via the queue's amendment recorder |
-| 6 · Nudge scheduler | **Live**: immediate "draft ready for review" email on the qa→review release (admin action route); daily pass on the bot-nudges cron — final-pack T-3/T-1/T-0, review T-3/T-1, debrief day-7 (exact-day buckets ⇒ idempotent), Telegram when linked else email (suppression + unsubscribe headers respected). WhatsApp waits for its Meta template setup. The in-page strip mirrors the same triggers |
+| 6 · Nudge scheduler | **Live + observable**: immediate "draft ready for review" email is awaited on the qa→review release; each revision has its own Resend idempotency key and delivery-ledger row. The daily pass sends final-pack T-3/T-1/T-0, review T-3/T-1, and debrief day-7 nudges (exact-day buckets ⇒ idempotent), Telegram when linked else email. `/api/admin/email-health` exposes configuration and recent accepted/failed/skipped sends. WhatsApp waits for its Meta template setup. |
 
 ## Before first real charge (carried from SPEC §8/§9)
 
 - Create the 4 `STRIPE_PRICE_SUBMISSION_*` prices (else charges the package price while displaying it correctly on /pay — the wizard shows the per-type number, so create the prices first).
 - Currency: lines support a currency field; Stripe billing is USD-only today.
-- `npm run migrate` or first-hit self-heal creates the two tables; a real
-  end-to-end walk on Vercel preview is the merge gate (see SESSION.md entry).
+- `npm run migrate` or first-hit self-heal creates/extends the workflow tables.
+- `npm run rehearsal:first-client -- --base-url=<preview>` is the merge gate:
+  it seeds short-lived competing tenants, exercises the one-use credit,
+  consent boundary, two sealed revisions, downloads, receipt, and email health,
+  then removes its tagged customer rows.

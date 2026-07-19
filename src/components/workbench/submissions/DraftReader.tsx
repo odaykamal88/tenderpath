@@ -120,6 +120,7 @@ export function DraftReader({
   const { data } = useWorkbench();
   const mobile = useMedia("(max-width: 767px)");
   const [idx, setIdx] = useState(startIdx);
+  const [versionIdx, setVersionIdx] = useState(Math.max(0, order.artifactVersions.length - 1));
   const [mode, setMode] = useState<null | "changes">(null);
   const [notes, setNotes] = useState("");
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -131,11 +132,19 @@ export function DraftReader({
     }),
     [data],
   );
-  const all = useMemo(() => docContent(order, company), [order, company]);
+  const latestVersionIdx = Math.max(0, order.artifactVersions.length - 1);
+  const activeVersionIdx = Math.min(versionIdx, latestVersionIdx);
+  const selectedVersion = order.artifactVersions[activeVersionIdx] ?? null;
+  const all = useMemo(
+    () => selectedVersion?.documents ?? docContent(order, company),
+    [order, company, selectedVersion],
+  );
   const docs = order.deliverables;
   const doc = all[Math.min(idx, all.length - 1)];
 
-  const canAct = order.stage === "review";
+  const isHistorical = order.artifactVersions.length > 0 && activeVersionIdx !== latestVersionIdx;
+  const revision = selectedVersion?.revision ?? order.round + 1;
+  const canAct = order.stage === "review" && !isHistorical;
   const isFinal = order.stage === "final" || order.stage === "submitted";
 
   useEffect(() => {
@@ -158,14 +167,34 @@ export function DraftReader({
       <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 12, padding: mobile ? "10px 14px" : "12px 22px", background: C.ink, color: C.paper, borderBottom: "1px solid #2b3543" }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontFamily: F.mono, fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase", color: C.accent2 }}>
-            {order.type} · {order.ref} · {isFinal ? "final pack" : `draft for your review · round ${order.round + 1}`}
+            {order.type} · {order.ref} · {isFinal ? "final pack" : `draft for your review · revision ${revision}`}
           </div>
           <div style={{ fontFamily: F.sans, fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 2 }}>
             {order.tender}
           </div>
         </div>
+        {order.artifactVersions.length > 1 && (
+          <label style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            <span style={{ fontFamily: F.mono, fontSize: 8, letterSpacing: "0.1em", textTransform: "uppercase", color: "#8a94a1" }}>Version</span>
+            <select
+              aria-label="Draft version"
+              value={activeVersionIdx}
+              onChange={(e) => {
+                setVersionIdx(Number(e.target.value));
+                setIdx(0);
+              }}
+              style={{ background: "#182230", color: C.paper, border: "1px solid #3a4654", padding: "6px 8px", fontFamily: F.mono, fontSize: 10 }}
+            >
+              {order.artifactVersions.map((version, i) => (
+                <option key={`${version.revision}-${version.generatedAt}`} value={i}>
+                  Revision {version.revision}{i === latestVersionIdx ? " · latest" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <a
-          href={`/api/dashboard/submission-orders/${order.id}/export?deliverable=${idx}`}
+          href={`/api/dashboard/submission-orders/${order.id}/export?deliverable=${idx}&version=${revision}`}
           style={{ background: "transparent", border: "1px solid #3a4654", color: C.paper, padding: "7px 11px", cursor: "pointer", fontFamily: F.mono, fontSize: 10, flexShrink: 0, textDecoration: "none" }}
         >
           Download ↓
@@ -197,7 +226,7 @@ export function DraftReader({
         <div style={{ maxWidth: 700, margin: "0 auto", position: "relative" }}>
           <div style={{ background: "#fffdf8", border: `1px solid ${C.rule}`, boxShadow: "0 16px 44px rgba(15,22,32,0.35)", padding: mobile ? "30px 22px 40px" : "48px 52px 56px", position: "relative" }}>
             <div style={{ position: "absolute", top: 18, right: 18, transform: "rotate(-4deg)", border: `1.5px solid ${isFinal ? C.pos : C.accent}`, color: isFinal ? C.pos : C.accent, fontFamily: F.mono, fontSize: 8.5, letterSpacing: "0.14em", textTransform: "uppercase", padding: "4px 9px", opacity: 0.85 }}>
-              {isFinal ? "Final · submission copy" : "Draft · QA passed"}
+              {isFinal ? "Final · submission copy" : isHistorical ? `Archived · revision ${revision}` : "Draft · QA passed"}
             </div>
             <div style={{ fontFamily: F.mono, fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase", color: C.faint, marginBottom: 18 }}>
               {company.name} · {doc?.fmt} · prepared by TenderPath

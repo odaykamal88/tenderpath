@@ -69,6 +69,10 @@ export function TenderPackPanel({
   ) ?? "";
   const officialNoticeUrl = safeExternalHttpUrl(tender.sourceUrl);
   const portalName = tender.portal || portal.portalName;
+  const portalGuideUrl = tender.portalOverride
+    ? safeExternalHttpUrl(tender.portalGuideUrl)
+    : safeExternalHttpUrl(tender.portalGuideUrl || portal.guideUrl);
+  const portalSteps = tender.portalOverride ? [] : portal.steps;
   const companionView = useMemo(
     () => buildPortalCompanionView(tender, pack, companion),
     [tender, pack, companion],
@@ -172,7 +176,7 @@ export function TenderPackPanel({
   const statusCopy = pack.status === "ready"
     ? `${pack.documents.length} private document${pack.documents.length === 1 ? "" : "s"} ready`
     : pack.status === "partial"
-      ? "Pack saved; some files need a visual check"
+      ? `${pack.documents.filter((doc) => doc.extractionStatus === "extracted").length}/${pack.documents.length} files readable — fix the rest`
       : pack.status === "needs_upload"
         ? "Portal download needed"
         : "Not checked yet";
@@ -218,7 +222,7 @@ export function TenderPackPanel({
             ) : (
               <span style={{ fontFamily: F.sans, fontSize: 11, color: C.warn }}>Follow the channel named in the official notice.</span>
             )}
-            {(tender.portalGuideUrl || portal.guideUrl) && <a href={tender.portalGuideUrl || portal.guideUrl} target="_blank" rel="noopener noreferrer" style={{ fontFamily: F.mono, fontSize: 10, color: C.ink2, textDecoration: "none", borderBottom: `1px solid ${C.rule}` }}>Official guide</a>}
+            {portalGuideUrl && <a href={portalGuideUrl} target="_blank" rel="noopener noreferrer" style={{ fontFamily: F.mono, fontSize: 10, color: C.ink2, textDecoration: "none", borderBottom: `1px solid ${C.rule}` }}>Official guide</a>}
           </div>
           {companion.portalOpenedAt && <div style={{ fontFamily: F.mono, fontSize: 8.5, color: C.faint, marginTop: 8, letterSpacing: "0.06em", textTransform: "uppercase" }}>Portal opened from this workspace</div>}
         </div>
@@ -268,13 +272,17 @@ export function TenderPackPanel({
           )}
         </div>
 
-        <details style={{ marginTop: 12 }}>
-          <summary style={{ fontFamily: F.mono, fontSize: 9.5, color: C.ink2, cursor: "pointer", letterSpacing: "0.08em", textTransform: "uppercase" }}>Show verified portal steps</summary>
-          <ol style={{ margin: "10px 0 0", paddingLeft: 22, display: "flex", flexDirection: "column", gap: 7 }}>
-            {portal.steps.map((step) => <li key={step} style={{ fontFamily: F.sans, fontSize: 11, color: C.mute, lineHeight: 1.5, paddingLeft: 3 }}>{step}</li>)}
-          </ol>
-          <div style={{ fontFamily: F.sans, fontSize: 10.5, color: C.faint, lineHeight: 1.45, marginTop: 9 }}>{portal.note}</div>
-        </details>
+        {portalSteps.length > 0 ? (
+          <details style={{ marginTop: 12 }}>
+            <summary style={{ fontFamily: F.mono, fontSize: 9.5, color: C.ink2, cursor: "pointer", letterSpacing: "0.08em", textTransform: "uppercase" }}>Show verified portal steps</summary>
+            <ol style={{ margin: "10px 0 0", paddingLeft: 22, display: "flex", flexDirection: "column", gap: 7 }}>
+              {portalSteps.map((step) => <li key={step} style={{ fontFamily: F.sans, fontSize: 11, color: C.mute, lineHeight: 1.5, paddingLeft: 3 }}>{step}</li>)}
+            </ol>
+            <div style={{ fontFamily: F.sans, fontSize: 10.5, color: C.faint, lineHeight: 1.45, marginTop: 9 }}>{portal.note}</div>
+          </details>
+        ) : (
+          <div style={{ fontFamily: F.sans, fontSize: 10.5, color: C.faint, lineHeight: 1.45, marginTop: 12 }}>Notice-specific route recorded. The official notice remains authoritative.</div>
+        )}
       </div>
 
       <div style={{ padding: "15px 17px" }}>

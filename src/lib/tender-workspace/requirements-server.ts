@@ -13,9 +13,50 @@ import type {
   TenderRequirementsState,
 } from "./types";
 
-const DEFAULT_MODEL = "claude-sonnet-4-6";
-const MAX_TOTAL_TEXT = 140_000;
-const MAX_TEXT_PER_DOCUMENT = 36_000;
+// Interactive extraction is a high-volume structured task. The faster model is
+// sufficient because every returned quote is verified against the source text;
+// deeper Sonnet analysis remains reserved for proposal scoring and review.
+const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
+const MAX_TOTAL_TEXT = 60_000;
+const MAX_TEXT_PER_DOCUMENT = 24_000;
+const MODEL_TIMEOUT_MS = 35_000;
+const REQUIREMENTS_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    note: { type: ["string", "null"] },
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          category: { type: "string", enum: ["administrative", "technical", "financial", "submission"] },
+          severity: { type: "string", enum: ["BLOCK", "HIGH", "MED", "LOW"] },
+          title: { type: "string" },
+          action: { type: "string" },
+          evidence: { type: "string" },
+          sourceDocumentId: { type: "integer" },
+          sourceSection: { type: ["string", "null"] },
+          confidence: { type: "string", enum: ["high", "medium", "low"] },
+          status: { type: "string", enum: ["open"] },
+        },
+        required: [
+          "category",
+          "severity",
+          "title",
+          "action",
+          "evidence",
+          "sourceDocumentId",
+          "sourceSection",
+          "confidence",
+          "status",
+        ],
+      },
+    },
+  },
+  required: ["note", "items"],
+} as const;
 
 let anthropicClient: Anthropic | null = null;
 
@@ -40,7 +81,10 @@ function getAnthropicClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) throw new TenderRequirementsConfigurationError();
   if (!anthropicClient) {
-    anthropicClient = new Anthropic({ apiKey, maxRetries: 3, timeout: 90_000 });
+    // This is an interactive first-session workflow. A slow provider must fall
+    // back to the exact-quote rules scan instead of holding the UI open across
+    // automatic retries.
+    anthropicClient = new Anthropic({ apiKey, maxRetries: 0, timeout: MODEL_TIMEOUT_MS });
   }
   return anthropicClient;
 }
@@ -119,17 +163,23 @@ async function loadRequirementDocuments(
 function documentsForPrompt(documents: RequirementDocument[]): string {
   let remaining = MAX_TOTAL_TEXT;
   const blocks: string[] = [];
-  for (const document of documents) {
+  for (const [index, document] of documents.entries()) {
     if (remaining <= 0) break;
-    const cap = Math.min(MAX_TEXT_PER_DOCUMENT, remaining);
-    const text = document.text.slice(0, cap);
+    const documentsLeft = documents.length - index;
+    const cap = Math.min(MAX_TEXT_PER_DOCUMENT, Math.floor(remaining / documentsLeft));
+    const headLength = Math.floor(cap * 0.72);
+    const tailLength = cap - headLength;
+    const truncated = document.text.length > cap;
+    const text = truncated
+      ? `${document.text.slice(0, headLength)}\n[document middle omitted from interactive scan]\n${document.text.slice(-tailLength)}`
+      : document.text;
     blocks.push([
       `[[DOCUMENT id=${document.id} role=${document.role} name=${JSON.stringify(document.name)}]]`,
       text,
-      document.text.length > cap ? "[document truncated for analysis]" : "",
+      truncated ? "[document truncated for interactive analysis]" : "",
       "[[END DOCUMENT]]",
     ].filter(Boolean).join("\n"));
-    remaining -= text.length;
+    remaining -= Math.min(document.text.length, cap);
   }
   return blocks.join("\n\n");
 }
@@ -156,6 +206,14 @@ function safeJson(value: string): Record<string, unknown> {
 
 function cleanMeta(value: string | null | undefined, max: number): string {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
+}
+
+function cleanDisplayMeta(value: string | null | undefined, max: number): string {
+  if (typeof value !== "string") return "";
+  const cleaned = value.replace(/\s+/g, " ").trim();
+  return cleaned.length > max
+    ? `${cleaned.slice(0, max - 1).replace(/\s+\S*$/, "")}…`
+    : cleaned;
 }
 
 function evidenceComparable(value: string): string {
@@ -301,11 +359,11 @@ OUTPUT RULES
 - Categories are exactly: administrative, technical, financial, submission.
 - Include deadline/time-zone, channel/envelope, signature/form, eligibility, mandatory document, validity/security, technical conformity, financial-template, and evaluation requirements only when published.
 - action must tell the supplier exactly what to prepare or verify.
-- evidence must be a short exact source excerpt copied from one document, with no ellipses or paraphrase.
+- evidence must be a short exact source excerpt copied from one document, with no ellipses or paraphrase; keep it under 45 words.
 - sourceDocumentId must be the numeric id shown in the document marker.
 - sourceSection is the printed section/clause/page when visible, otherwise null.
 - confidence is high only when the source is explicit, medium when the wording needs interpretation, low when the source text is incomplete.
-- Return 6–30 distinct requirements. Merge duplicates across documents.
+- Return 6–12 distinct requirements. Merge duplicates across documents. Keep titles under 12 words and actions under 25 words.
 - Return only JSON with this shape:
 {
   "note": "short caveat if the document set appears incomplete, otherwise null",
@@ -330,12 +388,21 @@ ${documentsForPrompt(documents)}`;
   let parsed: Record<string, unknown> = {};
   let aiFallbackReason = "";
   try {
-    const response = await getAnthropicClient().messages.create({
-      model,
-      max_tokens: 8_000,
-      temperature: 0.1,
-      messages: [{ role: "user", content: prompt }],
-    });
+    const response = await getAnthropicClient().messages.create(
+      {
+        model,
+        max_tokens: 3_000,
+        temperature: 0.1,
+        messages: [{ role: "user", content: prompt }],
+        output_config: {
+          format: {
+            type: "json_schema",
+            schema: REQUIREMENTS_OUTPUT_SCHEMA,
+          },
+        },
+      },
+      { maxRetries: 0, timeout: MODEL_TIMEOUT_MS },
+    );
     const text = response.content.find((block) => block.type === "text")?.text ?? "{}";
     parsed = safeJson(text);
   } catch (error) {
@@ -362,18 +429,24 @@ ${documentsForPrompt(documents)}`;
   }
   const now = new Date().toISOString();
   const notes = [
-    cleanMeta(typeof parsed.note === "string" ? parsed.note : null, 300),
+    cleanDisplayMeta(typeof parsed.note === "string" ? parsed.note : null, 300),
     aiFallbackReason,
     unavailable > 0 ? `${unavailable} tender file${unavailable === 1 ? " was" : "s were"} not readable, so this map may be incomplete.` : "",
     verified.rejected > 0 ? `${verified.rejected} candidate requirement${verified.rejected === 1 ? " was" : "s were"} omitted because its source excerpt could not be verified.` : "",
   ].filter(Boolean);
+  const combinedNote = notes.join(" ");
+  const displayNote = combinedNote.length > 500
+    ? `${combinedNote.slice(0, 496).replace(/\s+\S*$/, "")}…`
+    : combinedNote;
   const normalized = normalizeTenderRequirements({
-    generationStatus: unavailable > 0 || Boolean(aiFallbackReason) ? "partial" : "ready",
+    generationStatus: unavailable > 0 || Boolean(aiFallbackReason) || verified.rejected > 0
+      ? "partial"
+      : "ready",
     packFingerprint: tenderPackFingerprint(args.pack),
     generatedAt: now,
     updatedAt: now,
     items: verified.items,
-    note: notes.join(" ").slice(0, 500) || null,
+    note: displayNote || null,
   }, args.pack);
 
   if (!normalized.items.length) {

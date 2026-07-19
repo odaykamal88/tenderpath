@@ -219,22 +219,24 @@ export async function createWorkOrderFromCheckout(
           type: submissionOrder.type,
           alreadyPaid: live === null,
         });
-        sendWorkOrderPaidNotifications({
-          id: order.id as number,
-          plan: order.plan as string,
-          serviceSlug: (order.service_slug as string | null) ?? `submission-${submissionOrder.type.toLowerCase()}`,
-          email: (order.email as string | null) ?? email,
-          tenderTitle: order.tender_title as string | null,
-          agency: order.agency as string | null,
-          paymentStatus: order.payment_status as string | null,
-          amountCents: order.amount_cents as number | null,
-          currency: order.currency as string | null,
-        }).catch((err) => {
+        try {
+          await sendWorkOrderPaidNotifications({
+            id: order.id as number,
+            plan: order.plan as string,
+            serviceSlug: (order.service_slug as string | null) ?? `submission-${submissionOrder.type.toLowerCase()}`,
+            email: (order.email as string | null) ?? email,
+            tenderTitle: order.tender_title as string | null,
+            agency: order.agency as string | null,
+            paymentStatus: order.payment_status as string | null,
+            amountCents: order.amount_cents as number | null,
+            currency: order.currency as string | null,
+          });
+        } catch (err) {
           console.error("[tp:work_order_email:failed]", {
             workOrderId: order.id,
             error: err instanceof Error ? err.message : String(err),
           });
-        });
+        }
       }
       return;
     }

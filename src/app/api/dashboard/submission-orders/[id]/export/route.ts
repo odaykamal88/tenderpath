@@ -29,16 +29,16 @@ function slug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
 }
 
-function stampFor(order: SubmissionOrder): string {
+function stampFor(order: SubmissionOrder, revision?: number): string {
   return order.stage === "final" || order.stage === "submitted"
     ? "FINAL · SUBMISSION COPY"
-    : "DRAFT · QA PASSED";
+    : `DRAFT · QA PASSED${revision ? ` · REVISION ${revision}` : ""}`;
 }
 
 /** XLSX for the priced-lines deliverables, built from the intake lines. */
 async function renderLinesXlsx(order: SubmissionOrder, doc: DeliverableDoc): Promise<Buffer | null> {
   if (!/xlsx/i.test(doc.fmt)) return null;
-  const fields = order.intakeFields as { lines?: PricedLine[]; currency?: string };
+  const fields = order.intakeFields as { lines?: PricedLine[]; currency?: string; fields?: Record<string, string> };
   const lines = Array.isArray(fields.lines) ? fields.lines : [];
   if (lines.length === 0) return null;
   const { default: ExcelJS } = await import("exceljs");
@@ -59,7 +59,8 @@ async function renderLinesXlsx(order: SubmissionOrder, doc: DeliverableDoc): Pro
     total += lt;
     ws.addRow({ desc: l.desc, spec: l.specRef ?? "", qty: l.qty, unit: l.unit, price: l.unitPrice ?? null, total: lt || null });
   }
-  const totalRow = ws.addRow({ desc: `Total · ${fields.currency ?? "USD"} · excl. VAT`, total });
+  const taxTreatment = fields.fields?.tax?.trim() || "tax treatment per solicitation";
+  const totalRow = ws.addRow({ desc: `Total · ${fields.currency ?? "USD"} · ${taxTreatment}`, total });
   totalRow.font = { bold: true };
   const buf = await wb.xlsx.writeBuffer();
   return Buffer.from(buf);
@@ -100,6 +101,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const url = new URL(request.url);
   const deliverableRaw = url.searchParams.get("deliverable");
+  const versionRaw = url.searchParams.get("version");
   const which = (url.searchParams.get("envelope") ?? (deliverableRaw == null ? "all" : "")).toLowerCase();
 
   try {
@@ -110,7 +112,17 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       name: guard.user!.business_name?.trim() || guard.user!.name?.trim() || guard.user!.email,
       signatory: guard.user!.name?.trim() || guard.user!.email,
     };
-    const docs = docContent(order, company);
+    const requestedVersion = versionRaw && /^\d+$/.test(versionRaw)
+      ? order.artifactVersions.find((version) => version.revision === Number(versionRaw)) ?? null
+      : null;
+    if (versionRaw && !requestedVersion) {
+      return NextResponse.json({ error: "Unknown draft version." }, { status: 404 });
+    }
+    const currentVersion = requestedVersion ?? order.artifactVersions.at(-1) ?? null;
+    const docs = currentVersion?.documents ?? docContent(order, company);
+    const exportOrder = currentVersion
+      ? { ...order, intakeFields: currentVersion.intakeFields }
+      : order;
 
     // Single-deliverable PDF — the reader's Download, available from review on.
     if (deliverableRaw != null) {
@@ -120,17 +132,17 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       const i = /^\d+$/.test(deliverableRaw) ? Number(deliverableRaw) : -1;
       const doc = docs[i];
       if (!doc) return NextResponse.json({ error: "Unknown deliverable." }, { status: 404 });
-      const stamp = stampFor(order);
-      const generatedAt = new Date().toISOString().slice(0, 10);
+      const stamp = stampFor(order, currentVersion?.revision);
+      const generatedAt = (currentVersion?.generatedAt ?? new Date().toISOString()).slice(0, 10);
       const pdf = await renderSubmissionDeliverablePdf(doc, { companyName: company.name, ref: order.ref, stamp, generatedAt });
-      const xlsx = await renderLinesXlsx(order, doc);
+      const xlsx = await renderLinesXlsx(exportOrder, doc);
       const docxBuf = /docx/i.test(doc.fmt)
         ? await renderSubmissionDeliverableDocx(doc, { companyName: company.name, ref: order.ref, stamp })
         : null;
       // Multi-format deliverables ship every format together; PDF-only stays bare.
       if (xlsx || docxBuf) {
         const zip = new JSZip();
-        const base = `${order.ref}_${slug(doc.name)}`;
+        const base = `${order.ref}_r${currentVersion?.revision ?? order.round + 1}_${slug(doc.name)}`;
         zip.file(`${base}.pdf`, pdf);
         if (xlsx) zip.file(`${base}.xlsx`, xlsx);
         if (docxBuf) zip.file(`${base}.docx`, docxBuf);
@@ -145,7 +157,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       return new NextResponse(new Uint8Array(pdf), {
         headers: {
           "content-type": "application/pdf",
-          "content-disposition": `attachment; filename="${order.ref}_${slug(doc.name)}.pdf"`,
+          "content-disposition": `attachment; filename="${order.ref}_r${currentVersion?.revision ?? order.round + 1}_${slug(doc.name)}.pdf"`,
         },
       });
     }

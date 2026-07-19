@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import styles from "../../admin.module.css";
 import { briefingUrl, foldedOpportunityCount, foldedSourceLabel, selectInsightfulGaps } from "@/lib/network/outreach";
+import NextStepPanel from "@/components/admin/NextStepPanel";
 import type { Gap } from "@/lib/types";
 
 const STATUSES = ["new", "seen", "contacted", "replied", "booked", "paid", "not_relevant", "dismissed", "won", "lost"] as const;
@@ -413,6 +414,23 @@ export default function AdminNetworkCompanyPage() {
       {toast && <div className={`${styles.toast} ${toast.ok ? styles.toastOk : styles.toastErr}`}>{toast.msg}</div>}
       {c?.profile_status === "failed" && (
         <div className={`${styles.toast} ${styles.toastErr}`}>Profile build failed: {c.profile_error ?? "unknown"}. Fix the website/services and Re-match.</div>
+      )}
+
+      {c && (
+        <section className={styles.panel}>
+          <header className={styles.panelHead}>
+            <div>
+              <h2 className={styles.panelTitle}>Next best step</h2>
+              <p className={styles.panelSub}>
+                AI read on how to move {c.name} closer to closing — grounded in their live tenders and this
+                timeline — or whether to sunset it. Also lives in the <Link href="/admin/crm" className={styles.tableLink}>Sales command</Link>.
+              </p>
+            </div>
+          </header>
+          <div style={{ padding: "12px 22px 22px" }}>
+            <NextStepPanel companyId={id} />
+          </div>
+        </section>
       )}
 
       {editing && c && (

@@ -22,6 +22,7 @@ interface RequirementsBody {
 }
 
 export async function POST(request: Request) {
+  const startedAt = Date.now();
   let userId: number | null = null;
   let documentCount = 0;
 
@@ -43,6 +44,10 @@ export async function POST(request: Request) {
     }
     const tenderPack = await sanitizeTenderPackForUser(userId, body.tenderPack);
     documentCount = tenderPack.documents.length;
+    console.log("[tender-requirements:started]", {
+      userId,
+      documentCount,
+    });
     const requirements = await generateTenderRequirements({
       userId,
       tender: body.tender,
@@ -53,6 +58,7 @@ export async function POST(request: Request) {
       documentCount,
       requirementCount: requirements.items.length,
       generationStatus: requirements.generationStatus,
+      durationMs: Date.now() - startedAt,
     });
     return NextResponse.json({ requirements });
   } catch (error) {
@@ -69,6 +75,7 @@ export async function POST(request: Request) {
     console.error("[tender-requirements:route_failed]", {
       userId,
       documentCount,
+      durationMs: Date.now() - startedAt,
       error: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(

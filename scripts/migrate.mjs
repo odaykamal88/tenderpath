@@ -142,6 +142,8 @@ CREATE TABLE IF NOT EXISTS email_queue (
 ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS attempts INTEGER DEFAULT 0;
 ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS provider TEXT;
 ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS error TEXT;
+ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS message_key TEXT;
+ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 -- One row per assessment so resend-email's ON CONFLICT (assessment_id) upsert
 -- works without falling back to a plain INSERT. Dedupes any prior duplicates
@@ -155,6 +157,7 @@ WHERE id NOT IN (
 )
 AND assessment_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS email_queue_assessment_id_unique ON email_queue (assessment_id) WHERE assessment_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS email_queue_message_key_unique ON email_queue (message_key) WHERE message_key IS NOT NULL;
 
 -- Hotfix 2026-05-20: the original email_queue.assessment_id FK had no
 -- ON DELETE clause, defaulting to NO ACTION. That blocks ANY delete on
@@ -745,6 +748,7 @@ CREATE TABLE IF NOT EXISTS submission_orders (
   intake_fields JSONB NOT NULL DEFAULT '{}'::jsonb,
   deliverables JSONB NOT NULL DEFAULT '[]'::jsonb,
   events JSONB NOT NULL DEFAULT '[]'::jsonb,
+  artifact_versions JSONB NOT NULL DEFAULT '[]'::jsonb,
   revision_notes TEXT,
   amendments JSONB NOT NULL DEFAULT '[]'::jsonb,
   qna JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -754,6 +758,7 @@ CREATE TABLE IF NOT EXISTS submission_orders (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE submission_orders ADD COLUMN IF NOT EXISTS artifact_versions JSONB NOT NULL DEFAULT '[]'::jsonb;
 CREATE INDEX IF NOT EXISTS submission_orders_user_idx ON submission_orders (user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS submission_orders_stage_idx ON submission_orders (stage, updated_at DESC);
 CREATE INDEX IF NOT EXISTS submission_orders_wo_idx ON submission_orders (work_order_id);

@@ -34,7 +34,7 @@ check(
   a0.blockers.every((b) => ["ungm"].includes(b.id)),
   a0.blockers,
 );
-check("static pre-fills count toward completeness (validity/incoterms/warranty pre'd)", a0.have >= 3, { have: a0.have });
+check("notice-specific commercial fields never count before the user confirms them", a0.have === 0, { have: a0.have });
 
 const fullRfq: WizardDraftState = {
   ...EMPTY_DRAFT,
@@ -43,6 +43,7 @@ const fullRfq: WizardDraftState = {
     validity: "60 days (required minimum)",
     delivery: "6 weeks from PO",
     incoterms: "DAP — Delivered at Place (most UN RFQs)",
+    tax: "VAT included as required by the RFQ",
     warranty: "24 months on all items",
     specs: "Fully compliant with all specs",
   },
@@ -141,6 +142,7 @@ const order: SubmissionOrder = {
   intakeFields: buildIntakeFields(fullRfq),
   deliverables: buildDeliverables(rfq).map((d) => ({ ...d, status: "ready" as const })),
   events: [],
+  artifactVersions: [],
   revisionNotes: null,
   amendments: [],
   qna: [],
@@ -169,8 +171,9 @@ const sigCount = docs.flatMap((d) => d.blocks).filter((b) => b.b === "sig").leng
 check("signature points are explicit (≥2 across the pack)", sigCount >= 2);
 check("sig blocks carry the signatory name", docs.flatMap((d) => d.blocks).some((b) => b.b === "sig" && b.name === "Amir Osman"));
 check(
-  "VAT-exemption line present on the quotation form (load-bearing copy)",
-  JSON.stringify(docs[0].blocks).includes("tax-exempt"),
+  "quotation form carries the notice-specific tax treatment without inventing an exemption",
+  JSON.stringify(docs[0].blocks).includes("VAT included as required by the RFQ")
+    && !JSON.stringify(docs[0].blocks).includes("tax-exempt"),
 );
 
 /* ── 5 · nudges ────────────────────────────────────────────────────────── */

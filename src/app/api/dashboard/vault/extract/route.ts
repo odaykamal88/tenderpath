@@ -258,7 +258,8 @@ export async function POST(req: NextRequest) {
       });
       return NextResponse.json(
         {
-          error: `Extraction failed at ${stage}. ${err instanceof Error ? err.message : "Unknown error"}`,
+          error: "TenderPath could not finish processing this document. Please try again.",
+          code: "DOCUMENT_PROCESSING_FAILED",
           stage,
         },
         { status: 500 },
@@ -274,7 +275,8 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json(
       {
-        error: `Server error processing extraction: ${err instanceof Error ? err.message : "unknown"}`,
+        error: "TenderPath could not finish processing this document. Please try again.",
+        code: "DOCUMENT_PROCESSING_FAILED",
         stage: "handler",
       },
       { status: 500 },

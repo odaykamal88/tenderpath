@@ -82,9 +82,13 @@ export function discoverTenderAttachments(
 /** Conservative filename/label role inference aligned to the scoring engine. */
 export function inferTenderDocumentRole(value: string): TenderDocumentRole {
   const lower = value.toLowerCase();
-  if (/corrigendum|amendment|addendum|revision|revised/.test(lower)) return "amendment";
+  // Explicit amendment language wins, but "revised" by itself must not turn a
+  // revised TOR into an amendment. The document's primary type remains the
+  // most useful role unless the filename actually says amendment/corrigendum.
+  if (/corrigendum|amendment|addendum/.test(lower)) return "amendment";
   if (/\bq\s*(?:&|and)\s*a\b|questions?[-_ ]answers?|clarification/.test(lower)) return "qa";
   if (/terms? of reference|\btor\b|scope of work|statement of work|\bsow\b/.test(lower)) return "tor";
+  if (/\brevision\b|\brevised\b/.test(lower)) return "amendment";
   if (/guideline|instruction(?:s)? to (?:bidder|offeror|supplier)/.test(lower)) return "guidelines";
   if (/info(?:rmation)? session|pre[- ]?bid|briefing|minutes/.test(lower)) return "info_session";
   if (/annex|appendix|schedule|form|template|bill of quantities|\bboq\b|price/.test(lower)) return "annex";
@@ -94,5 +98,5 @@ export function inferTenderDocumentRole(value: string): TenderDocumentRole {
 
 export function tenderPackStatus(documents: TenderPackDocument[], attempted: boolean): TenderPackStatus {
   if (!documents.length) return attempted ? "needs_upload" : "not_started";
-  return documents.some((doc) => doc.extractionStatus === "extracted") ? "ready" : "partial";
+  return documents.every((doc) => doc.extractionStatus === "extracted") ? "ready" : "partial";
 }

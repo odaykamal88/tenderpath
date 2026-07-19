@@ -662,11 +662,16 @@ export function CriteriaBlock({
   patch: Patch;
   prefills: Record<string, string>;
 }) {
-  const totalPts = block.items.reduce((s, k) => s + k.pts, 0);
+  const hasPublishedWeights = block.items.every((item) => typeof item.pts === "number");
+  const totalPts = hasPublishedWeights
+    ? block.items.reduce((sum, item) => sum + (item.pts ?? 0), 0)
+    : 0;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.14em", textTransform: "uppercase", color: C.mute }}>
-        Evaluation matrix · {totalPts} technical points · threshold 70%
+        {hasPublishedWeights
+          ? `Published evaluation matrix · ${totalPts} technical points`
+          : "Response planning framework · weights added only from the published rubric"}
       </div>
       {block.items.map((k) => {
         const pre = prefills[k.id] ?? "";
@@ -678,10 +683,12 @@ export function CriteriaBlock({
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderBottom: `1px solid ${C.ruleSoft}`, background: "#fbf9f3" }}>
               <span style={{ fontFamily: F.sans, fontSize: 13, fontWeight: 600, color: C.ink, flex: 1 }}>{k.crit}</span>
               {prefilled && <PreTag />}
-              <span style={{ fontFamily: F.display, fontSize: 19, color: C.accent }}>
-                {k.pts}
-                <span style={{ fontFamily: F.mono, fontSize: 9, color: C.faint }}> pts</span>
-              </span>
+              {typeof k.pts === "number" && (
+                <span style={{ fontFamily: F.display, fontSize: 19, color: C.accent }}>
+                  {k.pts}
+                  <span style={{ fontFamily: F.mono, fontSize: 9, color: C.faint }}> pts</span>
+                </span>
+              )}
             </div>
             <div style={{ padding: "12px 14px" }}>
               <Lbl>{k.fieldLabel}</Lbl>

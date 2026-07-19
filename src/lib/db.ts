@@ -172,12 +172,17 @@ export async function initializeDatabase() {
       provider VARCHAR(50),
       sent_at TIMESTAMPTZ,
       error TEXT,
+      message_key TEXT,
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
   await sql`ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS attempts INTEGER DEFAULT 0`;
   await sql`ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS provider VARCHAR(50)`;
   await sql`ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS error TEXT`;
+  await sql`ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS message_key TEXT`;
+  await sql`ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb`;
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS email_queue_message_key_unique ON email_queue (message_key) WHERE message_key IS NOT NULL`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS crawl_logs (

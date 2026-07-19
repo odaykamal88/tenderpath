@@ -4,6 +4,8 @@ import { sql } from "@/lib/db";
 import { generateMagicToken } from "@/lib/auth";
 import { defaultEmailMeta } from "@/lib/email/defaults";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { createHash } from "node:crypto";
+import { recordEmailDelivery } from "@/lib/email/delivery-log";
 
 function envValue(key: string): string | null {
   const value = process.env[key]?.trim();
@@ -59,6 +61,7 @@ export async function POST(request: Request) {
     const appUrl = envValue("NEXT_PUBLIC_APP_URL") ?? "https://www.tenderpath.me";
     const fromEmail = envValue("RESEND_FROM_EMAIL") ?? "TenderPath <no-reply@tenderpath.me>";
     const magicLink = `${appUrl}/login?token=${magicToken}`;
+    const messageKey = `tp-auth-signup-${createHash("sha256").update(magicToken).digest("hex").slice(0, 24)}`;
 
     if (resendKey) {
       const resend = new Resend(resendKey);
@@ -68,15 +71,17 @@ export async function POST(request: Request) {
         recipient: normalizedEmail,
       });
       try {
-        const { error: emailError } = await resend.emails.send({
+        const { data, error: emailError } = await resend.emails.send({
           from: fromEmail,
           to: normalizedEmail,
           subject,
           html,
           text,
+          tags: [{ name: "kind", value: "auth-signup" }],
           ...defaultEmailMeta(normalizedEmail),
-        });
+        }, { idempotencyKey: messageKey });
         if (emailError) {
+          await recordEmailDelivery({ messageKey, email: normalizedEmail, kind: "auth_signup", status: "failed", error: emailError.message });
           console.error("[auth:signup:magic_link_failed]", {
             email: normalizedEmail,
             error: emailError.message ?? String(emailError),
@@ -87,8 +92,12 @@ export async function POST(request: Request) {
               { status: 502 },
             );
           }
+        } else {
+          await recordEmailDelivery({ messageKey, email: normalizedEmail, kind: "auth_signup", status: "sent", providerMessageId: data?.id ?? null });
+          console.info("[auth:signup:magic_link_sent]", { messageId: data?.id ?? null });
         }
       } catch (sendErr) {
+        await recordEmailDelivery({ messageKey, email: normalizedEmail, kind: "auth_signup", status: "failed", error: sendErr instanceof Error ? sendErr.message : String(sendErr) });
         console.error("[auth:signup:magic_link_send_threw]", {
           email: normalizedEmail,
           error: sendErr instanceof Error ? sendErr.message : String(sendErr),
@@ -101,6 +110,7 @@ export async function POST(request: Request) {
         }
       }
     } else if (!isDev) {
+      await recordEmailDelivery({ messageKey, email: normalizedEmail, kind: "auth_signup", status: "skipped", error: "RESEND_API_KEY missing" });
       console.warn("[auth:signup:no_resend_key]");
       return NextResponse.json(
         { error: "Magic link email is not configured. Please contact support." },

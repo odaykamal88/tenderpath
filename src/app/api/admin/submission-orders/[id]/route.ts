@@ -118,23 +118,24 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       metadata: { submissionOrderId: id, action: body.action },
     });
 
-    // Draft ready for review → immediate client email (SPEC §5 contract 6).
-    // Fire-and-forget: a mail failure never fails the stage advance.
+    // Draft ready for review → immediate, awaited client email. The stage
+    // advance remains successful if Resend rejects the mail, but the response
+    // and delivery ledger make that failure visible to ops.
+    let notification: Awaited<ReturnType<typeof sendSubmissionReviewReadyEmail>> | null = null;
     if (body.action === "advance" && body.to === "review") {
-      void (async () => {
-        try {
-          const rows = await sql`SELECT email FROM users WHERE id = ${order.userId} LIMIT 1`;
-          await sendSubmissionReviewReadyEmail(order, (rows[0]?.email as string | null) ?? null);
-        } catch (err) {
-          console.error("[tp:submissions:review_email_failed]", {
-            orderId: order.id,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-      })();
+      try {
+        const rows = await sql`SELECT email FROM users WHERE id = ${order.userId} LIMIT 1`;
+        notification = await sendSubmissionReviewReadyEmail(order, (rows[0]?.email as string | null) ?? null);
+      } catch (err) {
+        console.error("[tp:submissions:review_email_failed]", {
+          orderId: order.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        notification = { status: "failed", reason: err instanceof Error ? err.message : String(err) };
+      }
     }
 
-    return NextResponse.json({ order: { ...order, contentLoaded: true } });
+    return NextResponse.json({ order: { ...order, contentLoaded: true }, notification });
   } catch (err) {
     if (err instanceof OrderStateError) {
       const status = err.code === "NOT_FOUND" ? 404 : err.code === "ORDER_CHANGED" ? 409 : 422;

@@ -170,7 +170,7 @@ function ReviewActions({
   return (
     <div style={{ border: `1px solid ${C.accent2}`, background: "#fdfaf2", padding: "16px 18px" }}>
       <div style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.14em", textTransform: "uppercase", color: C.accent, marginBottom: 8 }}>
-        Your review — unlimited revisions until you approve
+        Your review — request changes within the rounds agreed at intake
       </div>
       <p style={{ fontFamily: F.sans, fontSize: 12.5, color: C.ink2, lineHeight: 1.6, margin: "0 0 14px" }}>
         The draft pack passed our QA gate. Read every document in the reader — especially names, figures

@@ -16,6 +16,10 @@ import {
   resolveOrMintForAnonymousSubmission,
   setDemoSessionCookie,
 } from "@/lib/assessment/demo-session";
+import {
+  PUBLIC_ASSESSMENT_ERROR,
+  PUBLIC_ASSESSMENT_ERROR_CODE,
+} from "@/lib/assessment/public-errors";
 
 /**
  * Public assessment endpoint — no auth required.
@@ -112,9 +116,13 @@ export async function POST(request: Request) {
     if (demoSessionId) setDemoSessionCookie(response, demoSessionId);
     return response;
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Assessment failed";
-    console.error("Assessment error:", err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[tp:assessment:public_failed]", {
+      errorName: err instanceof Error ? err.name : "unknown",
+      errorMessage: err instanceof Error ? err.message : String(err),
+    });
+    return NextResponse.json(
+      { error: PUBLIC_ASSESSMENT_ERROR, code: PUBLIC_ASSESSMENT_ERROR_CODE },
+      { status: 500 },
+    );
   }
 }
