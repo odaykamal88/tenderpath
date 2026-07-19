@@ -23,6 +23,8 @@ import { CheckoutCard, type CheckoutContext } from "@/components/checkout/Checko
 import type { WbMatch } from "@/lib/workbench/types";
 import type { DocResolution, SubmissionCode, WizardDraftState } from "@/lib/submissions/types";
 import { EMPTY_DRAFT } from "@/lib/submissions/types";
+import { buildPortalCompanionView } from "@/lib/tender-workspace/companion";
+import { EMPTY_PORTAL_COMPANION } from "@/lib/tender-workspace/types";
 import { resolveSubmissionPortal } from "@/lib/tenders/submission-portals";
 import { flowFor, FLOW_GUARANTEE, type FlowBlock, type FlowStep, type SubmissionFlow } from "@/lib/submissions/flows";
 import { docSpec } from "@/lib/submissions/docs-catalog";
@@ -163,7 +165,11 @@ function TenderStep({
             <button
               key={m.id}
               onClick={() => {
-                patch({ tender: tenderFromMatch(m), tenderPack: { status: "not_started", documents: [] } });
+                patch({
+                  tender: tenderFromMatch(m),
+                  tenderPack: { status: "not_started", documents: [] },
+                  portalCompanion: { ...EMPTY_PORTAL_COMPANION },
+                });
                 setManual(false);
               }}
               style={{ textAlign: "left", cursor: "pointer", background: C.white, border: `1px solid ${on ? C.ink : C.rule}`, boxShadow: on ? `inset 0 0 0 1px ${C.ink}` : "none", padding: "16px 18px", display: "flex", gap: 14, alignItems: "center" }}
@@ -201,13 +207,18 @@ function TenderStep({
                   onChange={(e) => {
                     const agency = e.target.value;
                     const portal = resolveSubmissionPortal(agency);
-                    setT({
-                      agency,
-                      portal: portal.portalName,
-                      portalKey: portal.key,
-                      portalOverride: false,
-                      portalUrl: portal.signInUrl || portal.registrationUrl,
-                      portalGuideUrl: portal.guideUrl || null,
+                    patch({
+                      tender: {
+                        title: "",
+                        ...(t ?? {}),
+                        agency,
+                        portal: portal.portalName,
+                        portalKey: portal.key,
+                        portalOverride: false,
+                        portalUrl: portal.signInUrl || portal.registrationUrl,
+                        portalGuideUrl: portal.guideUrl || null,
+                      },
+                      portalCompanion: { ...EMPTY_PORTAL_COMPANION },
                     });
                   }}
                   style={inputStyle}
@@ -220,17 +231,36 @@ function TenderStep({
             </div>
             <div>
               <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 600, color: C.ink, marginBottom: 6 }}>Official notice URL</div>
-              <input value={t?.sourceUrl ?? ""} placeholder="https://…" onChange={(e) => setT({ sourceUrl: e.target.value || null })} style={inputStyle} />
+                <input type="url" inputMode="url" value={t?.sourceUrl ?? ""} placeholder="https://…" onChange={(e) => setT({ sourceUrl: e.target.value || null })} style={inputStyle} />
             </div>
             <div>
               <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 600, color: C.ink, marginBottom: 6 }}>Submission portal / channel</div>
               <input
                 value={t?.portal ?? ""}
                 placeholder="e.g. UNGM e-submission · email in the notice"
-                onChange={(e) => setT({ portal: e.target.value || null, portalOverride: true })}
+                onChange={(e) => patch({
+                  tender: { title: "", ...(t ?? {}), portal: e.target.value || null, portalOverride: true, portalUrl: null },
+                  portalCompanion: { ...EMPTY_PORTAL_COMPANION },
+                })}
                 style={inputStyle}
               />
             </div>
+            {t?.portalOverride && (
+              <div>
+                <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 600, color: C.ink, marginBottom: 6 }}>Submission portal URL <span style={{ color: C.faint, fontWeight: 400 }}>(if the channel is online)</span></div>
+                <input
+                  type="url"
+                  inputMode="url"
+                  value={t.portalUrl ?? ""}
+                  placeholder="https://…"
+                  onChange={(e) => patch({
+                    tender: { ...t, portalUrl: e.target.value || null },
+                    portalCompanion: { ...EMPTY_PORTAL_COMPANION },
+                  })}
+                  style={inputStyle}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -238,7 +268,9 @@ function TenderStep({
         <TenderPackPanel
           tender={t}
           pack={draft.tenderPack ?? { status: "not_started", documents: [] }}
+          companion={draft.portalCompanion ?? EMPTY_PORTAL_COMPANION}
           onChange={(tenderPack) => patch({ tenderPack })}
+          onCompanionChange={(portalCompanion) => patch({ portalCompanion })}
         />
       )}
       <div style={{ marginTop: 14, padding: "13px 16px", border: `1px dashed ${C.rule}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -285,6 +317,11 @@ function ReviewStep({
 }) {
   const tender = draft.tender;
   const canGo = a.canPay;
+  const portalReadiness = buildPortalCompanionView(
+    tender,
+    draft.tenderPack,
+    draft.portalCompanion,
+  );
   const rows: [string, string][] = [
     ["Format", `${flow.code} — ${flow.name}`],
     ["Tender", tender?.title || "— pick one in step 1"],
@@ -294,6 +331,10 @@ function ReviewStep({
       draft.tenderPack?.documents.length
         ? `${draft.tenderPack.documents.length} private document${draft.tenderPack.documents.length === 1 ? "" : "s"} · ${draft.tenderPack.status}`
         : "No documents attached — confirm the portal pack before drafting",
+    ],
+    [
+      "Portal hand-off",
+      `${portalReadiness.complete}/${portalReadiness.total} checks · ${portalReadiness.nextAction.title}`,
     ],
     ["Deadline", tender?.due ? `${shortDate(tender.due)} (${deadlineLabel(tender.due)})` : "—"],
     ["Intake completeness", `${a.pct}% · ${a.need - a.have} item(s) open`],
@@ -466,12 +507,14 @@ export function SubWizard({ type, seedMatch, onClose }: SubWizardProps) {
             ...EMPTY_DRAFT,
             tender: tenderFromMatch(seedMatch),
             tenderPack: { status: "not_started", documents: [] },
+            portalCompanion: { ...EMPTY_PORTAL_COMPANION },
           };
         } else if (!merged.tender?.title) {
           merged.tender = tenderFromMatch(seedMatch);
         }
       }
       if (!merged.tenderPack) merged.tenderPack = { status: "not_started", documents: [] };
+      if (!merged.portalCompanion) merged.portalCompanion = { ...EMPTY_PORTAL_COMPANION };
       if (merged.tender?.title && !merged.tender.portalOverride) {
         const portal = resolveSubmissionPortal(merged.tender.agency);
         merged.tender = {

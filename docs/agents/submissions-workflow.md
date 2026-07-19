@@ -53,6 +53,20 @@ trust a client-supplied vault id, file URL, filename, or extraction status.
 See `docs/agents/sprint-1-guided-tender-workspace.md` for caps, portal sources,
 failure behavior, early-adopter ranking, and the preview acceptance walk.
 
+## Portal companion (Sprint 2)
+
+The same first step now tracks a seven-check portal hand-off: notice, verified
+route, supplier-confirmed access, private pack, core solicitation role,
+amendment/Q&A check, and cutoff/envelope confirmation. Derived checks are
+recomputed from the current tender and owner-scoped manifest; only the three
+explicit confirmations and bounded timestamps persist in
+`WizardDraftState.portalCompanion` and `intake_fields.portalCompanion`.
+
+The portal opens in a user-initiated adjacent browser window when the browser
+allows it, with a direct official-link fallback. No iframe, credential custody,
+session replay, signing, or submission authority is introduced. See
+`docs/agents/sprint-2-portal-companion.md` for the contract and acceptance walk.
+
 ## Payment seam (work-order-first, like every other paid service)
 
 1. Wizard "Pay $X & start drafting" → `POST /api/dashboard/submission-orders`

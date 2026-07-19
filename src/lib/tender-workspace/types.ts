@@ -44,3 +44,28 @@ export interface TenderPackState {
   checkedAt?: string | null;
   note?: string | null;
 }
+
+export const PORTAL_CONFIRMATION_IDS = [
+  "portal_access",
+  "latest_documents",
+  "deadline_channel",
+] as const;
+
+export type PortalConfirmationId = (typeof PORTAL_CONFIRMATION_IDS)[number];
+
+/**
+ * User-confirmed portal hand-off state. Derived checks (notice, route, pack,
+ * and core-document coverage) are intentionally not persisted as booleans;
+ * they are recomputed from the current tender and owner-scoped manifest.
+ */
+export interface PortalCompanionState {
+  confirmed: PortalConfirmationId[];
+  portalOpenedAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export const EMPTY_PORTAL_COMPANION: PortalCompanionState = {
+  confirmed: [],
+  portalOpenedAt: null,
+  updatedAt: null,
+};

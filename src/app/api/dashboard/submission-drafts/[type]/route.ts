@@ -8,6 +8,7 @@ import { isSubmissionCode } from "@/lib/workbench/pricing";
 import type { SubmissionCode, WizardDraftState } from "@/lib/submissions/types";
 import { EMPTY_DRAFT } from "@/lib/submissions/types";
 import { clearDraft, getDraft, putDraft } from "@/lib/submissions/store";
+import { normalizePortalCompanion } from "@/lib/tender-workspace/companion";
 import { sanitizeTenderPackForUser, TenderPackOwnershipError } from "@/lib/tender-workspace/ownership";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +47,7 @@ export async function PUT(request: Request, ctx: { params: Promise<{ type: strin
     const body = (await request.json()) as { draft?: Partial<WizardDraftState> };
     const draft: WizardDraftState = { ...EMPTY_DRAFT, ...(body.draft ?? {}) };
     draft.tenderPack = await sanitizeTenderPackForUser(guard.user!.id, draft.tenderPack);
+    draft.portalCompanion = normalizePortalCompanion(draft.portalCompanion);
     await putDraft(guard.user!.id, type, draft);
     return NextResponse.json({ ok: true });
   } catch (err) {

@@ -2,7 +2,18 @@
 
 import { useMemo, useRef, useState } from "react";
 import type { WizardDraftState } from "@/lib/submissions/types";
-import { TENDER_DOCUMENT_ROLES, type TenderPackDocument, type TenderPackState } from "@/lib/tender-workspace/types";
+import {
+  buildPortalCompanionView,
+  safeExternalHttpUrl,
+  togglePortalConfirmation,
+} from "@/lib/tender-workspace/companion";
+import {
+  TENDER_DOCUMENT_ROLES,
+  type PortalCompanionState,
+  type PortalConfirmationId,
+  type TenderPackDocument,
+  type TenderPackState,
+} from "@/lib/tender-workspace/types";
 import { tenderPackStatus } from "@/lib/tender-workspace/documents";
 import { uploadTenderPackFile } from "@/lib/vault/client-upload";
 import { resolveSubmissionPortal } from "@/lib/tenders/submission-portals";
@@ -33,11 +44,15 @@ function mergeDocuments(current: TenderPackDocument[], incoming: TenderPackDocum
 export function TenderPackPanel({
   tender,
   pack,
+  companion,
   onChange,
+  onCompanionChange,
 }: {
   tender: TenderDraft;
   pack: TenderPackState;
+  companion: PortalCompanionState;
   onChange: (pack: TenderPackState) => void;
+  onCompanionChange: (companion: PortalCompanionState) => void;
 }) {
   const mobile = useMedia("(max-width: 767px)");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -47,9 +62,52 @@ export function TenderPackPanel({
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const portalUrl = tender.portalUrl || portal.signInUrl || portal.registrationUrl;
+  const portalUrl = safeExternalHttpUrl(
+    tender.portalOverride
+      ? tender.portalUrl
+      : tender.portalUrl || portal.signInUrl || portal.registrationUrl,
+  ) ?? "";
+  const officialNoticeUrl = safeExternalHttpUrl(tender.sourceUrl);
   const portalName = tender.portal || portal.portalName;
-  const portalCta = portal.signInUrl ? "Open supplier portal" : "Open official supplier instructions";
+  const companionView = useMemo(
+    () => buildPortalCompanionView(tender, pack, companion),
+    [tender, pack, companion],
+  );
+
+  function openPortalBeside() {
+    setError(null);
+    if (!portalUrl) {
+      setError("This notice does not include a portal URL. Use the submission channel named in the official notice.");
+      return;
+    }
+    const width = Math.min(900, Math.max(620, Math.round(window.screen.availWidth * 0.48)));
+    const height = Math.max(620, window.screen.availHeight - 72);
+    const positionedScreen = window.screen as Screen & { availLeft?: number; availTop?: number };
+    const left = (positionedScreen.availLeft ?? 0) + Math.max(0, window.screen.availWidth - width);
+    const top = (positionedScreen.availTop ?? 0) + 36;
+    const opened = window.open(
+      portalUrl,
+      "tenderpath_supplier_portal",
+      `popup=yes,width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`,
+    );
+    if (!opened) {
+      setError("The portal window was blocked. Allow pop-ups for TenderPath, or use the direct portal link below.");
+      return;
+    }
+    try {
+      opened.opener = null;
+      opened.focus();
+    } catch {
+      // Cross-origin portal controls can block focus/opener writes. The portal
+      // is still open and no workflow state depends on those browser hints.
+    }
+    const now = new Date().toISOString();
+    onCompanionChange({ ...companion, portalOpenedAt: now, updatedAt: now });
+  }
+
+  function confirm(id: PortalConfirmationId, done: boolean) {
+    onCompanionChange(togglePortalConfirmation(companion, id, done));
+  }
 
   async function importPublicPack() {
     if (!tender.tenderId) return;
@@ -126,15 +184,18 @@ export function TenderPackPanel({
           <div style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.14em", textTransform: "uppercase", color: C.accent }}>Private tender workspace</div>
           <div style={{ fontFamily: F.sans, fontSize: 13, color: C.ink2, lineHeight: 1.5, marginTop: 5 }}>Notice, submission route, and solicitation pack in one place.</div>
         </div>
-        <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: pack.status === "ready" ? C.pos : C.warn, border: `1px solid ${pack.status === "ready" ? C.pos : C.rule}`, background: C.white, padding: "4px 7px" }}>{statusCopy}</span>
+        <div style={{ display: "flex", gap: 7, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: companionView.complete === companionView.total ? C.pos : C.warn, border: `1px solid ${companionView.complete === companionView.total ? C.pos : C.rule}`, background: C.white, padding: "4px 7px" }}>{companionView.complete}/{companionView.total} portal checks</span>
+          <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: pack.status === "ready" ? C.pos : C.warn, border: `1px solid ${pack.status === "ready" ? C.pos : C.rule}`, background: C.white, padding: "4px 7px" }}>{statusCopy}</span>
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", borderBottom: `1px solid ${C.rule}` }}>
         <div style={{ padding: "15px 17px", borderRight: mobile ? 0 : `1px solid ${C.rule}`, borderBottom: mobile ? `1px solid ${C.rule}` : 0 }}>
           <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: C.faint }}>Official notice</div>
           <div style={{ fontFamily: F.sans, fontSize: 12.5, color: C.ink2, lineHeight: 1.5, marginTop: 6 }}>Use the source notice as the authority for deadlines and instructions.</div>
-          {tender.sourceUrl ? (
-            <a href={tender.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", fontFamily: F.mono, fontSize: 10, color: C.ink, marginTop: 10, textDecoration: "none", borderBottom: `1px solid ${C.ink}` }}>Open official notice</a>
+          {officialNoticeUrl ? (
+            <a href={officialNoticeUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", fontFamily: F.mono, fontSize: 10, color: C.ink, marginTop: 10, textDecoration: "none", borderBottom: `1px solid ${C.ink}` }}>Open official notice</a>
           ) : (
             <div style={{ fontFamily: F.mono, fontSize: 10, color: C.warn, marginTop: 10 }}>No verified source link on record</div>
           )}
@@ -142,11 +203,78 @@ export function TenderPackPanel({
         <div style={{ padding: "15px 17px" }}>
           <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: C.faint }}>Submission route</div>
           <div style={{ fontFamily: F.sans, fontSize: 13, color: C.ink, fontWeight: 600, marginTop: 6 }}>{portalName}</div>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 9 }}>
-            <a href={portalUrl} target="_blank" rel="noopener noreferrer" style={{ fontFamily: F.mono, fontSize: 10, color: C.accent, textDecoration: "none", borderBottom: `1px solid ${C.accent}` }}>{portalCta}</a>
+          {companionView.firstTimeRisk !== "none" && (
+            <div style={{ fontFamily: F.sans, fontSize: 11, color: companionView.firstTimeRisk === "very-tight" ? C.neg : C.warn, lineHeight: 1.45, marginTop: 6 }}>
+              {companionView.firstTimeRisk === "very-tight" ? "Registration window is very tight" : "Registration window may be tight"}
+              {companionView.daysUntilDeadline != null ? ` · ${companionView.daysUntilDeadline} day${companionView.daysUntilDeadline === 1 ? "" : "s"} left` : ""}
+            </div>
+          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+            {portalUrl ? (
+              <>
+                <Btn kind="primary" size="sm" onClick={openPortalBeside}>Open portal beside TenderPath</Btn>
+                <a href={portalUrl} target="_blank" rel="noopener noreferrer" style={{ fontFamily: F.mono, fontSize: 9.5, color: C.accent, textDecoration: "none", borderBottom: `1px solid ${C.accent}` }}>Direct portal link</a>
+              </>
+            ) : (
+              <span style={{ fontFamily: F.sans, fontSize: 11, color: C.warn }}>Follow the channel named in the official notice.</span>
+            )}
             {(tender.portalGuideUrl || portal.guideUrl) && <a href={tender.portalGuideUrl || portal.guideUrl} target="_blank" rel="noopener noreferrer" style={{ fontFamily: F.mono, fontSize: 10, color: C.ink2, textDecoration: "none", borderBottom: `1px solid ${C.rule}` }}>Official guide</a>}
           </div>
+          {companion.portalOpenedAt && <div style={{ fontFamily: F.mono, fontSize: 8.5, color: C.faint, marginTop: 8, letterSpacing: "0.06em", textTransform: "uppercase" }}>Portal opened from this workspace</div>}
         </div>
+      </div>
+
+      <div style={{ padding: "15px 17px", borderBottom: `1px solid ${C.rule}`, background: C.white }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: C.accent }}>Portal hand-off checklist</div>
+            <div style={{ fontFamily: F.sans, fontSize: 12.5, color: C.ink2, lineHeight: 1.5, marginTop: 5 }}>Derived evidence plus your confirmations—never invented progress.</div>
+          </div>
+          <span style={{ fontFamily: F.display, fontSize: 25, lineHeight: 1, color: companionView.pct === 100 ? C.pos : C.ink }}>{companionView.pct}%</span>
+        </div>
+        <div role="progressbar" aria-label="Portal hand-off readiness" aria-valuemin={0} aria-valuemax={100} aria-valuenow={companionView.pct} style={{ height: 3, background: C.rule, marginTop: 11 }}>
+          <div style={{ height: "100%", width: `${companionView.pct}%`, background: companionView.pct === 100 ? C.pos : C.accent, transition: "width 160ms ease" }} />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "minmax(0,1fr) minmax(0,1fr)", gap: mobile ? 0 : "0 22px", marginTop: 12 }}>
+          {companionView.items.map((item) => (
+            <label key={item.id} style={{ display: "flex", gap: 9, alignItems: "flex-start", padding: "9px 0", borderBottom: `1px solid ${C.ruleSoft}`, cursor: item.confirmationId ? "pointer" : "default" }}>
+              <input
+                type="checkbox"
+                checked={item.complete}
+                disabled={!item.confirmationId}
+                onChange={(event) => item.confirmationId && confirm(item.confirmationId, event.target.checked)}
+                style={{ width: 15, height: 15, margin: "1px 0 0", accentColor: C.pos, flexShrink: 0 }}
+              />
+              <span>
+                <span style={{ display: "block", fontFamily: F.sans, fontSize: 11.8, fontWeight: 600, color: item.complete ? C.ink : C.ink2, lineHeight: 1.35 }}>{item.label}</span>
+                <span style={{ display: "block", fontFamily: F.sans, fontSize: 10.5, color: C.faint, lineHeight: 1.4, marginTop: 2 }}>{item.detail}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <div style={{ marginTop: 13, padding: "12px 13px", border: `1px solid ${companionView.nextAction.kind === "ready" ? C.pos : C.rule}`, background: companionView.nextAction.kind === "ready" ? "#f3f8f4" : C.paper, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
+          <div style={{ minWidth: 0, maxWidth: 520 }}>
+            <div style={{ fontFamily: F.mono, fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase", color: companionView.nextAction.kind === "ready" ? C.pos : C.warn }}>Next best action</div>
+            <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 600, color: C.ink, marginTop: 4 }}>{companionView.nextAction.title}</div>
+            <div style={{ fontFamily: F.sans, fontSize: 10.8, color: C.mute, lineHeight: 1.45, marginTop: 3 }}>{companionView.nextAction.detail}</div>
+          </div>
+          {companionView.nextAction.kind === "portal" && portalUrl && <Btn kind="primary" size="sm" onClick={openPortalBeside}>Open portal</Btn>}
+          {companionView.nextAction.kind === "pack" && (
+            tender.tenderId && tender.sourceUrl
+              ? <Btn kind="primary" size="sm" onClick={importPublicPack} style={{ opacity: importing ? 0.55 : 1, pointerEvents: importing ? "none" : "auto" }}>{importing ? "Checking source…" : "Import public pack"}</Btn>
+              : <Btn kind="primary" size="sm" onClick={() => inputRef.current?.click()}>Upload files</Btn>
+          )}
+        </div>
+
+        <details style={{ marginTop: 12 }}>
+          <summary style={{ fontFamily: F.mono, fontSize: 9.5, color: C.ink2, cursor: "pointer", letterSpacing: "0.08em", textTransform: "uppercase" }}>Show verified portal steps</summary>
+          <ol style={{ margin: "10px 0 0", paddingLeft: 22, display: "flex", flexDirection: "column", gap: 7 }}>
+            {portal.steps.map((step) => <li key={step} style={{ fontFamily: F.sans, fontSize: 11, color: C.mute, lineHeight: 1.5, paddingLeft: 3 }}>{step}</li>)}
+          </ol>
+          <div style={{ fontFamily: F.sans, fontSize: 10.5, color: C.faint, lineHeight: 1.45, marginTop: 9 }}>{portal.note}</div>
+        </details>
       </div>
 
       <div style={{ padding: "15px 17px" }}>

@@ -10,7 +10,11 @@
  * change appends to `events[]` — both sides read the same log. */
 
 import type { SubmissionCode } from "@/lib/workbench/pricing";
-import type { TenderPackState } from "@/lib/tender-workspace/types";
+import {
+  EMPTY_PORTAL_COMPANION,
+  type PortalCompanionState,
+  type TenderPackState,
+} from "@/lib/tender-workspace/types";
 
 export type { SubmissionCode };
 
@@ -244,6 +248,8 @@ export interface WizardDraftState {
   } | null;
   /** Private solicitation set carried from source import / guided upload. */
   tenderPack?: TenderPackState;
+  /** User-confirmed, non-credential portal hand-off state. */
+  portalCompanion?: PortalCompanionState;
   fields: Record<string, string>;
   lines: PricedLine[];
   currency: string;
@@ -257,6 +263,7 @@ export interface WizardDraftState {
 export const EMPTY_DRAFT: WizardDraftState = {
   tender: null,
   tenderPack: { status: "not_started", documents: [] },
+  portalCompanion: { ...EMPTY_PORTAL_COMPANION },
   fields: {},
   lines: [],
   currency: "USD",

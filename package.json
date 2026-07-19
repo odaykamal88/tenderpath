@@ -15,6 +15,7 @@
     "security:sprint0-db": "tsx scripts/sprint0-production-db-check.ts",
     "security:sprint0": "tsx scripts/sprint0-security-smoke.ts",
     "smoke:sprint1": "tsx scripts/sprint1-tender-workspace-smoke.ts",
+    "smoke:sprint2": "tsx scripts/sprint2-portal-companion-smoke.ts",
     "validation:paid-services": "tsx scripts/paid-services-validation.ts --panel=data/validation/paid-services-panel.csv",
     "validate:paid-services": "tsx scripts/paid-services-validation.ts --panel=data/validation/paid-services-panel.csv"
   },
