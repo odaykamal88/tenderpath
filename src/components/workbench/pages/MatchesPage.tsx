@@ -98,6 +98,17 @@ function Row({ m, open, onToggle }: { m: WbMatch; open: boolean; onToggle: () =>
               <div style={{ fontFamily: F.sans, fontSize: 13.5, color: C.ink, marginTop: 5 }}>{detail}</div>
             </div>
             <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
+              {m.sourceUrl && (
+                <a
+                  href={m.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`View primary source for ${m.title}`}
+                  style={{ display: "inline-flex", alignItems: "center", border: `1px solid ${C.rule}`, color: C.ink, background: C.white, padding: "8px 12px", fontFamily: F.mono, fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", textDecoration: "none" }}
+                >
+                  View primary source ↗
+                </a>
+              )}
               <Btn kind="ghost" size="sm" onClick={() => openPaste(m)}>Bid / no-bid</Btn>
               <Btn kind="primary" size="sm" onClick={() => go(route)}>{step} →</Btn>
             </div>

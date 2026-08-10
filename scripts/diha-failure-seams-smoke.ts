@@ -26,6 +26,10 @@ const submissions = source("src/app/api/dashboard/submission-orders/route.ts");
 assert.match(submissions, /\[tp:submissions:list_failed\]/, "submission list failures must be diagnosable");
 assert.match(submissions, /status: 500/, "submission list failures must not return a silent empty success");
 
+const matchesPage = source("src/components/workbench/pages/MatchesPage.tsx");
+assert.match(matchesPage, /href=\{m\.sourceUrl\}/, "a matched tender must expose its primary-source link");
+assert.match(matchesPage, /target="_blank"/, "the primary source must not replace the rehearsed dashboard tab");
+
 const reset = source("scripts/diha-demo-reset.ts");
 assert.match(reset, /const apply = args\.has\("--apply"\)/, "fixture restore must default to a dry run");
 assert.match(reset, /email === PUBLIC_DEMO_EMAIL/, "fixture restore must refuse the public demo account");
