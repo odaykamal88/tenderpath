@@ -107,6 +107,14 @@ function iso(v: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+/** PostgreSQL DATE values may arrive from Neon as Date objects. String slicing
+ * would turn `Mon Aug 31 ...` into `Mon Aug 3`, which JavaScript parses as 2001.
+ * Normalize through Date/ISO while preserving an already-canonical date. */
+export function submissionDueDate(v: unknown): string | null {
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}(?:$|T)/.test(v)) return v.slice(0, 10);
+  return iso(v)?.slice(0, 10) ?? null;
+}
+
 /** Display ref, stable per order — also the inbound-mail local part later. */
 export function submissionRef(id: number): string {
   return `TP-${2000 + id}`;
@@ -130,7 +138,7 @@ export function rowToOrder(row: Record<string, any>): SubmissionOrder {
     portal: row.portal ?? null,
     tenderId: row.tender_id ?? null,
     pipelineItemId: row.pipeline_item_id ?? null,
-    due: row.due ? String(row.due).slice(0, 10) : null,
+    due: submissionDueDate(row.due),
     value: row.value ?? null,
     fit: row.fit ?? null,
     stage: row.stage as SubmissionStage,

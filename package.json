@@ -20,6 +20,7 @@
     "smoke:sprint4": "tsx scripts/sprint4-production-trust-gate-smoke.ts",
     "smoke:diha-ops": "tsx scripts/diha-ops-smoke.ts",
     "smoke:diha-dedup": "tsx scripts/diha-dedup-smoke.ts",
+    "smoke:diha-submission-date": "tsx scripts/diha-submission-date-smoke.ts",
     "demo:diha:reset": "tsx scripts/diha-demo-reset.ts",
     "rehearsal:first-client": "tsx scripts/first-client-rehearsal.ts",
     "validation:paid-services": "tsx scripts/paid-services-validation.ts --panel=data/validation/paid-services-panel.csv",
