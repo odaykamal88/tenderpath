@@ -125,7 +125,7 @@ export function MatchesPage() {
     const failed = data.assessmentStatus === "failed";
     return (
       <div>
-        <SectionHead n="02" title="Matched tenders" count={0} hint="Ranked by fit · refreshed daily" />
+        <SectionHead n="02" title="Matched tenders" count={0} hint="Evidence-backed fit · source freshness monitored" />
         <Card pad={24}>
           <Eyebrow color={failed ? C.warn : C.faint}>{unassessed ? failed ? "Assessment needs attention" : "No company evidence yet" : "No current matches"}</Eyebrow>
           <p style={{ fontFamily: F.sans, fontSize: 14, color: C.ink2, margin: "8px 0 16px", lineHeight: 1.6 }}>
@@ -146,7 +146,7 @@ export function MatchesPage() {
 
   return (
     <div>
-      <SectionHead n="02" title="Matched tenders" count={data.pipeline.matched} hint="Ranked by fit · refreshed daily" />
+      <SectionHead n="02" title="Matched tenders" count={data.pipeline.matched} hint="Evidence-backed fit · source freshness monitored" />
 
       {/* intro strip */}
       <div style={{ display: "flex", gap: 1, background: C.rule, border: `1px solid ${C.rule}`, marginBottom: 24, flexWrap: mobile ? "wrap" : "nowrap" }}>

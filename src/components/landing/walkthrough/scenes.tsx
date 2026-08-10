@@ -312,7 +312,7 @@ export function SceneSubmit({ st }: { st: number }) {
               })}
             </div>
             <div style={{ background: LC.paper, padding: "16px 18px" }}>
-              <div style={{ fontFamily: mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: LC.mute, marginBottom: 12 }}>Proposal — filled for you</div>
+              <div style={{ fontFamily: mono, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: LC.mute, marginBottom: 12 }}>Response pack — ready for review</div>
               {FIELDS.map((f, i) => {
                 const on = st >= 1.0 + i * 0.32;
                 return (
@@ -374,7 +374,7 @@ export const SCENES: Array<[number, number, SceneComp, string | null]> = [
   [S.score, S.match, SceneScore, "Paste your website — a readiness score in seconds."],
   [S.match, S.verdict, SceneMatches, "Every live tender you actually fit, ranked."],
   [S.verdict, S.submit, SceneVerdict, "Paste any tender. Get an instant bid / no-bid call."],
-  [S.submit, S.won, SceneSubmit, "Close the gaps — your proposal assembles itself."],
+  [S.submit, S.won, SceneSubmit, "Close the gaps — then review, approve and submit through the official channel."],
   [S.won, S.end, SceneWon, null],
 ];
 export const SCORE_CURSOR: number[][] = [[0, 760, 250], [0.9, 770, 360], [1.1, 770, 360], [2.0, 760, 250]];

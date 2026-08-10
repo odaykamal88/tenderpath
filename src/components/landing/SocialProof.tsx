@@ -21,13 +21,13 @@ export default function SocialProof({ liveTenderCount }: { liveTenderCount: numb
   const firstStat: [string, string] =
     liveTenderCount && liveTenderCount > 0
       ? [fmtCount(liveTenderCount), "live tenders tracked right now"]
-      : ["Daily", "fresh tender feed, refreshed every morning"];
+      : ["Live", "tender feed with source freshness monitoring"];
 
   const stats: Array<[string, string]> = [
     firstStat,
     ["30+", "UN agencies + EU & donor feeds"],
     ["Fast", "evidence-based bid/no-bid read"],
-    ["< 1 day", "after complete pilot intake"],
+    ["Assisted", "pilot delivery, timing confirmed at intake"],
   ];
 
   return (

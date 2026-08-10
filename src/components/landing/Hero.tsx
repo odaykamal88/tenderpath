@@ -95,7 +95,7 @@ export default function Hero({ viewer }: { viewer: LandingViewer }) {
             maxWidth: 600,
           }}
         >
-          Paste any UN or donor tender to see whether it deserves your effort, what could disqualify you, and exactly what to fix before you submit.
+          TenderPath helps experienced response teams decide which UN and donor tenders deserve effort, control the evidence behind that decision, and keep expert approval at every submission gate.
         </p>
 
         <div style={{ marginTop: 34 }}>
@@ -138,7 +138,7 @@ export default function Hero({ viewer }: { viewer: LandingViewer }) {
           <span style={{ color: LC.rule }}>·</span>
           <span>30+ UN agencies, EU &amp; AfDB feeds</span>
           <span style={{ color: LC.rule }}>·</span>
-          <span>New tenders every day</span>
+          <span>Live source sync · freshness monitored</span>
         </div>
       </div>
     </section>

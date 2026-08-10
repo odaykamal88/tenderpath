@@ -302,9 +302,9 @@ function LoginForm() {
             <div style={{ borderTop: `1px solid ${C.spineLine}` }}>
               {[
                 ["01", "Readiness score & the gap Navigator", " — close every blocker with your hand held."],
-                ["02", "Live tender matches", " ranked by fit, refreshed daily."],
+                ["02", "Live tender matches", " ranked by fit, with evidence and source freshness visible."],
                 ["03", "Paste any tender", " for an instant bid / no-bid call."],
-                ["04", "Submission-ready proposals", " — EOI, RFQ, RFP, mapped to the matrix."],
+                ["04", "Review-ready response packs", " — EOI, RFQ, ITB, RFP, mapped to published requirements."],
               ].map(([n, lead, tail]) => (
                 <div key={n} style={{ display: "flex", gap: 14, alignItems: "baseline", padding: "13px 0", borderBottom: `1px solid ${C.spineLine}` }}>
                   <span style={{ fontFamily: F.mono, fontSize: 10, color: C.accent2, letterSpacing: "0.1em", flexShrink: 0 }}>{n}</span>

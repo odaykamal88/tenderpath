@@ -231,7 +231,7 @@ export default function Features() {
             id="f-matches"
             tag="Matched tenders"
             title="Stop scrolling portals. See only what fits."
-            body="One ranked feed of every live UN, EU and donor tender you're genuinely eligible for — scored on sector, geography, track record and compliance, refreshed daily."
+            body="One ranked feed of live UN, EU and donor tenders worth qualifying — scored against the company evidence available, with reasons and caveats kept visible."
             points={["Fit score with the reasoning behind it", "Buckets from 'act now' to 'watchlist'", "Pulls UNGM, EU, AfDB & national portals"]}
             visual={<VMatches />}
           />
@@ -259,9 +259,9 @@ export default function Features() {
             flip
             id="f-proposal"
             tag="Proposals"
-            title="A submission-ready proposal, without preventable surprises."
-            body="Turn the brief into a full EOI, RFQ, RFP or ITB response — mapped to the tender's scoring matrix, compliance-checked, and ready for your approval."
-            points={["EOI · RFQ · ITB · RFP, matrix-mapped", "Compliance-mapped, evaluator-ready", "Built from your file and the scoring matrix"]}
+            title="A review-ready response pack, with controlled approval gates."
+            body="Turn the brief into an EOI, RFQ, RFP or ITB response workspace — mapped to the published requirements, checked for compliance, and held for your team's approval, signature and official submission."
+            points={["EOI · RFQ · ITB · RFP, requirements-mapped", "Compliance-mapped for expert review", "Built from your evidence and the published criteria"]}
             visual={<VProposal />}
           />
         </div>

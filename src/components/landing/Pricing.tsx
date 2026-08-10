@@ -15,7 +15,7 @@ import {
 // (2026-06): the dashboard is free on signup; Pro adds the vault, the gap
 // Navigator and unlimited bid/no-bid.
 const FREE_INCLUDES = [
-  "Every matched tender, ranked & refreshed daily",
+  "Matched tenders ranked with evidence and monitored source freshness",
   "Browse the full tender database",
   "3 bid/no-bid verdicts a month",
   "Telegram deal-flow alerts & deadline nudges",

@@ -147,10 +147,13 @@ async function selectLiveTenderFixtures(): Promise<TenderRow[]> {
     WHERE source_rank <= 3
     ORDER BY
       CASE source_name
-        WHEN 'UNGM' THEN 1
-        WHEN 'World Bank' THEN 2
-        WHEN 'UNDP' THEN 3
-        WHEN 'TED EU' THEN 4
+        -- Lead the live walkthrough with a primary URL that resolves without
+        -- UNGM's intermittent bot challenge. UNGM opportunities remain in the
+        -- fixture, but they are not the on-stage source-navigation target.
+        WHEN 'World Bank' THEN 1
+        WHEN 'UNDP' THEN 2
+        WHEN 'TED EU' THEN 3
+        WHEN 'UNGM' THEN 4
         WHEN 'UK Find a Tender' THEN 5
         WHEN 'SAM.gov' THEN 6
         ELSE 7
@@ -244,7 +247,9 @@ function buildMatchedTenders(rows: TenderRow[]) {
         scoreBreakdown: { sector: 30, capabilities: 28, geography: 17, agency: 14 },
         evidenceQuality: "rich",
         confidence: index < 3 ? "high" : "medium",
-        caveats: index < 2 ? [] : ["Confirm country eligibility and local-partner requirements before committing bid effort."],
+        caveats: [index === 0
+          ? "Resolve the audited-financials gate and confirm buyer eligibility before committing bid effort."
+          : "Confirm country eligibility and local-partner requirements before committing bid effort."],
       },
       confidence: index < 3 ? "high" : "medium",
       opportunity_bucket: buckets[index] ?? "watchlist",

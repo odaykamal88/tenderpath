@@ -39,10 +39,10 @@ export default function VideoSection() {
             <SectionTag n="01" label="See it work" color={LC.paper} />
           </div>
           <h2 style={{ fontFamily: LF.display, fontSize: mobile ? 28 : 40, fontWeight: 400, letterSpacing: "-0.02em", color: LC.paper, margin: "16px 0 0", lineHeight: 1.08 }}>
-            Your whole path to a win —<br />in about a minute.
+            Your path to a controlled response —<br />in about a minute.
           </h2>
           <p style={{ fontFamily: LF.sans, fontSize: mobile ? 14.5 : 16, color: LC.onDark, margin: "14px auto 0", maxWidth: 540, lineHeight: 1.6 }}>
-            Paste your site, get scored, see the tenders you fit, and walk out with a submission-ready proposal.
+            Build the company file, qualify the tenders that matter, and move one decision into a review-ready response workspace.
           </p>
         </div>
         <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", background: "#0a0a0a", border: `1px solid ${LC.darkLine2}`, overflow: "hidden", boxShadow: "0 30px 80px rgba(0,0,0,0.5)" }}>

@@ -4,7 +4,7 @@ import { LC, LF, SectionTag } from "./kit";
 import { useMedia } from "@/components/workbench/useMedia";
 
 const ITEMS: Array<[string, string, string]> = [
-  ["20–40 hrs", "wasted per wrong bid", "Teams pour weeks into proposals they were never eligible to win — wrong tier, wrong geography, missing a single certificate."],
+  ["Weeks of work", "can disappear into a wrong bid", "Teams can pour scarce response time into proposals with a hard eligibility gap or weak supporting evidence."],
   ["Every weak bid", "steals from a stronger one", "Without a fast, honest bid/no-bid call, teams spend scarce proposal time on opportunities with weak evidence or hard eligibility gaps."],
   ["1 missing doc", "= automatic rejection", "A lapsed registration or an absent audited statement gets you screened out before an evaluator reads a word."],
 ];

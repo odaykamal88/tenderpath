@@ -4,7 +4,7 @@ import { LC, LF, SectionTag, Ic, type IcName } from "./kit";
 import { useMedia } from "@/components/workbench/useMedia";
 
 const STEPS: Array<[string, IcName, string, string]> = [
-  ["01", "target", "Assess & match", "Take the readiness assessment once. We score you and surface every live tender you actually fit — ranked, refreshed daily."],
+  ["01", "target", "Assess & match", "Build an evidence-backed company file. We rank live tenders worth qualifying and show the reasons and caveats behind each match."],
   ["02", "paste", "Paste & decide", "Drop any tender. Get an evidence-based bid/no-bid read, with the fit reasons and compliance gaps behind it."],
   ["03", "compass", "Close the gaps", "The Navigator walks you through each gap — UNGM, certifications, financials — hand-held, pre-filled, step by step."],
   ["04", "doc", "Review & submit", "Turn the brief into a compliance-mapped submission pack. You approve, sign, and submit through the official channel."],
