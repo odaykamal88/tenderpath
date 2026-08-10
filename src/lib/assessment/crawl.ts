@@ -1,5 +1,6 @@
 import type { CrawledData } from "@/lib/types";
 import { assertSafeHttpUrl, UnsafeUrlError } from "@/lib/security/safe-url";
+import { crawlerWorkerEndpoints } from "@/lib/crawlers/worker-endpoints";
 
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -272,15 +273,21 @@ async function fetchViaBrowserWorker(url: string): Promise<FetchResult | null> {
     return null;
   }
 
-  const workerUrl = process.env.CRAWLER_WORKER_URL;
+  let endpoints: ReturnType<typeof crawlerWorkerEndpoints>;
+  try {
+    endpoints = crawlerWorkerEndpoints();
+  } catch (err) {
+    console.warn("[crawl:browser_worker:invalid_config]", err instanceof Error ? err.message : String(err));
+    return null;
+  }
   const crawlerKey = process.env.CRAWLER_WORKER_KEY;
 
-  if (!workerUrl || !crawlerKey) {
+  if (!endpoints || !crawlerKey) {
     console.warn("[crawl] CRAWLER_WORKER_URL or CRAWLER_WORKER_KEY not set — skipping browser fallback");
     return null;
   }
 
-  const fetchPromise = fetch(`${workerUrl}/fetch`, {
+  const fetchPromise = fetch(endpoints.fetch, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

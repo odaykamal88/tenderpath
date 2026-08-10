@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { crawlerWorkerEndpoints } from "@/lib/crawlers/worker-endpoints";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ interface DeepHealth extends ShallowHealth {
   open_tenders: number;
   stale_sources: string[];
   fresh_sources: string[];
-  worker?: { status: "ok" | "unreachable" | "skipped"; latency_ms?: number; error?: string };
+  worker?: { status: "ok" | "unreachable" | "unconfigured"; latency_ms?: number; error?: string };
 }
 
 async function deepHealth(): Promise<{ body: DeepHealth; httpStatus: number }> {
@@ -102,29 +103,52 @@ async function deepHealth(): Promise<{ body: DeepHealth; httpStatus: number }> {
   }
 
   // Step 3 — best-effort browser-worker ping (only if configured).
-  const workerUrl = process.env.CRAWLER_WORKER_URL;
+  let workerEndpoint: string | null = null;
+  let workerConfigError: string | null = null;
+  try {
+    workerEndpoint = crawlerWorkerEndpoints()?.health ?? null;
+  } catch (err) {
+    workerConfigError = err instanceof Error ? err.message : String(err);
+    console.error("[health:worker:invalid_config]", { error: workerConfigError });
+  }
+  const workerKey = process.env.CRAWLER_WORKER_KEY;
   let worker: DeepHealth["worker"];
-  if (workerUrl) {
+  if (workerEndpoint && workerKey) {
     const start = Date.now();
     try {
       const controller = new AbortController();
       const t = setTimeout(() => controller.abort(), 4_000);
-      const res = await fetch(`${workerUrl.replace(/\/$/, "")}/health`, {
-        signal: controller.signal,
-      });
-      clearTimeout(t);
-      worker = res.ok
+      let res: Response;
+      try {
+        res = await fetch(workerEndpoint, {
+          headers: { "X-Crawler-Key": workerKey },
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(t);
+      }
+      const body = (await res.json().catch(() => ({}))) as { ok?: boolean; browser?: string; error?: string };
+      worker = res.ok && body.ok === true && body.browser === "ok"
         ? { status: "ok", latency_ms: Date.now() - start }
-        : { status: "unreachable", latency_ms: Date.now() - start, error: `HTTP ${res.status}` };
+        : {
+            status: "unreachable",
+            latency_ms: Date.now() - start,
+            error: body.error ?? `HTTP ${res.status}`,
+          };
     } catch (err) {
+      const message = err instanceof Error ? err.message : "fetch failed";
+      console.error("[health:worker:unreachable]", { endpoint: workerEndpoint, error: message });
       worker = {
         status: "unreachable",
         latency_ms: Date.now() - start,
-        error: err instanceof Error ? err.message : "fetch failed",
+        error: message,
       };
     }
   } else {
-    worker = { status: "skipped" };
+    worker = {
+      status: "unconfigured",
+      error: workerConfigError ?? "CRAWLER_WORKER_URL / CRAWLER_WORKER_KEY not set",
+    };
   }
 
   // A deep-health response is "degraded" if any of the load-bearing sources is
@@ -132,7 +156,7 @@ async function deepHealth(): Promise<{ body: DeepHealth; httpStatus: number }> {
   // can treat 503 as a yellow light.
   const loadBearing = new Set(["UNGM", "World Bank", "TED EU"]);
   const loadBearingStale = stale.some((s) => loadBearing.has(s));
-  const degraded = loadBearingStale || worker.status === "unreachable" || openTenders === 0;
+  const degraded = loadBearingStale || worker.status !== "ok" || openTenders === 0;
 
   return {
     body: {

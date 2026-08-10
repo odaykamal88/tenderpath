@@ -23,6 +23,7 @@
  */
 import { normalizeSector } from "./sector-map";
 import { type RawTender, type CrawlResult, withRetry } from "./types";
+import { crawlerWorkerEndpoints } from "./worker-endpoints";
 
 const UNGM_API = "https://www.ungm.org/Public/Notice/Search";
 const UNGM_WARMUP = "https://www.ungm.org/Public/Notice";
@@ -112,8 +113,9 @@ const MAX_ENRICHMENT = 25;
  * don't need a second env var.
  */
 function fetchManyEndpoint(): string {
-  const raw = process.env.CRAWLER_WORKER_URL!;
-  return new URL("/fetch-many", raw).toString();
+  const endpoints = crawlerWorkerEndpoints();
+  if (!endpoints) throw new Error("CRAWLER_WORKER_URL is not configured");
+  return endpoints.fetchMany;
 }
 
 /**

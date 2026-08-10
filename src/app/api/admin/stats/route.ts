@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
 import { SOURCE_COVERAGE } from "@/lib/crawlers/source-coverage";
+import { crawlerWorkerEndpoints } from "@/lib/crawlers/worker-endpoints";
 
 type WorkerHealth = {
   configured: boolean;
@@ -158,16 +159,24 @@ function qualityThresholds(platform: string): SourceQualityThresholds {
   return { ...DEFAULT_QUALITY_THRESHOLDS, ...(SOURCE_QUALITY_THRESHOLDS[platform] ?? {}) };
 }
 
-function workerHealthEndpoint(): string | null {
-  const raw = process.env.CRAWLER_WORKER_URL;
-  if (!raw) return null;
-  return new URL("/health", raw).toString();
-}
-
 async function checkWorkerHealth(): Promise<WorkerHealth> {
-  const endpoint = workerHealthEndpoint();
   const key = process.env.CRAWLER_WORKER_KEY;
   const checkedAt = new Date().toISOString();
+  let endpoint: string | null = null;
+
+  try {
+    endpoint = crawlerWorkerEndpoints()?.health ?? null;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[admin:worker_health:invalid_config]", { error: message });
+    return {
+      configured: false,
+      ok: false,
+      status: "unconfigured",
+      checkedAt,
+      error: message,
+    };
+  }
 
   if (!endpoint || !key) {
     return {

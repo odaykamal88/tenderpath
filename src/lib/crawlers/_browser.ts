@@ -7,6 +7,7 @@
  */
 import { fetchWithTimeout } from "./types";
 import { assertSafeHttpUrl } from "@/lib/security/safe-url";
+import { crawlerWorkerEndpoints } from "./worker-endpoints";
 
 export interface BrowserFetchOpts {
   method?: "GET" | "POST";
@@ -40,7 +41,11 @@ export interface BrowserFetchResult {
 }
 
 export function browserAvailable(): boolean {
-  return !!(process.env.CRAWLER_WORKER_URL && process.env.CRAWLER_WORKER_KEY);
+  try {
+    return !!(crawlerWorkerEndpoints() && process.env.CRAWLER_WORKER_KEY);
+  } catch {
+    return false;
+  }
 }
 
 export async function fetchViaBrowser(
@@ -50,9 +55,9 @@ export async function fetchViaBrowser(
   await assertSafeHttpUrl(url);
   if (opts.warmupUrl) await assertSafeHttpUrl(opts.warmupUrl);
 
-  const workerUrl = process.env.CRAWLER_WORKER_URL;
+  const endpoints = crawlerWorkerEndpoints();
   const key = process.env.CRAWLER_WORKER_KEY;
-  if (!workerUrl || !key) {
+  if (!endpoints || !key) {
     throw new Error(
       "CRAWLER_WORKER_URL / CRAWLER_WORKER_KEY not set — deploy workers/crawler-browser first",
     );
@@ -71,7 +76,7 @@ export async function fetchViaBrowser(
   };
 
   const resp = await fetchWithTimeout(
-    workerUrl,
+    endpoints.fetch,
     {
       method: "POST",
       headers: {
