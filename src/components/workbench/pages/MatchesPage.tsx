@@ -109,7 +109,7 @@ function Row({ m, open, onToggle }: { m: WbMatch; open: boolean; onToggle: () =>
 }
 
 export function MatchesPage() {
-  const { data, openPaste } = useWorkbench();
+  const { data, openPaste, go } = useWorkbench();
   const mobile = useMedia("(max-width: 1023px)");
   const matches = data.matches;
   const [filter, setFilter] = useState<"all" | BucketKey>("all");
@@ -121,13 +121,24 @@ export function MatchesPage() {
   const avgFit = matches.length ? Math.round(matches.reduce((a, m) => a + m.fit, 0) / matches.length) : 0;
 
   if (matches.length === 0) {
+    const unassessed = !data.hasAssessment;
+    const failed = data.assessmentStatus === "failed";
     return (
       <div>
         <SectionHead n="02" title="Matched tenders" count={0} hint="Ranked by fit · refreshed daily" />
         <Card pad={24}>
-          <p style={{ fontFamily: F.sans, fontSize: 14, color: C.ink2, margin: 0 }}>
-            No matched tenders yet. They appear here once your assessment runs and the daily sync finds opportunities that fit your profile.
+          <Eyebrow color={failed ? C.warn : C.faint}>{unassessed ? failed ? "Assessment needs attention" : "No company evidence yet" : "No current matches"}</Eyebrow>
+          <p style={{ fontFamily: F.sans, fontSize: 14, color: C.ink2, margin: "8px 0 16px", lineHeight: 1.6 }}>
+            {unassessed
+              ? failed
+                ? "No fit conclusion has been made because the assessment did not finish. Retry it, or evaluate the tender in front of you directly."
+                : "Fit ranking starts after a company assessment. You can still evaluate any live opportunity tender-first."
+              : "Your completed profile has no current matches. Browse the live database or score a tender you are already tracking."}
           </p>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <Btn kind="primary" size="sm" onClick={() => unassessed ? go("/assessment/wizard") : go("browse")}>{unassessed ? failed ? "Retry assessment" : "Build company file" : "Browse live tenders"} →</Btn>
+            <Btn kind="ghost" size="sm" onClick={() => openPaste()}>Score a tender →</Btn>
+          </div>
         </Card>
       </div>
     );

@@ -75,7 +75,7 @@ function GapsProLock({ open, potential, onSubscribe }: { open: number; potential
 }
 
 export function GapsPage() {
-  const { data, liveScore, openNavigator, openSubscribe, isClosed } = useWorkbench();
+  const { data, liveScore, openNavigator, openPaste, openSubscribe, isClosed, go } = useWorkbench();
   const mobile = useMedia("(max-width: 1023px)");
   const gaps = data.gaps;
   const open = gaps.filter((g) => g.status === "open" && !isClosed(g.id));
@@ -84,11 +84,34 @@ export function GapsPage() {
   const projected = Math.min(100, liveScore + potential);
 
   if (gaps.length === 0) {
+    if (!data.hasAssessment) {
+      const failed = data.assessmentStatus === "failed";
+      return (
+        <div>
+          <SectionHead n="04" title="Readiness gaps" count={0} hint="Evidence-backed blockers and next actions" />
+          <Card pad={24}>
+            <Eyebrow color={failed ? C.neg : C.accent}>{failed ? "Assessment needs attention" : "Not evaluated yet"}</Eyebrow>
+            <h2 style={{ fontFamily: F.display, fontSize: 24, fontWeight: 400, color: C.ink, margin: "8px 0 6px" }}>
+              {failed ? "We could not finish your company assessment." : "Build your company file to identify real readiness gaps."}
+            </h2>
+            <p style={{ fontFamily: F.sans, fontSize: 14, lineHeight: 1.6, color: C.mute, margin: "0 0 18px", maxWidth: 620 }}>
+              {failed
+                ? "No readiness conclusion has been made. Retry with stronger company evidence, or keep moving by evaluating a tender directly."
+                : "TenderPath will only call a gap covered after it has evidence from your assessment or Vault. You can also start tender-first and score a live opportunity now."}
+            </p>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <Btn kind="primary" size="sm" onClick={() => go("/assessment/wizard")}>{failed ? "Retry assessment" : "Build company file"} →</Btn>
+              <Btn kind="ghost" size="sm" onClick={() => openPaste()}>Start with a tender →</Btn>
+            </div>
+          </Card>
+        </div>
+      );
+    }
     return (
       <div>
         <SectionHead n="04" title="Readiness gaps" count={0} hint="Close these to lift your score & unlock matches" />
         <Card pad={24}>
-          <p style={{ fontFamily: F.sans, fontSize: 14, color: C.pos, margin: 0 }}>No open gaps detected — your profile is clear of blockers. Keep your Vault current as new tenders demand fresh documents.</p>
+          <p style={{ fontFamily: F.sans, fontSize: 14, color: C.pos, margin: 0 }}>Your completed assessment found no open gaps. Keep your Vault current as new tenders demand fresh documents.</p>
         </Card>
       </div>
     );

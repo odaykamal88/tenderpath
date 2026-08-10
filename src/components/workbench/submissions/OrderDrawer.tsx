@@ -34,6 +34,42 @@ function stageColor(stage: SubmissionStage): string {
   return stage === "submitted" ? C.pos : stage === "review" ? C.blue : stage === "final" ? C.accent : C.warn;
 }
 
+function DecisionRead({ o }: { o: SubmissionOrder }) {
+  const read = o.intakeFields.decisionRead;
+  if (!read) return null;
+  return (
+    <div>
+      <Eyebrow color={C.accent}>Bid / no-bid decision read</Eyebrow>
+      <div style={{ border: `1px solid ${C.rule}`, background: C.white, marginTop: 9 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: `1px solid ${C.ruleSoft}` }}>
+          <div style={{ padding: "14px 16px", borderRight: `1px solid ${C.ruleSoft}` }}>
+            <div style={{ fontFamily: F.mono, fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase", color: C.faint }}>Response merit</div>
+            <div style={{ fontFamily: F.display, fontSize: 28, color: C.ink, marginTop: 3 }}>{read.merit.score}<span style={{ fontFamily: F.mono, fontSize: 10, color: C.faint }}> / 100</span></div>
+            <div style={{ fontFamily: F.sans, fontSize: 11.5, color: C.pos, marginTop: 2 }}>{read.merit.band}</div>
+          </div>
+          <div style={{ padding: "14px 16px" }}>
+            <div style={{ fontFamily: F.mono, fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase", color: C.faint }}>Contestability · separate signal</div>
+            <div style={{ fontFamily: F.display, fontSize: 28, color: C.ink, marginTop: 3 }}>{read.contestability.band}</div>
+            <div style={{ fontFamily: F.sans, fontSize: 11.5, color: C.mute, marginTop: 2 }}>{read.contestability.thinEvidence ? "Limited market evidence" : "Evidence-backed market read"}</div>
+          </div>
+        </div>
+        <div style={{ padding: "12px 16px" }}>
+          <div style={{ fontFamily: F.sans, fontSize: 13, fontWeight: 600, color: C.ink }}>{read.recommendation}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 9 }}>
+            <ul style={{ margin: 0, paddingLeft: 17, color: C.ink2 }}>
+              {read.merit.basis.map((basis) => <li key={basis} style={{ fontFamily: F.sans, fontSize: 11.5, lineHeight: 1.5 }}>{basis}</li>)}
+            </ul>
+            <ul style={{ margin: 0, paddingLeft: 17, color: C.mute }}>
+              {read.contestability.basis.map((basis) => <li key={basis} style={{ fontFamily: F.sans, fontSize: 11.5, lineHeight: 1.5 }}>{basis}</li>)}
+            </ul>
+          </div>
+          <div style={{ fontFamily: F.sans, fontSize: 10.5, color: C.warn, lineHeight: 1.5, marginTop: 9 }}>Caveat: {read.caveat}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── stage timeline ────────────────────────────────────────────────────── */
 
 function Timeline({ o }: { o: SubmissionOrder }) {
@@ -651,6 +687,8 @@ export function OrderDrawer({
           {order.stage === "review" && <ReviewActions busy={busy} act={act} onRead={(i) => onOpenReader(order, i)} />}
           {order.stage === "final" && <Shepherd o={order} busy={busy} act={act} />}
           {order.stage === "submitted" && <OutcomePanel o={order} busy={busy} act={act} />}
+
+          <DecisionRead o={order} />
 
           <div>
             <Eyebrow color={C.accent}>Where it stands</Eyebrow>

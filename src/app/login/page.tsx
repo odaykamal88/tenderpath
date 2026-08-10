@@ -161,10 +161,10 @@ function LoginForm() {
   // Shown while the magic-link token is being verified on load.
   if (busy && !email && search.get("token")) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, background: C.paper }}>
+      <div role="status" aria-live="polite" aria-busy="true" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, background: C.paper }}>
         <div style={{ width: 30, height: 30, borderRadius: 999, border: `2px solid ${C.paper2}`, borderTopColor: C.accent, animation: "tpSpin .8s linear infinite" }} />
         <p style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: C.ink2 }}>Signing you in</p>
-        {error && <p style={{ maxWidth: 360, borderLeft: `2px solid ${C.neg}`, background: "#fbeceb", padding: "8px 12px", fontFamily: F.sans, fontSize: 12, color: C.neg }}>{error}</p>}
+        {error && <p role="alert" style={{ maxWidth: 360, borderLeft: `2px solid ${C.neg}`, background: "#fbeceb", padding: "8px 12px", fontFamily: F.sans, fontSize: 12, color: C.neg }}>{error}</p>}
       </div>
     );
   }
@@ -183,8 +183,8 @@ function LoginForm() {
 
       {/* mode toggle */}
       <div style={{ display: mobile ? "flex" : "inline-flex", width: mobile ? "fit-content" : undefined, margin: mobile ? "20px auto 18px" : "20px 0 18px", border: `1px solid ${C.rule}` }}>
-        <button type="button" onClick={() => { setLoginMode("magic"); setStep("request"); setError(null); setMagicNudge(null); }} style={toggleBtn(loginMode === "magic")}>Magic link</button>
-        <button type="button" onClick={() => { setLoginMode("password"); setStep("request"); setError(null); }} style={toggleBtn(loginMode === "password")}>Password</button>
+        <button type="button" aria-pressed={loginMode === "magic"} onClick={() => { setLoginMode("magic"); setStep("request"); setError(null); setMagicNudge(null); }} style={toggleBtn(loginMode === "magic")}>Magic link</button>
+        <button type="button" aria-pressed={loginMode === "password"} onClick={() => { setLoginMode("password"); setStep("request"); setError(null); }} style={toggleBtn(loginMode === "password")}>Password</button>
       </div>
 
       {loginMode === "password" ? (
@@ -197,12 +197,12 @@ function LoginForm() {
             <button type="button" onClick={() => { setEmail("demo@tenderpath.me"); setPassword("TenderDemo2026!"); }} style={{ flexShrink: 0, border: `1px solid ${C.rule}`, background: C.white, padding: "5px 9px", fontFamily: F.mono, fontSize: 9.5, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: C.accent, cursor: "pointer" }}>Fill</button>
           </div>
           <div>
-            <label style={labelStyle}>Email</label>
-            <input type="email" style={inputStyle} placeholder="you@company.com" value={email} onChange={(e) => { setEmail(e.target.value); setMagicNudge(null); }} required />
+            <label htmlFor="login-email" style={labelStyle}>Email</label>
+            <input id="login-email" name="email" autoComplete="email" type="email" style={inputStyle} placeholder="you@company.com" value={email} onChange={(e) => { setEmail(e.target.value); setMagicNudge(null); }} required />
           </div>
           <div>
-            <label style={labelStyle}>Password</label>
-            <input type="password" style={inputStyle} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <label htmlFor="login-password" style={labelStyle}>Password</label>
+            <input id="login-password" name="password" autoComplete="current-password" type="password" style={inputStyle} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </div>
           <button disabled={busy} style={{ width: "100%", background: C.ink, color: C.paper, border: 0, padding: "12px 0", fontFamily: F.mono, fontSize: 11.5, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", opacity: busy ? 0.5 : 1 }}>
             {busy ? "Signing in…" : "Sign in →"}
@@ -211,8 +211,8 @@ function LoginForm() {
       ) : step === "request" ? (
         <form onSubmit={request} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
-            <label style={labelStyle}>Work email</label>
-            <input type="email" style={inputStyle} placeholder="you@company.com" value={email} onChange={(e) => { setEmail(e.target.value); setMagicNudge(null); }} required />
+            <label htmlFor="magic-email" style={labelStyle}>Work email</label>
+            <input id="magic-email" name="email" autoComplete="email" type="email" style={inputStyle} placeholder="you@company.com" value={email} onChange={(e) => { setEmail(e.target.value); setMagicNudge(null); }} required />
           </div>
           <button disabled={busy} style={{ width: "100%", background: C.accent, color: C.white, border: 0, padding: "13px 0", fontFamily: F.mono, fontSize: 11.5, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", opacity: busy ? 0.5 : 1 }}>
             {busy ? "Sending…" : "Send magic link →"}
@@ -253,7 +253,7 @@ function LoginForm() {
       )}
 
       {error && (
-        <p style={{ marginTop: 14, borderLeft: `2px solid ${C.neg}`, background: "#fbeceb", padding: "9px 12px", fontFamily: F.sans, fontSize: 12, color: C.neg }}>{error}</p>
+        <p role="alert" aria-live="assertive" style={{ marginTop: 14, borderLeft: `2px solid ${C.neg}`, background: "#fbeceb", padding: "9px 12px", fontFamily: F.sans, fontSize: 12, color: C.neg }}>{error}</p>
       )}
 
       {loginMode === "magic" && step === "request" && (

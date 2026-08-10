@@ -1,3 +1,5 @@
+import { canonicalAgency } from "./agency-map";
+
 export interface RawTender {
   reference_id: string;
   title: string;
@@ -87,11 +89,23 @@ export async function verifyLink(url: string, timeoutMs = 8000): Promise<boolean
 }
 
 /**
- * Stable dedup key. Different sources publish the same tender under different IDs;
- * matching on (normalized title + agency + deadline) catches the cross-posts.
+ * Stable cross-source opportunity key. Agency aliases are canonicalized so a
+ * direct UNDP country-office notice and its UNGM copy meet on the same key.
+ * Explicit lot/amendment markers remain part of the key so distinct procurement
+ * variants cannot be folded together merely because their titles and dates match.
  */
-export function dedupKey(t: { title: string; agency: string; deadline: string | null }): string {
+export function dedupKey(t: { title: string; agency: string; deadline: string | null; reference_id?: string | null }): string {
   const norm = (s: string) =>
-    s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 120);
-  return `${norm(t.title)}|${norm(t.agency)}|${t.deadline ?? ""}`;
+    s.normalize("NFKD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const title = norm(t.title).slice(0, 160);
+  const agency = norm(canonicalAgency(t.agency) ?? t.agency).slice(0, 120);
+  const variantText = `${t.title} ${t.reference_id ?? ""}`;
+  const markers = [...variantText.matchAll(/\b(?:lot|amendment|corrigendum|addendum|clarification|revision|rev)\b\s*[-:#/]?\s*([a-z0-9]+)\b/gi)]
+    .map((match) => norm(match[0]))
+    .sort();
+  const referenceVersion = (t.reference_id ?? "").match(/,(\d+)$/)?.[1];
+  if (referenceVersion) markers.push(`version ${referenceVersion}`);
+  const variant = markers.join("+")
+    .slice(0, 120);
+  return `${title}|${agency}|${t.deadline ?? ""}|${variant}`;
 }

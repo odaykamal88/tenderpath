@@ -70,7 +70,8 @@ const tdStyle: CSSProperties = {
 };
 
 export function BrowsePage() {
-  const { token, openPaste, go } = useWorkbench();
+  const { data, token, openPaste, go } = useWorkbench();
+  const hasScoredProfile = data.hasAssessment && data.assessmentStatus === "ready";
 
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -80,7 +81,8 @@ export function BrowsePage() {
   const [sector, setSector] = useState("");
   const [minDays, setMinDays] = useState("0");
   const [matchedOnly, setMatchedOnly] = useState(false);
-  const [sort, setSort] = useState<"deadline" | "fit">("fit");
+  const [sort, setSort] = useState<"deadline" | "fit">(() => hasScoredProfile ? "fit" : "deadline");
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   const [rows, setRows] = useState<WbBrowseRow[]>([]);
   const [sectorSug, setSectorSug] = useState<string[]>([]);
@@ -122,6 +124,11 @@ export function BrowsePage() {
         headers: token ? { authorization: `Bearer ${token}` } : {},
         cache: "no-store",
       });
+      if (res.status === 401) {
+        localStorage.removeItem("tp_token");
+        window.location.assign("/login?next=/dashboard/browse");
+        return null;
+      }
       if (!res.ok) return null;
       return (await res.json()) as WbBrowseResult;
     },
@@ -152,7 +159,7 @@ export function BrowsePage() {
       setPage(1);
       setLoading(false);
     })();
-  }, [fetchPage]);
+  }, [fetchPage, reloadNonce]);
 
   const loadMore = async () => {
     setLoadingMore(true);
@@ -195,15 +202,22 @@ export function BrowsePage() {
 
   const sortToggle = (
     <div style={{ display: "flex", border: `1px solid ${C.rule}` }}>
-      {([["fit", "Best fit"], ["deadline", "Closing soon"]] as [typeof sort, string][]).map(([val, lbl]) => (
+      {([["fit", "Best fit"], ["deadline", "Closing soon"]] as [typeof sort, string][]).map(([val, lbl]) => {
+        const disabled = val === "fit" && !hasScoredProfile;
+        return (
         <button
           key={val}
+          type="button"
           onClick={() => setSort(val)}
-          style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", padding: "8px 12px", background: sort === val ? C.ink : C.white, color: sort === val ? C.paper : C.ink2, border: 0, cursor: "pointer" }}
+          disabled={disabled}
+          aria-pressed={sort === val}
+          title={disabled ? "Complete a company assessment to unlock fit ranking." : undefined}
+          style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", padding: "8px 12px", background: sort === val ? C.ink : C.white, color: disabled ? C.faint : sort === val ? C.paper : C.ink2, border: 0, cursor: disabled ? "not-allowed" : "pointer" }}
         >
           {lbl}
         </button>
-      ))}
+        );
+      })}
     </div>
   );
 
@@ -214,7 +228,7 @@ export function BrowsePage() {
 
       {/* stat strip — mirrors the admin matching hero row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: `1px solid ${C.rule}`, background: C.white, marginBottom: 20 }}>
-        {([["Tenders shown", total], ["Matched to you", matchedTotal], ["Closing ≤7 days", soonTotal]] as [string, number][]).map(([label, val], i) => (
+        {([["Tenders shown", total], [hasScoredProfile ? "Matched to you" : "Scored matches", matchedTotal], ["Closing ≤7 days", soonTotal]] as [string, number][]).map(([label, val], i) => (
           <div key={label} style={{ padding: "15px 18px", borderLeft: i ? `1px solid ${C.ruleSoft}` : undefined }}>
             <div style={{ fontFamily: F.mono, fontSize: 9.5, letterSpacing: "0.14em", textTransform: "uppercase", color: C.faint }}>{label}</div>
             <div style={{ fontFamily: F.display, fontSize: 32, color: C.ink, lineHeight: 1.05, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>{val}</div>
@@ -225,8 +239,12 @@ export function BrowsePage() {
       {/* edit-sectors nudge */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, borderLeft: `2px solid ${C.accent}`, background: "#f8f2e2", padding: "11px 16px", marginBottom: 18, flexWrap: "wrap" }}>
         <span style={{ color: C.accent, flexShrink: 0 }}>↻</span>
-        <span style={{ flex: 1, minWidth: 200, fontFamily: F.sans, fontSize: 12.5, color: C.ink2 }}>Fit scores are tuned to your sector labels. Add or edit them to surface more relevant tenders.</span>
-        <button onClick={() => go("account")} style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: C.ink, background: "none", border: 0, borderBottom: `1px solid ${C.ink}`, cursor: "pointer", flexShrink: 0 }}>Edit my sectors →</button>
+        <span style={{ flex: 1, minWidth: 200, fontFamily: F.sans, fontSize: 12.5, color: C.ink2 }}>
+          {hasScoredProfile
+            ? "Fit scores are tuned to your sector labels. Add or edit them to surface more relevant tenders."
+            : "These are live opportunities, ordered by deadline. Add company evidence to unlock evidence-backed fit ranking."}
+        </span>
+        <button onClick={() => go(hasScoredProfile ? "account" : "/assessment/wizard")} style={{ fontFamily: F.mono, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: C.ink, background: "none", border: 0, borderBottom: `1px solid ${C.ink}`, cursor: "pointer", flexShrink: 0 }}>{hasScoredProfile ? "Edit my sectors" : "Build company file"} →</button>
       </div>
 
       {/* filter bar — instant, no apply */}
@@ -273,7 +291,7 @@ export function BrowsePage() {
 
         <input type="number" min={0} value={minDays} onChange={(e) => setMinDays(e.target.value)} placeholder="Min days" title="Only show tenders closing at least this many days out. 0 = all." style={{ ...inputStyle, flex: "0 1 110px", width: 110 }} />
 
-        <button onClick={() => setMatchedOnly((v) => !v)} style={{ height: 38, padding: "0 13px", border: `1px solid ${matchedOnly ? C.ink : C.rule}`, background: matchedOnly ? C.ink : C.white, color: matchedOnly ? C.paper : C.ink2, cursor: "pointer", fontFamily: F.mono, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
+        <button type="button" disabled={!hasScoredProfile} title={!hasScoredProfile ? "Complete a company assessment to create matches." : undefined} onClick={() => setMatchedOnly((v) => !v)} style={{ height: 38, padding: "0 13px", border: `1px solid ${matchedOnly ? C.ink : C.rule}`, background: matchedOnly ? C.ink : C.white, color: !hasScoredProfile ? C.faint : matchedOnly ? C.paper : C.ink2, cursor: !hasScoredProfile ? "not-allowed" : "pointer", fontFamily: F.mono, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
           {matchedOnly ? "✓ " : ""}My matches
         </button>
       </div>
@@ -290,8 +308,9 @@ export function BrowsePage() {
       </div>
 
       {error ? (
-        <div style={{ background: C.white, border: `1px solid ${C.rule}`, padding: 20 }}>
-          <span style={{ fontFamily: F.sans, fontSize: 13.5, color: C.neg }}>{error}</span>
+        <div role="alert" style={{ background: C.white, border: `1px solid ${C.rule}`, padding: 20, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          <span style={{ fontFamily: F.sans, fontSize: 13.5, color: C.neg, flex: 1 }}>{error}</span>
+          <Btn kind="ghost" size="sm" onClick={() => setReloadNonce((n) => n + 1)}>Retry</Btn>
         </div>
       ) : (
         <div style={{ border: `1px solid ${C.rule}`, background: C.white, overflowX: "auto" }}>
@@ -330,7 +349,11 @@ export function BrowsePage() {
                     <div style={{ marginTop: 2 }}><DeadlinePill deadline={r.deadline} /></div>
                   </td>
                   <td style={{ ...tdStyle, fontFamily: F.mono, fontSize: 11.5 }}>{r.value}</td>
-                  <td style={{ ...tdStyle, textAlign: "right" }}><FitBadge score={r.fit ?? 0} /></td>
+                  <td style={{ ...tdStyle, textAlign: "right" }}>
+                    {r.fit == null
+                      ? <span style={{ fontFamily: F.mono, fontSize: 9.5, color: C.faint, whiteSpace: "nowrap" }}>Not scored</span>
+                      : <FitBadge score={r.fit} />}
+                  </td>
                   <td style={{ ...tdStyle, textAlign: "right" }}>
                     <button onClick={() => openPaste(rowToSeed(r))} aria-label="Score this tender" title="Score this tender" style={{ width: 28, height: 28, border: `1px solid ${C.rule}`, background: C.white, color: C.ink, cursor: "pointer" }}>→</button>
                   </td>

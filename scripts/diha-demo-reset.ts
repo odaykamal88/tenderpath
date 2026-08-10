@@ -99,7 +99,27 @@ function assertSafeInputs(): void {
 
 async function selectLiveTenderFixtures(): Promise<TenderRow[]> {
   const rows = await sql`
-    WITH ranked AS (
+    WITH canonical AS (
+      SELECT
+        id, reference_id, title, agency, country, sector, deadline,
+        estimated_value, source_url, source_name, opportunity_type,
+        ROW_NUMBER() OVER (
+          PARTITION BY COALESCE(NULLIF(dedup_key, ''), 'legacy:' || id::text)
+          ORDER BY
+            CASE source_name WHEN 'UNDP' THEN 1 WHEN 'UNDP Atlas' THEN 2 WHEN 'UNGM' THEN 3 ELSE 4 END,
+            CASE WHEN LENGTH(COALESCE(description, '')) >= 120 THEN 0 ELSE 1 END,
+            id DESC
+        ) AS canonical_rank
+      FROM tenders
+      WHERE status = 'open'
+        AND deadline BETWEEN CURRENT_DATE + 21 AND CURRENT_DATE + 180
+        AND source_url LIKE 'http%'
+        AND COALESCE(has_broken_link, false) = false
+        AND source_name IN ('UNGM', 'World Bank', 'UNDP', 'TED EU', 'UK Find a Tender', 'SAM.gov')
+        AND title ~* '(^|[^[:alnum:]_])(digital|data|monitoring|evaluation|evaluate|consulting|consultant|training|software|information|capacity|research|survey|surveys|studies)([^[:alnum:]_]|$)|technical assistance|expert services'
+        AND title !~* 'information session|prior information notice|contract award'
+    ),
+    ranked AS (
       SELECT
         id, reference_id, title, agency, country, sector, deadline,
         estimated_value, source_url, source_name, opportunity_type,
@@ -117,20 +137,14 @@ async function selectLiveTenderFixtures(): Promise<TenderRow[]> {
             deadline,
             id
         ) AS source_rank
-      FROM tenders
-      WHERE status = 'open'
-        AND deadline BETWEEN CURRENT_DATE + 21 AND CURRENT_DATE + 180
-        AND source_url LIKE 'http%'
-        AND COALESCE(has_broken_link, false) = false
-        AND source_name IN ('UNGM', 'World Bank', 'UNDP', 'TED EU', 'UK Find a Tender', 'SAM.gov')
-        AND title ~* '(^|[^[:alnum:]_])(digital|data|monitoring|evaluation|evaluate|consulting|consultant|training|software|information|capacity|research|survey|surveys|studies)([^[:alnum:]_]|$)|technical assistance|expert services'
-        AND title !~* 'information session|prior information notice|contract award'
+      FROM canonical
+      WHERE canonical_rank = 1
     )
     SELECT
       id, reference_id, title, agency, country, sector, deadline,
       estimated_value, source_url, source_name, opportunity_type
     FROM ranked
-    WHERE source_rank <= 2
+    WHERE source_rank <= 3
     ORDER BY
       CASE source_name
         WHEN 'UNGM' THEN 1
@@ -142,7 +156,7 @@ async function selectLiveTenderFixtures(): Promise<TenderRow[]> {
         ELSE 7
       END,
       source_rank
-    LIMIT 6
+    LIMIT 10
   `;
 
   return rows as unknown as TenderRow[];
@@ -181,8 +195,8 @@ function buildGaps() {
 }
 
 function buildMatchedTenders(rows: TenderRow[]) {
-  const fits = [89, 84, 79, 73, 68, 63];
-  const buckets = ["act_now", "strong_fit", "strong_fit", "strategic", "adjacent", "watchlist"];
+  const fits = [89, 86, 83, 79, 75, 72, 69, 66, 63, 60];
+  const buckets = ["act_now", "strong_fit", "strong_fit", "strong_fit", "strategic", "strategic", "adjacent", "adjacent", "watchlist", "watchlist"];
 
   return rows.map((row, index) => {
     const fit = fits[index] ?? Math.max(55, 89 - index * 5);
@@ -310,6 +324,13 @@ async function applyReset(tenders: TenderRow[]): Promise<void> {
 
   // Delete children first for compatibility with databases that predate the
   // ON DELETE hardening. Every target is anchored to this fixture user/email.
+  await sql`DELETE FROM calibration_log WHERE user_id = ${userId}`;
+  await sql`DELETE FROM proposal_packages WHERE user_id = ${userId}`;
+  await sql`DELETE FROM submission_orders WHERE user_id = ${userId}`;
+  await sql`DELETE FROM submission_drafts WHERE user_id = ${userId}`;
+  await sql`DELETE FROM customer_access_events WHERE owner_user_id = ${userId}`;
+  await sql`DELETE FROM customer_access_grants WHERE owner_user_id = ${userId}`;
+  await sql`DELETE FROM work_orders WHERE user_id = ${userId}`;
   await sql`DELETE FROM pipeline_items WHERE user_id = ${userId}`;
   await sql`
     DELETE FROM email_queue
@@ -364,11 +385,12 @@ async function applyReset(tenders: TenderRow[]): Promise<void> {
   `;
   const assessmentId = Number(assessmentRows[0].id);
 
-  const stages = ["evaluating", "preparing", "matched", "submitted", "matched", "matched"];
+  const stages = ["evaluating", "preparing", "matched", "submitted", "matched", "matched", "matched", "matched", "matched", "matched"];
+  const pipelineItemIds: number[] = [];
   for (let index = 0; index < matchedTenders.length; index += 1) {
     const tender = matchedTenders[index];
     const reasons = JSON.stringify(tender.structured_reasons);
-    await sql`
+    const inserted = await sql`
       INSERT INTO pipeline_items (
         user_id, assessment_id, tender_id, tender_title, tender_agency,
         tender_deadline, tender_value, source_url, fit_score, stage,
@@ -379,18 +401,167 @@ async function applyReset(tenders: TenderRow[]): Promise<void> {
         ${tender.score}, ${stages[index] ?? "matched"}, ${index},
         ${`[${FIXTURE_MARKER}] Curated walkthrough opportunity from ${tender.source_name}.`},
         ${reasons}::jsonb, NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day'
-      )
+      ) RETURNING id
     `;
+    pipelineItemIds.push(Number(inserted[0].id));
   }
+
+  const featured = matchedTenders[0];
+  const workOrders = await sql`
+    INSERT INTO work_orders (
+      user_id, plan, status, payment_status, amount_cents, currency, email,
+      service_slug, pipeline_item_id, tender_title, agency, tender_url, intake,
+      fulfillment_notes, created_at, updated_at
+    ) VALUES (
+      ${userId}, 'proposal-draft', 'in_progress', 'paid', 34900, 'usd', ${email},
+      'submission-rfp', ${pipelineItemIds[0]}, ${featured.title}, ${featured.agency},
+      ${featured.source_url},
+      ${JSON.stringify({ fixture: FIXTURE_MARKER, submission_type: "RFP", synthetic_walkthrough: true })}::jsonb,
+      'Synthetic DIHA walkthrough: amendment-aware response pack in client review.',
+      NOW() - INTERVAL '3 days', NOW() - INTERVAL '6 hours'
+    ) RETURNING id
+  `;
+  const workOrderId = Number(workOrders[0].id);
+  const decisionRead = {
+    merit: {
+      score: 82,
+      band: "Strong — conditional bid",
+      basis: [
+        "Relevant monitoring, evaluation, and digital-delivery evidence is on file.",
+        "The response plan maps named evidence to the published scope and deadline.",
+      ],
+    },
+    contestability: {
+      band: "Mixed" as const,
+      basis: [
+        "The notice is openly published on a primary procurement source.",
+        "Incumbent and bidder-field evidence is not available, so no stronger market claim is made.",
+      ],
+      thinEvidence: true,
+    },
+    recommendation: "Bid only after the audited-financials blocker is resolved.",
+    caveat: "Merit and contestability are independent signals; this walkthrough scenario does not predict win probability.",
+  };
+  const intakeFields = {
+    fixture: FIXTURE_MARKER,
+    syntheticWalkthrough: true,
+    decisionRead,
+    fields: {
+      k1: "A mixed-method delivery approach with field validation and an auditable indicator chain",
+      k2: "Team lead, evaluation specialist, data systems lead, and country research partners",
+      k3: "Two comparable public-sector assignments with buyer-verifiable contacts",
+      k4: "Mobilisation in two weeks; amendment-adjusted review gate before final submission",
+      ceiling: "145,000",
+      validity: "120 days",
+    },
+    lines: [],
+    currency: "USD",
+    conformity: [],
+    declarations: [],
+    refs: [{ id: "diha-ref-1", label: "Regional programme evaluation", src: "typed" }],
+    docs: [],
+  };
+  const docsV1 = [
+    { name: "Technical proposal (methodology, workplan, team)", fmt: "DOCX + PDF", envelope: "technical", blocks: [{ b: "h1", text: "Technical Proposal · Revision 1" }, { b: "p", text: "Initial evidence-mapped response released for client review." }] },
+    { name: "Financial proposal — sealed separately", fmt: "PDF", envelope: "financial", blocks: [{ b: "h1", text: "Financial Proposal · Revision 1" }, { b: "note", text: "Kept outside the technical envelope." }] },
+    { name: "Forms, CVs & declarations pack", fmt: "PDF", envelope: "forms", blocks: [{ b: "h1", text: "Forms, CVs & Declarations · Revision 1" }, { b: "p", text: "Signature and evidence checklist." }] },
+  ];
+  const docsV2 = docsV1.map((doc) => ({
+    ...doc,
+    blocks: doc.blocks.map((block) => block.b === "h1" ? { ...block, text: block.text.replace("Revision 1", "Revision 2") } : block),
+  }));
+  const deliverables = [
+    { name: "Technical proposal (methodology, workplan, team)", fmt: "DOCX + PDF", envelope: "technical", status: "ready" },
+    { name: "Financial proposal — sealed separately", fmt: "PDF", envelope: "financial", status: "ready" },
+    { name: "Forms, CVs & declarations pack", fmt: "PDF", envelope: "forms", status: "ready" },
+  ];
+  const artifactVersions = [
+    { revision: 1, generatedAt: new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString(), basedOnRevisionNotes: null, intakeFields, documents: docsV1 },
+    { revision: 2, generatedAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), basedOnRevisionNotes: "Apply Amendment 1 and the answered Q&A to the workplan and evidence checklist.", intakeFields, documents: docsV2 },
+  ];
+  const amendments = [{
+    n: 1,
+    at: new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString(),
+    summary: "Walkthrough scenario: Amendment 1 extends the response timetable and clarifies the reporting cadence.",
+    action: "Revision 2 was sealed; the workplan, compliance map, and internal review dates were updated.",
+  }];
+  const qna = [{
+    at: new Date(Date.now() - 14 * 60 * 60 * 1000).toISOString(),
+    src: "ops",
+    q: "Walkthrough scenario: may country research partners be named as associates?",
+    a: "Yes, provided the prime remains accountable and each role is evidenced.",
+    impact: "Revision 2 updates the team table and responsibility matrix.",
+  }];
+  const events = [
+    { at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), label: "Submission commissioned from a matched opportunity.", by: "client" },
+    { at: new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString(), label: "Revision 1 passed QA and was sealed for review.", by: "ops" },
+    { at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), label: "Amendment and Q&A incorporated; Revision 2 sealed without overwriting Revision 1.", by: "ops" },
+  ];
+  const submissionRows = await sql`
+    INSERT INTO submission_orders (
+      user_id, work_order_id, type, price_cents, currency, tender, agency,
+      source, portal, tender_id, pipeline_item_id, due, value, fit, stage, pct,
+      round, stage_note, sla_mins, completeness, blockers, intake, intake_fields,
+      deliverables, events, artifact_versions, amendments, qna, outcome, shepherd,
+      paid_at, created_at, updated_at
+    ) VALUES (
+      ${userId}, ${workOrderId}, 'RFP', 34900, 'usd', ${featured.title}, ${featured.agency},
+      ${featured.source_url}, 'Primary procurement portal', ${featured.id}, ${pipelineItemIds[0]},
+      ${featured.deadline}, ${featured.estimated_value ?? null}, ${featured.score}, 'review', 100,
+      1, 'Synthetic walkthrough · Revision 2 is ready for your evidence check.', 1440, 92,
+      ${JSON.stringify([{ id: "financials", label: "Attach the latest signed audit before approval", sev: "high", state: "acknowledged", note: "Owner: Finance lead · due before final approval" }])}::jsonb,
+      ${JSON.stringify([["Scenario", "Synthetic DIHA walkthrough"], ["Decision", "Conditional bid"], ["Current owner", "Finance lead"]])}::jsonb,
+      ${JSON.stringify(intakeFields)}::jsonb, ${JSON.stringify(deliverables)}::jsonb,
+      ${JSON.stringify(events)}::jsonb, ${JSON.stringify(artifactVersions)}::jsonb,
+      ${JSON.stringify(amendments)}::jsonb, ${JSON.stringify(qna)}::jsonb,
+      '{"state":"pending"}'::jsonb, '{"checked":[]}'::jsonb,
+      NOW() - INTERVAL '3 days', NOW() - INTERVAL '3 days', NOW() - INTERVAL '6 hours'
+    ) RETURNING id
+  `;
+  const submissionOrderId = Number(submissionRows[0].id);
+  await sql`UPDATE submission_orders SET ref = ${`TP-${2000 + submissionOrderId}`} WHERE id = ${submissionOrderId}`;
+  await sql`
+    INSERT INTO calibration_log (
+      user_id, source, event_type, tender_id, work_order_id, submission_order_id,
+      agency, tender_type, value_band, country, system_output, vendor_action,
+      review_disqualifier_caught, founder_fit_reasoning, outcome_state, dedup_key,
+      captured_at, updated_at
+    ) VALUES (
+      ${userId}, 'diha_fixture', 'match', ${featured.id}, ${workOrderId}, ${submissionOrderId},
+      ${featured.agency}, 'RFP', 'unknown', ${featured.country},
+      ${JSON.stringify({
+        compliance: { flags: [{ id: "financials", severity: "high", state: "acknowledged" }] },
+        merit: decisionRead.merit,
+        contestability: decisionRead.contestability,
+        verdict: { recommendation: "conditional_bid" },
+        outcomeHook: { state: "pending" },
+      })}::jsonb,
+      'bid', true,
+      'Strong capability fit, conditional on resolving the evidenced financial gate.',
+      'pending', ${`${FIXTURE_MARKER}:${userId}:submission:${submissionOrderId}`},
+      NOW() - INTERVAL '6 hours', NOW() - INTERVAL '6 hours'
+    )
+  `;
 
   const verification = await sql`
     SELECT
       (SELECT COUNT(*)::int FROM assessments WHERE lower(email) = ${email}) AS assessments,
       (SELECT COUNT(*)::int FROM pipeline_items WHERE user_id = ${userId}) AS pipeline_items,
+      (SELECT COUNT(*)::int FROM submission_orders WHERE user_id = ${userId}) AS submission_orders,
+      (SELECT COUNT(*)::int FROM calibration_log WHERE user_id = ${userId}) AS calibration_events,
+      (SELECT jsonb_array_length(artifact_versions)::int FROM submission_orders WHERE user_id = ${userId} LIMIT 1) AS artifact_versions,
       (SELECT COUNT(*)::int FROM users WHERE id = ${userId} AND is_super_admin = false) AS non_admin_users
   `;
   const result = verification[0];
-  if (Number(result.assessments) !== 1 || Number(result.pipeline_items) !== matchedTenders.length || Number(result.non_admin_users) !== 1) {
+  if (
+    Number(result.assessments) !== 1
+    || Number(result.pipeline_items) < 8
+    || Number(result.pipeline_items) > 12
+    || Number(result.submission_orders) !== 1
+    || Number(result.calibration_events) !== 1
+    || Number(result.artifact_versions) !== 2
+    || Number(result.non_admin_users) !== 1
+  ) {
     throw new Error(`Fixture verification failed: ${JSON.stringify(result)}`);
   }
 
@@ -400,6 +571,9 @@ async function applyReset(tenders: TenderRow[]): Promise<void> {
     assessmentId,
     reportId: assessmentRows[0].public_id,
     matchedTenders: matchedTenders.length,
+    workOrderId,
+    submissionOrderId,
+    artifactVersions: 2,
     password: "supplied-via-environment",
   });
 }
@@ -408,8 +582,8 @@ async function main(): Promise<void> {
   assertSafeInputs();
   const existingUserId = await validateFixtureOwnership();
   const tenders = await selectLiveTenderFixtures();
-  if (tenders.length < 4) {
-    throw new Error(`Only ${tenders.length} suitable live tenders found; refusing to create a thin demo`);
+  if (tenders.length < 8 || tenders.length > 12) {
+    throw new Error(`Selected ${tenders.length} suitable live tenders; the DIHA fixture requires 8–12`);
   }
 
   console.log("[diha:demo:plan]", {

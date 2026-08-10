@@ -80,9 +80,9 @@ export async function GET(request: Request) {
   const minDays = Math.max(0, Math.floor(Number(searchParams.get("min_days") ?? 0)) || 0);
   const matchedOnly = searchParams.get("matched") === "1";
   const relevant = searchParams.get("relevant") === "1";
-  // Default to best-fit so a viewer's matched tenders surface first; "deadline"
-  // is the explicit "closing soon" choice.
-  const sort = searchParams.get("sort") === "deadline" ? "deadline" : "fit";
+  // Deadline is the honest API default: callers must explicitly request fit.
+  // The assessed Workbench does so; unassessed users never get implied ranking.
+  const sort = searchParams.get("sort") === "fit" ? "fit" : "deadline";
   const page = Math.max(1, Number.parseInt(searchParams.get("page") ?? "1", 10) || 1);
   const offset = (page - 1) * PAGE_SIZE;
   const like = q ? `%${q}%` : null;
@@ -115,24 +115,11 @@ export async function GET(request: Request) {
   `;
 
   try {
-    // Canonical "same opportunity" key — the read-side twin of dedupKey() in
-    // crawlers/types.ts (normalized title + agency + deadline). Overlapping
-    // sources cross-post the same tender under different reference_ids and
-    // upsertTenders dedups ON CONFLICT (reference_id) only, so each copy persists
-    // as its own row. We collapse them at read time; the upsert / dedupe /
-    // link-verify contracts upstream are untouched. Two shapes of the one key:
-    //   dupKeyT    — concatenated text over the `t` alias, for COUNT(DISTINCT …)
-    //   dupKeyCols — the three key columns (unprefixed) for DISTINCT ON in the CTE
-    const dupKeyT = sql`(
-      LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.title, '')),  '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
-      LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(t.agency, '')), '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
-      COALESCE(t.deadline::date::text, '')
-    )`;
-    const dupKeyCols = sql`
-      LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(title, '')),  '[^a-z0-9]+', ' ', 'g')), 120),
-      LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(agency, '')), '[^a-z0-9]+', ' ', 'g')), 120),
-      deadline::date
-    `;
+    // The maintained key is produced by dedupKey() during upsert/backfill. It
+    // canonicalizes agency aliases (UNDP ↔ UNDP-KHM) and preserves explicit lot
+    // or amendment markers. The fallback only covers legacy rows not yet touched
+    // by the crawler migration; the production reconcile removes that condition.
+    const dupKeyT = sql`COALESCE(NULLIF(t.dedup_key, ''), 'legacy:' || t.id::text)`;
 
     // 1) Harmonize the sector universe. Pull the full raw grouping (no LIMIT,
     //    excluding leaked JSON blobs) under the facet scope, then collapse every
@@ -253,13 +240,14 @@ export async function GET(request: Request) {
       sql`
         WITH base AS (
           SELECT t.id, t.reference_id, t.title, t.agency, t.deadline, t.sector, t.country,
-                 t.opportunity_type, t.source_name, t.estimated_value, t.source_url, pf.fit
+                 t.opportunity_type, t.source_name, t.estimated_value, t.source_url, pf.fit,
+                 ${dupKeyT} AS canonical_key
           FROM tenders t ${join} ${where}
         ),
         deduped AS (
-          SELECT DISTINCT ON (${dupKeyCols}) *
+          SELECT DISTINCT ON (canonical_key) *
           FROM base
-          ORDER BY ${dupKeyCols}, fit DESC NULLS LAST, id DESC
+          ORDER BY canonical_key, fit DESC NULLS LAST, id DESC
         )
         SELECT * FROM deduped
         ORDER BY ${orderByOuter}, id DESC

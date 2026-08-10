@@ -59,7 +59,10 @@ const SOURCE_PRIORITY: Record<string, number> = {
   "TED EU": 90,
   "SAM.gov": 85,
   "UK Find a Tender": 80,
-  "UNDP Atlas": 75,
+  // The agency-owned notice carries richer scope text than its UNGM cross-post.
+  // Preserve UNGM as the primary source for the wider UN system, while keeping
+  // UNDP's own canonical page when the same UNDP opportunity exists in both.
+  "UNDP Atlas": 104,
   ADB: 75,
   AfDB: 75,
   IDB: 75,
@@ -70,7 +73,7 @@ const SOURCE_PRIORITY: Record<string, number> = {
   NRC: 65,
   JICA: 65,
   KfW: 65,
-  UNDP: 60,
+  UNDP: 105,
   GIZ: 60,
   AFD: 60,
   ADA: 55,
@@ -99,6 +102,12 @@ function dedupeTenders(tenders: RawTender[]): { kept: RawTender[]; deduped: numb
     const existing = byKey.get(key);
     if (!existing) {
       byKey.set(key, t);
+      continue;
+    }
+    // Same-source rows with different references may be separate lots or repeat
+    // procurements. Cross-source collapse is the only safe automatic operation.
+    if (existing.source_name === t.source_name && existing.reference_id !== t.reference_id) {
+      byKey.set(`${key}|source:${t.source_name}|ref:${t.reference_id}`, t);
       continue;
     }
     deduped++;
@@ -186,20 +195,21 @@ export async function upsertTenders(tenders: RawTender[]): Promise<{ added: numb
   for (const t of tenders) {
     if (!t.reference_id || !t.title) continue;
     const country = normalizeCountryName(t.country);
+    const canonicalDedupKey = dedupKey(t);
 
     const result = await sql`
       INSERT INTO tenders (
         reference_id, title, description, agency, country, country_code,
         region, sector, deadline, estimated_value, source_url, status,
         source_tier, source_name, opportunity_type, eligibility_summary,
-        experience_level, submission_language, updated_at
+        experience_level, submission_language, dedup_key, updated_at
       ) VALUES (
         ${t.reference_id}, ${t.title}, ${t.description}, ${t.agency},
         ${country}, ${t.country_code}, ${t.region}, ${t.sector},
         ${t.deadline}, ${t.estimated_value}, ${t.source_url}, 'open',
         ${t.source_tier}, ${t.source_name}, ${t.opportunity_type},
         ${t.eligibility_summary}, ${t.experience_level ?? 'any'},
-        ${t.submission_language}, NOW()
+        ${t.submission_language}, ${canonicalDedupKey}, NOW()
       )
       ON CONFLICT (reference_id) DO UPDATE SET
         title = EXCLUDED.title,
@@ -211,6 +221,7 @@ export async function upsertTenders(tenders: RawTender[]): Promise<{ added: numb
         opportunity_type = EXCLUDED.opportunity_type,
         estimated_value = COALESCE(EXCLUDED.estimated_value, tenders.estimated_value),
         eligibility_summary = COALESCE(EXCLUDED.eligibility_summary, tenders.eligibility_summary),
+        dedup_key = EXCLUDED.dedup_key,
         updated_at = NOW()
       RETURNING (xmax = 0) AS is_insert
     `;
@@ -264,18 +275,21 @@ export async function ensureTenderDedupSchema(): Promise<void> {
         END $$;
       `;
       await sql`ALTER TABLE tenders ADD COLUMN IF NOT EXISTS dedup_key TEXT`;
-      await sql`
-        UPDATE tenders
-        SET dedup_key =
-          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(title, '')),  '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
-          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(agency, '')), '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
-          COALESCE(deadline::date::text, '')
-        WHERE dedup_key IS DISTINCT FROM (
-          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(title, '')),  '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
-          LEFT(BTRIM(REGEXP_REPLACE(LOWER(COALESCE(agency, '')), '[^a-z0-9]+', ' ', 'g')), 120) || '|' ||
-          COALESCE(deadline::date::text, '')
-        )
-      `;
+      const rows = (await sql`
+        SELECT id, reference_id, title, agency, deadline::date::text AS deadline, dedup_key
+        FROM tenders
+        WHERE status = 'open' AND COALESCE(title, '') <> ''
+      `) as Array<{ id: number; reference_id: string | null; title: string; agency: string; deadline: string | null; dedup_key: string | null }>;
+      const changed = rows
+        .map((row) => ({ id: row.id, key: dedupKey(row) }))
+        .filter((row, index) => row.key !== rows[index].dedup_key);
+      if (changed.length > 0) {
+        await sql`
+          UPDATE tenders AS t SET dedup_key = v.key
+          FROM unnest(${changed.map((row) => row.id)}::int[], ${changed.map((row) => row.key)}::text[]) AS v(id, key)
+          WHERE t.id = v.id
+        `;
+      }
       await sql`CREATE INDEX IF NOT EXISTS tenders_dedup_key_open_idx ON tenders (dedup_key) WHERE status = 'open'`;
     })().catch((err) => {
       _dedupSchemaReady = null;
@@ -300,6 +314,7 @@ type DupRow = {
   source_name: string | null;
   updated_at: string | null;
   match_count: number;
+  quality_score: number;
 };
 
 /** Lower = better survivor: primary source → most matches → most recent → highest id. */
@@ -307,6 +322,7 @@ function compareSurvivor(a: DupRow, b: DupRow): number {
   const pa = SOURCE_PRIORITY[a.source_name ?? ""] ?? 0;
   const pb = SOURCE_PRIORITY[b.source_name ?? ""] ?? 0;
   if (pa !== pb) return pb - pa;
+  if (a.quality_score !== b.quality_score) return b.quality_score - a.quality_score;
   if (a.match_count !== b.match_count) return b.match_count - a.match_count;
   const ta = a.updated_at ? Date.parse(a.updated_at) : 0;
   const tb = b.updated_at ? Date.parse(b.updated_at) : 0;
@@ -345,14 +361,20 @@ export async function collapseDuplicateTenders(opts: { dryRun?: boolean } = {}):
       FROM tenders
       WHERE status = 'open' AND COALESCE(title, '') <> '' AND dedup_key IS NOT NULL
       GROUP BY dedup_key
-      HAVING COUNT(*) > 1
+      HAVING COUNT(DISTINCT source_name) > 1
     )
     SELECT
       t.id, t.dedup_key, t.source_name, t.updated_at::text AS updated_at,
       (
         COALESCE((SELECT COUNT(*) FROM tender_vendor_matches m WHERE m.tender_id = t.id), 0)
         + COALESCE((SELECT COUNT(*) FROM network_company_matches n WHERE n.tender_id = t.id), 0)
-      )::int AS match_count
+      )::int AS match_count,
+      (
+        CASE WHEN COALESCE(LENGTH(t.description), 0) >= 120 THEN 4 ELSE 0 END
+        + CASE WHEN t.source_url IS NOT NULL AND t.source_url <> '' THEN 2 ELSE 0 END
+        + CASE WHEN t.sector IS NOT NULL AND t.sector <> '' THEN 1 ELSE 0 END
+        + CASE WHEN t.estimated_value IS NOT NULL AND t.estimated_value <> '' THEN 1 ELSE 0 END
+      )::int AS quality_score
     FROM tenders t
     JOIN dups d ON d.dedup_key = t.dedup_key
     WHERE t.status = 'open' AND COALESCE(t.title, '') <> ''

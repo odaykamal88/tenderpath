@@ -257,11 +257,10 @@ ALTER TABLE tenders ADD COLUMN IF NOT EXISTS description TEXT;
 ALTER TABLE tenders ADD COLUMN IF NOT EXISTS submission_language TEXT;
 ALTER TABLE tenders ADD COLUMN IF NOT EXISTS estimated_value TEXT;
 
--- Canonical "same opportunity" key (the read-side twin of dedupKey() in
--- src/lib/crawlers/types.ts): normalized title + agency + deadline. This is a
--- maintained text column, not GENERATED, because live deadline values are
--- timestamptz and Postgres rejects timezone-sensitive casts in generated
--- expressions. ensureTenderDedupSchema() backfills/refreshes values at runtime.
+-- Canonical "same opportunity" key maintained by dedupKey() in
+-- src/lib/crawlers/types.ts. It includes canonical agency aliases and explicit
+-- lot/amendment variants, so it is populated/backfilled in application code
+-- rather than a generated SQL expression.
 ALTER TABLE tenders ADD COLUMN IF NOT EXISTS dedup_key TEXT;
 CREATE INDEX IF NOT EXISTS tenders_dedup_key_open_idx ON tenders (dedup_key) WHERE status = 'open';
 

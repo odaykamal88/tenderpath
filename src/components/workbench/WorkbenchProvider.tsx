@@ -62,9 +62,12 @@ export function useWorkbench(): WorkbenchCtx {
   return v;
 }
 
-function FullScreen({ children }: { children: ReactNode }) {
+function FullScreen({ children, error = false, onRetry }: { children: ReactNode; error?: boolean; onRetry?: () => void }) {
   return (
     <div
+      role={error ? "alert" : "status"}
+      aria-live={error ? "assertive" : "polite"}
+      aria-busy={!error}
       style={{
         minHeight: "100vh",
         display: "grid",
@@ -77,7 +80,14 @@ function FullScreen({ children }: { children: ReactNode }) {
         color: C.mute,
       }}
     >
-      {children}
+      <div style={{ display: "grid", justifyItems: "center", gap: 14, textAlign: "center", padding: 24 }}>
+        {children}
+        {onRetry && (
+          <button type="button" onClick={onRetry} style={{ border: `1px solid ${C.rule}`, background: C.white, color: C.ink, padding: "10px 16px", fontFamily: F.mono, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }}>
+            Retry
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -237,7 +247,7 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
     [data, go, openNavigator, openPaste, openVault, openSubscribe],
   );
 
-  if (fatal) return <FullScreen>{fatal}</FullScreen>;
+  if (fatal) return <FullScreen error onRetry={() => void load(true)}>{fatal}</FullScreen>;
   if (loading || !data) return <FullScreen>Loading your Workbench…</FullScreen>;
 
   const value: WorkbenchCtx = {

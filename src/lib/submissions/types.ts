@@ -125,7 +125,16 @@ export interface ShepherdState {
 
 /** Raw wizard values keyed by field id — drives docContent() so the reader
  *  previews documents built from the order's own intake. */
-export type IntakeFields = Record<string, unknown>;
+export interface SubmissionDecisionRead {
+  /** Evidence-backed response merit. Kept separate from market contestability. */
+  merit: { score: number; band: string; basis: string[] };
+  /** Practical/political competition context; never blended into merit. */
+  contestability: { band: "Open" | "Mixed" | "Constrained"; basis: string[]; thinEvidence: boolean };
+  recommendation: string;
+  caveat: string;
+}
+
+export type IntakeFields = Record<string, unknown> & { decisionRead?: SubmissionDecisionRead };
 
 export interface PricedLine {
   id: string;
