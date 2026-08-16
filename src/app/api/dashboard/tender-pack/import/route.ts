@@ -303,10 +303,19 @@ export async function POST(req: NextRequest) {
     if (limited) return limited;
 
     let tenderId: number;
+    // Optional user-supplied document/page URL. Many notices (UNGM and most
+    // login-walled portals) expose no public attachments, so `source_url`
+    // discovery returns nothing; the bidder usually does have a direct link to
+    // the pack. Treated exactly like the source URL — same SSRF guard, same
+    // discovery, same extraction — never as a trusted input.
+    let pastedUrl: string | null = null;
     try {
-      const body = (await req.json()) as { tenderId?: number };
+      const body = (await req.json()) as { tenderId?: number; url?: unknown };
       tenderId = Number(body.tenderId);
       if (!Number.isInteger(tenderId) || tenderId <= 0) throw new Error("invalid tender id");
+      if (typeof body.url === "string" && body.url.trim()) {
+        pastedUrl = body.url.trim().slice(0, 2000);
+      }
     } catch {
       return NextResponse.json({ error: "A valid tender is required." }, { status: 400 });
     }
@@ -321,12 +330,15 @@ export async function POST(req: NextRequest) {
     if (!tender) return NextResponse.json({ error: "Tender not found." }, { status: 404 });
 
     const current = await listPackDocuments(guard.user!.id, tender.id);
-    if (!tender.source_url) {
+    // A pasted link wins over the stored notice URL — the user is telling us
+    // where the pack actually is, which is the whole point of pasting it.
+    const importUrl = pastedUrl ?? tender.source_url;
+    if (!importUrl) {
       return NextResponse.json({
         status: tenderPackStatus(current, true),
         documents: current,
         checkedAt: new Date().toISOString(),
-        note: "This tender has no official source URL on record. Upload the solicitation pack you downloaded from the supplier portal.",
+        note: "This tender has no official source URL on record. Paste a direct link to the solicitation documents, or upload the pack you downloaded from the supplier portal.",
       });
     }
     if (!privateBlobConfigured()) {
@@ -334,7 +346,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Private document storage is unavailable." }, { status: 503 });
     }
 
-    const { candidates, note } = await sourceCandidates(tender.source_url);
+    let candidates: TenderAttachmentLink[];
+    let note: string | null;
+    try {
+      ({ candidates, note } = await sourceCandidates(importUrl));
+    } catch (error) {
+      // A bad or unreachable pasted link is user error, not a server fault —
+      // say so plainly instead of returning a silent empty pack.
+      const reason = error instanceof Error ? error.message : String(error);
+      console.warn("[tp:tender-pack:import_url_rejected]", {
+        userId: guard.user!.id,
+        tenderId: tender.id,
+        pasted: Boolean(pastedUrl),
+        reason,
+      });
+      return NextResponse.json(
+        {
+          error: pastedUrl
+            ? `That link could not be read: ${reason}`
+            : `The notice URL could not be read: ${reason}`,
+        },
+        { status: 400 },
+      );
+    }
     const imported: TenderPackDocument[] = [];
     const failures: string[] = [];
     let totalBytes = 0;
@@ -364,6 +398,10 @@ export async function POST(req: NextRequest) {
     console.info("[tp:tender-pack:import_complete]", {
       userId: guard.user!.id,
       tenderId: tender.id,
+      // Which URL was actually scraped — `discovered: 0` is uninterpretable
+      // without knowing whether it was the stored notice or a pasted link.
+      urlSource: pastedUrl ? "pasted" : "tender_source_url",
+      host: (() => { try { return new URL(importUrl).host; } catch { return "(unparseable)"; } })(),
       discovered: candidates.length,
       imported: imported.length,
       failed: failures.length,

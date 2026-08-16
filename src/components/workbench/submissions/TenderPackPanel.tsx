@@ -61,6 +61,7 @@ export function TenderPackPanel({
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [linkUrl, setLinkUrl] = useState("");
 
   const portalUrl = safeExternalHttpUrl(
     tender.portalOverride
@@ -113,18 +114,23 @@ export function TenderPackPanel({
     onCompanionChange(togglePortalConfirmation(companion, id, done));
   }
 
-  async function importPublicPack() {
+  async function importPublicPack(url?: string) {
     if (!tender.tenderId) return;
     setImporting(true);
     setError(null);
     try {
-      const imported = await importTenderPack(tender.tenderId);
+      const imported = await importTenderPack(tender.tenderId, url);
       onChange({
         status: imported.status,
         documents: mergeDocuments(pack.documents, imported.documents),
         checkedAt: imported.checkedAt ?? new Date().toISOString(),
         note: imported.note ?? null,
       });
+      if (url && imported.documents.length === pack.documents.length) {
+        setError("That link did not yield any documents. If it opens a portal page that needs a login, download the pack there and upload the files instead.");
+      } else if (url) {
+        setLinkUrl("");
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Tender pack import failed.");
     } finally {
@@ -301,14 +307,46 @@ export function TenderPackPanel({
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div style={{ maxWidth: 410 }}>
             <div style={{ fontFamily: F.sans, fontSize: 13, fontWeight: 600, color: C.ink }}>Bring in the solicitation pack</div>
-            <div style={{ fontFamily: F.sans, fontSize: 11.5, color: C.mute, lineHeight: 1.5, marginTop: 4 }}>We import public attachments when the notice exposes them. If the portal requires login, download there and upload here.</div>
+            <div style={{ fontFamily: F.sans, fontSize: 11.5, color: C.mute, lineHeight: 1.5, marginTop: 4 }}>We import public attachments when the notice exposes them. Otherwise paste a direct link to the documents, or download from the portal and upload here.</div>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {tender.tenderId && tender.sourceUrl && <Btn kind="ghost" size="sm" onClick={importPublicPack} style={{ opacity: importing ? 0.55 : 1, pointerEvents: importing ? "none" : "auto" }}>{importing ? "Checking source…" : "Import public pack"}</Btn>}
+            {tender.tenderId && tender.sourceUrl && <Btn kind="ghost" size="sm" onClick={() => void importPublicPack()} style={{ opacity: importing ? 0.55 : 1, pointerEvents: importing ? "none" : "auto" }}>{importing ? "Checking source…" : "Import public pack"}</Btn>}
             <Btn kind="primary" size="sm" onClick={() => inputRef.current?.click()} style={{ opacity: uploading ? 0.55 : 1, pointerEvents: uploading ? "none" : "auto" }}>{uploading ? `Uploading${progress != null ? ` ${progress}%` : "…"}` : "Upload portal files"}</Btn>
             <input ref={inputRef} type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,image/jpeg,image/png,image/webp" onChange={(event) => void uploadFiles(event.target.files)} style={{ display: "none" }} />
           </div>
         </div>
+
+        {/* Paste-a-link. Most UN notices expose no public attachments, so
+            source-URL discovery finds nothing while the bidder does hold a
+            direct link to the pack. Server-side this runs through the same
+            SSRF guard, discovery and extraction as the notice URL. */}
+        {tender.tenderId && (
+          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: mobile ? "wrap" : "nowrap" }}>
+            <input
+              type="url"
+              inputMode="url"
+              value={linkUrl}
+              onChange={(event) => setLinkUrl(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && linkUrl.trim() && !importing) {
+                  event.preventDefault();
+                  void importPublicPack(linkUrl.trim());
+                }
+              }}
+              placeholder="Paste a direct link to the tender documents (PDF, DOCX or a page listing them)"
+              aria-label="Direct link to the tender documents"
+              style={{ flex: 1, minWidth: mobile ? "100%" : 260, fontFamily: F.sans, fontSize: 12, color: C.ink, background: C.white, border: `1px solid ${C.rule}`, padding: "8px 10px", borderRadius: 0, outline: "none" }}
+            />
+            <Btn
+              kind="ghost"
+              size="sm"
+              onClick={() => void importPublicPack(linkUrl.trim())}
+              style={{ opacity: linkUrl.trim() && !importing ? 1 : 0.45, pointerEvents: linkUrl.trim() && !importing ? "auto" : "none", whiteSpace: "nowrap" }}
+            >
+              {importing ? "Fetching…" : "Fetch link"}
+            </Btn>
+          </div>
+        )}
 
         {pack.note && <div style={{ fontFamily: F.sans, fontSize: 11.5, color: C.warn, lineHeight: 1.5, marginTop: 11, padding: "9px 11px", background: C.white, border: `1px solid ${C.rule}` }}>{pack.note}</div>}
         {error && <div role="alert" style={{ fontFamily: F.sans, fontSize: 11.5, color: C.neg, lineHeight: 1.5, marginTop: 11 }}>{error}</div>}
