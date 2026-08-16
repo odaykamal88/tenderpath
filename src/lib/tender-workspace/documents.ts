@@ -15,6 +15,40 @@ export interface TenderAttachmentLink {
   ext: string;
 }
 
+/**
+ * The vault tag that binds a document to one tender's solicitation pack.
+ *
+ * Crawled tenders key on `tenders.id`, which is what every pack created before
+ * 2026-08-16 uses — that form is preserved exactly so existing packs keep
+ * resolving. Hand-entered notices have no `tenders` row (the wizard's manual
+ * path sets title/agency but never an id), which previously meant they could
+ * carry no pack at all: the import route rejected them and an upload silently
+ * dropped the pack tags, leaving drafting with nothing to read. They now key on
+ * a slug of the notice title instead.
+ *
+ * Deliberately NOT a hash: a readable slug is debuggable in the tags column,
+ * and two entries of the same title SHOULD share a pack. Collision risk across
+ * different tenders is bounded because every pack query is already scoped by
+ * `user_id` — this tag never widens access on its own.
+ *
+ * Kept dependency-free (no node:crypto) because this module is imported by the
+ * client upload path as well as the server routes.
+ */
+export function tenderPackTag(input: {
+  tenderId?: number | null;
+  title?: string | null;
+}): string | null {
+  if (typeof input.tenderId === "number" && Number.isInteger(input.tenderId) && input.tenderId > 0) {
+    return `tender-pack:${input.tenderId}`;
+  }
+  const slug = (input.title ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return slug ? `tender-pack:h:${slug}` : null;
+}
+
 function decodeBasicEntities(value: string): string {
   return value
     .replace(/&nbsp;/gi, " ")

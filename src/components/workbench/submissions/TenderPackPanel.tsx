@@ -62,6 +62,9 @@ export function TenderPackPanel({
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [linkUrl, setLinkUrl] = useState("");
+  /** A pack can be keyed by a crawled tender id OR a hand-entered title, so a
+   *  notice our crawlers do not cover can still carry its solicitation pack. */
+  const canBuildPack = Boolean(tender.tenderId || tender.title?.trim());
 
   const portalUrl = safeExternalHttpUrl(
     tender.portalOverride
@@ -115,11 +118,15 @@ export function TenderPackPanel({
   }
 
   async function importPublicPack(url?: string) {
-    if (!tender.tenderId) return;
+    // A hand-entered notice has no tenderId; its pack keys on the title.
+    if (!tender.tenderId && !tender.title?.trim()) return;
     setImporting(true);
     setError(null);
     try {
-      const imported = await importTenderPack(tender.tenderId, url);
+      const imported = await importTenderPack(
+        { tenderId: tender.tenderId, title: tender.title, agency: tender.agency },
+        url,
+      );
       onChange({
         status: imported.status,
         documents: mergeDocuments(pack.documents, imported.documents),
@@ -320,7 +327,7 @@ export function TenderPackPanel({
             source-URL discovery finds nothing while the bidder does hold a
             direct link to the pack. Server-side this runs through the same
             SSRF guard, discovery and extraction as the notice URL. */}
-        {tender.tenderId && (
+        {canBuildPack && (
           <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: mobile ? "wrap" : "nowrap" }}>
             <input
               type="url"

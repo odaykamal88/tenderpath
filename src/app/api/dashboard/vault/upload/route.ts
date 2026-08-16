@@ -6,7 +6,7 @@ import { sql } from "@/lib/db";
 import { ensureCustomerPrivacySchema } from "@/lib/privacy/schema";
 import { privateBlobConfigured, putPrivateBlob } from "@/lib/vault/storage";
 import { tenderTitleTag } from "@/lib/documents/classify";
-import { inferTenderDocumentRole } from "@/lib/tender-workspace/documents";
+import { inferTenderDocumentRole, tenderPackTag } from "@/lib/tender-workspace/documents";
 import {
   TENDER_DOCUMENT_ROLES,
   type TenderDocumentRole,
@@ -142,11 +142,17 @@ export async function POST(req: NextRequest) {
       ? "bid-no-bid-tender"
       : "bid-no-bid-supporting";
     const titleTag = tenderTitleTag(tenderTitle);
+    // Pack membership previously required a crawled tenders.id, so a file
+    // uploaded against a hand-entered notice landed in the vault WITHOUT the
+    // pack tags — it looked uploaded, but requirements extraction and drafting
+    // never saw it. Falling back to the title-keyed tag makes hand-entered
+    // notices carry a pack too; identical to the import route's resolution.
+    const packTag = tenderPackTag({ tenderId, title: tenderTitle });
     const tags = [
       purposeTag,
       titleTag,
-      tenderId ? `tender-pack:${tenderId}` : null,
-      tenderId ? "tender-pack:user-upload" : null,
+      packTag,
+      packTag ? "tender-pack:user-upload" : null,
       `tender-role:${tenderRole}`,
     ].filter(Boolean) as string[];
     const inserted = (await sql`
