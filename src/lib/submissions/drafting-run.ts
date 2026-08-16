@@ -91,6 +91,32 @@ async function companyFor(userId: number): Promise<{ name: string; email: string
   };
 }
 
+/** Put the evidence gaps on the client-visible timeline. Release is automatic,
+ *  so this is the only place the customer learns what is not yet evidenced.
+ *  post_note truncates at 400 chars, so each gap is clipped individually rather
+ *  than letting the note be cut mid-sentence. */
+async function postGapNote(orderId: number, gaps: string[]): Promise<void> {
+  const head = `Open evidence gaps (${gaps.length}): `;
+  const clipped: string[] = [];
+  let budget = 400 - head.length;
+  for (const g of gaps) {
+    const one = g.length > 110 ? `${g.slice(0, 107)}…` : g;
+    if (one.length + 3 > budget) break;
+    clipped.push(one);
+    budget -= one.length + 3;
+  }
+  if (clipped.length === 0) return;
+  await applyAdminAction(orderId, {
+    action: "post_note",
+    note: `${head}${clipped.join(" · ")}`,
+  }).catch((err) => {
+    console.warn("[tp:submissions:gap_note_failed]", {
+      orderId,
+      err: err instanceof Error ? err.message : String(err),
+    });
+  });
+}
+
 /** Advance one ops step, tolerating an order another actor already moved. */
 async function advance(
   orderId: number,
@@ -109,6 +135,113 @@ async function advance(
     }
     throw err;
   }
+}
+
+/**
+ * Re-draft after the client requests changes.
+ *
+ * Without this the revision loop repeats the original bug: `request_changes`
+ * moved the order to `revisions`, ops clicked "Revisions applied → re-run QA",
+ * and the client got the SAME prose re-released with a fresh "ready" email.
+ *
+ * Claimed per ROUND, not per order — the guard compares the round already
+ * written into `generated_prose` against the order's current round, so a second
+ * call for the same round is a no-op while round 2 can still run later.
+ */
+export async function runSubmissionRevision(orderId: number): Promise<DraftingRunResult> {
+  const claimed = await sql`
+    UPDATE submission_orders
+    SET generation_status = 'generating', updated_at = NOW()
+    WHERE id = ${orderId}
+      AND stage = 'revisions'
+      AND COALESCE((generated_prose->>'round')::int, 0) < round
+      AND (
+        generation_status <> 'generating'
+        OR updated_at < NOW() - (${STALE_GENERATING_MINUTES} * INTERVAL '1 minute')
+      )
+    RETURNING id, round
+  `;
+  if (!claimed.length) {
+    console.info("[tp:submissions:revision_not_claimed]", { orderId });
+    return { ok: false, orderId, status: "ready", slotCount: 0, gapCount: 0, released: false, skippedReason: "already_revised_or_running" };
+  }
+
+  const order = await getOrderForAdmin(orderId);
+  if (!order) {
+    await persistProse(orderId, "failed", null);
+    return { ok: false, orderId, status: "failed", slotCount: 0, gapCount: 0, released: false, skippedReason: "order_not_found" };
+  }
+
+  const company = await companyFor(order.userId);
+  const notes = (order.revisionNotes ?? "").trim();
+  console.info("[tp:submissions:revision_run_start]", {
+    orderId,
+    ref: order.ref,
+    round: order.round,
+    noteChars: notes.length,
+  });
+
+  let prose: SubmissionProse | null = null;
+  try {
+    prose = await generateSubmissionProse({
+      order,
+      companyName: company.name,
+      revision: {
+        round: order.round,
+        notes,
+        priorSlots: order.generatedProse?.slots ?? {},
+      },
+    });
+  } catch (err) {
+    console.error("[tp:submissions:revision_generate_threw]", {
+      orderId,
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // A failed revision must not silently re-release the prior prose as if the
+  // notes had been applied — leave the round unconsumed so it can be retried.
+  if (!prose) {
+    await persistProse(orderId, "failed", order.generatedProse);
+    console.warn("[tp:submissions:revision_failed]", { orderId, ref: order.ref, round: order.round });
+    return { ok: false, orderId, status: "failed", slotCount: 0, gapCount: 0, released: false, skippedReason: "generation_unavailable" };
+  }
+
+  await persistProse(orderId, "ready", prose);
+  const gaps = prose.gaps ?? [];
+
+  await advance(orderId, "qa");
+  if (gaps.length > 0) await postGapNote(orderId, gaps);
+  const released = await advance(orderId, "review");
+
+  if (released) {
+    try {
+      await sendSubmissionReviewReadyEmail(released, company.email);
+    } catch (err) {
+      console.error("[tp:submissions:revision_email_failed]", {
+        orderId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  console.info("[tp:submissions:revision_run_done]", {
+    orderId,
+    ref: order.ref,
+    round: order.round,
+    slotCount: Object.keys(prose.slots).length,
+    gapCount: gaps.length,
+    released: Boolean(released),
+  });
+
+  return {
+    ok: true,
+    orderId,
+    status: "ready",
+    slotCount: Object.keys(prose.slots).length,
+    gapCount: gaps.length,
+    released: Boolean(released),
+  };
 }
 
 export async function runSubmissionDrafting(orderId: number): Promise<DraftingRunResult> {
@@ -155,30 +288,7 @@ export async function runSubmissionDrafting(orderId: number): Promise<DraftingRu
   await advance(orderId, "drafting");
   await advance(orderId, "qa");
 
-  if (gaps.length > 0) {
-    // Release is automatic, so the client must be able to see what is not
-    // evidenced. Recorded before the release note so it sits above it.
-    // post_note truncates at 400 chars — clip each gap so the note stays
-    // readable instead of being cut mid-sentence.
-    const head = `Open evidence gaps (${gaps.length}): `;
-    const clipped: string[] = [];
-    let budget = 400 - head.length;
-    for (const g of gaps) {
-      const one = g.length > 110 ? `${g.slice(0, 107)}…` : g;
-      if (one.length + 3 > budget) break;
-      clipped.push(one);
-      budget -= one.length + 3;
-    }
-    await applyAdminAction(orderId, {
-      action: "post_note",
-      note: `${head}${clipped.join(" · ")}`,
-    }).catch((err) => {
-      console.warn("[tp:submissions:draft_run_gap_note_failed]", {
-        orderId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-    });
-  }
+  if (gaps.length > 0) await postGapNote(orderId, gaps);
 
   const released = await advance(orderId, "review");
 

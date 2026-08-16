@@ -9,7 +9,7 @@ import { flowFor, shepherdSteps } from "../src/lib/submissions/flows";
 import { canTransition, opsNextStage } from "../src/lib/submissions/stages";
 import { docContent } from "../src/lib/submissions/doc-content";
 import { buildNudges } from "../src/lib/submissions/nudges";
-import { tenderPackTag } from "../src/lib/tender-workspace/documents";
+import { isDirectDocumentUrl, tenderPackTag } from "../src/lib/tender-workspace/documents";
 import { EMPTY_DRAFT, type SubmissionOrder, type WizardDraftState } from "../src/lib/submissions/types";
 
 let failures = 0;
@@ -246,6 +246,18 @@ check(
   tenderPackTag({ title: "RFI #24626: AI/Coding — Agents!" }) === "tender-pack:h:rfi-24626-ai-coding-agents",
 );
 check("no tender identity yields no tag", tenderPackTag({ tenderId: null, title: "   " }) === null);
+
+// A notice URL that is already a document is auto-imported; a portal page is
+// not (it may need a login, so fetching it must stay a deliberate click).
+check(
+  "a direct PDF notice URL is recognised as a document",
+  isDirectDocumentUrl("https://www.un.org/Depts/ptd/sites/www.un.org.Depts.ptd/files/pdf/rfi24626.pdf"),
+);
+check("a .docx link is recognised", isDirectDocumentUrl("https://example.org/a/b/tender-pack.DOCX"));
+check("a portal notice page is NOT auto-fetched", !isDirectDocumentUrl("https://www.ungm.org/Public/Notice/120261"));
+check("a query-string download route is NOT assumed to be a file", !isDirectDocumentUrl("https://site.org/download?file=x.pdf"));
+check("garbage is not a document", !isDirectDocumentUrl("not a url"));
+check("null is not a document", !isDirectDocumentUrl(null));
 
 /* ── 5 · nudges ────────────────────────────────────────────────────────── */
 console.log("nudges");

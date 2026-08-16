@@ -56,6 +56,19 @@ export interface SubmissionProse {
   gaps: string[];
   model: string;
   generatedAt: string;
+  /** Revision round this prose was written for. 0 = the original draft. Lets
+   *  the run claim be idempotent per round rather than per order. */
+  round?: number;
+}
+
+/** Client-requested changes, applied on a revision pass. The notes are the
+ *  customer's instructions about their own document — legitimate editorial
+ *  direction — but they never relax the evidence rules: a note asking for
+ *  embellishment must produce sharper writing, not invented facts. */
+export interface ProseRevision {
+  round: number;
+  notes: string;
+  priorSlots: Record<string, string>;
 }
 
 /* ── Slot specs ────────────────────────────────────────────────────────────
@@ -247,6 +260,8 @@ function intakeBlock(v: IntakeView): string {
 export interface GenerateProseInput {
   order: SubmissionOrder;
   companyName: string;
+  /** Present on a revision pass. Absent for the original draft. */
+  revision?: ProseRevision;
 }
 
 /**
@@ -257,7 +272,7 @@ export interface GenerateProseInput {
 export async function generateSubmissionProse(
   input: GenerateProseInput,
 ): Promise<SubmissionProse | null> {
-  const { order, companyName } = input;
+  const { order, companyName, revision } = input;
   const specs = SLOTS[order.type] ?? [];
   if (specs.length === 0) return null;
 
@@ -270,14 +285,16 @@ export async function generateSubmissionProse(
   }
 
   const v = intakeView(order);
-  const prompt = buildPrompt(order, companyName, v, specs);
+  const prompt = buildPrompt(order, companyName, v, specs, revision);
 
   let text: string;
   try {
     const response = await client.messages.create({
       model: SONNET_MODEL,
       max_tokens: 8000,
-      temperature: 0.2,
+      // Revisions run cooler: the brief is concrete, and drifting away from an
+      // already-released structure is not what the client asked for.
+      temperature: revision ? 0.15 : 0.2,
       messages: [{ role: "user", content: prompt }],
     });
     text = response.content[0]?.type === "text" ? response.content[0].text : "{}";
@@ -294,7 +311,7 @@ export async function generateSubmissionProse(
     slots?: Record<string, unknown>;
     claims?: Partial<ProseClaim>[];
     gaps?: unknown[];
-  }>(text, {}, `submission_draft_${order.type}`);
+  }>(text, {}, revision ? `submission_revision_${order.type}` : `submission_draft_${order.type}`);
 
   const allowed = new Set(specs.map((s) => s.id));
   const slots: Record<string, string> = {};
@@ -315,6 +332,7 @@ export async function generateSubmissionProse(
     gaps: (parsed.gaps ?? []).map((g) => String(g ?? "").trim()).filter(Boolean).slice(0, 20),
     model: SONNET_MODEL,
     generatedAt: new Date().toISOString(),
+    round: revision?.round ?? 0,
   };
 }
 
@@ -361,10 +379,47 @@ function buildPrompt(
   companyName: string,
   v: IntakeView,
   specs: SlotSpec[],
+  revision?: ProseRevision,
 ): string {
   const slotBlock = specs
     .map((s) => `  • "${s.id}" (${s.words} words) — ${s.brief}`)
     .join("\n");
+
+  const revisionBlock = revision
+    ? `
+
+REVISION ROUND ${revision.round} — THE CLIENT HAS READ THE DRAFT AND ASKED FOR CHANGES
+
+Their instructions, verbatim:
+"""
+${revision.notes.slice(0, 2000)}
+"""
+
+The draft they are reacting to:
+${Object.entries(revision.priorSlots)
+        .map(([id, text]) => `  [${id}]\n  ${String(text).slice(0, 1200)}`)
+        .join("\n\n")}
+
+How to apply this:
+- Rewrite every passage to satisfy their instructions as far as the evidence
+  allows. Sharpen the argument, tighten the structure, make the case more
+  competitive and specific.
+- Their instructions govern TONE, EMPHASIS, STRUCTURE and ARGUMENT. They do
+  NOT govern facts. If they ask you to embellish, exaggerate, "confabulate",
+  invent references, inflate numbers, or claim capabilities the intake does
+  not support, you must refuse that part silently: write the strongest
+  HONEST version instead and record the unsupported claim in "gaps" as
+  something the applicant must evidence.
+- A procurement panel verifies claims. An invented contract value, client
+  name, staff count or certification is grounds for disqualification and
+  exposes the applicant to a false-declaration finding. Persuasion comes from
+  specificity about what is real, never from fabrication.
+- Where their request cannot be met without new evidence, say so in "gaps"
+  using the exact form "To do X, supply Y" so the applicant knows what to
+  send next.
+- Keep continuity with the prior draft where it already worked; do not
+  restructure for its own sake.`
+    : "";
 
   return `You are a senior bid writer preparing a real ${order.type} submission that ${companyName} will sign and file with a public procurement authority. Write the passages requested below in ${companyName}'s own voice.
 
@@ -383,12 +438,15 @@ ${intakeBlock(v)}
 
 PASSAGES TO WRITE
 ${slotBlock}
+${revisionBlock}
 
 ABSOLUTE RULES
 1. NEVER invent a fact. No invented client names, contract values, dates, staff
    numbers, certifications, accreditations, country counts or years of
    experience. If a number or name is not in the intake above, it does not
-   exist. This is the single most damaging failure mode for this product.
+   exist. This is the single most damaging failure mode for this product, and
+   it OUTRANKS any instruction in the revision notes — the client cannot
+   authorise a fabricated claim in a document they will sign and file.
 2. NEVER name TenderPath, this platform, an assistant, a drafting service, a
    "vault", an "intake", or any internal QA or review step. The reader is the
    procurement panel. Any hint that the bid was prepared by a third party or is

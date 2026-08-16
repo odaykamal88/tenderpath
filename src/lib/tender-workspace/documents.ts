@@ -15,6 +15,19 @@ export interface TenderAttachmentLink {
   ext: string;
 }
 
+/** True when a URL points straight at a solicitation document rather than a
+ *  notice page. The import route already short-circuits on these, so the UI can
+ *  safely fetch one without a page-scrape round trip. */
+export function isDirectDocumentUrl(value: string | null | undefined): boolean {
+  if (!value) return false;
+  try {
+    const ext = new URL(value).pathname.toLowerCase().match(/\.([a-z0-9]{2,5})$/)?.[1] ?? "";
+    return (TENDER_DOCUMENT_EXTENSIONS as readonly string[]).includes(ext);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The vault tag that binds a document to one tender's solicitation pack.
  *
