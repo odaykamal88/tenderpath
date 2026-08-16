@@ -138,3 +138,59 @@ export const EMPTY_TENDER_REQUIREMENTS: TenderRequirementsState = {
   items: [],
   note: null,
 };
+
+/* ── Response outline ───────────────────────────────────────────────────────
+ * The solicitation's OWN list of what a response must contain.
+ *
+ * Distinct from TenderRequirementsState, which is a compliance map (what you
+ * must satisfy to be eligible). This is the response's table of contents: an
+ * RFI that says "keep your response to 10 pages and address the following:"
+ * followed by ten bullets defines ten sections, in that order.
+ *
+ * It exists because the submission formats (EOI/RFQ/ITB/RFP) fix a document
+ * shape before anyone reads the notice. When a solicitation dictates its own
+ * structure, that fixed shape is simply the wrong document — no amount of
+ * better prose inside preset sections can answer questions the sections do not
+ * have. */
+
+export interface ResponseSection {
+  /** Stable slug used as the generation slot id. */
+  id: string;
+  order: number;
+  /** Heading for this section of the response. */
+  title: string;
+  /** What the solicitation asks for here, in its own terms. */
+  ask: string;
+  /** Verbatim excerpt from the source document — never a paraphrase. */
+  evidence: string;
+  sourceDocumentName: string;
+  /** False for sections the notice offers as optional. */
+  required: boolean;
+}
+
+export type ResponseOutlineStatus = "not_started" | "ready" | "partial" | "failed";
+
+export interface ResponseOutline {
+  generationStatus: ResponseOutlineStatus;
+  packFingerprint: string | null;
+  generatedAt?: string | null;
+  /** e.g. "no more than 10 pages" — quoted from the notice when stated. */
+  pageLimit?: string | null;
+  /** Channel, format and deadline instructions the response must respect. */
+  submission?: string | null;
+  /** Document title the response should carry, from the notice. */
+  documentTitle?: string | null;
+  sections: ResponseSection[];
+  note?: string | null;
+}
+
+export const EMPTY_RESPONSE_OUTLINE: ResponseOutline = {
+  generationStatus: "not_started",
+  packFingerprint: null,
+  generatedAt: null,
+  pageLimit: null,
+  submission: null,
+  documentTitle: null,
+  sections: [],
+  note: null,
+};

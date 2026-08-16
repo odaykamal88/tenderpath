@@ -97,7 +97,7 @@ interface RequirementDocumentRow {
   char_count: number | null;
 }
 
-interface RequirementDocument {
+export interface RequirementDocument {
   id: number;
   name: string;
   role: TenderDocumentRole;
@@ -116,7 +116,7 @@ const ROLE_PRIORITY: Record<TenderDocumentRole, number> = {
   supporting: 7,
 };
 
-async function loadRequirementDocuments(
+export async function loadRequirementDocuments(
   userId: number,
   pack: TenderPackState,
 ): Promise<{ documents: RequirementDocument[]; unavailable: number }> {
@@ -160,7 +160,7 @@ async function loadRequirementDocuments(
   return { documents, unavailable: Math.max(0, pack.documents.length - documents.length) };
 }
 
-function documentsForPrompt(documents: RequirementDocument[]): string {
+export function documentsForPrompt(documents: RequirementDocument[]): string {
   let remaining = MAX_TOTAL_TEXT;
   const blocks: string[] = [];
   for (const [index, document] of documents.entries()) {
