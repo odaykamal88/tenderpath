@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { WizardDraftState } from "@/lib/submissions/types";
 import {
   buildPortalCompanionView,
@@ -14,7 +14,7 @@ import {
   type TenderPackDocument,
   type TenderPackState,
 } from "@/lib/tender-workspace/types";
-import { tenderPackStatus } from "@/lib/tender-workspace/documents";
+import { isDirectDocumentUrl, tenderPackStatus } from "@/lib/tender-workspace/documents";
 import { uploadTenderPackFile } from "@/lib/vault/client-upload";
 import { resolveSubmissionPortal } from "@/lib/tenders/submission-portals";
 import { C, F } from "../tokens";
@@ -144,6 +144,29 @@ export function TenderPackPanel({
       setImporting(false);
     }
   }
+
+  /* Auto-import a notice URL that is already a direct document.
+   *
+   * A live test pasted the solicitation PDF into the notice's source-URL field,
+   * reasonably expecting it to be read — and nothing fetched it, so the order
+   * was drafted with `requirements: 0`. A field that accepts a document link
+   * and then ignores it is the same trap the panel had before "Fetch link"
+   * existed. Fires once, only when the pack is genuinely empty, and only for a
+   * direct file link (never a portal page, which may need a login and should
+   * stay a deliberate click). */
+  const autoImported = useRef(false);
+  useEffect(() => {
+    if (autoImported.current) return;
+    if (!canBuildPack || importing) return;
+    if (pack.documents.length > 0 || pack.status !== "not_started") return;
+    const url = safeExternalHttpUrl(tender.sourceUrl);
+    if (!url || !isDirectDocumentUrl(url)) return;
+    autoImported.current = true;
+    void importPublicPack(url);
+    // importPublicPack is stable for this purpose; re-running on its identity
+    // would refire the effect on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canBuildPack, importing, pack.documents.length, pack.status, tender.sourceUrl]);
 
   async function uploadFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -292,7 +315,7 @@ export function TenderPackPanel({
           {companionView.nextAction.kind === "portal" && portalUrl && <Btn kind="primary" size="sm" onClick={openPortalBeside}>Open portal</Btn>}
           {companionView.nextAction.kind === "pack" && (
             tender.tenderId && tender.sourceUrl
-              ? <Btn kind="primary" size="sm" onClick={importPublicPack} style={{ opacity: importing ? 0.55 : 1, pointerEvents: importing ? "none" : "auto" }}>{importing ? "Checking source…" : "Import public pack"}</Btn>
+              ? <Btn kind="primary" size="sm" onClick={() => void importPublicPack()} style={{ opacity: importing ? 0.55 : 1, pointerEvents: importing ? "none" : "auto" }}>{importing ? "Checking source…" : "Import public pack"}</Btn>
               : <Btn kind="primary" size="sm" onClick={() => inputRef.current?.click()}>Upload files</Btn>
           )}
         </div>
@@ -317,7 +340,7 @@ export function TenderPackPanel({
             <div style={{ fontFamily: F.sans, fontSize: 11.5, color: C.mute, lineHeight: 1.5, marginTop: 4 }}>We import public attachments when the notice exposes them. Otherwise paste a direct link to the documents, or download from the portal and upload here.</div>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {tender.tenderId && tender.sourceUrl && <Btn kind="ghost" size="sm" onClick={() => void importPublicPack()} style={{ opacity: importing ? 0.55 : 1, pointerEvents: importing ? "none" : "auto" }}>{importing ? "Checking source…" : "Import public pack"}</Btn>}
+            {canBuildPack && tender.sourceUrl && <Btn kind="ghost" size="sm" onClick={() => void importPublicPack()} style={{ opacity: importing ? 0.55 : 1, pointerEvents: importing ? "none" : "auto" }}>{importing ? "Checking source…" : "Import public pack"}</Btn>}
             <Btn kind="primary" size="sm" onClick={() => inputRef.current?.click()} style={{ opacity: uploading ? 0.55 : 1, pointerEvents: uploading ? "none" : "auto" }}>{uploading ? `Uploading${progress != null ? ` ${progress}%` : "…"}` : "Upload portal files"}</Btn>
             <input ref={inputRef} type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,image/jpeg,image/png,image/webp" onChange={(event) => void uploadFiles(event.target.files)} style={{ display: "none" }} />
           </div>

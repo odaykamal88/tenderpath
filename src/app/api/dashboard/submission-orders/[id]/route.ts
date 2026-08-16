@@ -4,7 +4,7 @@
  * guarded server-side, and a stale transition surfaces ORDER_CHANGED rather
  * than silently clobbering (SPEC §9). */
 
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
 import type { ClientOrderAction } from "@/lib/submissions/types";
 import {
@@ -12,8 +12,13 @@ import {
   getOrderForUser,
   OrderStateError,
 } from "@/lib/submissions/store";
+import { runSubmissionRevision } from "@/lib/submissions/drafting-run";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+// A revision re-runs generation post-response; the lambda stays alive until it
+// resolves. 300s is the Vercel Pro ceiling — do NOT raise it.
+export const maxDuration = 300;
 
 const CLIENT_ACTIONS = new Set([
   "approve",
@@ -65,6 +70,26 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       return NextResponse.json({ error: "Unknown action." }, { status: 400 });
     }
     const order = await applyClientAction(guard.user!.id, id, body);
+
+    // Requesting changes must actually re-draft. Without this the order sits in
+    // `revisions` holding the ORIGINAL prose until someone re-releases it
+    // unchanged — the same silent no-op the first-draft path used to have.
+    // Post-response so the client's click returns immediately; idempotent per
+    // round, so a double-click cannot double-bill or double-email.
+    if (body.action === "request_changes") {
+      after(async () => {
+        try {
+          const result = await runSubmissionRevision(id);
+          console.info("[tp:submissions:revision_after_done]", result);
+        } catch (err) {
+          console.error("[tp:submissions:revision_after_failed]", {
+            orderId: id,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        }
+      });
+    }
+
     return NextResponse.json({ order });
   } catch (err) {
     if (err instanceof OrderStateError) {
