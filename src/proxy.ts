@@ -121,8 +121,35 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // API routes: authenticate via Authorization header
+  // API routes: authenticate via Authorization header.
   const authHeader = request.headers.get("authorization");
+
+  // GET-only cookie fallback. A file download has to be a top-level browser
+  // navigation (<a href> / window.open) to trigger the save dialog, and a
+  // navigation cannot carry a custom header — so every download link in the
+  // product 401'd here even though the user was signed in. The route layer
+  // already accepts `tp_session` (getUserFromRequest), so only this gate
+  // needed to.
+  //
+  // Restricted to GET on purpose. `tp_session` is SameSite=Lax, which means the
+  // browser withholds it on cross-site POST/PATCH/DELETE and on cross-site
+  // subresource requests — so accepting it for GET adds no CSRF surface, while
+  // accepting it for every method would. State-changing calls stay Bearer-only.
+  if (!authHeader?.startsWith("Bearer ") && request.method === "GET") {
+    const cookieToken = request.cookies.get("tp_session")?.value;
+    if (cookieToken) {
+      try {
+        await jwtVerify(cookieToken, new TextEncoder().encode(secret));
+        return NextResponse.next();
+      } catch {
+        return NextResponse.json(
+          { error: "Invalid or expired session", code: "AUTH_INVALID" },
+          { status: 401 },
+        );
+      }
+    }
+  }
+
   if (!authHeader?.startsWith("Bearer ")) {
     return NextResponse.json(
       { error: "Authentication required", code: "AUTH_REQUIRED" },
