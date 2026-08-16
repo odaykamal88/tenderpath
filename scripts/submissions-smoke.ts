@@ -148,6 +148,8 @@ const order: SubmissionOrder = {
   qna: [],
   outcome: { state: "pending" },
   shepherd: { checked: [] },
+  generationStatus: "not_started",
+  generatedProse: null,
   paidAt: new Date().toISOString(),
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
@@ -175,6 +177,54 @@ check(
   JSON.stringify(docs[0].blocks).includes("VAT included as required by the RFQ")
     && !JSON.stringify(docs[0].blocks).includes("tax-exempt"),
 );
+
+/* ── 4b · generated prose slots + buyer-safe prose ─────────────────────── */
+console.log("generated prose");
+
+// No prose → the deterministic template still delivers (graceful degradation).
+check(
+  "without generation, the offer statement falls back to the template",
+  JSON.stringify(docs[0].blocks).includes("We, the undersigned, offer to supply"),
+);
+
+const withProse = docContent(order, company, {
+  slots: {
+    rfq_offer_statement: "BrightPath Solutions Ltd offers to supply the quoted items against schedule RFQ-88.",
+    rfq_compliance_statement: "All offered items meet the published specification without deviation.",
+  },
+  claims: [{ text: "Items meet specification", provenance: "evidenced" }],
+  gaps: [],
+  model: "test",
+  generatedAt: new Date().toISOString(),
+});
+check(
+  "written prose replaces the templated offer statement",
+  JSON.stringify(withProse[0].blocks).includes("against schedule RFQ-88")
+    && !JSON.stringify(withProse[0].blocks).includes("We, the undersigned, offer to supply"),
+);
+check(
+  "a slot the model skipped still falls back rather than blanking the document",
+  JSON.stringify(
+    docContent(order, company, {
+      slots: { rfq_offer_statement: "Short offer." },
+      claims: [],
+      gaps: [],
+      model: "test",
+      generatedAt: new Date().toISOString(),
+    })[2].blocks,
+  ).includes("fully compliant with the technical specifications"),
+);
+
+// Buyer-facing documents must never disclose the platform or an unfinished
+// internal step — `note` blocks render into the exported PDF and DOCX.
+const allProse = [docs, withProse]
+  .flat()
+  .flatMap((d) => d.blocks)
+  .map((b) => JSON.stringify(b))
+  .join(" ");
+for (const banned of ["TenderPath", "founder QA", "Founder QA", "your vault", "during drafting", "from your intake"]) {
+  check(`buyer-facing documents never contain "${banned}"`, !allProse.includes(banned));
+}
 
 /* ── 5 · nudges ────────────────────────────────────────────────────────── */
 console.log("nudges");

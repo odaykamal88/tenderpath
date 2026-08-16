@@ -10,6 +10,7 @@
  * Block model (SPEC §4): h1 · h2 · p · kv · list · table · note · sig. */
 
 import type { ConformityRow, PricedLine, ReferenceEntry, SubmissionOrder } from "./types";
+import type { SubmissionProse } from "./draft-llm";
 import { flowFor } from "./flows";
 
 export type DocBlock =
@@ -87,10 +88,17 @@ function refsLine(refs: ReferenceEntry[]): string {
   return refs.length ? refs.map((r) => r.label).join(" · ") : "comparable engagements on file";
 }
 
-export function docContent(order: SubmissionOrder, company: DocCompany): DeliverableDoc[] {
+export function docContent(
+  order: SubmissionOrder,
+  company: DocCompany,
+  prose?: SubmissionProse | null,
+): DeliverableDoc[] {
   const flow = flowFor(order.type);
   const it = intakeOf(order);
   const f = (k: string, fb = "") => (it.fields[k] ?? "").trim() || fb;
+  /** Written prose for a slot, falling back to the deterministic text when
+   *  generation is absent, failed, or skipped that slot. */
+  const slot = (id: string, fallback: string) => (prose?.slots?.[id] ?? "").trim() || fallback;
   const head: DocBlock = {
     b: "kv",
     rows: [
@@ -120,7 +128,7 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
             money(it.lines.reduce((s, l) => s + (l.unitPrice ?? 0) * (l.qty || 0), 0)),
           ],
         }
-      : { b: "p", text: "Line schedule as quoted at intake." };
+      : { b: "p", text: "Line schedule as quoted." };
 
   const conformityTable: DocBlock | null = it.conformity.length
     ? {
@@ -144,11 +152,17 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
       { b: "p", text: "Dear Procurement Officer," },
       {
         b: "p",
-        text: `${company.name} is pleased to express its interest in the above procurement. ${stripDot(angle)}. We believe this positions us to deliver the services described in the notice to the standard ${agencyShort(order)} requires.`,
+        text: slot(
+          "eoi_cover_interest",
+          `${company.name} is pleased to express its interest in the above procurement. ${stripDot(angle)}. We believe this positions us to deliver the services described in the notice to the standard ${agencyShort(order)} requires.`,
+        ),
       },
       {
         b: "p",
-        text: `Our track record includes directly comparable engagements — ${refsLine(it.refs)} — with client references available in the annexed capability statement.`,
+        text: slot(
+          "eoi_cover_track_record",
+          `Our track record includes directly comparable engagements — ${refsLine(it.refs)} — with client references available in the annexed capability statement.`,
+        ),
       },
       {
         b: "p",
@@ -161,13 +175,21 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
     capability.blocks = [
       { b: "h1", text: "Capability Statement" },
       { b: "h2", text: "1 · Who we are" },
-      { b: "p", text: f("angle", `${company.name} — profile narrative drafted from your intake.`) },
+      { b: "p", text: slot("eoi_capability_who", f("angle", `${company.name} submits this capability statement in support of its expression of interest.`)) },
       { b: "h2", text: "2 · Relevant experience" },
       it.refs.length
         ? { b: "table", head: ["Engagement", "Evidence"], rows: it.refs.map((r) => [r.label, r.src === "vault" ? "Reference on file" : "Cited — reference available on request"]) }
-        : { b: "p", text: "References as selected at intake." },
+        : { b: "p", text: "References as listed in this submission." },
       { b: "h2", text: "3 · Capacity for this assignment" },
-      { b: "p", text: f("capacity") || f("geo") || "Capacity evidence expanded from your vault during drafting." },
+      {
+        b: "p",
+        text: slot(
+          "eoi_capability_capacity",
+          f("capacity") ||
+            f("geo") ||
+            `${company.name} will confirm assignment-specific staffing and logistics capacity on request.`,
+        ),
+      },
     ];
 
     const annex = dv(2);
@@ -183,7 +205,6 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
           "Supporting documents (incorporation, tax compliance) are attached and current.",
         ],
       },
-      { b: "note", text: "Eligibility attachments compile from your vault at drafting — outstanding items are flagged, never silently skipped." },
       sig,
     ];
     return [cover, capability, annex];
@@ -207,7 +228,10 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
       },
       {
         b: "p",
-        text: "We, the undersigned, offer to supply the goods and services listed in the attached priced schedule, in full conformity with the specifications and conditions of the Request for Quotation.",
+        text: slot(
+          "rfq_offer_statement",
+          "We, the undersigned, offer to supply the goods and services listed in the attached priced schedule, in full conformity with the specifications and conditions of the Request for Quotation.",
+        ),
       },
       sig,
     ];
@@ -216,7 +240,6 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
     schedule.blocks = [
       { b: "h1", text: "Priced Line Schedule" },
       linesTable(`Total · ${it.currency} · ${f("tax", "tax treatment per RFQ")}`),
-      { b: "note", text: "TenderPath founder QA cross-checks every priced line against the live RFQ schedule before the assisted pack is marked ready." },
     ];
 
     const compliance = dv(2);
@@ -224,10 +247,12 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
       { b: "h1", text: "Specifications Compliance & Declarations" },
       {
         b: "p",
-        text:
+        text: slot(
+          "rfq_compliance_statement",
           f("specs") === "Compliant with declared deviations"
-            ? `Compliant with declared deviations: ${f("deviations", "as declared at intake")}.`
+            ? `Compliant with declared deviations: ${f("deviations", "as declared in this response")}.`
             : "All offered goods are fully compliant with the technical specifications in the RFQ schedule.",
+        ),
       },
       {
         b: "list",
@@ -252,9 +277,12 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
       head,
       {
         b: "p",
-        text: it.conformity.length
-          ? `${it.conformity.length - devs} of ${it.conformity.length} specs comply · ${devs} deviation${devs === 1 ? "" : "s"} declared.`
-          : "Item-by-item response to the technical schedule, with all deviations declared.",
+        text: slot(
+          "itb_conformity_summary",
+          it.conformity.length
+            ? `${it.conformity.length - devs} of ${it.conformity.length} specs comply · ${devs} deviation${devs === 1 ? "" : "s"} declared.`
+            : "Item-by-item response to the technical schedule, with all deviations declared.",
+        ),
       },
       ...(conformityTable ? [conformityTable] : []),
       {
@@ -264,7 +292,6 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
           ["Bid validity", f("validity", "Confirm against the solicitation")],
         ],
       },
-      { b: "note", text: "Founder QA must confirm that no pricing appears in this envelope before delivery; technical / financial cross-contamination can cause rejection." },
     ];
 
     const boq = dv(1);
@@ -288,12 +315,11 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
         b: "list",
         items: [
           "Bid submission form — ready for authorized signature",
-          "Bid-security instrument or declaration — as confirmed at intake",
+          "Bid-security instrument or declaration — as confirmed",
           "Manufacturer authorization — as obtained from supplier",
-          "Eligibility documents — attached from your vault",
+          "Eligibility documents — attached",
         ],
       },
-      { b: "note", text: "Sign where flagged. Do not rename, merge or re-export files — digital signatures and page limits can break." },
       sig,
     ];
     return [technical, boq, forms];
@@ -311,29 +337,40 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
     { b: "h2", text: "1 · Understanding of the assignment" },
     {
       b: "p",
-      text: `${agencyShort(order)} seeks a partner for “${order.tender}”. We read the requirement as demanding not a study but a delivery system — one that survives contact with field realities and reports against the indicators the programme is judged on.`,
+      text: slot(
+        "rfp_understanding",
+        `${agencyShort(order)} seeks a partner for “${order.tender}”. We read the requirement as demanding not a study but a delivery system — one that survives contact with field realities and reports against the indicators the programme is judged on.`,
+      ),
     },
     { b: "h2", text: `2 · Methodology & approach${pts("k1") ? ` — ${pts("k1")} pts` : ""}` },
     {
       b: "p",
-      text: `${stripDot(f("k1", "Methodology drafted from your intake"))}. During assisted review, each section is mapped to the published TOR tasks and evaluation criteria before delivery.`,
+      text: slot("rfp_methodology", `${stripDot(f("k1", "Methodology as set out in this proposal"))}.`),
     },
     { b: "h2", text: `3 · Team composition${pts("k2") ? ` — ${pts("k2")} pts` : ""}` },
     {
       b: "p",
-      text: `${f("k2", "Proposed team as named at intake")}. Full CVs in the agency template, each mapped to the TOR competencies, are annexed and flagged for signature.`,
+      text: slot(
+        "rfp_team",
+        `${f("k2", "Proposed team as named in this proposal")}. Full CVs in the agency template, each mapped to the TOR competencies, are annexed and flagged for signature.`,
+      ),
     },
     { b: "h2", text: `4 · Comparable experience${pts("k3") ? ` — ${pts("k3")} pts` : ""}` },
     {
       b: "p",
-      text: `${f("k3", refsLine(it.refs))} — directly comparable in sector, geography and contract form. Reference letters annexed where on file.`,
+      text: slot(
+        "rfp_experience",
+        `${f("k3", refsLine(it.refs))} — directly comparable in sector, geography and contract form. Reference letters annexed where on file.`,
+      ),
     },
     { b: "h2", text: `5 · Workplan & timeline${pts("k4") ? ` — ${pts("k4")} pts` : ""}` },
     {
       b: "p",
-      text: f("k4", "Mobilization within weeks of signature; field phases scheduled around seasonal access constraints; deliverables front-loaded against the payment milestones."),
+      text: slot(
+        "rfp_workplan",
+        f("k4", "Mobilization within weeks of signature; field phases scheduled around seasonal access constraints; deliverables front-loaded against the payment milestones."),
+      ),
     },
-    { b: "note", text: "Response framework prepared from the intake. Before delivery, TenderPath maps every section to the published evaluation criteria and weights; no generic threshold is assumed." },
   ];
 
   const financial = dv(1);
@@ -353,7 +390,7 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
       b: "p",
       text: "Detailed cost breakdown by activity, expert and phase follows the agency's financial proposal template, annexed as a separate, sealed document.",
     },
-    { b: "note", text: "SEALED SEPARATELY — this document never travels in the technical envelope. The portal upload checklist enforces the split." },
+    { b: "note", text: "SEALED SEPARATELY — financial proposal. Not to be opened with the technical envelope." },
   ];
 
   const pack = dv(2);
@@ -364,7 +401,7 @@ export function docContent(order: SubmissionOrder, company: DocCompany): Deliver
       items: [
         "Proposal submission form — ready for authorized signature",
         "Key expert CVs in the agency template — flagged for each expert's signature",
-        "Eligibility & beneficial-ownership declarations — pre-filled from your vault",
+        "Eligibility & beneficial-ownership declarations — completed for signature",
         ...(it.refs.length ? [`Reference letters (${it.refs.length}) — attached where on file`] : []),
       ],
     },

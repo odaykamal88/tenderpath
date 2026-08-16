@@ -11,6 +11,7 @@
 
 import type { SubmissionCode } from "@/lib/workbench/pricing";
 import type { DeliverableDoc } from "./doc-content";
+import type { SubmissionProse } from "./draft-llm";
 import {
   EMPTY_PORTAL_COMPANION,
   EMPTY_TENDER_REQUIREMENTS,
@@ -218,10 +219,22 @@ export interface SubmissionOrder {
   qna: SubmissionQna[];
   outcome: SubmissionOutcome;
   shepherd: ShepherdState;
+  /** Drafting run state. `skipped` means generation was unavailable and the
+   *  deterministic template stands in — delivery is never blocked on it. */
+  generationStatus: SubmissionGenerationStatus;
+  /** Written prose slots consumed by docContent(); null before/without a run. */
+  generatedProse: SubmissionProse | null;
   paidAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+export type SubmissionGenerationStatus =
+  | "not_started"
+  | "generating"
+  | "ready"
+  | "skipped"
+  | "failed";
 
 /* ── Client/admin action contracts ─────────────────────────────────────── */
 

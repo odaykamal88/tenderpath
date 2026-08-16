@@ -16,6 +16,32 @@ import {
   getOrderByWorkOrder,
   markSubmissionOrderPaidByWorkOrder,
 } from "@/lib/submissions/store";
+import { runSubmissionDrafting } from "@/lib/submissions/drafting-run";
+
+/** Kick the submission drafting run post-response. after() needs a request
+ *  scope; if this is ever reached outside one (script, non-request cron) the
+ *  run is skipped rather than throwing into the payment path — the order still
+ *  delivers on docContent()'s deterministic template. */
+function startSubmissionDrafting(submissionOrderId: number): void {
+  try {
+    after(async () => {
+      try {
+        const result = await runSubmissionDrafting(submissionOrderId);
+        console.info("[tp:submissions:draft_after_done]", result);
+      } catch (err) {
+        console.error("[tp:submissions:draft_after_failed]", {
+          submissionOrderId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    });
+  } catch (err) {
+    console.warn("[tp:submissions:draft_after_unavailable]", {
+      submissionOrderId,
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
 
 export const WORK_ORDER_PLANS = new Set([
   "bid-no-bid",
@@ -219,6 +245,15 @@ export async function createWorkOrderFromCheckout(
           type: submissionOrder.type,
           alreadyPaid: live === null,
         });
+        // Payment settled → write the draft. Post-response so the payer's
+        // request returns immediately; idempotent at the claim, so the Stripe
+        // webhook and the credit path cannot both draft the same order.
+        //
+        // Deliberately unconditional, including when `live === null` (the order
+        // was already marked paid). claimRun() makes a redundant call a no-op,
+        // and the call doubles as the recovery path for an order that was paid
+        // but never drafted — do not gate this on `live`.
+        startSubmissionDrafting(submissionOrder.id);
         try {
           await sendWorkOrderPaidNotifications({
             id: order.id as number,

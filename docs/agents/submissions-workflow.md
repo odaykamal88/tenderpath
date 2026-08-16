@@ -91,18 +91,23 @@ reliable authenticated small-file uploads, truthful pack readiness, traced
 PDF.js runtime files, and shared-demo profile reset. See
 `docs/agents/sprint-4-production-trust-gate.md`.
 
-## Workflow continuity (Sprint 5 — planned)
+## Former workflow continuity sprint
 
-Named/resumable drafts, mobile wizard structure, unreadable-file replacement,
-and browser-rendering health are grouped as one continuity sprint. See
-`docs/agents/sprint-5-workflow-continuity.md`.
+The former Sprint 5 is no longer an independently sequenced build. Addressable
+drafts, repair controls, mobile scope, and model observability were redistributed
+across the enterprise roadmap according to design-partner value. See
+`docs/agents/sprint-5-workflow-continuity.md` and
+`docs/product/enterprise-response-roadmap-2026-07-20.md`.
 
-## Consultancy tenancy (Sprint 6 — planned)
+## Organisation and client tenancy
 
-Adviser accounts require an explicit client/legal-entity boundary across every
-customer object before multi-client UI ships. Per-client envelope encryption is
-a separate security architecture step, not a UI promise. See
-`docs/agents/sprint-6-consultancy-tenancy.md`.
+The former consultancy-only Sprint 6 has become Enterprise Sprint E1. All team
+accounts require an organisation/membership/role boundary; adviser accounts
+add an explicit client/legal-entity boundary across every customer object.
+Per-client envelope encryption remains a separate, demand-gated security
+architecture step, not a UI promise. See
+`docs/agents/sprint-6-consultancy-tenancy.md` and
+`docs/product/enterprise-response-roadmap-2026-07-20.md`.
 
 ## Payment seam (work-order-first, like every other paid service)
 
@@ -121,10 +126,50 @@ a separate security architecture step, not a UI promise. See
 3. Credit fulfillment or webhook → `createWorkOrderFromCheckout` finds the linked submission order →
    `markSubmissionOrderPaidByWorkOrder` (sets `paid_at` = SLA clock start,
    appends the order-placed event, clears the wizard draft, sends the
-   order-received email) and **returns before any LLM auto-fulfillment**.
+   order-received email), then kicks the drafting run.
 
 The wizard never embeds payment-bearing code — deliberate deviation from the
 prototype's inline card, to keep all payment paths on the proven surface.
+
+## Drafting run (2026-08-16 — supersedes "no LLM auto-fulfillment")
+
+Before this change a paid order sat in `intake` until ops clicked through
+three stages by hand, and the only "document" was `docContent()`'s template —
+a reformatted echo of the wizard intake. Ops advancing the stages produced no
+writing, so a customer could be emailed "draft ready for review" for a pack
+nobody had written.
+
+- `src/lib/submissions/draft-llm.ts` writes named **prose slots** per format,
+  grounded in the extracted `tenderRequirements` (each item carries an evidence
+  excerpt from the source document), the intake answers, and the selected
+  references. Claims are labelled evidenced / inferred / gap.
+- `docContent(order, company, prose?)` consumes those slots and **falls back
+  per slot** to the deterministic text. Document structure, envelopes, formats
+  and the whole export pipeline (reader · PDF · DOCX · XLSX · ZIP) are
+  unchanged, so an absent `ANTHROPIC_API_KEY` or a failed call degrades to
+  exactly the previous behaviour instead of breaking delivery.
+- `src/lib/submissions/drafting-run.ts` runs post-response via `after()` from
+  the shared fulfillment seam in `work-orders.ts` (covers both the Stripe
+  webhook and the invite-only credit path; the bundled-EOI path triggers from
+  the order route). It is **idempotent at the claim** — a guarded UPDATE on
+  `generation_status`/`stage`, so two lambdas cannot double-draft or
+  double-email. It walks `intake → drafting → qa → review` and sends the
+  review-ready email.
+- Release to the client is **automatic** (founder decision, 2026-08-16).
+  Because no human gates it, evidence gaps are posted to the client-visible
+  timeline before release rather than being swallowed.
+- `generation_status` is `not_started | generating | ready | skipped | failed`;
+  `skipped` means the template stood in. Both columns self-heal in
+  `ensureSubmissionsSchema()` **and** live in `scripts/migrate.mjs`.
+
+**Buyer-facing prose rule (load-bearing).** `note` blocks render into the
+exported PDF *and* DOCX with a "QA" label, so anything in a block reaches the
+procurement panel. Documents must never name TenderPath, an internal QA step,
+the vault, or the intake, and must never narrate the submission's own
+incompleteness — a panel reads that as an unfinished bid. The generator strips
+such sentences defensively (`BANNED_SENTENCE`) and `scripts/submissions-smoke.ts`
+asserts none survive. The model is also forbidden from computing derived
+figures (years in business, totals, counts) that are not written in the intake.
 
 ## Copy rules (load-bearing — do not soften)
 
@@ -147,7 +192,7 @@ prototype's inline card, to keep all payment paths on the proven surface.
 | Contract | Status |
 |---|---|
 | 1 · Payment | **Live** (through the existing checkout seam; per-type prices dormant until the 6 Stripe envs exist) |
-| 2 · Doc pipeline | **Versioned reader + PDF/XLSX/DOCX/ZIP exports live**: every qa→review release seals an immutable `artifact_versions[]` snapshot. Revision N+1 appends without overwriting N; the reader and versioned download route select the same snapshot. `renderSubmissionDeliverablePdf` (shared pdfDocs.tsx primitives), real XLSX for "XLSX + PDF" deliverables (exceljs), and real DOCX for "DOCX + PDF" ones (`src/lib/submissions/docx.ts`, `docx` package) all use that snapshot. Per-deliverable download is available from review on; envelope ZIPs are final/submitted only. Ops prose enrichment is future work |
+| 2 · Doc pipeline | **Versioned reader + PDF/XLSX/DOCX/ZIP exports live**: every qa→review release seals an immutable `artifact_versions[]` snapshot. Revision N+1 appends without overwriting N; the reader and versioned download route select the same snapshot. `renderSubmissionDeliverablePdf` (shared pdfDocs.tsx primitives), real XLSX for "XLSX + PDF" deliverables (exceljs), and real DOCX for "DOCX + PDF" ones (`src/lib/submissions/docx.ts`, `docx` package) all use that snapshot. Per-deliverable download is available from review on; envelope ZIPs are final/submitted only. **Prose is now written by `draft-llm.ts` on payment** (see "Drafting run"), with per-slot fallback to the template |
 | 3 · Third-party request engine | **Letters + chase-due live, sending manual**: `src/lib/submissions/request-letters.ts` drafts the auditor/supplier/bank/client letter (addressed to the wizard's ask contact) — ops copies it from the queue card and sends from the ops mailbox; a red "chase due" chip appears when a `requested` blocker is >48h old (epoch = paid_at). Auto-send + arrival webhook are future work |
 | 4 · Inbound agency mail | **Endpoint built, DORMANT**: `POST /api/inbound/agency-mail` (in PUBLIC_PATHS; 503 until `INBOUND_MAIL_SECRET` is set) maps `tp-####@…` → order, appends an UNANSWERED `qna[]` entry + event + ops email — ops posts the answer/impact (we never auto-claim a verdict). Provisioning needs in.tenderpath.me MX + a provider that verifies DKIM/SPF and forwards with the shared secret. The drawer's paste-forward path stays; the address is still not shown in the UI until provisioned |
 | 5 · Amendment watcher | **Live for linked tenders**: `watchSubmissionAmendments()` runs on the daily bot-nudges cron (08:30 UTC, after the 06:00 crawl) — a moved source deadline becomes an `amendments[]` entry + due update + client event + an ops email demanding the draft re-base. Hand-entered notices (no tender_id) stay manual via the queue's amendment recorder |

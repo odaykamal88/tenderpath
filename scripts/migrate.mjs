@@ -754,11 +754,15 @@ CREATE TABLE IF NOT EXISTS submission_orders (
   qna JSONB NOT NULL DEFAULT '[]'::jsonb,
   outcome JSONB NOT NULL DEFAULT '{"state":"pending"}'::jsonb,
   shepherd JSONB NOT NULL DEFAULT '{"checked":[]}'::jsonb,
+  generation_status TEXT NOT NULL DEFAULT 'not_started',
+  generated_prose JSONB,
   paid_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE submission_orders ADD COLUMN IF NOT EXISTS artifact_versions JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE submission_orders ADD COLUMN IF NOT EXISTS generation_status TEXT NOT NULL DEFAULT 'not_started';
+ALTER TABLE submission_orders ADD COLUMN IF NOT EXISTS generated_prose JSONB;
 CREATE INDEX IF NOT EXISTS submission_orders_user_idx ON submission_orders (user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS submission_orders_stage_idx ON submission_orders (stage, updated_at DESC);
 CREATE INDEX IF NOT EXISTS submission_orders_wo_idx ON submission_orders (work_order_id);

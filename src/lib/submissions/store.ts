@@ -19,12 +19,14 @@ import type {
   SubmissionDeliverable,
   SubmissionEvent,
   SubmissionArtifactVersion,
+  SubmissionGenerationStatus,
   SubmissionOrder,
   SubmissionStage,
   WizardDraftState,
 } from "./types";
 import { EMPTY_DRAFT } from "./types";
 import { docContent } from "./doc-content";
+import type { SubmissionProse } from "./draft-llm";
 import { canTransition, DEFAULT_STAGE_NOTE, OPS_ACTIONS } from "./stages";
 import { shepherdSteps } from "./flows";
 
@@ -75,6 +77,10 @@ export async function ensureSubmissionsSchema(): Promise<void> {
         )
       `;
       await sql`ALTER TABLE submission_orders ADD COLUMN IF NOT EXISTS artifact_versions JSONB NOT NULL DEFAULT '[]'::jsonb`;
+      // Drafting run state. Self-heals on first request like the columns above;
+      // absent/failed generation degrades to the deterministic template.
+      await sql`ALTER TABLE submission_orders ADD COLUMN IF NOT EXISTS generation_status TEXT NOT NULL DEFAULT 'not_started'`;
+      await sql`ALTER TABLE submission_orders ADD COLUMN IF NOT EXISTS generated_prose JSONB`;
       await sql`CREATE INDEX IF NOT EXISTS submission_orders_user_idx ON submission_orders (user_id, updated_at DESC)`;
       await sql`CREATE INDEX IF NOT EXISTS submission_orders_stage_idx ON submission_orders (stage, updated_at DESC)`;
       await sql`CREATE INDEX IF NOT EXISTS submission_orders_wo_idx ON submission_orders (work_order_id)`;
@@ -150,6 +156,11 @@ export function rowToOrder(row: Record<string, any>): SubmissionOrder {
     qna: asArray(row.qna),
     outcome: { state: "pending", ...outcome },
     shepherd: { checked: [], ...shepherd },
+    generationStatus: (row.generation_status ?? "not_started") as SubmissionGenerationStatus,
+    generatedProse:
+      row.generated_prose && typeof row.generated_prose === "object"
+        ? (row.generated_prose as SubmissionProse)
+        : null,
     paidAt: iso(row.paid_at),
     createdAt: iso(row.created_at) ?? new Date(0).toISOString(),
     updatedAt: iso(row.updated_at) ?? new Date(0).toISOString(),
@@ -339,6 +350,10 @@ export async function listOrdersForAdmin(): Promise<AdminOrderRow[]> {
       so.pipeline_item_id, so.due, so.value, so.fit, so.stage, so.pct, so.round,
       so.stage_note, so.sla_mins, so.completeness, so.paid_at, so.created_at,
       so.updated_at,
+      -- Drafting run state is METADATA (ops needs to know whether the pack was
+      -- written or fell back to the template). generated_prose is customer
+      -- CONTENT and stays behind the access grant — never select it here.
+      so.generation_status,
       u.email AS user_email,
       u.business_name AS user_business,
       grant_row.expires_at AS content_access_expires_at
@@ -631,17 +646,21 @@ export async function applyAdminAction(
           generatedAt,
           basedOnRevisionNotes: order.revisionNotes,
           intakeFields: structuredClone(order.intakeFields),
-          documents: docContent(releasedOrder, {
-            name:
-              (user.business_name as string | null)?.trim()
-              || (user.name as string | null)?.trim()
-              || (user.email as string | null)?.trim()
-              || "Customer company",
-            signatory:
-              (user.name as string | null)?.trim()
-              || (user.email as string | null)?.trim()
-              || "Authorized representative",
-          }),
+          documents: docContent(
+            releasedOrder,
+            {
+              name:
+                (user.business_name as string | null)?.trim()
+                || (user.name as string | null)?.trim()
+                || (user.email as string | null)?.trim()
+                || "Customer company",
+              signatory:
+                (user.name as string | null)?.trim()
+                || (user.email as string | null)?.trim()
+                || "Authorized representative",
+            },
+            order.generatedProse,
+          ),
         };
         artifactVersions = [...order.artifactVersions, version];
       }
