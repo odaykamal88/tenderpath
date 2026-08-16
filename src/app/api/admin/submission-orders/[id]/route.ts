@@ -13,6 +13,7 @@ import {
   getOrderForAdmin,
   OrderStateError,
 } from "@/lib/submissions/store";
+import { runSubmissionRevision } from "@/lib/submissions/drafting-run";
 import { sendSubmissionReviewReadyEmail } from "@/lib/submissions/notify";
 import {
   activeSupportAccess,
@@ -20,6 +21,12 @@ import {
 } from "@/lib/privacy/support-access";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+// The revisions → qa advance regenerates the draft INLINE (ops waits for the
+// result, unlike the post-response client path), so this route needs the same
+// ceiling as the other generation routes. 300s is the Vercel Pro maximum — do
+// NOT raise it, the deploy is rejected above it.
+export const maxDuration = 300;
 
 const ADMIN_ACTIONS = new Set([
   "advance",
@@ -108,6 +115,49 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     if (!accessResult.ok) {
       return NextResponse.json({ error: accessResult.error, code: "CUSTOMER_CONTENT_LOCKED" }, { status: accessResult.status });
     }
+
+    // "Revisions applied → re-run QA" must actually apply the revisions.
+    // Advancing out of `revisions` used to be a bare status flip, so the client
+    // got their original prose re-released with a fresh "ready" email. Run the
+    // revision generation instead — it regenerates against the client's notes
+    // and performs the qa → review walk and the email itself.
+    //
+    // Also the recovery lever for an order that entered `revisions` before this
+    // path existed: the client-side trigger only fires on review → revisions,
+    // which such an order has already passed.
+    if (body.action === "advance" && body.to === "qa") {
+      const current = await getOrderForAdmin(id);
+      if (current?.stage === "revisions") {
+        const result = await runSubmissionRevision(id);
+        await recordSupportAccessEvent({
+          ownerUserId: accessResult.context.ownerUserId,
+          workOrderId: accessResult.context.workOrderId!,
+          actorUserId: guard.user!.id,
+          eventType: "content_write",
+          purpose: accessResult.access.purpose,
+          metadata: { submissionOrderId: id, action: "revision_regenerate" },
+        });
+        const fresh = await getOrderForAdmin(id);
+        if (!result.ok) {
+          console.warn("[tp:submissions:revision_manual_failed]", { orderId: id, result });
+          return NextResponse.json(
+            {
+              order: fresh ? { ...fresh, contentLoaded: true } : null,
+              error: result.skippedReason === "generation_unavailable"
+                ? "Re-drafting failed, so the revision was not released. The draft is unchanged — try again."
+                : "This revision round has already been applied.",
+              code: "REVISION_NOT_APPLIED",
+            },
+            { status: 409 },
+          );
+        }
+        return NextResponse.json({
+          order: fresh ? { ...fresh, contentLoaded: true } : null,
+          revision: result,
+        });
+      }
+    }
+
     const order = await applyAdminAction(id, body);
     await recordSupportAccessEvent({
       ownerUserId: accessResult.context.ownerUserId,
