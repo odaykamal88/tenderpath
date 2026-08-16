@@ -88,11 +88,49 @@ function refsLine(refs: ReferenceEntry[]): string {
   return refs.length ? refs.map((r) => r.label).join(" · ") : "comparable engagements on file";
 }
 
+/** The response the NOTICE asked for, when it prescribed its own structure.
+ *  One document whose sections are the solicitation's own question list —
+ *  this REPLACES the format pack, because a notice that dictates its shape
+ *  makes the preset cover-letter/capability/annex set the wrong document. */
+function outlineDrivenDocs(order: SubmissionOrder, company: DocCompany): DeliverableDoc[] | null {
+  const draft = order.responseDraft;
+  if (!draft || draft.sections.length === 0) return null;
+  const blocks: DocBlock[] = [
+    { b: "h1", text: draft.documentTitle },
+    {
+      b: "kv",
+      rows: [
+        ["To", `${order.agency ?? "Issuing body"} — Procurement`],
+        ["Ref", order.tender],
+        ["From", company.name],
+        ["Date", shortDate(order.updatedAt)],
+      ],
+    },
+  ];
+  for (const section of draft.sections) {
+    blocks.push({ b: "h2", text: `${section.order} · ${section.title}` });
+    blocks.push({ b: "p", text: section.content });
+  }
+  blocks.push({ b: "sig", name: company.signatory, role: `Authorized representative · ${company.name}` });
+  return [
+    {
+      name: draft.documentTitle,
+      // The notice states the channel and format; PDF is the near-universal ask
+      // and matches every export path already wired.
+      fmt: "PDF",
+      envelope: "technical",
+      blocks,
+    },
+  ];
+}
+
 export function docContent(
   order: SubmissionOrder,
   company: DocCompany,
   prose?: SubmissionProse | null,
 ): DeliverableDoc[] {
+  const fromOutline = outlineDrivenDocs(order, company);
+  if (fromOutline) return fromOutline;
   const flow = flowFor(order.type);
   const it = intakeOf(order);
   const f = (k: string, fb = "") => (it.fields[k] ?? "").trim() || fb;

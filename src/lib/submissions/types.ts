@@ -12,6 +12,8 @@
 import type { SubmissionCode } from "@/lib/workbench/pricing";
 import type { DeliverableDoc } from "./doc-content";
 import type { SubmissionProse } from "./draft-llm";
+import type { ResponseDraft } from "./response-draft";
+import type { ResponseOutline } from "@/lib/tender-workspace/types";
 import {
   EMPTY_PORTAL_COMPANION,
   EMPTY_TENDER_REQUIREMENTS,
@@ -233,6 +235,13 @@ export interface SubmissionOrder {
   generationStatus: SubmissionGenerationStatus;
   /** Written prose slots consumed by docContent(); null before/without a run. */
   generatedProse: SubmissionProse | null;
+  /** The solicitation's OWN section list, when it prescribes one. Null (or an
+   *  outline with no sections) means the fixed format applies. */
+  responseOutline: ResponseOutline | null;
+  /** A response written against that outline. When present it REPLACES the
+   *  format's documents — the notice dictated the shape, so the preset pack is
+   *  the wrong document. */
+  responseDraft: ResponseDraft | null;
   paidAt: string | null;
   createdAt: string;
   updatedAt: string;

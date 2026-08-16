@@ -339,12 +339,12 @@ export async function generateSubmissionProse(
 /** Sentences that must never reach the buyer: ones naming the platform or the
  *  drafting process, and ones in which the applicant narrates its own
  *  submission as incomplete. Both read to a panel as an unfinished bid. */
-const BANNED_SENTENCE =
+export const BANNED_SENTENCE =
   /tenderpath|founder qa|your vault|during drafting|from your intake|(?:have|has)\s+not\s+(?:yet\s+)?(?:been\s+)?(?:provided|included|supplied|attached|submitted)|not\s+(?:yet\s+)?(?:provided|included|supplied|attached)\s+(?:in|with)\s+this|is\s+not\s+included\s+(?:here|in\s+this)|we\s+recognise\s+that\s+the\s+solicitation\s+requires/i;
 
 /** Strip markdown artefacts and any leaked meta-commentary. The output is a
  *  document a procurement panel reads. */
-function sanitizeProse(raw: string): string {
+export function sanitizeProse(raw: string): string {
   let s = raw.replace(/\r/g, "").trim();
   if (!s) return "";
   s = s
@@ -362,7 +362,7 @@ function sanitizeProse(raw: string): string {
   return s.slice(0, 6000);
 }
 
-function normalizeClaim(raw: Partial<ProseClaim>): ProseClaim {
+export function normalizeClaim(raw: Partial<ProseClaim>): ProseClaim {
   const VALID: ProseProvenance[] = ["evidenced", "inferred", "gap"];
   const kind = VALID.includes(raw.provenance as ProseProvenance)
     ? (raw.provenance as ProseProvenance)
