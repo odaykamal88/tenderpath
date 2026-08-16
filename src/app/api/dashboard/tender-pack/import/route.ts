@@ -11,6 +11,7 @@ import {
   discoverTenderAttachments,
   inferTenderDocumentRole,
   tenderPackStatus,
+  tenderPackTag,
   type TenderAttachmentLink,
 } from "@/lib/tender-workspace/documents";
 import type { TenderPackDocument } from "@/lib/tender-workspace/types";
@@ -84,8 +85,7 @@ function mapPackRow(row: VaultPackRow): TenderPackDocument {
   };
 }
 
-async function listPackDocuments(userId: number, tenderId: number): Promise<TenderPackDocument[]> {
-  const tag = `tender-pack:${tenderId}`;
+async function listPackDocuments(userId: number, tag: string): Promise<TenderPackDocument[]> {
   const rows = (await sql`
     SELECT vd.id, vd.name, vd.tags, de.status, de.char_count
     FROM vault_documents vd
@@ -199,6 +199,8 @@ async function sourceCandidates(sourceUrl: string): Promise<{
 async function persistImportedDocument(args: {
   userId: number;
   tender: TenderRow;
+  /** Resolved pack tag — crawled tenders and hand-entered notices differ. */
+  packTag: string;
   candidate: TenderAttachmentLink;
   maxBytes: number;
 }): Promise<{ document: TenderPackDocument; bytes: number }> {
@@ -213,7 +215,7 @@ async function persistImportedDocument(args: {
     LIMIT 1
   `) as unknown as VaultPackRow[];
   if (existing[0]) {
-    const packTag = `tender-pack:${args.tender.id}`;
+    const packTag = args.packTag;
     const mergedTags = Array.from(new Set([...(existing[0].tags ?? []), packTag]));
     if (!(existing[0].tags ?? []).includes(packTag)) {
       await sql`UPDATE vault_documents SET tags = ${mergedTags}::text[] WHERE id = ${existing[0].id} AND user_id = ${args.userId}`;
@@ -231,7 +233,7 @@ async function persistImportedDocument(args: {
   const buffer = await readBuffer(response, Math.min(MAX_DOCUMENT_BYTES, args.maxBytes));
   const role = inferTenderDocumentRole(`${args.candidate.label} ${args.candidate.href}`);
   const fileName = cleanFileName(args.candidate.label, args.candidate.ext);
-  const packTag = `tender-pack:${args.tender.id}`;
+  const packTag = args.packTag;
   const tags = [
     packTag,
     "tender-pack:source-import",
@@ -302,31 +304,70 @@ export async function POST(req: NextRequest) {
     });
     if (limited) return limited;
 
-    let tenderId: number;
+    // Optional user-supplied document/page URL. Many notices (UNGM and most
+    // login-walled portals) expose no public attachments, so `source_url`
+    // discovery returns nothing; the bidder usually does have a direct link to
+    // the pack. Treated exactly like the source URL — same SSRF guard, same
+    // discovery, same extraction — never as a trusted input.
+    let pastedUrl: string | null = null;
+    let tenderId: number | null = null;
+    let handTitle = "";
+    let handAgency = "";
     try {
-      const body = (await req.json()) as { tenderId?: number };
-      tenderId = Number(body.tenderId);
-      if (!Number.isInteger(tenderId) || tenderId <= 0) throw new Error("invalid tender id");
+      const body = (await req.json()) as {
+        tenderId?: number;
+        title?: unknown;
+        agency?: unknown;
+        url?: unknown;
+      };
+      const rawId = Number(body.tenderId);
+      tenderId = Number.isInteger(rawId) && rawId > 0 ? rawId : null;
+      if (typeof body.title === "string") handTitle = body.title.trim().slice(0, 300);
+      if (typeof body.agency === "string") handAgency = body.agency.trim().slice(0, 200);
+      if (typeof body.url === "string" && body.url.trim()) {
+        pastedUrl = body.url.trim().slice(0, 2000);
+      }
+      if (!tenderId && !handTitle) throw new Error("no tender identity");
     } catch {
-      return NextResponse.json({ error: "A valid tender is required." }, { status: 400 });
+      return NextResponse.json(
+        { error: "A tender is required — pick a matched tender or enter the notice title." },
+        { status: 400 },
+      );
     }
 
-    const tenders = (await sql`
-      SELECT id, title, agency, source_url
-      FROM tenders
-      WHERE id = ${tenderId}
-      LIMIT 1
-    `) as unknown as TenderRow[];
-    const tender = tenders[0];
-    if (!tender) return NextResponse.json({ error: "Tender not found." }, { status: 404 });
+    // Crawled tender → authoritative row. Hand-entered notice → a synthetic
+    // stand-in so a notice our crawlers do not cover can still carry a pack.
+    // The synthetic row is never written to `tenders`; it only supplies the
+    // title/agency used for naming and document-role inference.
+    let tender: TenderRow;
+    if (tenderId) {
+      const tenders = (await sql`
+        SELECT id, title, agency, source_url
+        FROM tenders
+        WHERE id = ${tenderId}
+        LIMIT 1
+      `) as unknown as TenderRow[];
+      if (!tenders[0]) return NextResponse.json({ error: "Tender not found." }, { status: 404 });
+      tender = tenders[0];
+    } else {
+      tender = { id: 0, title: handTitle, agency: handAgency, source_url: null };
+    }
 
-    const current = await listPackDocuments(guard.user!.id, tender.id);
-    if (!tender.source_url) {
+    const packTag = tenderPackTag({ tenderId, title: tender.title });
+    if (!packTag) {
+      return NextResponse.json({ error: "A tender title is required to build a pack." }, { status: 400 });
+    }
+
+    const current = await listPackDocuments(guard.user!.id, packTag);
+    // A pasted link wins over the stored notice URL — the user is telling us
+    // where the pack actually is, which is the whole point of pasting it.
+    const importUrl = pastedUrl ?? tender.source_url;
+    if (!importUrl) {
       return NextResponse.json({
         status: tenderPackStatus(current, true),
         documents: current,
         checkedAt: new Date().toISOString(),
-        note: "This tender has no official source URL on record. Upload the solicitation pack you downloaded from the supplier portal.",
+        note: "This tender has no official source URL on record. Paste a direct link to the solicitation documents, or upload the pack you downloaded from the supplier portal.",
       });
     }
     if (!privateBlobConfigured()) {
@@ -334,7 +375,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Private document storage is unavailable." }, { status: 503 });
     }
 
-    const { candidates, note } = await sourceCandidates(tender.source_url);
+    let candidates: TenderAttachmentLink[];
+    let note: string | null;
+    try {
+      ({ candidates, note } = await sourceCandidates(importUrl));
+    } catch (error) {
+      // A bad or unreachable pasted link is user error, not a server fault —
+      // say so plainly instead of returning a silent empty pack.
+      const reason = error instanceof Error ? error.message : String(error);
+      console.warn("[tp:tender-pack:import_url_rejected]", {
+        userId: guard.user!.id,
+        packTag,
+        pasted: Boolean(pastedUrl),
+        reason,
+      });
+      return NextResponse.json(
+        {
+          error: pastedUrl
+            ? `That link could not be read: ${reason}`
+            : `The notice URL could not be read: ${reason}`,
+        },
+        { status: 400 },
+      );
+    }
     const imported: TenderPackDocument[] = [];
     const failures: string[] = [];
     let totalBytes = 0;
@@ -344,6 +407,7 @@ export async function POST(req: NextRequest) {
         const result = await persistImportedDocument({
           userId: guard.user!.id,
           tender,
+          packTag,
           candidate,
           maxBytes: MAX_TOTAL_DOCUMENT_BYTES - totalBytes,
         });
@@ -353,17 +417,22 @@ export async function POST(req: NextRequest) {
         failures.push(candidate.label);
         console.warn("[tp:tender-pack:document_import_failed]", {
           userId: guard.user!.id,
-          tenderId: tender.id,
+          packTag,
           host: new URL(candidate.href).host,
           error: error instanceof Error ? error.message : String(error),
         });
       }
     }
 
-    const documents = await listPackDocuments(guard.user!.id, tender.id);
+    const documents = await listPackDocuments(guard.user!.id, packTag);
     console.info("[tp:tender-pack:import_complete]", {
       userId: guard.user!.id,
-      tenderId: tender.id,
+      tenderId: tenderId ?? null,
+      packTag,
+      // Which URL was actually scraped — `discovered: 0` is uninterpretable
+      // without knowing whether it was the stored notice or a pasted link.
+      urlSource: pastedUrl ? "pasted" : "tender_source_url",
+      host: (() => { try { return new URL(importUrl).host; } catch { return "(unparseable)"; } })(),
       discovered: candidates.length,
       imported: imported.length,
       failed: failures.length,

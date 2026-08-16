@@ -136,7 +136,7 @@ export function DraftReader({
   const activeVersionIdx = Math.min(versionIdx, latestVersionIdx);
   const selectedVersion = order.artifactVersions[activeVersionIdx] ?? null;
   const all = useMemo(
-    () => selectedVersion?.documents ?? docContent(order, company),
+    () => selectedVersion?.documents ?? docContent(order, company, order.generatedProse),
     [order, company, selectedVersion],
   );
   const docs = order.deliverables;

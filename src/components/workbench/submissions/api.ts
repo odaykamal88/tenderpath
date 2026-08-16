@@ -80,10 +80,22 @@ export function saveDraft(type: SubmissionCode, draft: WizardDraftState): Promis
   });
 }
 
-export function importTenderPack(tenderId: number): Promise<TenderPackState & { sourceUrl?: string }> {
+/** `url` overrides the tender's stored notice URL — used when the bidder has a
+ *  direct link to the pack that the notice page does not expose publicly.
+ *  `title`/`agency` carry a hand-entered notice, which has no tenders row; the
+ *  server keys its pack on the title instead of an id. */
+export function importTenderPack(
+  tender: { tenderId?: number | null; title?: string | null; agency?: string | null },
+  url?: string,
+): Promise<TenderPackState & { sourceUrl?: string }> {
   return request("/api/dashboard/tender-pack/import", {
     method: "POST",
-    body: JSON.stringify({ tenderId }),
+    body: JSON.stringify({
+      ...(tender.tenderId ? { tenderId: tender.tenderId } : {}),
+      ...(tender.title ? { title: tender.title } : {}),
+      ...(tender.agency ? { agency: tender.agency } : {}),
+      ...(url ? { url } : {}),
+    }),
   });
 }
 

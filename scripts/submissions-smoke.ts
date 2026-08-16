@@ -9,6 +9,7 @@ import { flowFor, shepherdSteps } from "../src/lib/submissions/flows";
 import { canTransition, opsNextStage } from "../src/lib/submissions/stages";
 import { docContent } from "../src/lib/submissions/doc-content";
 import { buildNudges } from "../src/lib/submissions/nudges";
+import { tenderPackTag } from "../src/lib/tender-workspace/documents";
 import { EMPTY_DRAFT, type SubmissionOrder, type WizardDraftState } from "../src/lib/submissions/types";
 
 let failures = 0;
@@ -148,6 +149,8 @@ const order: SubmissionOrder = {
   qna: [],
   outcome: { state: "pending" },
   shepherd: { checked: [] },
+  generationStatus: "not_started",
+  generatedProse: null,
   paidAt: new Date().toISOString(),
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
@@ -175,6 +178,74 @@ check(
   JSON.stringify(docs[0].blocks).includes("VAT included as required by the RFQ")
     && !JSON.stringify(docs[0].blocks).includes("tax-exempt"),
 );
+
+/* ── 4b · generated prose slots + buyer-safe prose ─────────────────────── */
+console.log("generated prose");
+
+// No prose → the deterministic template still delivers (graceful degradation).
+check(
+  "without generation, the offer statement falls back to the template",
+  JSON.stringify(docs[0].blocks).includes("We, the undersigned, offer to supply"),
+);
+
+const withProse = docContent(order, company, {
+  slots: {
+    rfq_offer_statement: "BrightPath Solutions Ltd offers to supply the quoted items against schedule RFQ-88.",
+    rfq_compliance_statement: "All offered items meet the published specification without deviation.",
+  },
+  claims: [{ text: "Items meet specification", provenance: "evidenced" }],
+  gaps: [],
+  model: "test",
+  generatedAt: new Date().toISOString(),
+});
+check(
+  "written prose replaces the templated offer statement",
+  JSON.stringify(withProse[0].blocks).includes("against schedule RFQ-88")
+    && !JSON.stringify(withProse[0].blocks).includes("We, the undersigned, offer to supply"),
+);
+check(
+  "a slot the model skipped still falls back rather than blanking the document",
+  JSON.stringify(
+    docContent(order, company, {
+      slots: { rfq_offer_statement: "Short offer." },
+      claims: [],
+      gaps: [],
+      model: "test",
+      generatedAt: new Date().toISOString(),
+    })[2].blocks,
+  ).includes("fully compliant with the technical specifications"),
+);
+
+// Buyer-facing documents must never disclose the platform or an unfinished
+// internal step — `note` blocks render into the exported PDF and DOCX.
+const allProse = [docs, withProse]
+  .flat()
+  .flatMap((d) => d.blocks)
+  .map((b) => JSON.stringify(b))
+  .join(" ");
+for (const banned of ["TenderPath", "founder QA", "Founder QA", "your vault", "during drafting", "from your intake"]) {
+  check(`buyer-facing documents never contain "${banned}"`, !allProse.includes(banned));
+}
+
+/* ── 4c · tender-pack keying ───────────────────────────────────────────── */
+console.log("tender-pack keying");
+check(
+  "a crawled tender keeps the legacy id-keyed tag (existing packs must resolve)",
+  tenderPackTag({ tenderId: 120261, title: "Anything" }) === "tender-pack:120261",
+);
+check(
+  "a hand-entered notice keys on its title, so it can carry a pack at all",
+  tenderPackTag({ tenderId: null, title: "AI Coding Agents" }) === "tender-pack:h:ai-coding-agents",
+);
+check(
+  "the same title resolves to the same pack across calls",
+  tenderPackTag({ title: "  AI Coding Agents  " }) === tenderPackTag({ title: "AI Coding Agents" }),
+);
+check(
+  "punctuation and case normalise into one key",
+  tenderPackTag({ title: "RFI #24626: AI/Coding — Agents!" }) === "tender-pack:h:rfi-24626-ai-coding-agents",
+);
+check("no tender identity yields no tag", tenderPackTag({ tenderId: null, title: "   " }) === null);
 
 /* ── 5 · nudges ────────────────────────────────────────────────────────── */
 console.log("nudges");

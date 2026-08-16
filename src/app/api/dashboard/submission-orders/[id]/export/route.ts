@@ -119,7 +119,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       return NextResponse.json({ error: "Unknown draft version." }, { status: 404 });
     }
     const currentVersion = requestedVersion ?? order.artifactVersions.at(-1) ?? null;
-    const docs = currentVersion?.documents ?? docContent(order, company);
+    const docs = currentVersion?.documents ?? docContent(order, company, order.generatedProse);
     const exportOrder = currentVersion
       ? { ...order, intakeFields: currentVersion.intakeFields }
       : order;

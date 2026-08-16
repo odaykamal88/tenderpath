@@ -9,6 +9,7 @@
  *        in createWorkOrderFromCheckout. */
 
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { requireAuth } from "@/lib/subscription-guard";
 import { sql } from "@/lib/db";
 import { COMMERCE_ENABLED } from "@/lib/commerce";
@@ -39,8 +40,31 @@ import { normalizePortalCompanion } from "@/lib/tender-workspace/companion";
 import { normalizeTenderRequirements } from "@/lib/tender-workspace/requirements";
 import { sanitizeTenderPackForUser, TenderPackOwnershipError } from "@/lib/tender-workspace/ownership";
 import { recordCalibrationEvent, valueBand } from "@/lib/calibration/store";
+import { runSubmissionDrafting } from "@/lib/submissions/drafting-run";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+// Drafting runs post-response via after(); the lambda stays alive until it
+// resolves. 300s is the Vercel Pro ceiling (see the same note in
+// /api/proposals/generate — do NOT raise it, the deploy is rejected above it).
+export const maxDuration = 300;
+
+/** Kick the drafting run post-response. Never awaited and never allowed to
+ *  reject into the request path: payment has already succeeded by this point,
+ *  so a drafting failure must degrade to the template, not fail the order. */
+function startDrafting(orderId: number): void {
+  after(async () => {
+    try {
+      const result = await runSubmissionDrafting(orderId);
+      console.info("[tp:submissions:draft_after_done]", result);
+    } catch (err) {
+      console.error("[tp:submissions:draft_after_failed]", {
+        orderId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
+}
 
 export async function GET(request: Request) {
   const guard = await requireAuth(request);
@@ -240,6 +264,8 @@ export async function POST(request: Request) {
           { status: 409 },
         );
       }
+      // Drafting is kicked by the shared fulfillment seam in work-orders.ts,
+      // which this credit path already runs through (see [tp:submissions:order_paid]).
       const paidOrder = await getOrderByWorkOrder(workOrderId);
       await recordSubmissionCalibration("bid");
       return NextResponse.json({
@@ -264,6 +290,7 @@ export async function POST(request: Request) {
         const paidOrder = await markSubmissionOrderPaidByWorkOrder(workOrderId, 0, "usd");
         const usage = await recordBundledEoiUse(user);
         await recordSubmissionCalibration("bid");
+        startDrafting(paidOrder?.id ?? order.id);
         return NextResponse.json({
           order: paidOrder ?? order,
           work_order_id: workOrderId,

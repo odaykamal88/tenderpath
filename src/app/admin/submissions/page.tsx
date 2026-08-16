@@ -342,6 +342,18 @@ function OrderCard({
               <SlaChip order={order} now={now} />
               {order.round > 0 && <span className={`${styles.tag} ${styles.tagMute}`}>round {order.round}</span>}
               {needsChase && <span className={`${styles.tag} ${styles.tagNeg}`}>chase due — requested &gt;48h ago</span>}
+              {/* Drafting run state. Silence on `ready` (the normal case); shout
+                  when the pack fell back to the template or the run broke, so a
+                  template-only delivery is never mistaken for a written one. */}
+              {order.generationStatus === "skipped" && (
+                <span className={`${styles.tag} ${styles.tagWarn}`}>template fallback — not written</span>
+              )}
+              {order.generationStatus === "failed" && (
+                <span className={`${styles.tag} ${styles.tagNeg}`}>drafting failed</span>
+              )}
+              {order.generationStatus === "generating" && (
+                <span className={`${styles.tag} ${styles.tagMute}`}>drafting…</span>
+              )}
               {openBlockers.map((b) => (
                 <span key={b.id} className={`${styles.tag} ${b.state === "open" ? styles.tagNeg : styles.tagWarn}`}>
                   {b.label} · {b.state}
