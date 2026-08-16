@@ -147,8 +147,20 @@ export function TenderPackPanel({
             (value) => setProgress(Math.round(((index + value / 100) / files.length) * 100)),
           );
           completed.push(doc);
-        } catch {
-          failed.push(file.name);
+        } catch (cause) {
+          // The tender pack is the single biggest input to drafting quality, so
+          // a failed upload must never be a bare filename. Keep the real reason
+          // for the user AND in the console — a swallowed error here left a
+          // paid submission with an empty pack and no way to diagnose it.
+          const reason = cause instanceof Error ? cause.message : String(cause);
+          console.error("[tp:tender-pack:upload_failed]", {
+            file: file.name,
+            sizeBytes: file.size,
+            mimeType: file.type || "(none)",
+            tenderId: tender.tenderId ?? null,
+            reason,
+          });
+          failed.push(`${file.name} — ${reason}`);
         }
       }
       const documents = mergeDocuments(pack.documents, completed);
@@ -158,7 +170,7 @@ export function TenderPackPanel({
         checkedAt: new Date().toISOString(),
         note: failed.length ? `${failed.length} file(s) did not finish processing. Try them again.` : pack.note ?? null,
       });
-      if (failed.length) setError(`Could not process: ${failed.join(", ")}`);
+      if (failed.length) setError(`Could not process: ${failed.join(" · ")}`);
     } finally {
       setUploading(false);
       setProgress(null);
