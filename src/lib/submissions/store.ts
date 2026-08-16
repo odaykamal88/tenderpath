@@ -27,6 +27,8 @@ import type {
 import { EMPTY_DRAFT } from "./types";
 import { docContent } from "./doc-content";
 import type { SubmissionProse } from "./draft-llm";
+import type { ResponseDraft } from "./response-draft";
+import type { ResponseOutline } from "@/lib/tender-workspace/types";
 import { canTransition, DEFAULT_STAGE_NOTE, OPS_ACTIONS } from "./stages";
 import { shepherdSteps } from "./flows";
 
@@ -81,6 +83,10 @@ export async function ensureSubmissionsSchema(): Promise<void> {
       // absent/failed generation degrades to the deterministic template.
       await sql`ALTER TABLE submission_orders ADD COLUMN IF NOT EXISTS generation_status TEXT NOT NULL DEFAULT 'not_started'`;
       await sql`ALTER TABLE submission_orders ADD COLUMN IF NOT EXISTS generated_prose JSONB`;
+      // Solicitation-derived response structure (2026-08-16). When the notice
+      // prescribes its own sections these REPLACE the format's documents.
+      await sql`ALTER TABLE submission_orders ADD COLUMN IF NOT EXISTS response_outline JSONB`;
+      await sql`ALTER TABLE submission_orders ADD COLUMN IF NOT EXISTS response_draft JSONB`;
       await sql`CREATE INDEX IF NOT EXISTS submission_orders_user_idx ON submission_orders (user_id, updated_at DESC)`;
       await sql`CREATE INDEX IF NOT EXISTS submission_orders_stage_idx ON submission_orders (stage, updated_at DESC)`;
       await sql`CREATE INDEX IF NOT EXISTS submission_orders_wo_idx ON submission_orders (work_order_id)`;
@@ -160,6 +166,14 @@ export function rowToOrder(row: Record<string, any>): SubmissionOrder {
     generatedProse:
       row.generated_prose && typeof row.generated_prose === "object"
         ? (row.generated_prose as SubmissionProse)
+        : null,
+    responseOutline:
+      row.response_outline && typeof row.response_outline === "object"
+        ? (row.response_outline as ResponseOutline)
+        : null,
+    responseDraft:
+      row.response_draft && typeof row.response_draft === "object"
+        ? (row.response_draft as ResponseDraft)
         : null,
     paidAt: iso(row.paid_at),
     createdAt: iso(row.created_at) ?? new Date(0).toISOString(),

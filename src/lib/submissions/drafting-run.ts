@@ -21,6 +21,13 @@
 import { sql } from "@/lib/db";
 import { applyAdminAction, getOrderForAdmin, OrderStateError } from "./store";
 import { generateSubmissionProse, type SubmissionProse } from "./draft-llm";
+import { buildResponseOutline } from "./response-outline";
+import { generateResponseDraft } from "./response-draft";
+import {
+  documentsForPrompt,
+  loadRequirementDocuments,
+} from "@/lib/tender-workspace/requirements-server";
+import type { ResponseOutline, TenderPackState } from "@/lib/tender-workspace/types";
 import { sendSubmissionReviewReadyEmail } from "./notify";
 import type { SubmissionGenerationStatus, SubmissionOrder } from "./types";
 
@@ -74,6 +81,94 @@ async function persistProse(
         updated_at = NOW()
     WHERE id = ${orderId}
   `;
+}
+
+/**
+ * Try the solicitation-driven path: read the notice's own section list and
+ * answer it. Returns true when that produced a response, in which case the
+ * format's document pack is replaced.
+ *
+ * Returns false — normally, not exceptionally — when there is no readable pack,
+ * or the notice prescribes no structure. Most notices do not, and the fixed
+ * format is the right answer for those.
+ */
+async function tryOutlineDrivenResponse(
+  order: SubmissionOrder,
+  companyName: string,
+  revision?: { round: number; notes: string },
+): Promise<{ used: boolean; gaps: string[] }> {
+  const pack = (order.intakeFields as { tenderPack?: TenderPackState })?.tenderPack;
+  if (!pack?.documents?.length) return { used: false, gaps: [] };
+
+  let outline: ResponseOutline;
+  try {
+    outline = await buildResponseOutline({
+      userId: order.userId,
+      pack,
+      tenderTitle: order.tender,
+      agency: order.agency,
+    });
+  } catch (err) {
+    // An unreadable pack is an ordinary outcome here (no extracted text yet),
+    // not a delivery failure — fall through to the format path.
+    console.info("[tp:submissions:outline_unavailable]", {
+      orderId: order.id,
+      reason: err instanceof Error ? err.message : String(err),
+    });
+    return { used: false, gaps: [] };
+  }
+
+  await sql`
+    UPDATE submission_orders
+    SET response_outline = ${JSON.stringify(outline)}::jsonb, updated_at = NOW()
+    WHERE id = ${order.id}
+  `;
+  if (outline.sections.length === 0) return { used: false, gaps: [] };
+
+  // Give the writer the solicitation itself, not just the section titles:
+  // "which of areas A–E" cannot be answered from a heading.
+  let corpus: string | null = null;
+  try {
+    const { documents } = await loadRequirementDocuments(order.userId, pack);
+    corpus = documentsForPrompt(documents);
+  } catch {
+    corpus = null;
+  }
+
+  const draft = await generateResponseDraft({
+    order,
+    companyName,
+    outline,
+    corpus,
+    revision: revision
+      ? { round: revision.round, notes: revision.notes, priorSections: order.responseDraft?.sections ?? [] }
+      : undefined,
+  });
+  if (!draft) return { used: false, gaps: [] };
+
+  // The document set changed, so the deliverable list must change with it —
+  // otherwise the drawer lists the format's three files while the reader shows
+  // one. Same object drives both surfaces.
+  const deliverables = [
+    { name: draft.documentTitle, fmt: "PDF", envelope: "technical" as const, status: "ready" as const },
+  ];
+  await sql`
+    UPDATE submission_orders
+    SET response_draft = ${JSON.stringify(draft)}::jsonb,
+        deliverables = ${JSON.stringify(deliverables)}::jsonb,
+        generation_status = 'ready',
+        updated_at = NOW()
+    WHERE id = ${order.id}
+  `;
+  console.info("[tp:submissions:outline_response_written]", {
+    orderId: order.id,
+    ref: order.ref,
+    sections: draft.sections.length,
+    unevidenced: draft.sections.filter((s) => s.unevidenced).length,
+    gaps: draft.gaps.length,
+    round: draft.round ?? 0,
+  });
+  return { used: true, gaps: draft.gaps };
 }
 
 async function companyFor(userId: number): Promise<{ name: string; email: string | null }> {
@@ -181,34 +276,55 @@ export async function runSubmissionRevision(orderId: number): Promise<DraftingRu
     noteChars: notes.length,
   });
 
-  let prose: SubmissionProse | null = null;
-  try {
-    prose = await generateSubmissionProse({
-      order,
-      companyName: company.name,
-      revision: {
-        round: order.round,
-        notes,
-        priorSlots: order.generatedProse?.slots ?? {},
-      },
-    });
-  } catch (err) {
-    console.error("[tp:submissions:revision_generate_threw]", {
+  // A response built from the notice's own outline is revised the same way.
+  const outlineRun = await tryOutlineDrivenResponse(order, company.name, {
+    round: order.round,
+    notes,
+  }).catch((err) => {
+    console.error("[tp:submissions:outline_revision_threw]", {
       orderId,
       err: err instanceof Error ? err.message : String(err),
     });
+    return { used: false, gaps: [] as string[] };
+  });
+
+  let prose: SubmissionProse | null = null;
+  if (outlineRun.used) {
+    // Keep the round marker on generated_prose so claimRun stays idempotent.
+    await persistProse(orderId, "ready", {
+      ...(order.generatedProse ?? { slots: {}, claims: [], gaps: [], model: "outline", generatedAt: new Date().toISOString() }),
+      gaps: outlineRun.gaps,
+      round: order.round,
+    });
+  } else {
+    try {
+      prose = await generateSubmissionProse({
+        order,
+        companyName: company.name,
+        revision: {
+          round: order.round,
+          notes,
+          priorSlots: order.generatedProse?.slots ?? {},
+        },
+      });
+    } catch (err) {
+      console.error("[tp:submissions:revision_generate_threw]", {
+        orderId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   // A failed revision must not silently re-release the prior prose as if the
   // notes had been applied — leave the round unconsumed so it can be retried.
-  if (!prose) {
+  if (!outlineRun.used && !prose) {
     await persistProse(orderId, "failed", order.generatedProse);
     console.warn("[tp:submissions:revision_failed]", { orderId, ref: order.ref, round: order.round });
     return { ok: false, orderId, status: "failed", slotCount: 0, gapCount: 0, released: false, skippedReason: "generation_unavailable" };
   }
 
-  await persistProse(orderId, "ready", prose);
-  const gaps = prose.gaps ?? [];
+  if (prose) await persistProse(orderId, "ready", prose);
+  const gaps = outlineRun.used ? outlineRun.gaps : prose?.gaps ?? [];
 
   await advance(orderId, "qa");
   if (gaps.length > 0) await postGapNote(orderId, gaps);
@@ -229,7 +345,7 @@ export async function runSubmissionRevision(orderId: number): Promise<DraftingRu
     orderId,
     ref: order.ref,
     round: order.round,
-    slotCount: Object.keys(prose.slots).length,
+    slotCount: prose ? Object.keys(prose.slots).length : 0,
     gapCount: gaps.length,
     released: Boolean(released),
   });
@@ -238,7 +354,7 @@ export async function runSubmissionRevision(orderId: number): Promise<DraftingRu
     ok: true,
     orderId,
     status: "ready",
-    slotCount: Object.keys(prose.slots).length,
+    slotCount: prose ? Object.keys(prose.slots).length : 0,
     gapCount: gaps.length,
     released: Boolean(released),
   };
@@ -267,21 +383,32 @@ export async function runSubmissionDrafting(orderId: number): Promise<DraftingRu
       : 0,
   });
 
-  let prose: SubmissionProse | null = null;
-  try {
-    prose = await generateSubmissionProse({ order, companyName: company.name });
-  } catch (err) {
-    console.error("[tp:submissions:draft_run_generate_threw]", {
+  // Preferred path: let the notice dictate the document. Falls through to the
+  // format's fixed slots when the notice prescribes no structure.
+  const outlineRun = await tryOutlineDrivenResponse(order, company.name).catch((err) => {
+    console.error("[tp:submissions:outline_run_threw]", {
       orderId,
       err: err instanceof Error ? err.message : String(err),
     });
+    return { used: false, gaps: [] as string[] };
+  });
+
+  let prose: SubmissionProse | null = null;
+  if (!outlineRun.used) {
+    try {
+      prose = await generateSubmissionProse({ order, companyName: company.name });
+    } catch (err) {
+      console.error("[tp:submissions:draft_run_generate_threw]", {
+        orderId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+    await persistProse(orderId, prose ? "ready" : "skipped", prose);
   }
 
-  const status: SubmissionGenerationStatus = prose ? "ready" : "skipped";
-  await persistProse(orderId, status, prose);
-
-  const slotCount = prose ? Object.keys(prose.slots).length : 0;
-  const gaps = prose?.gaps ?? [];
+  const status: SubmissionGenerationStatus = outlineRun.used || prose ? "ready" : "skipped";
+  const slotCount = outlineRun.used ? 0 : prose ? Object.keys(prose.slots).length : 0;
+  const gaps = outlineRun.used ? outlineRun.gaps : prose?.gaps ?? [];
 
   // Walk to the client. Each step re-reads the order, so the qa → review seal
   // picks up the prose persisted above.

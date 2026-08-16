@@ -763,6 +763,8 @@ CREATE TABLE IF NOT EXISTS submission_orders (
 ALTER TABLE submission_orders ADD COLUMN IF NOT EXISTS artifact_versions JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE submission_orders ADD COLUMN IF NOT EXISTS generation_status TEXT NOT NULL DEFAULT 'not_started';
 ALTER TABLE submission_orders ADD COLUMN IF NOT EXISTS generated_prose JSONB;
+ALTER TABLE submission_orders ADD COLUMN IF NOT EXISTS response_outline JSONB;
+ALTER TABLE submission_orders ADD COLUMN IF NOT EXISTS response_draft JSONB;
 CREATE INDEX IF NOT EXISTS submission_orders_user_idx ON submission_orders (user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS submission_orders_stage_idx ON submission_orders (stage, updated_at DESC);
 CREATE INDEX IF NOT EXISTS submission_orders_wo_idx ON submission_orders (work_order_id);

@@ -162,6 +162,32 @@ nobody had written.
   `skipped` means the template stood in. Both columns self-heal in
   `ensureSubmissionsSchema()` **and** live in `scripts/migrate.mjs`.
 
+## Solicitation-driven responses (2026-08-16)
+
+The four formats fix a document shape in `flows.ts` before anyone opens the
+notice. When a solicitation dictates its own shape, that preset pack is the
+wrong document — no improvement to the prose inside its sections can answer
+questions the sections do not have. UNPD RFI 24626 asks ten specific questions
+under a 10-page limit; the EOI format offers three intake fields and four prose
+slots, and produced an eligibility annex the RFI never requested.
+
+- `response-outline.ts` extracts the notice's OWN section list. Every section
+  must carry a **verbatim quote** proving the notice asks for it; unverifiable
+  sections are dropped. **Finding no structure is a valid result** — most
+  notices prescribe none — and leaves the fixed format in place.
+- `response-draft.ts` answers one section per question. It receives the
+  solicitation **corpus** as well as the outline: "which of areas A–E" cannot be
+  answered from a heading, and without the text the model refuses to guess but
+  then explains the absence to the BUYER, which reads as an unfinished response.
+- `docContent()` returns the outline-driven document when `responseDraft` has
+  sections, **replacing** the format pack. `drafting-run.ts` writes the matching
+  single deliverable so the drawer and reader never disagree.
+- Sections the applicant cannot answer are marked `unevidenced`, kept short and
+  factual, and recorded as `"To answer X, supply Y"`. They are never padded, and
+  the deficiency never reaches the buyer.
+- Columns `response_outline` / `response_draft` self-heal in
+  `ensureSubmissionsSchema()` **and** live in `scripts/migrate.mjs`.
+
 **Buyer-facing prose rule (load-bearing).** `note` blocks render into the
 exported PDF *and* DOCX with a "QA" label, so anything in a block reaches the
 procurement panel. Documents must never name TenderPath, an internal QA step,

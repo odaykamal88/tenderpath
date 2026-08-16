@@ -151,6 +151,8 @@ const order: SubmissionOrder = {
   shepherd: { checked: [] },
   generationStatus: "not_started",
   generatedProse: null,
+  responseOutline: null,
+  responseDraft: null,
   paidAt: new Date().toISOString(),
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
@@ -258,6 +260,49 @@ check("a portal notice page is NOT auto-fetched", !isDirectDocumentUrl("https://
 check("a query-string download route is NOT assumed to be a file", !isDirectDocumentUrl("https://site.org/download?file=x.pdf"));
 check("garbage is not a document", !isDirectDocumentUrl("not a url"));
 check("null is not a document", !isDirectDocumentUrl(null));
+
+/* ── 4d · solicitation-driven response replaces the format pack ────────── */
+console.log("solicitation-driven response");
+
+const outlineOrder: SubmissionOrder = {
+  ...order,
+  responseOutline: {
+    generationStatus: "ready",
+    packFingerprint: "fp",
+    sections: [
+      { id: "s1-profile", order: 1, title: "Company profile", ask: "…", evidence: "…", sourceDocumentName: "RFI.pdf", required: true },
+      { id: "s2-areas", order: 2, title: "Which areas (A–E) you can address", ask: "…", evidence: "…", sourceDocumentName: "RFI.pdf", required: true },
+    ],
+  },
+  responseDraft: {
+    documentTitle: "Response to RFI 24626",
+    sections: [
+      { id: "s1-profile", order: 1, title: "Company profile", content: "We are a systems integrator.", unevidenced: false },
+      { id: "s2-areas", order: 2, title: "Which areas (A–E) you can address", content: "We address areas B and E.", unevidenced: false },
+    ],
+    claims: [], gaps: [], model: "test", generatedAt: new Date().toISOString(),
+  },
+};
+const respDocs = docContent(outlineOrder, company);
+check("an outline-driven response yields ONE document, not the format's three", respDocs.length === 1, respDocs.map((d) => d.name));
+check("the document is titled as the notice names it", respDocs[0].name === "Response to RFI 24626");
+check(
+  "sections appear in the notice's order, as headings",
+  JSON.stringify(respDocs[0].blocks).indexOf("1 · Company profile") <
+    JSON.stringify(respDocs[0].blocks).indexOf("2 · Which areas"),
+);
+check(
+  "the RFQ format's own documents are NOT emitted alongside it",
+  !respDocs.some((d) => d.name.includes("Quotation") || d.name.includes("Priced")),
+);
+check(
+  "an order with an outline but no draft still uses the format pack",
+  docContent({ ...outlineOrder, responseDraft: null }, company).length === 3,
+);
+check(
+  "an empty-section draft does not blank the document",
+  docContent({ ...outlineOrder, responseDraft: { ...outlineOrder.responseDraft!, sections: [] } }, company).length === 3,
+);
 
 /* ── 5 · nudges ────────────────────────────────────────────────────────── */
 console.log("nudges");
